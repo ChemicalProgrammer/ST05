@@ -289,7 +289,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert.equal(el('output').textContent,String(expected.line.at(-1).produced));
     const fittedFrame=labels.slice(lastFrameOrigin);
     const telemetryY=fittedFrame.find(([text])=>text==='upstream')[3]-21*.75*.75;
-    const cards=boxes.filter(box=>box.y===telemetryY);
+    const cards=boxes.filter(box=>box.y>=telemetryY&&box.height>=53*.75*.75);
     assert.equal(cards.length,9);
     const silhouettes=boxes.filter(box=>box.y<telemetryY&&box.width>100&&
       (box.height===7.5*.75||box.height>170&&box.height<200));
@@ -301,7 +301,7 @@ test('2D uses the representative seed to calculate new production and preserves 
       const center=silhouette.x+silhouette.width/2;
       assert(Math.abs((first.x+last.x+last.width)/2-center)<1e-8);
       const previous=cards[firstCardIndex-1];
-      if(previous)assert(first.x>=previous.x+previous.width);
+      if(previous&&first.y===previous.y)assert(first.x>=previous.x+previous.width);
       firstCardIndex+=count;
     }
     const control=el('machine-controls').querySelector('[aria-label="upstream controls"]');
@@ -528,9 +528,8 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert(overflow[3]<marker('B')[3]);
     const headings=labels.slice(lastFrameOrigin).filter(([text])=>text==='Parameter').slice(0,6);
     assert.equal(headings.length,6);
-    for(const [index,heading] of headings.entries()){
-      assert.equal(heading[3],headings[0][3]);
-      if(index)assert(heading[2]-headings[index-1][2]>=100);
+    for(let i=0;i<headings.length;i++)for(let j=i+1;j<headings.length;j++){
+      if(headings[i][3]===headings[j][3])assert(Math.abs(headings[i][2]-headings[j][2])>=100);
     }
     assert(!marker('Recovery Point'));
     window.STSimulation2D.load(['case','dimensions'],equipment,null,{seed:7},null,null,null,[formats[0]]);
@@ -1576,4 +1575,52 @@ test('conveyor band height is fixed at 75 percent and independent of conveyor le
  const ctx=new Proxy({},{get:(o,k)=>o[k]??(()=>{})});
  for(const length of [1000,10000])context.drawBand(ctx,0,0,length*.09,{id:'belt',unit:'CASES',length,speed:100,items:[]},1,2000,'#08f','#777','#fff');
  assert.deepEqual(boxes.map(b=>b.h),[7.5*.75,7.5*.75]);assert.equal(boxes[1].w/boxes[0].w,10);
+});
+
+test('conveyors meet equipment ports directly while cards occupy nonoverlapping rows',()=>{
+ const source=script('Simulation2D');
+ const context=vm.createContext({displayWidth:item=>item.width,machineDesign:item=>item.animated?{}:null,conveyorGroupWidth:400,telemetryGroupWidth:450,telemetryCardHeight:190,cardGap:24});
+ vm.runInContext(source.slice(source.indexOf('  function equipmentLayout('),source.indexOf('  function caseDimensions(')),context);
+ for(const animated of [false,true]){
+   const line=[{kind:'machine',width:180,animated},{kind:'belt',width:90},{kind:'machine',width:200,animated},{kind:'belt',width:900},{kind:'machine',width:220,animated}];
+   const layout=context.equipmentLayout(line);
+   for(let i=1;i<line.length;i++){
+     const previous=layout.items[i-1],current=layout.items[i];
+     const expected=previous.left+previous.width-previous.outlet-(line[i].animated?current.width*.1:0);
+     assert(Math.abs(current.left-expected)<1e-8,'conveyor and equipment ports share the same position');
+   }
+   for(let i=0;i<layout.items.length;i++)for(let j=i+1;j<layout.items.length;j++){
+     const a=layout.items[i],b=layout.items[j];
+     if(a.telemetryRow===b.telemetryRow)assert(b.center-b.telemetryWidth/2>=a.center+a.telemetryWidth/2+24);
+   }
+   assert.equal(layout.items[1].width,90);assert.equal(layout.items[3].width,900,'physical conveyor length is not stretched to fit its cards');
+ }
+});
+
+test('departing bottles advance into the equipment port and are clipped by its face',()=>{
+ const source=script('Simulation2D'),bottles=[],clips=[],model={time:0};
+ const context=vm.createContext({window:{STSimulation2DMachines:{drawBottle(ctx,x,y,w,h){bottles.push({x,y,w,h});}}},model,sceneScale:.09,beltDepth:5.625,beltInset:1.125,bottleStages:new Map([['b',7]]),appearance:{},productWidth:()=>20,productHeight:()=>40,strokeBox(){}});
+ vm.runInContext(source.slice(source.indexOf('  function drawBelt('),source.indexOf('  function draw(){'))+';this.drawBand=drawBelt;',context);
+ const ctx=new Proxy({rect(x,y,w,h){clips.push({x,y,w,h});},clip(){assert(clips.length>0);}},{get:(o,k)=>o[k]??(()=>{})});
+ const belt={id:'b',unit:'BOTTLES',length:1000,packageLength:200,speed:1000,items:[],recentOutput:[0]};
+ context.drawBand(ctx,0,0,90,belt,1,1000,'#08f','#777','#fff');const start=bottles.at(-1).x;
+ model.time=.1;context.drawBand(ctx,0,0,90,belt,1,1000,'#08f','#777','#fff');
+ assert(bottles.at(-1).x>start);assert.equal(clips.at(-1).w,90);
+ const drawn=bottles.length;model.time=.21;context.drawBand(ctx,0,0,90,belt,1,1000,'#08f','#777','#fff');assert.equal(bottles.length,drawn);
+});
+
+test('zero-residence palletizer still shows case entry, interior travel and pickup without changing production',()=>{
+ const source=script('Simulation2D'),model={time:0};
+ const context=vm.createContext({model,palletFlow:null,step:1/120,caseDimensions:()=>({caseWidth:37,caseHeight:28}),productHeight:()=>28,beltHalfHeight:()=>18});
+ vm.runInContext(source.slice(source.indexOf('  function palletEntryFlow('),source.indexOf('  function drawPalletInfeed(')),context);
+ const belt={kind:'belt',produced:0,recentOutput:[]},machine={rate:.5,produced:0,resident:[],residenceSeconds:0},line=[belt,machine];
+ const items=[{left:0,width:200},{left:200,width:300}];context.palletEntryFlow(line);
+ model.time=2;belt.produced=1;belt.recentOutput=[2];machine.produced=1;
+ let flow=context.palletEntryFlow(line);assert.equal(flow.produced,0);assert.equal(flow.entries[0].progress,0);
+ const entry=context.palletInfeed(line,items,100,{entries:flow.entries});assert.equal(entry.cases[0].left,163);
+ model.time=3;flow=context.palletEntryFlow(line);const halfway=context.palletInfeed(line,items,100,{entries:flow.entries});
+ assert.equal(halfway.cases[0].left,313);assert.equal(flow.produced,0);
+ model.time=4;flow=context.palletEntryFlow(line);assert.equal(flow.produced,1);assert.equal(flow.entries.length,0);
+ const waiting=context.palletInfeed(line,items,100,{entries:flow.entries,waiting:1});assert.equal(waiting.cases[0].left,waiting.pickup);
+ assert.equal(machine.produced,1);assert.equal(belt.produced,1);
 });

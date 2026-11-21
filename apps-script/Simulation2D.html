@@ -131,7 +131,7 @@ window.STSimulation2D=(function(){
   const machineHeight=540*sceneScale*machineScale,beltDepth=7.5*.75,beltInset=1.5*.75;
   let shiftHours=8,shiftOutput=[],limitSeconds=3600,save,signature,lastSave=0;
   let seed=1,key,viewKey,definitions=[],model=null,frame,previous=0,lag=0,drag,validation='',runState='Ready',lastMetrics=-Infinity;
-  let representative=null,defaultRun=null,palletAnimation=null;
+  let representative=null,defaultRun=null,palletAnimation=null,palletFlow=null;
   let productHeights={},machineTypes=new Map(),bottleStages=new Map(),conveyorDimensions=new Map();
   const dimensionRowHeight=32,dimensionLevels=3,dimensionOffset=126;
   let dimensionPointer=null;
@@ -629,18 +629,20 @@ window.STSimulation2D=(function(){
     return half+dimensionOffset+dimensionLevels*dimensionRowHeight;
   }
   function equipmentLayout(line){
-    let right=0,previous;
+    let right=0,previous;const rows=[];
     const items=line.map(item=>{
-      const width=displayWidth(item);
-      const telemetryWidth=item.kind==='belt'?conveyorGroupWidth:telemetryGroupWidth;
-      const center=previous
-        ? Math.max(right+width/2,previous.center+(previous.telemetryWidth+telemetryWidth)/2+cardGap)
-        : Math.max(width,telemetryWidth)/2;
-      right=center+width/2;
-      previous={left:center-width/2,center,width,telemetryWidth};
+      const width=displayWidth(item),telemetryWidth=item.kind==='belt'?conveyorGroupWidth:telemetryGroupWidth;
+      const inlet=machineDesign(item)?width*.1:0;
+      const left=previous?right-(previous.outlet||0)-inlet:(Math.max(width,telemetryWidth)-width)/2;
+      const center=left+width/2,cardLeft=center-telemetryWidth/2;
+      let row=rows.findIndex(edge=>cardLeft>=edge+cardGap);
+      if(row<0)row=rows.length;
+      rows[row]=cardLeft+telemetryWidth;
+      right=left+width;
+      previous={left,center,width,telemetryWidth,telemetryRow:row,telemetryOffset:row*(telemetryCardHeight+cardGap),outlet:machineDesign(item)?width*.1:0};
       return previous;
     });
-    return {items,right};
+    return {items,right,telemetryRows:rows.length,boundsRight:Math.max(right,...rows)};
   }
   function caseDimensions(line,index){
     const upstream=line.slice(0,index).reverse().find(item=>item.kind==='belt'&&item.unit==='CASES');
@@ -770,6 +772,31 @@ window.STSimulation2D=(function(){
     }
     return result;
   }
+  function palletEntryFlow(line){
+    const item=line.at(-1),belt=line.at(-2),time=model?.time??0,produced=item.produced||0;
+    const admissions=belt?.produced??produced+(item.resident?.length||0);
+    if(palletFlow?.model!==model||time<palletFlow.time){
+      palletFlow={model,time,seen:admissions,ready:produced,entries:[]};
+      if(item.resident?.length)palletFlow.entries.push({at:time,count:item.resident.length});
+    }
+    const state=palletFlow,added=Math.max(0,admissions-state.seen),period=1/Math.max(.001,item.rate||.001);
+    const travel=Math.max(step,item.residenceSeconds||0,period);
+    const groups=Math.min(added,120),recent=belt?.recentOutput||[];
+    for(let i=0;i<groups;i++){
+      const count=Math.floor((i+1)*added/groups)-Math.floor(i*added/groups);
+      const at=added<=recent.length?recent[recent.length-added+i]:state.time+(time-state.time)*(i+1)/groups;
+      state.entries.push({at,count});
+    }
+    state.seen=admissions;state.time=time;
+    const entering=[];
+    for(const entry of state.entries){
+      const progress=Math.max(0,Math.min(1,(time-entry.at)/travel));
+      if(progress>=1)state.ready+=entry.count;
+      else entering.push({...entry,progress});
+    }
+    state.entries=entering;
+    return {produced:Math.min(produced,state.ready),entries:entering,pending:Math.max(0,state.ready-produced)};
+  }
   function palletInfeed(line,items,y,transfer){
     const index=line.length-1,item=line[index],layout=items[index];
     const upstream=line[index-1],entry=items[index-1];
@@ -777,13 +804,13 @@ window.STSimulation2D=(function(){
     const pickup=layout.left+layout.width-caseWidth;
     const start=upstream?.kind==='belt'?entry.left+entry.width-caseWidth:layout.left;
     const startBottom=upstream?.kind==='belt'?y+productHeight(upstream)-beltHalfHeight(upstream):y;
-    const cases=(item.resident||[]).map(ready=>{
+    const cases=transfer?.entries?transfer.entries.map(entry=>({left:start+(pickup-start)*entry.progress,top:startBottom-caseHeight})):(item.resident||[]).map(ready=>{
       const progress=Math.max(0,Math.min(1,1-(ready-item.residenceClock)/Math.max(step,item.residenceSeconds)));
       return {left:start+(pickup-start)*progress,top:startBottom-caseHeight};
     });
     // Processed cases remain at pickup until the visual robot actually takes them.
     // Coincident cases intentionally share a silhouette, without growing the drawing workload.
-    if(transfer?.waiting>0)cases.push({left:pickup,top:startBottom-caseHeight,waiting:transfer.waiting});
+    if(transfer?.waiting>0||transfer?.infeedPending>0)cases.push({left:pickup,top:startBottom-caseHeight,waiting:transfer.waiting});
     return {start,startBottom,pickup,caseWidth,caseHeight,cases,waiting:transfer?.waiting||0};
   }
   function drawPalletInfeed(context,line,items,origin,y,colors,transfer){
@@ -808,11 +835,11 @@ window.STSimulation2D=(function(){
     viewports[activeViewport].initialized=true;
     if(!canvas.clientWidth||!canvas.clientHeight)return;
     const line=model?.line||definitions;
-    const {items,right}=equipmentLayout(line);
+    const {items,right,telemetryRows,boundsRight}=equipmentLayout(line);
     const last=items.at(-1);
     const output=productionLayout(line,items,right);
-    const length=(last?Math.max(output.right,output.production+cardWidth):0)/sceneScale;
-    const top=Math.max(sceneTop(),-output.productionY+8),bottom=Math.max(sceneHalfHeight()+telemetryTopGap+telemetryCardHeight+8,output.productionY+productionHeight(),output.pallets?174:0);
+    const length=(last?Math.max(output.right,output.production+cardWidth,boundsRight):0)/sceneScale;
+    const top=Math.max(sceneTop(),-output.productionY+8),bottom=Math.max(sceneHalfHeight()+telemetryTopGap+telemetryRows*(telemetryCardHeight+cardGap)+8,output.productionY+productionHeight(),output.pallets?174:0);
     const horizontal=(canvas.clientWidth-52)/Math.max(1,length);
     const vertical=(canvas.clientHeight-36)*sceneScale/(top+bottom);
     camera.scale=Math.max(.0001,Math.min(horizontal,vertical,.32));
@@ -1195,7 +1222,7 @@ window.STSimulation2D=(function(){
     }
     context.restore();
   }
-  function drawBelt(context,x,y,width,item,factor,w,accent,beltColor,surface,caseColor=beltColor){
+  function drawBelt(context,x,y,width,item,factor,w,accent,beltColor,surface,caseColor=beltColor,entryTail=true){
     const left=Math.max(0,x+5),right=Math.min(w,x+width-5);
     context.fillStyle=beltColor;context.strokeStyle=beltColor;
     strokeBox(context,x,y+beltInset,width,beltDepth);
@@ -1211,13 +1238,19 @@ window.STSimulation2D=(function(){
       context.setLineDash([]);context.lineDashOffset=0;context.lineWidth=1;
     }
     const length=productWidth(item),height=productHeight(item);
+    context.save();context.beginPath();context.rect(x,y-height-1,width,height+2);context.clip();
+    try{
     const cases=item.unit==='CASES',stage=bottleStages.get(item.id)??0;
     const labeled=Boolean(stage&1),filled=Boolean(stage&2),capped=Boolean(stage&4),pucked=Boolean(stage&8);
     const marker=length*factor<2;
     const bodyWidth=length,bodyHeight=height;
     const top=y-bodyHeight;
     const dx=bodyWidth/14,dy=bodyHeight/30;
-    const products=item.items||[];
+    const products=[...(item.items||[])];
+    if(entryTail&&item.speed>0)for(const at of item.recentOutput||[]){
+      const elapsed=(model?.time??0)-at;
+      if(elapsed>=0&&elapsed<item.packageLength/item.speed)products.push({x:item.length-item.packageLength/2+elapsed*item.speed});
+    }
     if(cases){
       for(const product of products){
         const px=x+product.x*sceneScale;
@@ -1305,6 +1338,7 @@ window.STSimulation2D=(function(){
       }
       context.fillStyle=appearance.cap||caseColor;context.fill();
     }
+    }finally{context.restore();}
   }
   function draw(){
     if(drawingViewports)return;
@@ -1365,7 +1399,9 @@ window.STSimulation2D=(function(){
     const line=model?.line||definitions;
     const {items,right}=equipmentLayout(line);
     const output=productionLayout(line,items,right);
-    const transfer=output.pallets?palletTransfer(line.at(-1),forkliftRoute(output)):null;
+    const flow=output.pallets?palletEntryFlow(line):null;
+    const transfer=flow?palletTransfer({...line.at(-1),produced:flow.produced},forkliftRoute(output)):null;
+    if(transfer){transfer.entries=flow.entries;transfer.infeedPending=flow.pending;}
     const palletColors={exitX:Number.isFinite(transfer?.forkExitOffset)?origin+output.start+transfer.forkExitOffset:undefined,pickupY:transfer?palletInfeed(line,items,y).startBottom:y,ink,soft:machineSoft,surface,accent:appearance.equipment||accent,belt:machineColor,caseColor:appearance.cases||secondary,caseAccent:appearance.caseLabel||accent,caseMarkShape:appearance.caseLabelShape,palletColor:secondary,caseWidth:output.caseWidth,caseHeight:output.caseHeight,forkProgress:transfer?.forkProgress,forkGroup:transfer?.forkGroup,removedPallets:transfer?.removedPallets,forkPickupX:Number.isFinite(transfer?.forkPickupOffset)?origin+output.start+transfer.forkPickupOffset:undefined,batch:transfer?.batch};
     if(transfer){
       const pickup=origin+palletInfeed(line,items,y).pickup;
@@ -1380,7 +1416,7 @@ window.STSimulation2D=(function(){
       const analysisButton=analysisButtons.get(item.id);
       if(analysisButton){
         const left=origin+items[index].center-items[index].telemetryWidth/2+telemetryPairWidth+telemetryGap;
-        const cx=(left+telemetryPadding)*factor,cy=(telemetryY+17.5*tableScale)*factor;
+        const cx=(left+telemetryPadding)*factor,cy=(telemetryY+items[index].telemetryOffset+17.5*tableScale)*factor;
         analysisButton.style.left=cx+'px';analysisButton.style.top=cy+'px';
         analysisButton.style.transform='translateY(-50%) scale('+factor+')';
         analysisButton.hidden=cx+analysisButton.offsetWidth*factor<=0||cx>=screenWidth||cy<0||cy>h;
@@ -1403,25 +1439,13 @@ window.STSimulation2D=(function(){
           !!item.emergency||(action==='PAUSE'&&item.mode==='PAUSE')||(action==='STOP'&&item.mode==='STOP');
       }
     }
-    // Join the equipment across the display space reserved for adjacent card groups.
-    const trackY=item=>item.kind==='belt'?y+productHeight(item)-beltHalfHeight(item)+beltInset+beltDepth/2:y;
-    context.strokeStyle=beltColor;
-    context.beginPath();
-    for(let index=1;index<items.length;index++){
-      if(index===items.length-1&&machineTypes.get(line[index].id)==='PALLETIZER')continue;
-      const start=items[index-1].left+items[index-1].width,end=items[index].left;
-      if(end<=start||origin+end<0||origin+start>w)continue;
-      context.moveTo(origin+start,trackY(line[index-1]));
-      context.lineTo(origin+end,trackY(line[index]));
-    }
-    context.stroke();
     for(let index=0;index<line.length;index++){
       const item=line[index],{left,width}=items[index],x=origin+left;
       const lane=item.kind==='belt';
       if(x+width<0||x>w)continue;
       if(lane){
         const beltY=y+productHeight(item)-beltHalfHeight(item);
-        drawBelt(context,x,beltY,width,item,factor,w,accent,beltColor,surface,secondary);
+        drawBelt(context,x,beltY,width,item,factor,w,accent,beltColor,surface,secondary,machineTypes.get(line[index+1]?.id)!=='PALLETIZER');
         const sensorY=y-beltHalfHeight(item)-12;
         const dimensions=showDimensions.checked?conveyorDimensions.get(item.id):null;
         const {backup,prime}=item;
@@ -1468,22 +1492,7 @@ window.STSimulation2D=(function(){
         const motionSeconds=reducedMotion?.matches?0:(durations.running||0)+(durations.acceleration||0)+(durations.deceleration||0);
         const detailed=machineDesign(item)&&window.STSimulation2DMachines.draw(context,
           machineTypes.get(item.id),x,top,width,height,{ink,soft:machineSoft,surface,accent:appearance.equipment||accent,belt:machineColor,resident:item.resident?.length??0,...caseDimensions(line,index)},motionSeconds);
-        if(detailed){
-          if(machineTypes.get(item.id)!=='PALLETIZER'){
-          const machineTrackY=y+height*.015;
-          context.strokeStyle=beltColor;context.lineWidth=beltDepth*.55;context.lineCap='round';
-          context.beginPath();
-          for(const side of [-1,1]){
-            const belt=line[index+side];
-            if(belt?.kind!=='belt')continue;
-            const edge=side<0?x:x+width;
-            const beltY=y+productHeight(belt)-beltHalfHeight(belt)+beltInset+beltDepth/2;
-            context.moveTo(edge,beltY);
-            context.lineTo(edge-side*width*.105,machineTrackY);
-          }
-          context.stroke();context.lineWidth=1;context.lineCap='butt';
-          }
-        }else{
+        if(!detailed){
           context.fillStyle=appearance.equipment?machineSoft:surface;context.strokeStyle=appearance.equipment||colors[signal.lamp];
           strokeBox(context,x,top,width,height);
           context.fillStyle=colors[signal.lamp];
@@ -1498,11 +1507,11 @@ window.STSimulation2D=(function(){
       }
     }
     for(let index=0;index<line.length;index++){
-      const item=line[index],{center,telemetryWidth}=items[index];
+      const item=line[index],{center,telemetryWidth,telemetryOffset}=items[index];
       const left=origin+center-telemetryWidth/2;
       if(left+telemetryWidth<0||left>w)continue;
       const signal=item.kind==='belt'?beltSignal(item):machineSignal(item);
-      drawTelemetry(context,item,left,telemetryY,signal,ink,border,surface,muted,soft,colors);
+      drawTelemetry(context,item,left,telemetryY+telemetryOffset,signal,ink,border,surface,muted,soft,colors);
     }
     if(transfer){
       drawPalletInfeed(context,line,items,origin,y,{belt:beltColor,caseColor:appearance.cases||secondary,caseAccent:appearance.caseLabel||accent,caseMarkShape:appearance.caseLabelShape,surface,accent},transfer);
@@ -1676,7 +1685,7 @@ window.STSimulation2D=(function(){
       !panel.closest('.hidden,[hidden]')&&!document.querySelector('dialog[open]')&&
       !event.target.closest?.('input,textarea,select,[contenteditable="true"]')&&model&&machineTypes.get(model.line.at(-1)?.id)==='PALLETIZER'){
       const {items,right}=equipmentLayout(model.line),output=productionLayout(model.line,items,right);
-      palletTransfer(model.line.at(-1),forkliftRoute(output),true);event.preventDefault();draw();
+      const flow=palletEntryFlow(model.line);palletTransfer({...model.line.at(-1),produced:flow.produced},forkliftRoute(output),true);event.preventDefault();draw();
     }
     if(event.key==='Escape'&&embeddedCamera&&!document.querySelector('dialog[open]')){
       event.preventDefault();
@@ -1799,7 +1808,7 @@ window.STSimulation2D=(function(){
       syncControls();if(camera.fit)fit();else draw();
     }
     const restoredCameras=newView?restoreLayout(stored||{}):false;
-    if(newView&&!restoredCameras&&camera.scale<sceneScale){camera={scale:sceneScale,x:28,y:Math.max(sceneTop()+18,canvas.clientHeight/2-80),fit:false};syncZoom();draw();}
+    if(newView&&!restoredCameras&&camera.scale<sceneScale&&equipmentLayout(model?.line||definitions).telemetryRows<=1){camera={scale:sceneScale,x:28,y:Math.max(sceneTop()+18,canvas.clientHeight/2-80),fit:false};syncZoom();draw();}
     if(newView){restoringView=false;draw();}
   }};
 })();

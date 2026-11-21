@@ -144,7 +144,16 @@ window.STSimulation2DMachines=(function(){
         context.strokeStyle=colors.belt;context.lineWidth=1;context.strokeRect(neck.x-2,neck.y,neck.width+4,12);
       }
     }
-    if(stage&8){context.fillStyle=colors.belt;context.fillRect(-5,173,110,27);}
+    context.restore();
+    if(stage&8)drawPuck(context,x,y+height,width,height,colors);
+  }
+  function drawPuck(context,x,bottom,width,height,colors){
+    // A bottle-specific carrier: its footprint follows the measured bottle width.
+    const overhang=width*.09,depth=Math.min(height*.09,width*.18);
+    context.save();context.fillStyle=colors.belt;context.strokeStyle=colors.belt;context.lineWidth=Math.min(1,width*.035);
+    context.beginPath();context.roundRect(x-overhang,bottom-depth,width+2*overhang,depth,depth*.25);context.fill();context.stroke();
+    context.fillStyle=colors.surface||'#fff';context.globalAlpha=.35;
+    context.fillRect(x-width*.025,bottom-depth,width*1.05,depth*.22);
     context.restore();
   }
   function drawCase(context,x,y,width,height,colors){
@@ -573,6 +582,6 @@ window.STSimulation2DMachines=(function(){
     }
     context.restore();
   }
-  return {draw,drawConveyor,dimensions,bottleNeck,drawBottle,drawCase,drawPalletOutput,palletStage,forkliftMotion};
+  return {draw,drawConveyor,drawPuck,dimensions,bottleNeck,drawBottle,drawCase,drawPalletOutput,palletStage,forkliftMotion};
 })();
 </script>

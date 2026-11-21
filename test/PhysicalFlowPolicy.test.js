@@ -43,7 +43,7 @@ test('conveyor dimension samples draw two matching units with independent width 
  const source=script('Simulation2D'),draws=[],dimensions=[];
  const window={STSimulation2DMachines:{drawBottle(...args){draws.push(['bottle',...args.slice(1)]);},drawCase(...args){draws.push(['case',...args.slice(1)]);}}};
  const ctx={save(){},restore(){},measureText(text){return{width:text.length*5};}};
- const context=vm.createContext({window,appearance:{bottle:'oval-jug',liquid:'#123456',cases:'#987654'},bottleStages:new Map([['belt',7]]),sceneScale:.09,telemetryFont:'6.75px system-ui',num:String,
+ const context=vm.createContext({defaultLayoutColors:{label:'#4E8AC2',caseLabel:'#4E8AC2'},window,appearance:{bottle:'oval-jug',liquid:'#123456',cases:'#987654'},bottleStages:new Map([['belt',7]]),sceneScale:.09,telemetryFont:'6.75px system-ui',num:String,
   productWidth:item=>(item.packageWidth||item.packageLength)*.09,productHeight:()=>25,
   CanvasDimension:class{constructor(...args){dimensions.push(args);}draw(){}}});
  vm.runInContext(source.slice(source.indexOf('  function drawConveyorUnitDimensions('),source.indexOf('  function drawBelt('))+';this.drawSample=drawConveyorUnitDimensions;',context);
@@ -54,4 +54,6 @@ test('conveyor dimension samples draw two matching units with independent width 
  draws.length=0;dimensions.length=0;item.unit='CASES';item.pitch=98;
  context.drawSample(ctx,item,100,100,'#111','#08f','#fff','#777','#999',null);
  assert.equal(draws.length,2);assert(draws.every(d=>d[0]==='case'));assert.equal(dimensions[1][0],'Gap · 0 mm');
+ assert(dimensions[2][3]<draws[0][2],'case center-to-center dimension is above the cases');
+ assert(dimensions[0][3]>draws[0][2]+25&&dimensions[1][3]>dimensions[0][3],'width and gap stay below the cases');
 });

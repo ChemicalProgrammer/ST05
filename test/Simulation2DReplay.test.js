@@ -221,7 +221,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     dialog.querySelector('[data-bottle-style="oval-jug"]').click();
     assert([...dialog.querySelectorAll('.simulation2d-bottle-gallery canvas')].every(preview=>previewFills.get(preview)?.includes('#f4a0c4')));
 
-    assert.equal(dialog.querySelectorAll('[aria-label="Liquid color palette"] button').length,14);
+    assert.equal(dialog.querySelectorAll('[aria-label="Liquid color palette"] button').length,15);
     dialog.querySelector('[data-bottle-style="softener"]').click();
     Array.from(dialog.querySelectorAll('button')).find(button=>button.textContent==='Cancel').click();
     assert.equal(records.length,beforeAppearance,'Cancel leaves saved appearance unchanged');
@@ -283,6 +283,8 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert.notEqual(bottles.at(-1),before,'the calculated bottle positions move');
     for(let now=1100;el('pause').disabled===false&&now<=6000;now+=20)animate(now);
     assert.equal(el('time').textContent,'25 s');
+    assert.equal(el('progress').textContent,'100.0%');
+    assert.equal(el('playback-state').textContent,'Completed');
     const expected=engine.create(createdDefinitions,78);
     while(25-expected.time>1e-8)expected.step(Math.min(1/120,25-expected.time));
     assert(expected.line.at(-1).produced>0);
@@ -1194,7 +1196,7 @@ test('bottle silhouettes are distinct and use the selected liquid only after fil
  for(const type of styles){
    assert(!trace(type,0).fills.some(([color])=>color===colors.liquid));
    assert(trace(type,2).fills.some(([color])=>color===colors.liquid));
-   assert(trace(type,15).fills.some(([,x,y,w,h])=>x===-5&&y===173&&w===110&&h===27),'puck remains supported');
+   assert(trace(type,15).ops.some(([name,x,y,w,h])=>name==='roundRect'&&Math.abs(x-5.5)<1e-9&&y===111&&w===59&&h===9),'width-matched puck remains supported');
    assert(trace(type,15).ops.some(([name])=>name==='clip'),'labels follow the bottle silhouette');
  }
 });
@@ -1214,13 +1216,13 @@ test('product and pallet drawing dimensions use measured width independently fro
  assert.equal(context.productWidth({...bottle,packageWidth:null}),90*.09,'legacy cases without width retain a fallback');
 });
 
-test('unset layout colors follow primary and secondary theme colors rather than previous browser colors',()=>{
+test('layout defaults use Kraft, boat blues and amparo blue while honoring chosen case colors',()=>{
  const source=script('Simulation2D'),theme={'--accent':'#112233','--secondary':'#778899'};
  const context=vm.createContext({window:{STPreferences:{read:()=> '#ff0000'}},canvas:{},getComputedStyle:()=>({getPropertyValue:name=>theme[name]||''})});
  vm.runInContext(source.slice(source.indexOf('  const bottleStyles='),source.indexOf('  function openAppearance(')),context);
  const defaults=context.validAppearance({});
- assert.equal(defaults.liquid,null);assert.equal(defaults.equipment,null);assert.equal(defaults.conveyors,null);
- assert.equal(context.appearanceColors().liquid,'#112233');assert.equal(context.appearanceColors().equipment,'#778899');
+ assert.equal(defaults.liquid,null);assert.equal(defaults.equipment,'#516BB7');assert.equal(defaults.cases,'#b98c5d');assert.equal(defaults.caseLabel,'#4E8AC2');assert.equal(defaults.label,'#4E8AC2');assert.equal(defaults.conveyors,null);
+ assert.equal(context.appearanceColors().liquid,'#112233');assert.equal(context.appearanceColors().equipment,'#516BB7');
  theme['--accent']='#345678';assert.equal(context.appearanceColors().liquid,'#345678');
  vm.runInContext('appearance=validAppearance({liquid:"#123456",equipment:"#abcdef",conveyors:"#223344"})',context);
  assert.equal(context.appearanceColors().liquid,'#123456');assert.equal(context.appearanceColors().equipment,'#abcdef');assert.equal(context.appearanceColors().conveyors,'#223344');
@@ -1627,7 +1629,7 @@ test('straight conveyor extensions reach the equipment when wider cards require 
 
 test('departing bottles advance into the equipment port and are clipped by its face',()=>{
  const source=script('Simulation2D'),bottles=[],clips=[],model={time:0};
- const context=vm.createContext({window:{STSimulation2DMachines:{drawBottle(ctx,x,y,w,h){bottles.push({x,y,w,h});}}},model,sceneScale:.09,beltDepth:5.625,beltInset:1.125,bottleStages:new Map([['b',7]]),appearance:{},productWidth:()=>20,productHeight:()=>40,strokeBox(){}});
+ const context=vm.createContext({defaultLayoutColors:{label:'#4E8AC2'},window:{STSimulation2DMachines:{drawBottle(ctx,x,y,w,h){bottles.push({x,y,w,h});}}},model,sceneScale:.09,beltDepth:5.625,beltInset:1.125,bottleStages:new Map([['b',7]]),appearance:{},productWidth:()=>20,productHeight:()=>40,strokeBox(){}});
  vm.runInContext(source.slice(source.indexOf('  function drawBelt('),source.indexOf('  function draw(){'))+';this.drawBand=drawBelt;',context);
  const ctx=new Proxy({rect(x,y,w,h){clips.push({x,y,w,h});},clip(){assert(clips.length>0);}},{get:(o,k)=>o[k]??(()=>{})});
  const belt={id:'b',unit:'BOTTLES',length:1000,packageLength:200,speed:1000,items:[],recentOutput:[0]};
@@ -1716,4 +1718,18 @@ test('telemetry columns fit full labels, large counts, units and a separate geom
  const widths=vm.runInContext('telemetryWidths.slice()',context);
  item.durations.flowing=1;item.produced=1;context.measureTelemetry([item]);
  assert.deepEqual(vm.runInContext('telemetryWidths.slice()',context),widths,'columns do not shrink or jitter during a run');
+});
+
+
+test('pucks follow bottle width, sit on the belt and disappear after the depucker',()=>{
+ const window={};vm.runInNewContext(script('Simulation2DMachines'),{window});
+ const art=window.STSimulation2DMachines;
+ for(const width of [10,20,40]){
+  const bases=[],ctx=new Proxy({roundRect(x,y,w,h){bases.push({x,y,w,h});}},{get:(o,k)=>o[k]??(()=>{})});
+  art.drawPuck(ctx,100,200,width,100,{belt:'#777',surface:'#fff'});
+  const base=bases[0];assert(Math.abs(base.w-width*1.18)<1e-8);assert.equal(base.y+base.h,200);
+  const plain=[],bottle=new Proxy({roundRect(...args){plain.push(args);}},{get:(o,k)=>o[k]??(()=>{})});
+  art.drawBottle(bottle,100,100,width,100,{belt:'#777',surface:'#fff'},'classic',7);
+  assert(!plain.some(([,y,w,h])=>y+h===200&&Math.abs(w-width*1.18)<1e-8),'after depucker the bottle has no carrier');
+ }
 });

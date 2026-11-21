@@ -304,7 +304,7 @@ test('2D uses the representative seed to calculate new production and preserves 
       if(previous&&first.y===previous.y)assert(first.x>=previous.x+previous.width);
       firstCardIndex+=count;
     }
-    const control=el('machine-controls').querySelector('[aria-label="upstream controls"]');
+    let control=el('machine-controls').querySelector('[aria-label="upstream controls"]');
     assert(Math.abs(parseFloat(control.style.left)-(silhouettes[0].x+silhouettes[0].width/2)*scale)<1e-8);
     const cardText=fittedFrame.filter(([, , , y])=>y>=telemetryY);
     assert(cardText.every(([,font])=>font==='6.75px system-ui'||font==='600 6.75px system-ui'));
@@ -330,6 +330,14 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert.equal(value[4],'right');
     assert(parameter[2]<value[2]&&value[2]<unit[2]);
     assert.equal(JSON.stringify(records.at(-1).checkpoint),JSON.stringify(records[saved-1].checkpoint),'view saves preserve the independent simulation while viewing a representative round');
+    const selectedRound=window.STSimulation2D.capture();
+    assert.equal(selectedRound.source,'representative');
+    assert(Math.abs(selectedRound.representativeView.checkpoint.time-25)<1e-8);
+    window.STSimulation2D.unload();
+    window.STSimulation2D.load(['case','simulation'],equipment,null,{seed:7,durationSeconds:25},selectedRound,record=>records.push(record),source);
+    assert.equal(el('source').value,'representative');assert.equal(el('time').textContent,'25 s');
+    assert.equal(JSON.stringify(window.STSimulation2D.capture().checkpoint),JSON.stringify(selectedRound.checkpoint));
+    control=el('machine-controls').querySelector('[aria-label="upstream controls"]');
     el('source').value='independent';
     el('source').dispatchEvent(new window.Event('change'));
     assert.equal(el('time').textContent,'1 s');
@@ -480,6 +488,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     };
     const sensorPosition=label=>marker(label).slice(2,4);
     const originalSensors=['B','P'].map(sensorPosition);
+    const beltDrawingScale=(originalSensors[1][0]-originalSensors[0][0])/1000;
     for(const control of ['source','machine-style','dimensions']){
       assert.equal(el(control).closest('.simulation2d-options'),dimensions.closest('.simulation2d-options'));
     }
@@ -513,7 +522,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     const lactLines=segments.filter(({start,end,dash})=>!dash&&start[1]===lactY&&end[1]===lactY);
     assert.equal(lactLines.length,2);
     assert(lactLines[0].end[0]<lact[2]&&lactLines[1].start[0]>lact[2]);
-    assert(segments.some(({start,end,dash})=>!dash&&start[1]===discharge[3]+10&&end[1]===start[1]&&Math.abs(end[0]-start[0]-9)<.0001));
+    assert(segments.some(({start,end,dash})=>!dash&&start[1]===discharge[3]+10&&end[1]===start[1]&&Math.abs(end[0]-start[0]-100*beltDrawingScale)<.0001));
     const guides=()=>segments.filter(({start,end,dash})=>dash&&start[1]===lactY&&end[1]>lactY);
     canvas.dispatchEvent(new window.MouseEvent('pointermove',{clientX:lact[2]*scale,clientY:lactY*scale}));
     assert.equal(guides().length,2);
@@ -522,8 +531,8 @@ test('2D uses the representative seed to calculate new production and preserves 
 
     const close=(actual,expected)=>assert(Math.abs(actual-expected)<.0001);
     assert.deepEqual(['B','P'].map(sensorPosition),originalSensors);
-    close(marker('Design B')[2]-marker('Max Run-Out point')[2],555*.09);
-    close(marker('P')[2]-marker('Design B')[2],695*.09);
+    close(marker('Design B')[2]-marker('Max Run-Out point')[2],555*beltDrawingScale);
+    close(marker('P')[2]-marker('Design B')[2],695*beltDrawingScale);
     assert(!marker('Design P'));
     assert(overflow[3]<marker('B')[3]);
     const headings=labels.slice(lastFrameOrigin).filter(([text])=>text==='Parameter').slice(0,6);
@@ -598,7 +607,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert.equal(minLength[2],totalLength[2]);
     assert.equal(minLength[3]-totalLength[3],14);
     assert(!segments.some(({start,end,dash})=>!dash&&start[1]===minLength[3]&&end[1]===minLength[3]));
-    close(extent('Lact'),2000*.09);
+    close(extent('Lact'),2000*beltDrawingScale);
     equipment[1].processData.geometry.lactMm=2540;
     const limit=window.STConveyorAnalysis.calculate({
       zone:geometry,data:equipment[1].processData,index:1,
@@ -758,7 +767,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     }
     window.STSimulation2D.unload();
     window.STSimulation2D.load(identity,equipment,null,config,fullscreenRecord,record=>records.push(record));
-    el('fullscreen').click();el('speed').dispatchEvent(new window.Event('change'));
+    assert.equal(el('fullscreen').getAttribute('aria-pressed'),'true','reopen in the saved fullscreen mode');el('speed').dispatchEvent(new window.Event('change'));
     assert.deepEqual(JSON.parse(JSON.stringify(records.at(-1).layout.fullscreenCameras)),fullscreenViews,'fullscreen cameras survive reopening the case');
     assert.equal(JSON.stringify(records.at(-1).checkpoint),JSON.stringify(fullscreenRecord.checkpoint));
     el('fullscreen').click();
@@ -788,6 +797,20 @@ test('2D uses the representative seed to calculate new production and preserves 
     el('panel').classList.add('hidden');pressM();el('panel').classList.remove('hidden');assert.equal(forkColors.forkProgress,undefined);
     pressM(window,{repeat:true});assert.equal(forkColors.forkProgress,undefined);
     pressM();assert.equal(forkColors.forkProgress,0,'M sends the forklift for the first complete staged pallet');
+    for(let tick=0;tick<60;tick++)currentModel.step(1/120);
+    const callbacksBeforeCapture=records.length;
+    const exactState=JSON.parse(JSON.stringify(window.STSimulation2D.capture())),forkBeforeReload=forkColors.forkProgress;
+    assert.equal(records.length,callbacksBeforeCapture,'taking a save snapshot does not enqueue another autosave');
+    assert.equal(exactState.version,2);assert(exactState.checkpoint.time>.49);
+    assert.equal(exactState.presentation.palletAnimation.forkStarted,0);
+    window.STSimulation2D.unload();
+    window.STSimulation2D.load(['manual-fork','case'],palletLine,{},config,exactState,record=>records.push(record));
+    const resumed=JSON.parse(JSON.stringify(window.STSimulation2D.capture()));
+    assert.equal(JSON.stringify(resumed.checkpoint),JSON.stringify(exactState.checkpoint));
+    assert.deepEqual(resumed.presentation,exactState.presentation);
+    assert.equal(forkColors.forkProgress,forkBeforeReload,'forklift resumes at its saved position');
+    assert.equal(el('pause').disabled,true);assert.equal(el('play').disabled,false);
+
     window.STSimulation2DMachines.drawPalletOutput=originalPalletDraw;window.STSimulation2DMachines.draw=originalMachineDraw;
   }finally{dom.window.close();}
 });
@@ -898,11 +921,11 @@ test('a palletizer case crosses continuously from belt exit through the machine 
   const belt={kind:'belt'},machine={resident:[10],residenceClock:0,residenceSeconds:10};
   const items=[{left:100,width:200},{left:400,width:300}];
   const path=context.palletInfeed([belt,machine],items,100);
-  assert.equal(path.cases[0].left,263);
+  assert.equal(path.cases[0].left,363);
   assert.equal(path.cases[0].top,82);
   machine.residenceClock=5;
   const midway=context.palletInfeed([belt,machine],items,100).cases[0];
-  assert.equal(midway.left,463);
+  assert.equal(midway.left,513);
   machine.residenceClock=10;
   const end=context.palletInfeed([belt,machine],items,100);
   assert.equal(end.cases[0].left,end.pickup);
@@ -1577,17 +1600,18 @@ test('conveyor band height is fixed at 75 percent and independent of conveyor le
  assert.deepEqual(boxes.map(b=>b.h),[7.5*.75,7.5*.75]);assert.equal(boxes[1].w/boxes[0].w,10);
 });
 
-test('conveyors meet equipment ports directly while cards occupy nonoverlapping rows',()=>{
+test('straight conveyor extensions reach the equipment when wider cards require spacing',()=>{
  const source=script('Simulation2D');
  const context=vm.createContext({displayWidth:item=>item.width,machineDesign:item=>item.animated?{}:null,conveyorGroupWidth:400,telemetryGroupWidth:450,telemetryCardHeight:190,cardGap:24});
  vm.runInContext(source.slice(source.indexOf('  function equipmentLayout('),source.indexOf('  function caseDimensions(')),context);
  for(const animated of [false,true]){
    const line=[{kind:'machine',width:180,animated},{kind:'belt',width:90},{kind:'machine',width:200,animated},{kind:'belt',width:900},{kind:'machine',width:220,animated}];
    const layout=context.equipmentLayout(line);
-   for(let i=1;i<line.length;i++){
-     const previous=layout.items[i-1],current=layout.items[i];
-     const expected=previous.left+previous.width-previous.outlet-(line[i].animated?current.width*.1:0);
-     assert(Math.abs(current.left-expected)<1e-8,'conveyor and equipment ports share the same position');
+   for(const i of [1,3]){
+     const span=context.conveyorSpan(line,layout.items,i),before=layout.items[i-1],after=layout.items[i+1];
+     assert.equal(span.left,before.left+before.width-before.outlet);
+     assert.equal(span.left+span.width,after.left+after.inlet);
+     assert(span.width>=layout.items[i].width,'horizontal extensions cover card spacing');
    }
    for(let i=0;i<layout.items.length;i++)for(let j=i+1;j<layout.items.length;j++){
      const a=layout.items[i],b=layout.items[j];
@@ -1606,7 +1630,7 @@ test('departing bottles advance into the equipment port and are clipped by its f
  context.drawBand(ctx,0,0,90,belt,1,1000,'#08f','#777','#fff');const start=bottles.at(-1).x;
  model.time=.1;context.drawBand(ctx,0,0,90,belt,1,1000,'#08f','#777','#fff');
  assert(bottles.at(-1).x>start);assert.equal(clips.at(-1).w,90);
- const drawn=bottles.length;model.time=.21;context.drawBand(ctx,0,0,90,belt,1,1000,'#08f','#777','#fff');assert.equal(bottles.length,drawn);
+ const drawn=bottles.length;model.time=.3;context.drawBand(ctx,0,0,90,belt,1,1000,'#08f','#777','#fff');assert.equal(bottles.length,drawn);
 });
 
 test('zero-residence palletizer still shows case entry, interior travel and pickup without changing production',()=>{

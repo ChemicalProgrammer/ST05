@@ -74,9 +74,8 @@ function saveCaseUnlocked_(request, user) {
   // Full editor requests already contain simulations; read only the manifest.
   var owned = getOwnedCaseFile_(request.id, user, Array.isArray(request.simulations));
   var current = owned.caseData;
-  if (Number(request.expectedRevision) !== Number(current.revision)) {
-    throw createSimulatorError_('CASE_CONFLICT', 'This Case was changed elsewhere. Reload it before saving.');
-  }
+  // Owned-case saves accept the current draft even if its revision is older.
+  // The write lock still serializes writes and the new revision follows the stored one.
 
   stage='NORMALIZE';
   var next = buildUpdatedCase_(request, current, user);

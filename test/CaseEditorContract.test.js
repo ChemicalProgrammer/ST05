@@ -42,28 +42,12 @@ test('updates a case with ordered equipment and increments its revision', () => 
   assert.equal(saved.equipment[1].unitOfFlow, 'cases');
 });
 
-test('rejects a stale Case Editor save instead of overwriting a newer revision', () => {
-  const runtime = createCaseRuntime();
-  const created = runtime.createCase_({ name: 'Concurrent edit' }, owner);
-  const original = runtime.getCase_(created.id, owner);
-  runtime.saveCase_({
-    id: original.id,
-    expectedRevision: original.revision,
-    name: 'First save',
-    unitOfFlow: 'units',
-    equipment: []
-  }, owner);
-
-  assert.throws(
-    () => runtime.saveCase_({
-      id: original.id,
-      expectedRevision: original.revision,
-      name: 'Stale save',
-      unitOfFlow: 'units',
-      equipment: []
-    }, owner),
-    (error) => error.simulatorError?.code === 'CASE_CONFLICT'
-  );
+test('accepts the current owned-case draft even when its revision is older', () => {
+  const runtime=createCaseRuntime(),created=runtime.createCase_({name:'Concurrent edit'},owner),original=runtime.getCase_(created.id,owner);
+  runtime.saveCase_({id:original.id,expectedRevision:original.revision,name:'First save',unitOfFlow:'units',equipment:[]},owner);
+  const saved=runtime.saveCase_({id:original.id,expectedRevision:original.revision,name:'Latest local draft',unitOfFlow:'units',equipment:[]},owner);
+  assert.equal(saved.name,'Latest local draft');assert.equal(saved.revision,3);
+  assert.equal(runtime.getCase_(created.id,owner).name,'Latest local draft');
 });
 
 test('preserves explicit real-format process data without inventing missing values', () => {
@@ -228,4 +212,17 @@ test('Capper is a supported physical type and survives case persistence',()=>{
  const summary=runtime.createCase_({name:'Capping study',equipment:[unit]},owner);
  assert.equal(runtime.getCase_(summary.id,owner).equipment[0].type,'CAPPER');
  assert.equal(runtime.getCase_(summary.id,owner).equipment[0].processData.machineType,'CAPPER');
+});
+
+test('case storage preserves resumable 2D physics, presentation and selected view',()=>{
+ const runtime=createCaseRuntime(),created=runtime.createCase_({name:'Resume',simulations:[{id:'view',name:'Simulation'}]},owner);
+ const record=runtime.getCase_(created.id,owner);
+ const diagram={version:2,identity:[created.id,'view'],source:'representative',signature:'physical',
+  checkpoint:{time:12.345,line:[{resident:[14],produced:8,randomState:42}]},
+  presentation:{palletAnimation:{time:12.345,placed:37,forkStarted:10,removedPallets:[0]},palletFlow:{time:12.345,seen:9,ready:8,entries:[{at:12,count:1}]}},
+  representativeView:{seed:78,round:2,checkpoint:{time:42.25,line:[{items:[{x:123.4}]}]}},
+  layout:{fullscreen:true,activeViewport:1,cameras:[{scale:.09,x:12,y:34}]}};
+ record.simulations[0].simulation2d=diagram;
+ runtime.saveCase_({...record,expectedRevision:0},owner);
+ assert.deepEqual(JSON.parse(JSON.stringify(runtime.getCase_(created.id,owner).simulations[0].simulation2d)),diagram);
 });

@@ -238,7 +238,7 @@ test('existing inline data is preserved across failed and successful migration t
  manifest.fail=true;assert.throws(()=>h.ctx.saveCase_(record,owner));assert.equal(manifest.content,before);assert.equal(h.ctx.getCase_('inline-legacy',owner).simulations[0].name,'Original');
  manifest.fail=false;h.ctx.saveCase_(record,owner);const stored=JSON.parse(manifest.content);assert.equal(stored.storageVersion,'case-folder-1');assert(stored.simulationFiles[0].fileName);assert(!stored.simulationFiles[0].inline);
  assert.deepEqual(JSON.parse(JSON.stringify(h.ctx.getCase_('inline-legacy',owner).simulations)),JSON.parse(JSON.stringify(record.simulations)));
- assert.throws(()=>h.ctx.saveCase_(record,owner),e=>e.simulatorError.code==='CASE_CONFLICT');
+ assert.doesNotThrow(()=>h.ctx.saveCase_(record,owner),'an idempotent retry may use the earlier revision');
 });
 
 test('changed simulations retain file identity, unchanged simulations are not read or written, and no replacement files are created',()=>{

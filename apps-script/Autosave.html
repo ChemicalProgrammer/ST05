@@ -28,7 +28,7 @@ window.STAutosave = function(options) {
       sending = false;
       if (!response.ok) {
         failure = Object.assign(new Error(response.error.message), {code: response.error.code});
-        // Keep the draft. Ambiguous failures must not blindly overwrite a revision.
+        // Keep the draft on failure; an explicit retry can submit it again.
         notify(); settle(failure); return;
       }
       saved = ticket;
@@ -44,13 +44,10 @@ window.STAutosave = function(options) {
     version++;
     if (firstEdit === null) firstEdit = Date.now();
     lastEdit = Date.now(); immediateDue = immediateDue || !!immediate;
-    // A conflict requires an explicit reload, never a blind overwrite.
-    if (failure && failure.code === 'CASE_CONFLICT') { notify(); return; }
     failure = null; notify(); schedule();
   }
   function flush() {
     return new Promise(function(resolve, reject) {
-      if (failure && failure.code === 'CASE_CONFLICT') { reject(failure); return; }
       waiters.push({resolve:resolve,reject:reject}); write();
     });
   }

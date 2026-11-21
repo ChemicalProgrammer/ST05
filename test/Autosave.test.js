@@ -15,9 +15,9 @@ test('autosave retains failed edits and retries transient errors',async()=>{
  const h=setup();h.edit('retained');const failed=h.queue.flush();h.sent[0].done({ok:false,error:{code:'NETWORK_ERROR',message:'offline'}});await assert.rejects(failed,/offline/);assert(h.queue.pending());
  const retry=h.queue.retry();assert.equal(h.sent[1].payload.value,'retained');h.sent[1].done({ok:true,data:{revision:2}});await retry;assert(!h.queue.pending());
 });
-test('autosave never silently retries a conflicting revision',async()=>{
+test('autosave lets the current draft retry after an older revision warning',async()=>{
  const h=setup();h.edit('local');const failed=h.queue.flush();h.sent[0].done({ok:false,error:{code:'CASE_CONFLICT',message:'conflict'}});await assert.rejects(failed,/conflict/);
- h.edit('more local edits');await assert.rejects(h.queue.flush(),/conflict/);assert.equal(h.sent.length,1);assert(h.queue.pending());h.queue.reset();
+ h.edit('more local edits');const retry=h.queue.flush();assert.equal(h.sent.length,2);assert.equal(h.sent[1].payload.value,'more local edits');h.sent[1].done({ok:true,data:{revision:3}});await retry;assert(!h.queue.pending());h.queue.reset();
 });
 
 function clock(){

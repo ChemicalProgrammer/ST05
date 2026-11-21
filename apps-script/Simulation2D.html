@@ -394,7 +394,7 @@ window.STSimulation2D=(function(){
   }
   function layoutRecord(){
     viewports[activeViewport].camera=camera;
-    return {activeViewport,split:{...split},equipmentView:machineStyle.value,showDimensions:showDimensions.checked,showEvents:showEvents.checked,
+    return {activeViewport,fullscreen:Boolean(embeddedCamera),split:{...split},equipmentView:machineStyle.value,showDimensions:showDimensions.checked,showEvents:showEvents.checked,
       folds:Object.fromEntries(['settings','events-panel','results'].map(id=>[id,el(id).querySelector('[data-subsection-toggle]').getAttribute('aria-expanded')!=='false'])),
       cameras:embeddedCamera??captureViewportCameras(),fullscreenCameras:embeddedCamera?captureViewportCameras():fullscreenCamera??undefined};
   }
@@ -629,20 +629,22 @@ window.STSimulation2D=(function(){
     return half+dimensionOffset+dimensionLevels*dimensionRowHeight;
   }
   function equipmentLayout(line){
-    let right=0,previous;const rows=[];
+    let right=0,previous;
     const items=line.map(item=>{
       const width=displayWidth(item),telemetryWidth=item.kind==='belt'?conveyorGroupWidth:telemetryGroupWidth;
-      const inlet=machineDesign(item)?width*.1:0;
-      const left=previous?right-(previous.outlet||0)-inlet:(Math.max(width,telemetryWidth)-width)/2;
-      const center=left+width/2,cardLeft=center-telemetryWidth/2;
-      let row=rows.findIndex(edge=>cardLeft>=edge+cardGap);
-      if(row<0)row=rows.length;
-      rows[row]=cardLeft+telemetryWidth;
-      right=left+width;
-      previous={left,center,width,telemetryWidth,telemetryRow:row,telemetryOffset:row*(telemetryCardHeight+cardGap),outlet:machineDesign(item)?width*.1:0};
+      const center=previous?Math.max(right+width/2,previous.center+(previous.telemetryWidth+telemetryWidth)/2+cardGap):Math.max(width,telemetryWidth)/2;
+      right=center+width/2;
+      previous={left:center-width/2,center,width,telemetryWidth,telemetryRow:0,telemetryOffset:0,inlet:machineDesign(item)?width*.1:0,outlet:machineDesign(item)?width*.1:0};
       return previous;
     });
-    return {items,right,telemetryRows:rows.length,boundsRight:Math.max(right,...rows)};
+    return {items,right,telemetryRows:items.length?1:0,boundsRight:Math.max(right,...items.map(item=>item.center+item.telemetryWidth/2))};
+  }
+  function conveyorSpan(line,items,index){
+    const belt=items[index],before=items[index-1],after=items[index+1];
+    const inlet=after&&machineDesign(line[index+1])?after.width*.1:0;
+    const left=before?before.left+before.width-(before.outlet||0):belt.left;
+    const right=after?after.left+inlet:belt.left+belt.width;
+    return {left,width:right-left,scale:(right-left)/line[index].length};
   }
   function caseDimensions(line,index){
     const upstream=line.slice(0,index).reverse().find(item=>item.kind==='belt'&&item.unit==='CASES');
@@ -802,7 +804,7 @@ window.STSimulation2D=(function(){
     const upstream=line[index-1],entry=items[index-1];
     const {caseWidth,caseHeight}=caseDimensions(line,index);
     const pickup=layout.left+layout.width-caseWidth;
-    const start=upstream?.kind==='belt'?entry.left+entry.width-caseWidth:layout.left;
+    const start=upstream?.kind==='belt'?layout.left+(layout.inlet||0)-caseWidth:layout.left;
     const startBottom=upstream?.kind==='belt'?y+productHeight(upstream)-beltHalfHeight(upstream):y;
     const cases=transfer?.entries?transfer.entries.map(entry=>({left:start+(pickup-start)*entry.progress,top:startBottom-caseHeight})):(item.resident||[]).map(ready=>{
       const progress=Math.max(0,Math.min(1,1-(ready-item.residenceClock)/Math.max(step,item.residenceSeconds)));
@@ -1161,6 +1163,7 @@ window.STSimulation2D=(function(){
     }
   }
   function drawConveyorDimensions(context,item,x,y,width,beltY,ink,accent,pointer){
+    const coordinateScale=width/item.length;
     const design=conveyorDimensions.get(item.id);
     const rows=design?.rows||[];
     context.save();
@@ -1176,8 +1179,10 @@ window.STSimulation2D=(function(){
         const midpoint=Number.isFinite(start)&&Number.isFinite(end)
           ?Math.max(0,Math.min(item.length,(start+end)/2)):item.length/2;
         const text=Number.isFinite(value)?label+' · '+num(value)+' mm'+(row.deficit?' deficit':'')+(row.partial?' (partial)':''):label+' · pending';
-        return new CanvasDimension(text,x+(valid?start:midpoint)*sceneScale,
-          x+(valid?end:midpoint)*sceneScale,rowY,beltY,context.measureText(text).width,row.deficit);
+        const dimension=new CanvasDimension(text,x+(valid?start:midpoint)*coordinateScale,
+          x+(valid?end:midpoint)*coordinateScale,rowY,beltY,context.measureText(text).width,row.deficit);
+        if(tier===0)dimension.inline=false;
+        return dimension;
       });
       const callouts=dimensions.filter(dimension=>!dimension.inline);
       for(let index=1;index<callouts.length;index++){
@@ -1229,7 +1234,7 @@ window.STSimulation2D=(function(){
     if(factor>=.25&&right>left){
       context.lineWidth=3*.75;
       context.setLineDash([20,8]);
-      const phase=((item.travelSeconds??model?.time??0)*item.speed*sceneScale)%28||0;
+      const phase=((item.travelSeconds??model?.time??0)*item.speed*(width/item.length))%28||0;
       for(const direction of [1,-1]){
         context.lineDashOffset=left-x-5-direction*phase;
         const track=y+(direction===1?beltInset:beltDepth+beltInset);
@@ -1244,16 +1249,18 @@ window.STSimulation2D=(function(){
     const labeled=Boolean(stage&1),filled=Boolean(stage&2),capped=Boolean(stage&4),pucked=Boolean(stage&8);
     const marker=length*factor<2;
     const bodyWidth=length,bodyHeight=height;
+    const productScale=Math.max(.000001,(width-bodyWidth)/Math.max(.000001,item.length-item.packageLength));
+    const productPosition=product=>x+bodyWidth/2+(product.x-item.packageLength/2)*productScale;
     const top=y-bodyHeight;
     const dx=bodyWidth/14,dy=bodyHeight/30;
     const products=[...(item.items||[])];
     if(entryTail&&item.speed>0)for(const at of item.recentOutput||[]){
       const elapsed=(model?.time??0)-at;
-      if(elapsed>=0&&elapsed<item.packageLength/item.speed)products.push({x:item.length-item.packageLength/2+elapsed*item.speed});
+      if(elapsed>=0&&elapsed<bodyWidth/(item.speed*productScale))products.push({x:item.length-item.packageLength/2+elapsed*item.speed});
     }
     if(cases){
       for(const product of products){
-        const px=x+product.x*sceneScale;
+        const px=productPosition(product);
         if(px+bodyWidth/2<0||px-bodyWidth/2>w)continue;
         window.STSimulation2DMachines.drawCase(context,px-length/2,y-height,length,height,{belt:beltColor,surface,caseColor:appearance.cases||caseColor,caseAccent:appearance.caseLabel||accent,caseMarkShape:appearance.caseLabelShape,accent});
       }
@@ -1261,7 +1268,7 @@ window.STSimulation2D=(function(){
     }
     if(!marker){
       for(const product of products){
-        const px=x+product.x*sceneScale;
+        const px=productPosition(product);
         if(px+bodyWidth/2>=0&&px-bodyWidth/2<=w)window.STSimulation2DMachines.drawBottle(context,px-bodyWidth/2,top,bodyWidth,bodyHeight,{surface,belt:beltColor,accent,liquid:appearance.liquid||accent,cap:appearance.cap||caseColor,label:appearance.label||'#f4f3ec',labelShape:appearance.labelShape},appearance.bottle,stage);
       }
       return;
@@ -1269,7 +1276,7 @@ window.STSimulation2D=(function(){
     const visible=px=>px+bodyWidth/2>=0&&px-bodyWidth/2<=w;
     context.beginPath();
     for(const product of products){
-      const px=x+product.x*sceneScale;
+      const px=productPosition(product);
       if(!visible(px))continue;
       const l=px-bodyWidth/2,r=px+bodyWidth/2;
       if(marker){
@@ -1298,7 +1305,7 @@ window.STSimulation2D=(function(){
     if(filled&&!marker){
       context.beginPath();
       for(const product of products){
-        const px=x+product.x*sceneScale;
+        const px=productPosition(product);
         if(!visible(px))continue;
         const l=px-bodyWidth/2,r=px+bodyWidth/2,level=top+4*dy;
         context.moveTo(l+4.6*dx,level);context.lineTo(l+4.6*dx,y-22*dy);
@@ -1314,7 +1321,7 @@ window.STSimulation2D=(function(){
     if(labeled){
       context.beginPath();
       for(const product of products){
-        const px=x+product.x*sceneScale;
+        const px=productPosition(product);
         if(visible(px))context.rect(px-bodyWidth*.5,y-bodyHeight*.36,bodyWidth,bodyHeight*.19);
       }
       context.fillStyle='#fff';context.fill();
@@ -1324,7 +1331,7 @@ window.STSimulation2D=(function(){
     if(pucked){
       context.fillStyle=beltColor;
       for(const product of products){
-        const px=x+product.x*sceneScale;
+        const px=productPosition(product);
         if(visible(px))context.fillRect(px-bodyWidth*.6,y-bodyHeight*.16,bodyWidth*1.2,bodyHeight*.16);
       }
     }
@@ -1333,7 +1340,7 @@ window.STSimulation2D=(function(){
       const capHeight=Math.min(bodyHeight*.25,Math.max(2.5*dy,1/factor));
       context.beginPath();
       for(const product of products){
-        const px=x+product.x*sceneScale;
+        const px=productPosition(product);
         if(visible(px))context.rect(px-capWidth/2,top,capWidth,capHeight);
       }
       context.fillStyle=appearance.cap||caseColor;context.fill();
@@ -1440,8 +1447,9 @@ window.STSimulation2D=(function(){
       }
     }
     for(let index=0;index<line.length;index++){
-      const item=line[index],{left,width}=items[index],x=origin+left;
-      const lane=item.kind==='belt';
+      const item=line[index],lane=item.kind==='belt';
+      const geometry=lane?conveyorSpan(line,items,index):items[index];
+      const {left,width}=geometry,x=origin+left;
       if(x+width<0||x>w)continue;
       if(lane){
         const beltY=y+productHeight(item)-beltHalfHeight(item);
@@ -1458,7 +1466,7 @@ window.STSimulation2D=(function(){
           ['P',prime]
         ]){
           if(!Number.isFinite(position)||position<0||position>item.length)continue;
-          const sx=x+position*scale,sy=sensorY-(label==='B'&&closeSensors?20:0);
+          const sx=x+position*geometry.scale,sy=sensorY-(label==='B'&&closeSensors?20:0);
           if(sx<0||sx>w)continue;
           context.strokeStyle=accent;
           context.beginPath();context.moveTo(sx,beltY);context.lineTo(sx,sy);context.stroke();
@@ -1474,7 +1482,7 @@ window.STSimulation2D=(function(){
             ['Design P',Number.isFinite(prime)&&Math.abs(dimensions.prime-prime)<1e-6?null:dimensions.prime,84]
           ]){
             if(!Number.isFinite(position)||position<0||position>item.length)continue;
-            const mx=x+position*scale,my=dimensionY+offset+10;
+            const mx=x+position*geometry.scale,my=dimensionY+offset+10;
             context.strokeStyle=accent;context.fillStyle=ink;
             context.setLineDash([3,4]);
             context.beginPath();context.moveTo(mx,beltY);context.lineTo(mx,my+4);context.stroke();
@@ -1552,13 +1560,32 @@ window.STSimulation2D=(function(){
     el('source').options[1].disabled=!representative;
     status();
   }
+  function presentationRecord(){
+    const withoutModel=value=>value?.model===model?Object.fromEntries(Object.entries(value).filter(([name])=>name!=='model')):null;
+    return JSON.parse(JSON.stringify({palletAnimation:withoutModel(palletAnimation),palletFlow:withoutModel(palletFlow),
+      machineActions:[...lastMachineActions],playbackAction:['play','pause','stop','reset'].find(name=>el(name).getAttribute('aria-pressed')==='true')}));
+  }
+  function restorePresentation(record){
+    record=record?JSON.parse(JSON.stringify(record)):null;
+    palletAnimation=record?.palletAnimation?{...record.palletAnimation,model}:null;
+    palletFlow=record?.palletFlow?{...record.palletFlow,model}:null;
+    lastMachineActions.clear();for(const [id,action] of record?.machineActions||[])lastMachineActions.set(id,action);
+    markPlaybackAction(record?.playbackAction??null);
+  }
+  function capture(){
+    if(restoringView||!viewKey)return null;
+    draw();
+    return {
+      identity:JSON.parse(viewKey),layout:layoutRecord(),version:2,appearance:{...appearance},viewports:viewportCount,options:scheduleSettings(),speed:Number(el('speed').value),limitSeconds,signature,runState:defaultRun?.runState??runState,
+      shiftOutput:[...(defaultRun?.shiftOutput??shiftOutput)],checkpoint:(defaultRun?.model??model)?.snapshot()??null,
+      presentation:defaultRun?.presentation??presentationRecord(),source:defaultRun?'representative':'independent',
+      representativeView:defaultRun?{seed:representative.seed,round:representative.round,runState,shiftOutput:[...shiftOutput],checkpoint:model?.snapshot(),presentation:presentationRecord()}:undefined
+    };
+  }
   function checkpoint(){
-    if(!save||restoringView)return;
-    window.clearTimeout(viewSaveTimer);viewSaveTimer=null;
-    save({
-      layout:layoutRecord(),version:1,appearance:{...appearance},viewports:viewportCount,options:scheduleSettings(),speed:Number(el('speed').value),limitSeconds,signature,runState:defaultRun?.runState??runState,
-      shiftOutput:[...(defaultRun?.shiftOutput??shiftOutput)],checkpoint:(defaultRun?.model??model)?.snapshot()??null
-    });
+    if(!save)return;
+    const record=capture();if(!record)return;
+    window.clearTimeout(viewSaveTimer);viewSaveTimer=null;save(record);
   }
   function pause(){
     if(runState!=='Running'){if(viewSaveTimer!==null)checkpoint();return;}
@@ -1575,11 +1602,12 @@ window.STSimulation2D=(function(){
     if(useRepresentative===Boolean(defaultRun))return;
     pause();
     if(useRepresentative){
-      defaultRun={model,shiftOutput,runState,validation};
+      defaultRun={model,shiftOutput,runState,validation,presentation:presentationRecord()};
       reset();
     }else{
+      const savedPresentation=defaultRun.presentation;
       ({model,shiftOutput,runState,validation}=defaultRun);
-      defaultRun=null;lag=0;lastMetrics=-Infinity;configureModel();
+      defaultRun=null;lag=0;lastMetrics=-Infinity;configureModel();restorePresentation(savedPresentation);
       syncControls();if(camera.fit)fit();else draw();
     }
     el('source').value=useRepresentative?'representative':'independent';
@@ -1749,7 +1777,7 @@ window.STSimulation2D=(function(){
   if(window.ResizeObserver){const observer=new ResizeObserver(()=>{if(!panel.classList.contains('hidden')&&canvas.clientWidth){if(camera.fit&&viewportCount===1)fit();else draw();}});viewports.forEach(view=>observer.observe(view.canvas));}
   setViewportCount(Number(window.STPreferences?.read('simulation2dViewports'))||1);
   window.addEventListener('st:theme',()=>draw());
-  return {pause,syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
+  return {pause,capture,hasState:()=>Boolean(viewKey&&model),syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
     const configuredHours=config.shiftHours??config.durationOptions?.shiftHours??config.shiftSeconds/3600;
     const hours=Number.isFinite(configuredHours)&&configuredHours>0?configuredHours:8;
     const next=JSON.stringify([identity,config.seed,hours]);
@@ -1800,16 +1828,27 @@ window.STSimulation2D=(function(){
     if(!el('speed').value)el('speed').value='1';
     if(newView){lastMachineActions.clear();markPlaybackAction(null);endDrag();viewKey=nextView;viewports.forEach(view=>{view.initialized=false;});camera.fit=viewportCount===1;}
     reset();
-    if(model&&stored?.version===1&&(stored.signature===signature)&&stored.checkpoint){
+    let restoredRun=false,resumedPresentation;
+    if(model&&[1,2].includes(stored?.version)&&(stored.signature===signature)&&stored.checkpoint){
       model=STSimulation2DEngine.create(definitions,seed,stored.checkpoint,schedule);
       configureModel();
       shiftOutput=Array.isArray(stored.shiftOutput)?[...stored.shiftOutput]:[];
       runState=model.time>=limitSeconds-1e-8?'Completed':stored.runState==='Stopped'?'Stopped':'Paused';
+      restoredRun=true;resumedPresentation=stored.presentation;
+      const visible=stored.representativeView;
+      if(stored.source==='representative'&&visible?.checkpoint&&representative?.seed===visible.seed){
+        defaultRun={model,shiftOutput,runState,validation,presentation:stored.presentation};
+        model=STSimulation2DEngine.create(definitions,visible.seed,visible.checkpoint,schedule);configureModel();
+        shiftOutput=[...(visible.shiftOutput||[])];runState=model.time>=limitSeconds-1e-8?'Completed':visible.runState==='Stopped'?'Stopped':'Paused';
+        resumedPresentation=visible.presentation;el('source').value='representative';
+      }
       syncControls();if(camera.fit)fit();else draw();
     }
     const restoredCameras=newView?restoreLayout(stored||{}):false;
     if(newView&&!restoredCameras&&camera.scale<sceneScale&&equipmentLayout(model?.line||definitions).telemetryRows<=1){camera={scale:sceneScale,x:28,y:Math.max(sceneTop()+18,canvas.clientHeight/2-80),fit:false};syncZoom();draw();}
-    if(newView){restoringView=false;draw();}
+    if(newView&&stored?.layout?.fullscreen)setFullscreen(true);
+    if(restoredRun)restorePresentation(resumedPresentation);
+    if(newView){restoringView=false;draw();}else if(restoredRun)draw();
   }};
 })();
 </script>

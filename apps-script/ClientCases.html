@@ -25,7 +25,7 @@
     window.addEventListener('beforeunload',function(event){if(autosave.pending()||STSettings.pending()){event.preventDefault();event.returnValue='';}});
     window.addEventListener('online',function(){if(automaticSaving()&&autosave.pending())autosave.retry().catch(function(){});});
     function automaticSaving(){return ['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||document.documentElement.dataset.uiMode).toUpperCase())&&STPreferences.caseOptions().autosaveEnabled;}
-    function syncSaveButton(){var b=document.getElementById('save-case');if(!b)return;b.classList.toggle('hidden',!state.activeCase||automaticSaving());b.disabled=state.saving||!state.isDirty;b.classList.toggle('has-changes',state.isDirty);}
+    function syncSaveButton(){var b=document.getElementById('save-case');if(!b)return;b.classList.toggle('hidden',!state.activeCase||automaticSaving());b.disabled=state.saving||(!state.isDirty&&!window.STSimulation2D?.hasState?.());b.classList.toggle('has-changes',state.isDirty);}
     function configureSaving(){var seconds=STPreferences.caseOptions().autosaveSeconds;autosave.configure({enabled:automaticSaving(),intervalMs:Math.max(1,Math.min(3600,seconds||10))*1000});syncSaveButton();}
     window.addEventListener('st-save-policy-change',configureSaving);
     function prepareCaseDraft(){try{STProducts.validateForSave();}catch(error){return Promise.reject(error);}state.lastInputError=null;
@@ -346,6 +346,11 @@ async function openCase(caseId, initialView) {
     }
     function captureForSave() {
       STProducts.validateForSave();
+      var diagram=window.STSimulation2D?.capture?.();
+      if(diagram&&state.activeCase&&diagram.identity?.[0]===state.activeCase.id){
+        var diagramOwner=state.activeCase.simulations.find(function(item){return item.id===diagram.identity[1];});
+        if(diagramOwner)diagramOwner.simulation2d=diagram;
+      }
       if(whatIfOnlySave&&state.activeCase){var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(evidenceDraft);}
       var next=collectCaseEditor();if(!next)return null;
       if(!next.name.trim()||next.equipment.some(function(e){return !e.id||!e.name||!(e.nominalRatePerSecond>0);}))throw new Error(__ST_TEXT__('autosave.invalid'));
@@ -371,8 +376,7 @@ async function openCase(caseId, initialView) {
       return draft;
     }
     function saveActiveCase(afterSave) {
-      autosave.change(true);
-      return prepareCaseDraft().then(function(){if(typeof afterSave==='function')afterSave(state.activeCase);}).catch(function(error){showError(error);});
+      return prepareCaseDraft().then(function(){autosave.change(true);return autosave.flush();}).then(function(){if(typeof afterSave==='function')afterSave(state.activeCase);}).catch(function(error){showError(error);});
     }
 
     function captureSheetImport() {

@@ -23,7 +23,8 @@ function stubScenarioGain(h){
 
 async function setup({remember=false,fail=false,many=false,invalidSheet=false,empty=false,realScenarioServer=false,fingerprintMismatch=false,autosaveSeconds=1,uiMode='ADVANCE',flowUnit,savedAccent,savedUiMode,indexedCatalog=false,startupFault=false}={}) {
  const context={}; vm.createContext(context);vm.runInContext(read('DemoCaseFactory.gs'),context);vm.runInContext(read('GeminiService.gs'),context);
- const initial=JSON.parse(JSON.stringify(context.createDemoCaseRequest_()));
+ // Keep generic UI tests independent from changes to the deployable Demo.
+ const initial=JSON.parse(fs.readFileSync(new URL('./fixtures/ui-demo-case.json',import.meta.url),'utf8'));
  // Generic UI fixture uses the browser defaults supplied by this test.
  delete initial.metadata.consoleOptions;
  if(flowUnit)initial.unitOfFlow=flowUnit;
@@ -205,7 +206,7 @@ test('UI: remove Gemini key requires confirmation and immediately updates its sa
 test('UI: run, edit, clone, compare, and delete retain the existing engine workflow',async()=>{
  const h=await setup();try{
   await h.click('#sign-in-button');await h.click('.open-case');assert(h.visible('run-panel'));assert(!h.visible('editor-panel'));
-  await h.click('.sidebar [data-view="editor"]');assert(h.visible('editor-panel'));assert.equal(h.d.querySelectorAll('.equipment-card').length,13);
+  await h.click('.sidebar [data-view="editor"]');assert(h.visible('editor-panel'));assert.equal(h.d.querySelectorAll('.equipment-card').length,record.equipment.length);
   await h.click('.equipment-card');assert(h.d.querySelector('.equipment-card').classList.contains('equipment-selected'));
   await h.click('.sidebar [data-view="simulation"]');h.d.getElementById('run-duration').value='60';await h.click('#run-simulation');await settle();await h.click('#pause-simulation');
   assert.equal(h.d.querySelectorAll('.live-equipment-card').length,13,h.d.getElementById('status').textContent+' '+JSON.stringify(h.errors));await h.click('.loss-toggle');assert(h.d.querySelector('.live-equipment-card').classList.contains('show-losses'));
@@ -379,7 +380,7 @@ test('UI: empty simulation imports all selected equipment without creating anoth
 test('UI: invalid source fields are unavailable and cancel leaves equipment intact',async()=>{
  const h=await setup({invalidSheet:true});try{
  await h.click('#sign-in-button');await h.click('.open-case');await h.click('.sidebar [data-view="editor"]');await h.click('#open-sheet-import');h.d.getElementById('sheet-import-url').value='synthetic-sheet-id';await h.click('#sheet-import-read');
- assert.match(h.d.getElementById('sheet-import-preview').textContent,/D10:E10/);assert(h.d.querySelector('[data-source-index="0"] [data-field="mtbf"]').disabled);await h.click('#sheet-import-cancel');assert.equal(h.d.querySelectorAll('.equipment-card').length,13);assert.equal(h.d.getElementById('sheet-import-preview').textContent,'');assert.deepEqual(h.errors,[]);
+ assert.match(h.d.getElementById('sheet-import-preview').textContent,/D10:E10/);assert(h.d.querySelector('[data-source-index="0"] [data-field="mtbf"]').disabled);await h.click('#sheet-import-cancel');assert.equal(h.d.querySelectorAll('.equipment-card').length,record.equipment.length);assert.equal(h.d.getElementById('sheet-import-preview').textContent,'');assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });
 
@@ -1903,12 +1904,20 @@ test('UI: Create demo opens the created case, retains its gallery entry and repo
    for(const name of ['DemoCaseFactory.gs','ScenarioEngine.gs',...(prepared?['DemoResults.gs']:[])])vm.runInContext(read(name),f);
    const record=JSON.parse(JSON.stringify(f.createDemoCaseRequest_()));Object.assign(record,{revision:1,ownerEmail:'preview@example.test',updatedAt:new Date().toISOString()});
    const getCase=h.api.getCase;h.api.getCase=id=>id===record.id?JSON.parse(JSON.stringify(record)):getCase(id);
-   h.api.createDemoCase=()=>({id:record.id,name:record.name,equipmentCount:13,isSimulationReady:true,demoResultsPrepared:prepared});
+   h.api.createDemoCase=()=>({id:record.id,name:record.name,equipmentCount:record.equipment.length,isSimulationReady:true,demoResultsPrepared:prepared});
    await h.click('#sign-in-button');const bootstraps=h.calls.filter(name=>name==='getBootstrap').length;
    await h.click('#create-demo-case');await waitFor(()=>h.d.getElementById('breadcrumb-case').textContent===record.name);
-   assert.equal(h.calls.filter(name=>name==='getBootstrap').length,bootstraps);assert.equal(h.d.querySelectorAll('.equipment-card').length,13);
+   assert.equal(h.calls.filter(name=>name==='getBootstrap').length,bootstraps);assert.equal(h.d.querySelectorAll('.equipment-card').length,record.equipment.length);
    assert.equal(h.d.getElementById('create-demo-case').disabled,false);
+   const planes=[],drawPallet=h.w.STSimulation2DMachines.drawPalletOutput;
+   h.w.STSimulation2DMachines.drawPalletOutput=(...args)=>{planes.push(args.at(-1));return drawPallet(...args);};
    if(!prepared){assert.match(h.d.querySelector('.message-dialog').textContent,/Demo created/);await h.click('.message-dialog button');}
+   Object.defineProperties(h.w.HTMLCanvasElement.prototype,{clientWidth:{configurable:true,get:()=>1100},clientHeight:{configurable:true,get:()=>550}});
+   h.w.HTMLCanvasElement.prototype.getContext=()=>new Proxy({measureText:text=>({width:String(text).length*3.5})},{get:(object,key)=>object[key]??(()=>{})});
+   await h.click('[data-basic-view=simulation2d]');
+   assert.equal(h.d.getElementById('simulation2d-machine-style').value,'animated');
+   assert(planes.includes('robot'),'the Demo renders the current palletizer robot');
+   assert(!/required|check nominal|no bypass/i.test(h.d.getElementById('simulation2d-status').textContent));
    await h.click('#home-cases');assert(Array.from(h.d.querySelectorAll('.case-name')).some(el=>el.textContent===record.name));
    h.api.createDemoCase=()=>{throw Error('Storage unavailable');};await h.click('#create-demo-case');
    assert.match(h.d.querySelector('.message-dialog').textContent,/Demo creation failed/);assert.equal(h.d.getElementById('create-demo-case').disabled,false);
@@ -1927,7 +1936,7 @@ test('UI: prepared demo opens with matching scenario card results and OEE compar
   assert(!h.d.getElementById('header-case-icon').classList.contains('hidden'));assert(h.d.getElementById('header-case-icon').querySelector('svg'));
   const cards=Array.from(h.d.querySelectorAll('.scenario-tier-grid .analysis-recommendation')).filter(c=>!c.classList.contains('scenario-current'));
   assert.equal(cards.length,3);cards.forEach((card,index)=>{const value=record.simulations[index+1].results.batch.statistics.lineOeePercent.mean.toFixed(1);assert.match(card.querySelector('.scenario-preview-status').textContent,/Saved demo scenario/);assert(card.querySelector('.scenario-basic-metrics').textContent.includes(value+'%'));});
-  await h.click('[data-basic-view="comparison"]');assert.equal(h.d.querySelectorAll('.comparison-equipment-oee tbody tr').length,8);assert.equal(runs,0);assert.deepEqual(h.errors,[]);
+  await h.click('[data-basic-view="comparison"]');assert.equal(h.d.querySelectorAll('.comparison-equipment-oee tbody tr').length,11);assert.equal(runs,0);assert.deepEqual(h.errors,[]);
   const source=Object.assign({},record.simulations[0],{unitOfFlow:record.unitOfFlow});const cached=await h.w.STScenarioExplorer.evaluate(source,[],()=>false,0,source.dynamicConfig);assert.equal(cached.oee,source.results.batch.statistics.lineOeePercent.mean);assert.equal(runs,0);
   await h.click('#home-cases');assert(!h.d.getElementById('header-case-icon').classList.contains('hidden'));assert.equal(h.d.getElementById('breadcrumb-case').textContent,'Workspace');
  }finally{h.dom.window.close();}

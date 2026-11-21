@@ -1,26 +1,11 @@
 function createDemoCaseRequest_() {
   var suffix = new Date().getTime().toString();
-  var equipment = [
-      createDemoLineUnit_({ id: 'blowmolder-1', type: 'BLOWMOLDER', name: 'Blowmolder', role: 'CRITICAL_MACHINE', nominalRateBpm: 420, maximumSpeedBpm: 450, mtbfMinutes: 720, mttrMinutes: 15, actualDischargeMm: 85, actualCodingMm: 85, packageLengthMm: 66, dischargePitchMm: 85, startupTimeSeconds: 8, bottlesDischargedAtStop: 4, infeedPitchMm: 88, rampUpTimeSeconds: 10, dischargeFactorPercent: 100, codingFactorPercent: 100, microStopProbabilityPerMinute: 0.08, microStopMinSeconds: 3, microStopMaxSeconds: 8 }),
-      createDemoLineUnit_({ id: 'conveyor-1', type: 'CONVEYOR', name: 'Blowmolder discharge conveyor', role: 'CONVEYOR', nominalRateBpm: 480, maximumSpeedBpm: 500, mtbfMinutes: 1440, mttrMinutes: 5, actualDischargeMm: 88, actualCodingMm: 88, packageLengthMm: 66, dischargePitchMm: 85, startupTimeSeconds: 4, bottlesDischargedAtStop: 2, infeedPitchMm: 88, rampUpTimeSeconds: 5, dischargeFactorPercent: 5, codingFactorPercent: 102, microStopProbabilityPerMinute: 0.04, microStopMinSeconds: 2, microStopMaxSeconds: 5 }),
-      createDemoLineUnit_({ id: 'pucker-1', type: 'PUCKER', name: 'Pucker', role: 'CRITICAL_MACHINE', nominalRateBpm: 415, maximumSpeedBpm: 430, mtbfMinutes: 960, mttrMinutes: 10, actualDischargeMm: 90, actualCodingMm: 90, packageLengthMm: 66, dischargePitchMm: 90, startupTimeSeconds: 7, bottlesDischargedAtStop: 3, infeedPitchMm: 90, rampUpTimeSeconds: 8, dischargeFactorPercent: 102, codingFactorPercent: 100, microStopProbabilityPerMinute: 0.1, microStopMinSeconds: 3, microStopMaxSeconds: 9 }),
-      createDemoLineUnit_({ id: 'conveyor-2', type: 'CONVEYOR', name: 'Pucker discharge conveyor', role: 'CONVEYOR', nominalRateBpm: 480, maximumSpeedBpm: 500, mtbfMinutes: 1440, mttrMinutes: 5, actualDischargeMm: 90, actualCodingMm: 90, packageLengthMm: 66, dischargePitchMm: 90, startupTimeSeconds: 4, bottlesDischargedAtStop: 2, infeedPitchMm: 90, rampUpTimeSeconds: 5, dischargeFactorPercent: 5, codingFactorPercent: 102, microStopProbabilityPerMinute: 0.04, microStopMinSeconds: 2, microStopMaxSeconds: 5 }),
-      createDemoLineUnit_({ id: 'filler-1', type: 'FILLER', name: 'Filler', role: 'PACEMAKER', nominalRateBpm: 400, maximumSpeedBpm: 420, mtbfMinutes: 600, mttrMinutes: 20, actualDischargeMm: 92, actualCodingMm: 92, packageLengthMm: 66, dischargePitchMm: 92, startupTimeSeconds: 12, bottlesDischargedAtStop: 6, infeedPitchMm: 92, rampUpTimeSeconds: 15, dischargeFactorPercent: 100, codingFactorPercent: 100, microStopProbabilityPerMinute: 0.12, microStopMinSeconds: 4, microStopMaxSeconds: 12 }),
-      createDemoLineUnit_({ id: 'conveyor-3', type: 'CONVEYOR', name: 'Filler discharge conveyor', role: 'CONVEYOR', nominalRateBpm: 480, maximumSpeedBpm: 500, mtbfMinutes: 1440, mttrMinutes: 5, actualDischargeMm: 92, actualCodingMm: 92, packageLengthMm: 66, dischargePitchMm: 92, startupTimeSeconds: 4, bottlesDischargedAtStop: 2, infeedPitchMm: 92, rampUpTimeSeconds: 5, dischargeFactorPercent: 7, codingFactorPercent: 102, microStopProbabilityPerMinute: 0.04, microStopMinSeconds: 2, microStopMaxSeconds: 5 }),
-      createDemoLineUnit_({ id: 'depucker-1', type: 'DEPUCKER', name: 'De-pucker', role: 'CRITICAL_MACHINE', nominalRateBpm: 410, maximumSpeedBpm: 430, mtbfMinutes: 1000, mttrMinutes: 8, actualDischargeMm: 92, actualCodingMm: 92, packageLengthMm: 66, dischargePitchMm: 92, startupTimeSeconds: 7, bottlesDischargedAtStop: 3, infeedPitchMm: 92, rampUpTimeSeconds: 8, dischargeFactorPercent: 102, codingFactorPercent: 100, microStopProbabilityPerMinute: 0.1, microStopMinSeconds: 3, microStopMaxSeconds: 9 }),
-      createDemoLineUnit_({ id: 'conveyor-4', type: 'CONVEYOR', name: 'De-pucker discharge conveyor', role: 'CONVEYOR', nominalRateBpm: 480, maximumSpeedBpm: 500, mtbfMinutes: 1440, mttrMinutes: 5, actualDischargeMm: 92, actualCodingMm: 92, packageLengthMm: 66, dischargePitchMm: 92, startupTimeSeconds: 4, bottlesDischargedAtStop: 2, infeedPitchMm: 92, rampUpTimeSeconds: 5, dischargeFactorPercent: 6, codingFactorPercent: 102, microStopProbabilityPerMinute: 0.04, microStopMinSeconds: 2, microStopMaxSeconds: 5 }),
-      createDemoLineUnit_({ id: 'sleever-1', type: 'SLEEVER', name: 'Sleever', role: 'CRITICAL_MACHINE', nominalRateBpm: 390, maximumSpeedBpm: 400, mtbfMinutes: 480, mttrMinutes: 15, actualDischargeMm: 94, actualCodingMm: 94, packageLengthMm: 66, dischargePitchMm: 94, startupTimeSeconds: 10, bottlesDischargedAtStop: 4, infeedPitchMm: 94, rampUpTimeSeconds: 12, dischargeFactorPercent: 101, codingFactorPercent: 100, microStopProbabilityPerMinute: 0.14, microStopMinSeconds: 4, microStopMaxSeconds: 12 }),
-      createDemoLineUnit_({ id: 'conveyor-5', type: 'CONVEYOR', name: 'Sleever discharge conveyor', role: 'CONVEYOR', nominalRateBpm: 450, maximumSpeedBpm: 470, mtbfMinutes: 1440, mttrMinutes: 5, actualDischargeMm: 94, actualCodingMm: 94, packageLengthMm: 66, dischargePitchMm: 94, startupTimeSeconds: 4, bottlesDischargedAtStop: 2, infeedPitchMm: 94, rampUpTimeSeconds: 5, dischargeFactorPercent: 5, codingFactorPercent: 102, microStopProbabilityPerMinute: 0.04, microStopMinSeconds: 2, microStopMaxSeconds: 5 }),
-      createDemoLineUnit_({ id: 'case-packer-1', type: 'CASE_PACKER', name: 'Case packer', role: 'CRITICAL_MACHINE', nominalRateBpm: 385, maximumSpeedBpm: 400, mtbfMinutes: 720, mttrMinutes: 12, actualDischargeMm: 96, actualCodingMm: 96, packageLengthMm: 66, dischargePitchMm: 96, startupTimeSeconds: 10, bottlesDischargedAtStop: 4, infeedPitchMm: 96, rampUpTimeSeconds: 12, dischargeFactorPercent: 100, codingFactorPercent: 100, microStopProbabilityPerMinute: 0.14, microStopMinSeconds: 4, microStopMaxSeconds: 12 }),
-      createDemoLineUnit_({ id: 'conveyor-6', type: 'CONVEYOR', name: 'Case packer discharge conveyor', role: 'CONVEYOR', nominalRateBpm: 430, maximumSpeedBpm: 450, mtbfMinutes: 1440, mttrMinutes: 5, actualDischargeMm: 96, actualCodingMm: 96, packageLengthMm: 66, dischargePitchMm: 96, startupTimeSeconds: 4, bottlesDischargedAtStop: 2, infeedPitchMm: 96, rampUpTimeSeconds: 5, dischargeFactorPercent: 5, codingFactorPercent: 102, microStopProbabilityPerMinute: 0.04, microStopMinSeconds: 2, microStopMaxSeconds: 5 }),
-      createDemoLineUnit_({ id: 'palletizer-1', type: 'PALLETIZER', name: 'Palletizer', role: 'CRITICAL_MACHINE', nominalRateBpm: 380, maximumSpeedBpm: 400, mtbfMinutes: 960, mttrMinutes: 20, actualDischargeMm: 96, actualCodingMm: 96, packageLengthMm: 66, dischargePitchMm: 96, startupTimeSeconds: 12, bottlesDischargedAtStop: 3, infeedPitchMm: 96, rampUpTimeSeconds: 15, dischargeFactorPercent: 100, codingFactorPercent: 100, microStopProbabilityPerMinute: 0.1, microStopMinSeconds: 4, microStopMaxSeconds: 10 })
-  ];
-
-  configureDemoAccumulationZones_(equipment);
-  configureDemoLosses_(equipment);
-  var run = { durationMode: 'SHIFTS', shiftHours: 8, shiftCount: 1, shiftSeconds: 28800, durationSeconds: 28800, tickSeconds: 0.25, sampleEverySeconds: 15, seed: 20261008, rounds: 3, commands: [] };
+  var equipment = createCompleteDemoLine_();
+  var catalog = createDemoFormatCatalog_(equipment);
+  var format = createDemoResolvedFormat_(catalog);
+  var run = { durationMode: 'FIXED', shiftHours: 8, shiftCount: 1, shiftSeconds: 28800, durationSeconds: 600, tickSeconds: 0.25, sampleEverySeconds: 15, seed: 20261008, rounds: 3, commands: [], machineResidenceEnabled: true, initialFormatId: format.id, initialProductId: format.id, productCatalog: [format] };
   var options = createDemoTargets_(equipment);
-  var baseline = { id: 'simulation-a', name: 'Baseline — inefficient line', equipment: equipment, dynamicConfig: run, results: null, whatIf: { externalOptions: options } };
+  var baseline = { id: 'simulation-a', name: 'Baseline — complete physical line', equipment: equipment, dynamicConfig: run, results: null, whatIf: { externalOptions: options } };
   var simulations = [baseline];
   options.forEach(function(option) {
     var copy = JSON.parse(JSON.stringify(equipment));
@@ -29,25 +14,26 @@ function createDemoCaseRequest_() {
       var keys = change.path.split('.'), field = keys.pop();
       keys.reduce(function(value, key) { return value[key]; }, unit)[field] = change.after;
     });
-    simulations.push({ id: 'demo-' + option.tier.toLowerCase(), name: option.tier === 'ZERO' ? 'Zero CAPEX — operating adjustments' : option.tier === 'MEDIUM' ? 'Medium CAPEX — buffers and restart control' : 'High CAPEX — accumulation upgrade',
+    simulations.push({ id: 'demo-' + option.tier.toLowerCase(), name: option.tier === 'ZERO' ? 'Zero CAPEX — operating adjustments' : option.tier === 'MEDIUM' ? 'Medium CAPEX — buffer extensions' : 'High CAPEX — accumulation upgrade',
       equipment: copy, dynamicConfig: JSON.parse(JSON.stringify(run)), results: null,
       scenario: { origin: 'DEMO', tier: option.tier, sourceSimulationId: baseline.id, changes: option.changes } });
   });
   var request = {
     id: 'demo-packaging-line-' + suffix,
-    name: 'Demo — low-efficiency CAPEX challenge',
+    name: 'Demo — complete bottling and packaging line',
     unitOfFlow: 'units',
-    metadata: createDemoMetadata_(),
+    metadata: Object.assign(createDemoMetadata_(), {formatCatalog: catalog}),
     engineConfig: {
-      modelMode: 'DEMO_EQUIVALENT_BOTTLES',
+      modelMode: 'DEMO_PHYSICAL_BOTTLES_AND_CASES',
       designThroughputBottlesPerHour: 24000,
-      packConfiguration: { bottlesPerCase: 12, casesPerLayer: 10, layersPerPallet: 6 },
+      packConfiguration: { bottlesPerCase: 12, casesPerLayer: 9, layersPerPallet: 4 },
       reliabilityModel: 'Seeded exponential time-to-failure with fixed MTTR repair duration',
       accumulationControlModel: 'FlowPilot physical conveyor engineering with package-pulse photoeyes, sustained Back-up debounce, overflow margin, and recovery audit'
     },
     equipment: equipment,
     simulations: simulations
   };
+  simulations.forEach(function(sim) {sim.simulation2d={viewports:1,speed:1,layout:{equipmentView:'animated'},appearance:{bottle:'ribbed',labelShape:'wrap'}};});
   applyPreparedDemoResults_(request);
   return request;
 }
@@ -103,147 +89,81 @@ function applyPreparedDemoResults_(record){
   base.whatIf.evaluations=entries;
 }
 
-// Deliberately poor operating setup. Keep reliability identical in all scenarios;
-// Zero tunes existing speeds/sensors; Medium and High add progressively larger
-// buffers and faster restart controls. Reliability stays fixed across categories.
-function configureDemoLosses_(equipment) {
-  var machineIndex = 0;
-  var rates = [460, 430, 400, 420, 440, 460, 480];
-  var maximums = [620, 580, 420, 560, 580, 600, 620];
-  var mtbf = [2.2, 1.8, 2.8, 1.6, 1.4, 1.8, 2];
-  var mttr = [0.4, 0.35, 0.3, 0.4, 0.3, 0.4, 0.4];
-  equipment.forEach(function(unit) {
-    if (unit.type === 'CONVEYOR') {
-      unit.processData.geometry.lactMm = 8000;
-      unit.processData.geometry.lpPrimeMm = 1800;
-      unit.processData.accumulation.backupSensorPositionMm = 1200;
-      unit.processData.accumulation.downstreamRampUpSeconds = 12;
-      unit.processData.accumulation.conveyorSpeedFactorPercent = 15;
-    } else {
-      var index = machineIndex++, rate = rates[index];
-      unit.nominalRatePerSecond = rate / 60;
-      unit.processData.role = unit.type === 'FILLER' ? 'PACEMAKER' : 'MACHINE';
-      unit.characteristics.isPacemaker = unit.type === 'FILLER';
-      unit.characteristics.nominalRateBpm = rate;
-      unit.processData.equipment.maximumSpeedBpm = maximums[index];
-      unit.processData.upstream.startupTimeSeconds = 5;
-      unit.noiseProfile.reliability = { mtbfMinutes: mtbf[index], mttrMinutes: mttr[index] };
-      unit.processData.equipment.mtbfMinutes = mtbf[index];
-      unit.processData.equipment.mttrMinutes = mttr[index];
-      unit.noiseProfile.microStop = { probabilityPerMinute: 0.35, minDurationSeconds: 3, maxDurationSeconds: 8 };
-    }
+// One representative of every distinct machine design; BLOWER is an alias of BLOWMOLDER.
+function createCompleteDemoLine_() {
+  var machines = [
+    ['blowmolder-1','BLOWMOLDER','Blowmolder',480,600,36,3],
+    ['feeder-1','FEEDER','Bottle orienter / feeder',460,580,40,2],
+    ['pucker-1','PUCKER','Pucker',440,560,24,2],
+    ['filler-1','FILLER','Filler',400,420,60,5],
+    ['capper-1','CAPPER','Capper',420,540,24,2],
+    ['depucker-1','DEPUCKER','Depucker',440,560,24,2],
+    ['sleever-1','SLEEVER','Sleeve labeller',460,580,30,3],
+    ['inspection-1','CUSTOM','Bottle inspection',480,600,12,1],
+    ['case-packer-1','CASE_PACKER','Case packer',500,620,48,3],
+    ['palletizer-1','PALLETIZER','Robotic palletizer',520,640,8,2]
+  ];
+  var equipment=[];
+  machines.forEach(function(spec,index){
+    var cases=spec[1]==='PALLETIZER',packing=spec[1]==='CASE_PACKER';
+    var factor=cases||packing?12:1;
+    var unit=createDemoLineUnit_({id:spec[0],type:spec[1],name:spec[2],role:spec[1]==='FILLER'?'PACEMAKER':'MACHINE',nominalRateBpm:spec[3]/factor,maximumSpeedBpm:spec[4]/factor,mtbfMinutes:30+index*3,mttrMinutes:1+index%3*.25,packageLengthMm:cases?340:66,dischargePitchMm:cases?400:85,infeedPitchMm:cases?400:85,startupTimeSeconds:2,bottlesDischargedAtStop:cases?1:3,rampUpTimeSeconds:3,actualDischargeMm:0,actualCodingMm:0,dischargeFactorPercent:5,codingFactorPercent:2,microStopProbabilityPerMinute:.04,microStopMinSeconds:2,microStopMaxSeconds:5});
+    unit.processData.flowUnits={input:cases?'CASES':'BOTTLES',output:cases||packing?'CASES':'BOTTLES'};
+    unit.processData.equipment.internalCapacityBottles=spec[5]; // Native input units: bottles, or cases at the palletizer.
+    unit.processData.equipment.residenceTimeSeconds=spec[6];
+    unit.processData.downstream.rampAfterRepair=true;
+    unit.characteristics.isPacemaker=spec[1]==='FILLER';
+    unit.characteristics.rateBasis=cases||packing?'cases per minute':'bottles per minute';
+    equipment.push(unit);
+    if(index===machines.length-1)return;
+    var boxed=packing,length=boxed?340:66,pitch=boxed?400:85;
+    var belt=createDemoLineUnit_({id:'conveyor-'+(index+1),type:'CONVEYOR',name:spec[2]+' discharge conveyor',role:'CONVEYOR',nominalRateBpm:spec[3]/factor,maximumSpeedBpm:spec[4]/factor,mtbfMinutes:1440,mttrMinutes:5,packageLengthMm:length,dischargePitchMm:pitch,infeedPitchMm:pitch,startupTimeSeconds:0,bottlesDischargedAtStop:boxed?1:3,rampUpTimeSeconds:3,actualDischargeMm:300,actualCodingMm:index===6?500:0,dischargeFactorPercent:5,codingFactorPercent:2,microStopProbabilityPerMinute:0,microStopMinSeconds:0,microStopMaxSeconds:0});
+    belt.processData.flowUnits={input:boxed?'CASES':'BOTTLES',output:boxed?'CASES':'BOTTLES'};
+    belt.processData.geometry.lactMm=boxed?6000:8000;
+    belt.processData.geometry.lpPrimeMm=boxed?1200:800;
+    belt.processData.upstream.packageWidthMm=boxed?260:66;
+    belt.processData.upstream.dischargeVelocityMPerMinute=spec[3]/factor*pitch/1000;
+    belt.processData.accumulation={id:'demo-zone-'+(index+1),name:spec[2]+' accumulation',restartToFirstPackageSeconds:spec[6],speedMode:'MANUAL',conveyorSpeedMmPerSecond:spec[3]/factor*pitch/60*1.2,conveyorWidthMm:boxed?400:150,movingGapMm:pitch-length,accumulatedGapMm:0,backupSensorPositionMm:1000,blockedTimeDelaySeconds:.5,clearTimeDelaySeconds:.5,insuranceFactorUnits:2,upstreamStopResponseSeconds:.4,bottlesDischargedAtStop:boxed?1:3,downstreamRampUpSeconds:3};
+    equipment.push(belt);
   });
+  return equipment;
 }
-
-// Each category is a complete independent hypothesis against the baseline.
-// The targets are model inputs; efficiencies are always computed by the engine.
+function createDemoFormatCatalog_(equipment){
+  var profiles={};
+  equipment.forEach(function(unit){profiles[unit.id]={inputUnit:unit.processData.flowUnits.input,outputUnit:unit.processData.flowUnits.output};});
+  return {version:3,products:[{id:'demo-product',name:'Multipurpose cleaner',volumeMl:500,bottle:{lengthMm:66,widthMm:66,heightMm:220},equipment:{}}],formats:[{id:'demo-format-12',name:'500 mL · 12 bottles per case',productId:'demo-product',bottlesPerCase:12,case:{lengthMm:340,widthMm:260,heightMm:240},packPattern:'4 × 3',equipment:profiles}]};
+}
+function createDemoResolvedFormat_(catalog){
+  var product=catalog.products[0],format=catalog.formats[0];
+  return {id:format.id,formatId:format.id,name:format.name,productId:product.id,productName:product.name,boxId:format.id,boxName:format.name,volumeMl:product.volumeMl,bottleLengthMm:product.bottle.lengthMm,caseLengthMm:format.case.lengthMm,bottlesPerCase:format.bottlesPerCase,packPattern:format.packPattern,presentations:{bottle:product.bottle,case:Object.assign({},format.case,{bottlesPerCase:format.bottlesPerCase})},equipment:format.equipment};
+}
+// Scenario changes retain the same physical units, capacities and reliability.
 function createDemoTargets_(equipment) {
-  return ['ZERO', 'MEDIUM', 'HIGH'].map(function(tier) {
-    var changes = [];
-    var speeds = tier === 'ZERO' ? [480, 440, 400, 440, 480, 520, 540] : tier === 'MEDIUM' ? [500, 460, 400, 450, 490, 530, 550] : [580, 540, 400, 500, 520, 550, 560];
-    var machineIndex = 0;
-    function change(unit, path, after, unitOfMeasure, intervention) {
-      var before = path.split('.').reduce(function(value, key) { return value[key]; }, unit);
-      if (before === after) return;
-      var item = { equipmentId: unit.id, path: path, before: before, after: after, unit: unitOfMeasure };
-      if (intervention) { item.external = true; item.justification = intervention; }
-      changes.push(item);
-    }
-    equipment.forEach(function(unit) {
-      if (unit.type === 'CONVEYOR') {
-        change(unit, 'processData.accumulation.conveyorSpeedFactorPercent', 100, '%');
-        change(unit, 'processData.geometry.lpPrimeMm', 400, 'mm');
-        if (tier !== 'ZERO') {
-          change(unit, 'processData.geometry.lactMm', tier === 'MEDIUM' ? 12000 : 24000, 'mm');
-        }
-        if (tier === 'HIGH') {
-          change(unit, 'processData.accumulation.backupSensorPositionMm', 3000, 'mm');
-        }
-      } else {
-        change(unit, 'nominalRatePerSecond', speeds[machineIndex++] / 60, 'units/s');
-        if (tier !== 'ZERO') change(unit, 'processData.upstream.startupTimeSeconds', tier === 'MEDIUM' ? 3 : 1, 's',
-          'Synthetic demo assumption: ' + (tier === 'MEDIUM' ? 'local start-sequence retrofit with a 3-second restart target.' : 'integrated controls upgrade with a 1-second restart target.') + ' This target is a hypothesis, not measured plant performance.');
+  return ['ZERO','MEDIUM','HIGH'].map(function(tier){
+    var changes=[];
+    function change(unit,path,after,measure){var before=path.split('.').reduce(function(value,key){return value[key];},unit);if(before!==after)changes.push({equipmentId:unit.id,path:path,before:before,after:after,unit:measure});}
+    equipment.forEach(function(unit){
+      if(unit.type==='CONVEYOR'){
+        change(unit,'processData.accumulation.conveyorSpeedMmPerSecond',unit.processData.accumulation.conveyorSpeedMmPerSecond*(tier==='HIGH'?1.35:1.15),'mm/s');
+        change(unit,'processData.geometry.lpPrimeMm',unit.processData.flowUnits.output==='CASES'?800:400,'mm');
+        if(tier!=='ZERO')change(unit,'processData.geometry.lactMm',tier==='HIGH'?16000:12000,'mm');
+      }else if(unit.type!=='FILLER'){
+        change(unit,'nominalRatePerSecond',Math.min(unit.processData.equipment.maximumSpeedBpm/60,unit.nominalRatePerSecond*(tier==='HIGH'?1.15:1.05)),unit.processData.flowUnits.output==='CASES'?'cases/s':'bottles/s');
       }
     });
-    return { tier: tier, changes: changes };
+    return {tier:tier,changes:changes};
   });
-}
-
-function configureDemoAccumulationZones_(equipment) {
-  setDemoConveyorEngineering_(equipment, 'conveyor-1', {
-    id: 'zone-blowmolder-to-pucker', name: 'Blowmolder discharge accumulation',
-    lactMm: 20000, lpPrimeMm: 1500, backupSensorPositionMm: 1600,
-    dischargeRunoutLengthMm: 250, rejectRunoutLengthMm: 350,
-    blockedTimeDelaySeconds: 0.5, clearTimeDelaySeconds: 0.5, insuranceFactorUnits: 2,
-    upstreamStopResponseSeconds: 1, bottlesDischargedAtStop: 4, downstreamRampUpSeconds: 8
-  });
-  setDemoConveyorEngineering_(equipment, 'conveyor-2', {
-    id: 'zone-pucker-to-filler', name: 'Pucker discharge accumulation',
-    lactMm: 20000, lpPrimeMm: 1500, backupSensorPositionMm: 1400,
-    dischargeRunoutLengthMm: 200, rejectRunoutLengthMm: 250,
-    blockedTimeDelaySeconds: 0.5, clearTimeDelaySeconds: 0.5, insuranceFactorUnits: 2,
-    upstreamStopResponseSeconds: 1, bottlesDischargedAtStop: 3, downstreamRampUpSeconds: 15
-  });
-  setDemoConveyorEngineering_(equipment, 'conveyor-3', {
-    id: 'zone-filler-to-depucker', name: 'Filler discharge accumulation',
-    lactMm: 24000, lpPrimeMm: 2000, backupSensorPositionMm: 2600,
-    dischargeRunoutLengthMm: 450, rejectRunoutLengthMm: 600,
-    blockedTimeDelaySeconds: 0.5, clearTimeDelaySeconds: 0.5, insuranceFactorUnits: 3,
-    upstreamStopResponseSeconds: 2, bottlesDischargedAtStop: 6, downstreamRampUpSeconds: 8
-  });
-  setDemoConveyorEngineering_(equipment, 'conveyor-4', {
-    id: 'zone-depucker-to-sleever', name: 'De-pucker discharge accumulation',
-    lactMm: 24000, lpPrimeMm: 2000, backupSensorPositionMm: 1600,
-    dischargeRunoutLengthMm: 250, rejectRunoutLengthMm: 350,
-    blockedTimeDelaySeconds: 0.5, clearTimeDelaySeconds: 0.5, insuranceFactorUnits: 2,
-    upstreamStopResponseSeconds: 1, bottlesDischargedAtStop: 3, downstreamRampUpSeconds: 12
-  });
-  setDemoConveyorEngineering_(equipment, 'conveyor-5', {
-    id: 'zone-sleever-to-case-packer', name: 'Sleever discharge accumulation',
-    lactMm: 22000, lpPrimeMm: 1800, backupSensorPositionMm: 1600,
-    dischargeRunoutLengthMm: 220, rejectRunoutLengthMm: 280,
-    blockedTimeDelaySeconds: 0.5, clearTimeDelaySeconds: 0.5, insuranceFactorUnits: 2,
-    upstreamStopResponseSeconds: 1, bottlesDischargedAtStop: 4, downstreamRampUpSeconds: 12
-  });
-  setDemoConveyorEngineering_(equipment, 'conveyor-6', {
-    id: 'zone-case-packer-to-palletizer', name: 'Case packer discharge accumulation',
-    lactMm: 18000, lpPrimeMm: 1500, backupSensorPositionMm: 1600,
-    dischargeRunoutLengthMm: 220, rejectRunoutLengthMm: 280,
-    blockedTimeDelaySeconds: 0.5, clearTimeDelaySeconds: 0.5, insuranceFactorUnits: 2,
-    upstreamStopResponseSeconds: 1, bottlesDischargedAtStop: 4, downstreamRampUpSeconds: 15
-  });
-}
-
-function setDemoConveyorEngineering_(equipment, equipmentId, design) {
-  var owner = equipment.filter(function(unit) { return unit.id === equipmentId; })[0];
-  if (!owner) throw new Error('Unknown demo conveyor: ' + equipmentId);
-  owner.processData.geometry.lactMm = design.lactMm;
-  owner.processData.geometry.lpPrimeMm = design.lpPrimeMm;
-  owner.processData.accumulation = {
-    id: design.id,
-    name: design.name,
-    backupSensorPositionMm: design.backupSensorPositionMm,
-    dischargeRunoutLengthMm: design.dischargeRunoutLengthMm,
-    rejectRunoutLengthMm: design.rejectRunoutLengthMm,
-    blockedTimeDelaySeconds: design.blockedTimeDelaySeconds,
-    clearTimeDelaySeconds: design.clearTimeDelaySeconds,
-    insuranceFactorUnits: design.insuranceFactorUnits,
-    upstreamStopResponseSeconds: design.upstreamStopResponseSeconds,
-    bottlesDischargedAtStop: design.bottlesDischargedAtStop,
-    downstreamRampUpSeconds: design.downstreamRampUpSeconds
-  };
-  owner.characteristics.accumulationModel = 'FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed.';
 }
 
 function createDemoMetadata_() {
   return {
-    demoRevision: 'capex-challenge-4',
+    demoRevision: 'complete-physical-line-5',
     consoleOptions: { autosaveEnabled: false, autosaveSeconds: 10, seedPolicy: 'FIXED' },
-    learningObjectives: ['Compare the low theoretical series availability with simulated OEE; buffering can decouple equipment downtime.', 'Read the instantaneous V-Graph: configured speeds decrease toward the 400 BPM Filler and increase downstream; recovery recommendations remain separate.', 'Zero CAPEX: increase installed recovery headroom and retune existing sensors.', 'Medium CAPEX: evaluate moderate buffer extensions and an explicitly assumed local restart-control retrofit.', 'High CAPEX: evaluate additional accumulation length and safe sensor relocation.'],
+    learningObjectives: ['Follow all ten machine types and nine conveyors, including pucks, filling, capping, labelling, inspection, case packing and robotic palletizing.', 'Compare internal capacity in bottles and cases, explicit residence times, and bottle-equivalent production.', 'Compare theoretical series availability with simulated OEE; buffering can decouple equipment downtime.', 'Read speeds in their native units: the Filler runs at 400 bpm; the Case packer and Palletizer use cases/min with 12 bottle equivalents per case.', 'Zero CAPEX: increase installed recovery headroom and retune existing sensors.', 'Medium CAPEX: evaluate moderate buffer extensions with unchanged reliability and internal capacities.', 'High CAPEX: evaluate additional accumulation length and safe sensor relocation.'],
     dataClassification: 'DEMO_ONLY',
     dataNote: 'This is a non-confidential demonstration Case. MTBF, MTTR, physical conveyor geometry, speeds, sensor positions, and line configuration are transparent synthetic assumptions for software testing; they are not plant measurements, equipment guarantees, or operating recommendations.',
     modelLimitations: [
-      'All generic-engine rates are units per minute; the current MVP does not yet transform bottles into cases or pallets.',
+      'Rates use each machine’s native output unit. The case packer consumes 12 bottles per case; the palletizer stores cases. Pallets and robot batch pickups are symbolic 36-space graphics.',
       'MTBF produces seeded exponential time-to-failure intervals. MTTR is represented as a fixed repair duration.',
       'The demo uses transparent synthetic L_act, L_p, runout lengths, sensor delays, insurance, and sensor positions. They are not plant measurements or recommendations.',
       'Every conveyor derives pitch, conveyor velocity, Population %, normal photoeye pulse/gap timing, Prime location, Back-up margin, usable accumulation, recovery length, and anti-starve / anti-block time from the named FlowPilot inputs.',

@@ -26,5 +26,7 @@ for(const simulation of record.simulations){
   shifts:result.shifts,replicationStatus:{state:'COMPLETE',completedRounds:input.run.rounds,totalRounds:input.run.rounds},batch:{...result.batch,replays:[]},replay});
  console.log(simulation.id+': '+result.batch.statistics.lineOeePercent.mean.toFixed(2)+'%');
 }
+// Retain the measured representative round without duplicating its full recording.
+for(const result of data.results)if(result.batch.representativeReplay)result.batch.representativeReplay={...result.replay,round:result.batch.representativeRound};
 const encoded=gzipSync(JSON.stringify(data)).toString('base64');
 fs.writeFileSync('apps-script/DemoResults.gs','function preparedDemoResults_(){return JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode('+JSON.stringify(encoded)+'),"application/x-gzip")).getDataAsString("UTF-8"));}\n');

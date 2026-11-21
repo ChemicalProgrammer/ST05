@@ -1,0 +1,5350 @@
+{
+  "id": "ui-demo-fixture",
+  "name": "Demo — low-efficiency CAPEX challenge",
+  "unitOfFlow": "units",
+  "metadata": {
+    "demoRevision": "capex-challenge-4",
+    "consoleOptions": {
+      "autosaveEnabled": false,
+      "autosaveSeconds": 10,
+      "seedPolicy": "FIXED"
+    },
+    "learningObjectives": [
+      "Compare the low theoretical series availability with simulated OEE; buffering can decouple equipment downtime.",
+      "Read the instantaneous V-Graph: configured speeds decrease toward the 400 BPM Filler and increase downstream; recovery recommendations remain separate.",
+      "Zero CAPEX: increase installed recovery headroom and retune existing sensors.",
+      "Medium CAPEX: evaluate moderate buffer extensions and an explicitly assumed local restart-control retrofit.",
+      "High CAPEX: evaluate additional accumulation length and safe sensor relocation."
+    ],
+    "dataClassification": "DEMO_ONLY",
+    "dataNote": "This is a non-confidential demonstration Case. MTBF, MTTR, physical conveyor geometry, speeds, sensor positions, and line configuration are transparent synthetic assumptions for software testing; they are not plant measurements, equipment guarantees, or operating recommendations.",
+    "modelLimitations": [
+      "All generic-engine rates are units per minute; the current MVP does not yet transform bottles into cases or pallets.",
+      "MTBF produces seeded exponential time-to-failure intervals. MTTR is represented as a fixed repair duration.",
+      "The demo uses transparent synthetic L_act, L_p, runout lengths, sensor delays, insurance, and sensor positions. They are not plant measurements or recommendations.",
+      "Every conveyor derives pitch, conveyor velocity, Population %, normal photoeye pulse/gap timing, Prime location, Back-up margin, usable accumulation, recovery length, and anti-starve / anti-block time from the named FlowPilot inputs.",
+      "Prime is modeled as leading-product travel to the downstream photocell. Back-up receives normal product pulses, but it requests an upstream stop only after a queue holds the photocell continuously blocked for its configured delay; its clear delay is also continuous."
+    ]
+  },
+  "engineConfig": {
+    "modelMode": "DEMO_EQUIVALENT_BOTTLES",
+    "designThroughputBottlesPerHour": 24000,
+    "packConfiguration": {
+      "bottlesPerCase": 12,
+      "casesPerLayer": 10,
+      "layersPerPallet": 6
+    },
+    "reliabilityModel": "Seeded exponential time-to-failure with fixed MTTR repair duration",
+    "accumulationControlModel": "FlowPilot physical conveyor engineering with package-pulse photoeyes, sustained Back-up debounce, overflow margin, and recovery audit"
+  },
+  "equipment": [
+    {
+      "id": "blowmolder-1",
+      "type": "BLOWMOLDER",
+      "name": "Blowmolder",
+      "nominalRatePerSecond": 7.666666666666667,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 460,
+        "isPacemaker": false
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 2.2,
+          "mttrMinutes": 0.4
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.35,
+          "minDurationSeconds": 3,
+          "maxDurationSeconds": 8
+        }
+      },
+      "processData": {
+        "role": "MACHINE",
+        "machineType": "BLOWMOLDER",
+        "equipment": {
+          "mtbfMinutes": 2.2,
+          "mttrMinutes": 0.4,
+          "maximumSpeedBpm": 620
+        },
+        "geometry": {
+          "lactMm": null,
+          "lpPrimeMm": null,
+          "actualDischargeMm": 85,
+          "actualCodingMm": 85
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 85,
+          "startupTimeSeconds": 5,
+          "bottlesDischargedAtStop": 4
+        },
+        "downstream": {
+          "infeedPitchMm": 88,
+          "rampUpTimeSeconds": 10
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+          "additionalParameters": []
+        }
+      }
+    },
+    {
+      "id": "conveyor-1",
+      "type": "CONVEYOR",
+      "name": "Blowmolder discharge conveyor",
+      "nominalRatePerSecond": 8,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 480,
+        "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.04,
+          "minDurationSeconds": 2,
+          "maxDurationSeconds": 5
+        }
+      },
+      "processData": {
+        "role": "CONVEYOR",
+        "machineType": "CONVEYOR",
+        "equipment": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5,
+          "maximumSpeedBpm": 500
+        },
+        "geometry": {
+          "lactMm": 8000,
+          "lpPrimeMm": 1800,
+          "actualDischargeMm": 88,
+          "actualCodingMm": 88
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 85,
+          "startupTimeSeconds": 4,
+          "bottlesDischargedAtStop": 2
+        },
+        "downstream": {
+          "infeedPitchMm": 88,
+          "rampUpTimeSeconds": 5
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+          "additionalParameters": []
+        },
+        "accumulation": {
+          "id": "zone-blowmolder-to-pucker",
+          "name": "Blowmolder discharge accumulation",
+          "backupSensorPositionMm": 1200,
+          "dischargeRunoutLengthMm": 250,
+          "rejectRunoutLengthMm": 350,
+          "blockedTimeDelaySeconds": 0.5,
+          "clearTimeDelaySeconds": 0.5,
+          "insuranceFactorUnits": 2,
+          "upstreamStopResponseSeconds": 1,
+          "bottlesDischargedAtStop": 4,
+          "downstreamRampUpSeconds": 12,
+          "conveyorSpeedFactorPercent": 15
+        }
+      }
+    },
+    {
+      "id": "pucker-1",
+      "type": "PUCKER",
+      "name": "Pucker",
+      "nominalRatePerSecond": 7.166666666666667,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 430,
+        "isPacemaker": false
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1.8,
+          "mttrMinutes": 0.35
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.35,
+          "minDurationSeconds": 3,
+          "maxDurationSeconds": 8
+        }
+      },
+      "processData": {
+        "role": "MACHINE",
+        "machineType": "PUCKER",
+        "equipment": {
+          "mtbfMinutes": 1.8,
+          "mttrMinutes": 0.35,
+          "maximumSpeedBpm": 580
+        },
+        "geometry": {
+          "lactMm": null,
+          "lpPrimeMm": null,
+          "actualDischargeMm": 90,
+          "actualCodingMm": 90
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 90,
+          "startupTimeSeconds": 5,
+          "bottlesDischargedAtStop": 3
+        },
+        "downstream": {
+          "infeedPitchMm": 90,
+          "rampUpTimeSeconds": 8
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+          "additionalParameters": []
+        }
+      }
+    },
+    {
+      "id": "conveyor-2",
+      "type": "CONVEYOR",
+      "name": "Pucker discharge conveyor",
+      "nominalRatePerSecond": 8,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 480,
+        "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.04,
+          "minDurationSeconds": 2,
+          "maxDurationSeconds": 5
+        }
+      },
+      "processData": {
+        "role": "CONVEYOR",
+        "machineType": "CONVEYOR",
+        "equipment": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5,
+          "maximumSpeedBpm": 500
+        },
+        "geometry": {
+          "lactMm": 8000,
+          "lpPrimeMm": 1800,
+          "actualDischargeMm": 90,
+          "actualCodingMm": 90
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 90,
+          "startupTimeSeconds": 4,
+          "bottlesDischargedAtStop": 2
+        },
+        "downstream": {
+          "infeedPitchMm": 90,
+          "rampUpTimeSeconds": 5
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+          "additionalParameters": []
+        },
+        "accumulation": {
+          "id": "zone-pucker-to-filler",
+          "name": "Pucker discharge accumulation",
+          "backupSensorPositionMm": 1200,
+          "dischargeRunoutLengthMm": 200,
+          "rejectRunoutLengthMm": 250,
+          "blockedTimeDelaySeconds": 0.5,
+          "clearTimeDelaySeconds": 0.5,
+          "insuranceFactorUnits": 2,
+          "upstreamStopResponseSeconds": 1,
+          "bottlesDischargedAtStop": 3,
+          "downstreamRampUpSeconds": 12,
+          "conveyorSpeedFactorPercent": 15
+        }
+      }
+    },
+    {
+      "id": "filler-1",
+      "type": "FILLER",
+      "name": "Filler",
+      "nominalRatePerSecond": 6.666666666666667,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 400,
+        "isPacemaker": true
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 2.8,
+          "mttrMinutes": 0.3
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.35,
+          "minDurationSeconds": 3,
+          "maxDurationSeconds": 8
+        }
+      },
+      "processData": {
+        "role": "PACEMAKER",
+        "machineType": "FILLER",
+        "equipment": {
+          "mtbfMinutes": 2.8,
+          "mttrMinutes": 0.3,
+          "maximumSpeedBpm": 420
+        },
+        "geometry": {
+          "lactMm": null,
+          "lpPrimeMm": null,
+          "actualDischargeMm": 92,
+          "actualCodingMm": 92
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 92,
+          "startupTimeSeconds": 5,
+          "bottlesDischargedAtStop": 6
+        },
+        "downstream": {
+          "infeedPitchMm": 92,
+          "rampUpTimeSeconds": 15
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+          "additionalParameters": []
+        }
+      }
+    },
+    {
+      "id": "conveyor-3",
+      "type": "CONVEYOR",
+      "name": "Filler discharge conveyor",
+      "nominalRatePerSecond": 8,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 480,
+        "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.04,
+          "minDurationSeconds": 2,
+          "maxDurationSeconds": 5
+        }
+      },
+      "processData": {
+        "role": "CONVEYOR",
+        "machineType": "CONVEYOR",
+        "equipment": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5,
+          "maximumSpeedBpm": 500
+        },
+        "geometry": {
+          "lactMm": 8000,
+          "lpPrimeMm": 1800,
+          "actualDischargeMm": 92,
+          "actualCodingMm": 92
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 92,
+          "startupTimeSeconds": 4,
+          "bottlesDischargedAtStop": 2
+        },
+        "downstream": {
+          "infeedPitchMm": 92,
+          "rampUpTimeSeconds": 5
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 7,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+          "additionalParameters": []
+        },
+        "accumulation": {
+          "id": "zone-filler-to-depucker",
+          "name": "Filler discharge accumulation",
+          "backupSensorPositionMm": 1200,
+          "dischargeRunoutLengthMm": 450,
+          "rejectRunoutLengthMm": 600,
+          "blockedTimeDelaySeconds": 0.5,
+          "clearTimeDelaySeconds": 0.5,
+          "insuranceFactorUnits": 3,
+          "upstreamStopResponseSeconds": 2,
+          "bottlesDischargedAtStop": 6,
+          "downstreamRampUpSeconds": 12,
+          "conveyorSpeedFactorPercent": 15
+        }
+      }
+    },
+    {
+      "id": "depucker-1",
+      "type": "DEPUCKER",
+      "name": "De-pucker",
+      "nominalRatePerSecond": 7,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 420,
+        "isPacemaker": false
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1.6,
+          "mttrMinutes": 0.4
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.35,
+          "minDurationSeconds": 3,
+          "maxDurationSeconds": 8
+        }
+      },
+      "processData": {
+        "role": "MACHINE",
+        "machineType": "DEPUCKER",
+        "equipment": {
+          "mtbfMinutes": 1.6,
+          "mttrMinutes": 0.4,
+          "maximumSpeedBpm": 560
+        },
+        "geometry": {
+          "lactMm": null,
+          "lpPrimeMm": null,
+          "actualDischargeMm": 92,
+          "actualCodingMm": 92
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 92,
+          "startupTimeSeconds": 5,
+          "bottlesDischargedAtStop": 3
+        },
+        "downstream": {
+          "infeedPitchMm": 92,
+          "rampUpTimeSeconds": 8
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+          "additionalParameters": []
+        }
+      }
+    },
+    {
+      "id": "conveyor-4",
+      "type": "CONVEYOR",
+      "name": "De-pucker discharge conveyor",
+      "nominalRatePerSecond": 8,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 480,
+        "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.04,
+          "minDurationSeconds": 2,
+          "maxDurationSeconds": 5
+        }
+      },
+      "processData": {
+        "role": "CONVEYOR",
+        "machineType": "CONVEYOR",
+        "equipment": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5,
+          "maximumSpeedBpm": 500
+        },
+        "geometry": {
+          "lactMm": 8000,
+          "lpPrimeMm": 1800,
+          "actualDischargeMm": 92,
+          "actualCodingMm": 92
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 92,
+          "startupTimeSeconds": 4,
+          "bottlesDischargedAtStop": 2
+        },
+        "downstream": {
+          "infeedPitchMm": 92,
+          "rampUpTimeSeconds": 5
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 6,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+          "additionalParameters": []
+        },
+        "accumulation": {
+          "id": "zone-depucker-to-sleever",
+          "name": "De-pucker discharge accumulation",
+          "backupSensorPositionMm": 1200,
+          "dischargeRunoutLengthMm": 250,
+          "rejectRunoutLengthMm": 350,
+          "blockedTimeDelaySeconds": 0.5,
+          "clearTimeDelaySeconds": 0.5,
+          "insuranceFactorUnits": 2,
+          "upstreamStopResponseSeconds": 1,
+          "bottlesDischargedAtStop": 3,
+          "downstreamRampUpSeconds": 12,
+          "conveyorSpeedFactorPercent": 15
+        }
+      }
+    },
+    {
+      "id": "sleever-1",
+      "type": "SLEEVER",
+      "name": "Sleever",
+      "nominalRatePerSecond": 7.333333333333333,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 440,
+        "isPacemaker": false
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1.4,
+          "mttrMinutes": 0.3
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.35,
+          "minDurationSeconds": 3,
+          "maxDurationSeconds": 8
+        }
+      },
+      "processData": {
+        "role": "MACHINE",
+        "machineType": "SLEEVER",
+        "equipment": {
+          "mtbfMinutes": 1.4,
+          "mttrMinutes": 0.3,
+          "maximumSpeedBpm": 580
+        },
+        "geometry": {
+          "lactMm": null,
+          "lpPrimeMm": null,
+          "actualDischargeMm": 94,
+          "actualCodingMm": 94
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 94,
+          "startupTimeSeconds": 5,
+          "bottlesDischargedAtStop": 4
+        },
+        "downstream": {
+          "infeedPitchMm": 94,
+          "rampUpTimeSeconds": 12
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 101,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+          "additionalParameters": []
+        }
+      }
+    },
+    {
+      "id": "conveyor-5",
+      "type": "CONVEYOR",
+      "name": "Sleever discharge conveyor",
+      "nominalRatePerSecond": 7.5,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 450,
+        "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.04,
+          "minDurationSeconds": 2,
+          "maxDurationSeconds": 5
+        }
+      },
+      "processData": {
+        "role": "CONVEYOR",
+        "machineType": "CONVEYOR",
+        "equipment": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5,
+          "maximumSpeedBpm": 470
+        },
+        "geometry": {
+          "lactMm": 8000,
+          "lpPrimeMm": 1800,
+          "actualDischargeMm": 94,
+          "actualCodingMm": 94
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 94,
+          "startupTimeSeconds": 4,
+          "bottlesDischargedAtStop": 2
+        },
+        "downstream": {
+          "infeedPitchMm": 94,
+          "rampUpTimeSeconds": 5
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+          "additionalParameters": []
+        },
+        "accumulation": {
+          "id": "zone-sleever-to-case-packer",
+          "name": "Sleever discharge accumulation",
+          "backupSensorPositionMm": 1200,
+          "dischargeRunoutLengthMm": 220,
+          "rejectRunoutLengthMm": 280,
+          "blockedTimeDelaySeconds": 0.5,
+          "clearTimeDelaySeconds": 0.5,
+          "insuranceFactorUnits": 2,
+          "upstreamStopResponseSeconds": 1,
+          "bottlesDischargedAtStop": 4,
+          "downstreamRampUpSeconds": 12,
+          "conveyorSpeedFactorPercent": 15
+        }
+      }
+    },
+    {
+      "id": "case-packer-1",
+      "type": "CASE_PACKER",
+      "name": "Case packer",
+      "nominalRatePerSecond": 7.666666666666667,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 460,
+        "isPacemaker": false
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1.8,
+          "mttrMinutes": 0.4
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.35,
+          "minDurationSeconds": 3,
+          "maxDurationSeconds": 8
+        }
+      },
+      "processData": {
+        "role": "MACHINE",
+        "machineType": "CASE_PACKER",
+        "equipment": {
+          "mtbfMinutes": 1.8,
+          "mttrMinutes": 0.4,
+          "maximumSpeedBpm": 600
+        },
+        "geometry": {
+          "lactMm": null,
+          "lpPrimeMm": null,
+          "actualDischargeMm": 96,
+          "actualCodingMm": 96
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 96,
+          "startupTimeSeconds": 5,
+          "bottlesDischargedAtStop": 4
+        },
+        "downstream": {
+          "infeedPitchMm": 96,
+          "rampUpTimeSeconds": 12
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+          "additionalParameters": []
+        }
+      }
+    },
+    {
+      "id": "conveyor-6",
+      "type": "CONVEYOR",
+      "name": "Case packer discharge conveyor",
+      "nominalRatePerSecond": 7.166666666666667,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 430,
+        "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.04,
+          "minDurationSeconds": 2,
+          "maxDurationSeconds": 5
+        }
+      },
+      "processData": {
+        "role": "CONVEYOR",
+        "machineType": "CONVEYOR",
+        "equipment": {
+          "mtbfMinutes": 1440,
+          "mttrMinutes": 5,
+          "maximumSpeedBpm": 450
+        },
+        "geometry": {
+          "lactMm": 8000,
+          "lpPrimeMm": 1800,
+          "actualDischargeMm": 96,
+          "actualCodingMm": 96
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 96,
+          "startupTimeSeconds": 4,
+          "bottlesDischargedAtStop": 2
+        },
+        "downstream": {
+          "infeedPitchMm": 96,
+          "rampUpTimeSeconds": 5
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+          "additionalParameters": []
+        },
+        "accumulation": {
+          "id": "zone-case-packer-to-palletizer",
+          "name": "Case packer discharge accumulation",
+          "backupSensorPositionMm": 1200,
+          "dischargeRunoutLengthMm": 220,
+          "rejectRunoutLengthMm": 280,
+          "blockedTimeDelaySeconds": 0.5,
+          "clearTimeDelaySeconds": 0.5,
+          "insuranceFactorUnits": 2,
+          "upstreamStopResponseSeconds": 1,
+          "bottlesDischargedAtStop": 4,
+          "downstreamRampUpSeconds": 12,
+          "conveyorSpeedFactorPercent": 15
+        }
+      }
+    },
+    {
+      "id": "palletizer-1",
+      "type": "PALLETIZER",
+      "name": "Palletizer",
+      "nominalRatePerSecond": 8,
+      "initialMode": "AUTO",
+      "characteristics": {
+        "dataClassification": "DEMO_ONLY",
+        "rateBasis": "units per minute",
+        "nominalRateBpm": 480,
+        "isPacemaker": false
+      },
+      "noiseProfile": {
+        "reliability": {
+          "mtbfMinutes": 2,
+          "mttrMinutes": 0.4
+        },
+        "microStop": {
+          "probabilityPerMinute": 0.35,
+          "minDurationSeconds": 3,
+          "maxDurationSeconds": 8
+        }
+      },
+      "processData": {
+        "role": "MACHINE",
+        "machineType": "PALLETIZER",
+        "equipment": {
+          "mtbfMinutes": 2,
+          "mttrMinutes": 0.4,
+          "maximumSpeedBpm": 620
+        },
+        "geometry": {
+          "lactMm": null,
+          "lpPrimeMm": null,
+          "actualDischargeMm": 96,
+          "actualCodingMm": 96
+        },
+        "upstream": {
+          "packageLengthMm": 66,
+          "dischargePitchMm": 96,
+          "startupTimeSeconds": 5,
+          "bottlesDischargedAtStop": 3
+        },
+        "downstream": {
+          "infeedPitchMm": 96,
+          "rampUpTimeSeconds": 15
+        },
+        "speedAndSensors": {
+          "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+          "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+          "additionalParameters": []
+        }
+      }
+    }
+  ],
+  "simulations": [
+    {
+      "id": "simulation-a",
+      "name": "Baseline — inefficient line",
+      "equipment": [
+        {
+          "id": "blowmolder-1",
+          "type": "BLOWMOLDER",
+          "name": "Blowmolder",
+          "nominalRatePerSecond": 7.666666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "BLOWMOLDER",
+            "equipment": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 85,
+              "actualCodingMm": 85
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 10
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-1",
+          "type": "CONVEYOR",
+          "name": "Blowmolder discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 1800,
+              "actualDischargeMm": 88,
+              "actualCodingMm": 88
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-blowmolder-to-pucker",
+              "name": "Blowmolder discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 15
+            }
+          }
+        },
+        {
+          "id": "pucker-1",
+          "type": "PUCKER",
+          "name": "Pucker",
+          "nominalRatePerSecond": 7.166666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-2",
+          "type": "CONVEYOR",
+          "name": "Pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 1800,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-pucker-to-filler",
+              "name": "Pucker discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 200,
+              "rejectRunoutLengthMm": 250,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 15
+            }
+          }
+        },
+        {
+          "id": "filler-1",
+          "type": "FILLER",
+          "name": "Filler",
+          "nominalRatePerSecond": 6.666666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 400,
+            "isPacemaker": true
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "PACEMAKER",
+            "machineType": "FILLER",
+            "equipment": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 420
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 6
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-3",
+          "type": "CONVEYOR",
+          "name": "Filler discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 1800,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 7,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-filler-to-depucker",
+              "name": "Filler discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 450,
+              "rejectRunoutLengthMm": 600,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 3,
+              "upstreamStopResponseSeconds": 2,
+              "bottlesDischargedAtStop": 6,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 15
+            }
+          }
+        },
+        {
+          "id": "depucker-1",
+          "type": "DEPUCKER",
+          "name": "De-pucker",
+          "nominalRatePerSecond": 7,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 420,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "DEPUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 560
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-4",
+          "type": "CONVEYOR",
+          "name": "De-pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 1800,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 6,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-depucker-to-sleever",
+              "name": "De-pucker discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 15
+            }
+          }
+        },
+        {
+          "id": "sleever-1",
+          "type": "SLEEVER",
+          "name": "Sleever",
+          "nominalRatePerSecond": 7.333333333333333,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 440,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "SLEEVER",
+            "equipment": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 101,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-5",
+          "type": "CONVEYOR",
+          "name": "Sleever discharge conveyor",
+          "nominalRatePerSecond": 7.5,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 450,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 470
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 1800,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-sleever-to-case-packer",
+              "name": "Sleever discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 15
+            }
+          }
+        },
+        {
+          "id": "case-packer-1",
+          "type": "CASE_PACKER",
+          "name": "Case packer",
+          "nominalRatePerSecond": 7.666666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "CASE_PACKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 600
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-6",
+          "type": "CONVEYOR",
+          "name": "Case packer discharge conveyor",
+          "nominalRatePerSecond": 7.166666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 450
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 1800,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-case-packer-to-palletizer",
+              "name": "Case packer discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 15
+            }
+          }
+        },
+        {
+          "id": "palletizer-1",
+          "type": "PALLETIZER",
+          "name": "Palletizer",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PALLETIZER",
+            "equipment": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        }
+      ],
+      "dynamicConfig": {
+        "durationMode": "SHIFTS",
+        "shiftHours": 8,
+        "shiftCount": 1,
+        "shiftSeconds": 28800,
+        "durationSeconds": 28800,
+        "tickSeconds": 0.25,
+        "sampleEverySeconds": 15,
+        "seed": 20261008,
+        "rounds": 3,
+        "commands": []
+      },
+      "results": null,
+      "whatIf": {
+        "externalOptions": [
+          {
+            "tier": "ZERO",
+            "changes": [
+              {
+                "equipmentId": "blowmolder-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.666666666666667,
+                "after": 8,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "pucker-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.166666666666667,
+                "after": 7.333333333333333,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "depucker-1",
+                "path": "nominalRatePerSecond",
+                "before": 7,
+                "after": 7.333333333333333,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "sleever-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.333333333333333,
+                "after": 8,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "case-packer-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.666666666666667,
+                "after": 8.666666666666666,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "palletizer-1",
+                "path": "nominalRatePerSecond",
+                "before": 8,
+                "after": 9,
+                "unit": "units/s"
+              }
+            ]
+          },
+          {
+            "tier": "MEDIUM",
+            "changes": [
+              {
+                "equipmentId": "blowmolder-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.666666666666667,
+                "after": 8.333333333333334,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "blowmolder-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 3,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 12000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "pucker-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.166666666666667,
+                "after": 7.666666666666667,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "pucker-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 3,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 12000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "filler-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 3,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 12000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "depucker-1",
+                "path": "nominalRatePerSecond",
+                "before": 7,
+                "after": 7.5,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "depucker-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 3,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 12000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "sleever-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.333333333333333,
+                "after": 8.166666666666666,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "sleever-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 3,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 12000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "case-packer-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.666666666666667,
+                "after": 8.833333333333334,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "case-packer-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 3,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 12000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "palletizer-1",
+                "path": "nominalRatePerSecond",
+                "before": 8,
+                "after": 9.166666666666666,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "palletizer-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 3,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+              }
+            ]
+          },
+          {
+            "tier": "HIGH",
+            "changes": [
+              {
+                "equipmentId": "blowmolder-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.666666666666667,
+                "after": 9.666666666666666,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "blowmolder-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 1,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 24000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-1",
+                "path": "processData.accumulation.backupSensorPositionMm",
+                "before": 1200,
+                "after": 3000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "pucker-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.166666666666667,
+                "after": 9,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "pucker-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 1,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 24000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-2",
+                "path": "processData.accumulation.backupSensorPositionMm",
+                "before": 1200,
+                "after": 3000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "filler-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 1,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 24000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-3",
+                "path": "processData.accumulation.backupSensorPositionMm",
+                "before": 1200,
+                "after": 3000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "depucker-1",
+                "path": "nominalRatePerSecond",
+                "before": 7,
+                "after": 8.333333333333334,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "depucker-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 1,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 24000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-4",
+                "path": "processData.accumulation.backupSensorPositionMm",
+                "before": 1200,
+                "after": 3000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "sleever-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.333333333333333,
+                "after": 8.666666666666666,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "sleever-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 1,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 24000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-5",
+                "path": "processData.accumulation.backupSensorPositionMm",
+                "before": 1200,
+                "after": 3000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "case-packer-1",
+                "path": "nominalRatePerSecond",
+                "before": 7.666666666666667,
+                "after": 9.166666666666666,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "case-packer-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 1,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.accumulation.conveyorSpeedFactorPercent",
+                "before": 15,
+                "after": 100,
+                "unit": "%"
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.geometry.lpPrimeMm",
+                "before": 1800,
+                "after": 400,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.geometry.lactMm",
+                "before": 8000,
+                "after": 24000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "conveyor-6",
+                "path": "processData.accumulation.backupSensorPositionMm",
+                "before": 1200,
+                "after": 3000,
+                "unit": "mm"
+              },
+              {
+                "equipmentId": "palletizer-1",
+                "path": "nominalRatePerSecond",
+                "before": 8,
+                "after": 9.333333333333334,
+                "unit": "units/s"
+              },
+              {
+                "equipmentId": "palletizer-1",
+                "path": "processData.upstream.startupTimeSeconds",
+                "before": 5,
+                "after": 1,
+                "unit": "s",
+                "external": true,
+                "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo-zero",
+      "name": "Zero CAPEX — operating adjustments",
+      "equipment": [
+        {
+          "id": "blowmolder-1",
+          "type": "BLOWMOLDER",
+          "name": "Blowmolder",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "BLOWMOLDER",
+            "equipment": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 85,
+              "actualCodingMm": 85
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 10
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-1",
+          "type": "CONVEYOR",
+          "name": "Blowmolder discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 88,
+              "actualCodingMm": 88
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-blowmolder-to-pucker",
+              "name": "Blowmolder discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "pucker-1",
+          "type": "PUCKER",
+          "name": "Pucker",
+          "nominalRatePerSecond": 7.333333333333333,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-2",
+          "type": "CONVEYOR",
+          "name": "Pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-pucker-to-filler",
+              "name": "Pucker discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 200,
+              "rejectRunoutLengthMm": 250,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "filler-1",
+          "type": "FILLER",
+          "name": "Filler",
+          "nominalRatePerSecond": 6.666666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 400,
+            "isPacemaker": true
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "PACEMAKER",
+            "machineType": "FILLER",
+            "equipment": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 420
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 6
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-3",
+          "type": "CONVEYOR",
+          "name": "Filler discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 7,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-filler-to-depucker",
+              "name": "Filler discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 450,
+              "rejectRunoutLengthMm": 600,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 3,
+              "upstreamStopResponseSeconds": 2,
+              "bottlesDischargedAtStop": 6,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "depucker-1",
+          "type": "DEPUCKER",
+          "name": "De-pucker",
+          "nominalRatePerSecond": 7.333333333333333,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 420,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "DEPUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 560
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-4",
+          "type": "CONVEYOR",
+          "name": "De-pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 6,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-depucker-to-sleever",
+              "name": "De-pucker discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "sleever-1",
+          "type": "SLEEVER",
+          "name": "Sleever",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 440,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "SLEEVER",
+            "equipment": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 101,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-5",
+          "type": "CONVEYOR",
+          "name": "Sleever discharge conveyor",
+          "nominalRatePerSecond": 7.5,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 450,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 470
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-sleever-to-case-packer",
+              "name": "Sleever discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "case-packer-1",
+          "type": "CASE_PACKER",
+          "name": "Case packer",
+          "nominalRatePerSecond": 8.666666666666666,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "CASE_PACKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 600
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-6",
+          "type": "CONVEYOR",
+          "name": "Case packer discharge conveyor",
+          "nominalRatePerSecond": 7.166666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 450
+            },
+            "geometry": {
+              "lactMm": 8000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-case-packer-to-palletizer",
+              "name": "Case packer discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "palletizer-1",
+          "type": "PALLETIZER",
+          "name": "Palletizer",
+          "nominalRatePerSecond": 9,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PALLETIZER",
+            "equipment": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 5,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        }
+      ],
+      "dynamicConfig": {
+        "durationMode": "SHIFTS",
+        "shiftHours": 8,
+        "shiftCount": 1,
+        "shiftSeconds": 28800,
+        "durationSeconds": 28800,
+        "tickSeconds": 0.25,
+        "sampleEverySeconds": 15,
+        "seed": 20261008,
+        "rounds": 3,
+        "commands": []
+      },
+      "results": null,
+      "scenario": {
+        "origin": "DEMO",
+        "tier": "ZERO",
+        "sourceSimulationId": "simulation-a",
+        "changes": [
+          {
+            "equipmentId": "blowmolder-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.666666666666667,
+            "after": 8,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "pucker-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.166666666666667,
+            "after": 7.333333333333333,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "depucker-1",
+            "path": "nominalRatePerSecond",
+            "before": 7,
+            "after": 7.333333333333333,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "sleever-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.333333333333333,
+            "after": 8,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "case-packer-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.666666666666667,
+            "after": 8.666666666666666,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "palletizer-1",
+            "path": "nominalRatePerSecond",
+            "before": 8,
+            "after": 9,
+            "unit": "units/s"
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo-medium",
+      "name": "Medium CAPEX — buffers and restart control",
+      "equipment": [
+        {
+          "id": "blowmolder-1",
+          "type": "BLOWMOLDER",
+          "name": "Blowmolder",
+          "nominalRatePerSecond": 8.333333333333334,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "BLOWMOLDER",
+            "equipment": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 85,
+              "actualCodingMm": 85
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 3,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 10
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-1",
+          "type": "CONVEYOR",
+          "name": "Blowmolder discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 12000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 88,
+              "actualCodingMm": 88
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-blowmolder-to-pucker",
+              "name": "Blowmolder discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "pucker-1",
+          "type": "PUCKER",
+          "name": "Pucker",
+          "nominalRatePerSecond": 7.666666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 3,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-2",
+          "type": "CONVEYOR",
+          "name": "Pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 12000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-pucker-to-filler",
+              "name": "Pucker discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 200,
+              "rejectRunoutLengthMm": 250,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "filler-1",
+          "type": "FILLER",
+          "name": "Filler",
+          "nominalRatePerSecond": 6.666666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 400,
+            "isPacemaker": true
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "PACEMAKER",
+            "machineType": "FILLER",
+            "equipment": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 420
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 3,
+              "bottlesDischargedAtStop": 6
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-3",
+          "type": "CONVEYOR",
+          "name": "Filler discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 12000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 7,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-filler-to-depucker",
+              "name": "Filler discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 450,
+              "rejectRunoutLengthMm": 600,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 3,
+              "upstreamStopResponseSeconds": 2,
+              "bottlesDischargedAtStop": 6,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "depucker-1",
+          "type": "DEPUCKER",
+          "name": "De-pucker",
+          "nominalRatePerSecond": 7.5,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 420,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "DEPUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 560
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 3,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-4",
+          "type": "CONVEYOR",
+          "name": "De-pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 12000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 6,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-depucker-to-sleever",
+              "name": "De-pucker discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "sleever-1",
+          "type": "SLEEVER",
+          "name": "Sleever",
+          "nominalRatePerSecond": 8.166666666666666,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 440,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "SLEEVER",
+            "equipment": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 3,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 101,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-5",
+          "type": "CONVEYOR",
+          "name": "Sleever discharge conveyor",
+          "nominalRatePerSecond": 7.5,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 450,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 470
+            },
+            "geometry": {
+              "lactMm": 12000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-sleever-to-case-packer",
+              "name": "Sleever discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "case-packer-1",
+          "type": "CASE_PACKER",
+          "name": "Case packer",
+          "nominalRatePerSecond": 8.833333333333334,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "CASE_PACKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 600
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 3,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-6",
+          "type": "CONVEYOR",
+          "name": "Case packer discharge conveyor",
+          "nominalRatePerSecond": 7.166666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 450
+            },
+            "geometry": {
+              "lactMm": 12000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-case-packer-to-palletizer",
+              "name": "Case packer discharge accumulation",
+              "backupSensorPositionMm": 1200,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "palletizer-1",
+          "type": "PALLETIZER",
+          "name": "Palletizer",
+          "nominalRatePerSecond": 9.166666666666666,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PALLETIZER",
+            "equipment": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 3,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        }
+      ],
+      "dynamicConfig": {
+        "durationMode": "SHIFTS",
+        "shiftHours": 8,
+        "shiftCount": 1,
+        "shiftSeconds": 28800,
+        "durationSeconds": 28800,
+        "tickSeconds": 0.25,
+        "sampleEverySeconds": 15,
+        "seed": 20261008,
+        "rounds": 3,
+        "commands": []
+      },
+      "results": null,
+      "scenario": {
+        "origin": "DEMO",
+        "tier": "MEDIUM",
+        "sourceSimulationId": "simulation-a",
+        "changes": [
+          {
+            "equipmentId": "blowmolder-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.666666666666667,
+            "after": 8.333333333333334,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "blowmolder-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 3,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 12000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "pucker-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.166666666666667,
+            "after": 7.666666666666667,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "pucker-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 3,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 12000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "filler-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 3,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 12000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "depucker-1",
+            "path": "nominalRatePerSecond",
+            "before": 7,
+            "after": 7.5,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "depucker-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 3,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 12000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "sleever-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.333333333333333,
+            "after": 8.166666666666666,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "sleever-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 3,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 12000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "case-packer-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.666666666666667,
+            "after": 8.833333333333334,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "case-packer-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 3,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 12000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "palletizer-1",
+            "path": "nominalRatePerSecond",
+            "before": 8,
+            "after": 9.166666666666666,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "palletizer-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 3,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: local start-sequence retrofit with a 3-second restart target. This target is a hypothesis, not measured plant performance."
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo-high",
+      "name": "High CAPEX — accumulation upgrade",
+      "equipment": [
+        {
+          "id": "blowmolder-1",
+          "type": "BLOWMOLDER",
+          "name": "Blowmolder",
+          "nominalRatePerSecond": 9.666666666666666,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "BLOWMOLDER",
+            "equipment": {
+              "mtbfMinutes": 2.2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 85,
+              "actualCodingMm": 85
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 1,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 10
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-1",
+          "type": "CONVEYOR",
+          "name": "Blowmolder discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 24000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 88,
+              "actualCodingMm": 88
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 85,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 88,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-blowmolder-to-pucker",
+              "name": "Blowmolder discharge accumulation",
+              "backupSensorPositionMm": 3000,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "pucker-1",
+          "type": "PUCKER",
+          "name": "Pucker",
+          "nominalRatePerSecond": 9,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.35,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 1,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-2",
+          "type": "CONVEYOR",
+          "name": "Pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 24000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 90,
+              "actualCodingMm": 90
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 90,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 90,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-pucker-to-filler",
+              "name": "Pucker discharge accumulation",
+              "backupSensorPositionMm": 3000,
+              "dischargeRunoutLengthMm": 200,
+              "rejectRunoutLengthMm": 250,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "filler-1",
+          "type": "FILLER",
+          "name": "Filler",
+          "nominalRatePerSecond": 6.666666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 400,
+            "isPacemaker": true
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "PACEMAKER",
+            "machineType": "FILLER",
+            "equipment": {
+              "mtbfMinutes": 2.8,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 420
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 1,
+              "bottlesDischargedAtStop": 6
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-3",
+          "type": "CONVEYOR",
+          "name": "Filler discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 24000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 7,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-filler-to-depucker",
+              "name": "Filler discharge accumulation",
+              "backupSensorPositionMm": 3000,
+              "dischargeRunoutLengthMm": 450,
+              "rejectRunoutLengthMm": 600,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 3,
+              "upstreamStopResponseSeconds": 2,
+              "bottlesDischargedAtStop": 6,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "depucker-1",
+          "type": "DEPUCKER",
+          "name": "De-pucker",
+          "nominalRatePerSecond": 8.333333333333334,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 420,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "DEPUCKER",
+            "equipment": {
+              "mtbfMinutes": 1.6,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 560
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 1,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 8
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 102,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-4",
+          "type": "CONVEYOR",
+          "name": "De-pucker discharge conveyor",
+          "nominalRatePerSecond": 8,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 500
+            },
+            "geometry": {
+              "lactMm": 24000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 92,
+              "actualCodingMm": 92
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 92,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 92,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 6,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-depucker-to-sleever",
+              "name": "De-pucker discharge accumulation",
+              "backupSensorPositionMm": 3000,
+              "dischargeRunoutLengthMm": 250,
+              "rejectRunoutLengthMm": 350,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 3,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "sleever-1",
+          "type": "SLEEVER",
+          "name": "Sleever",
+          "nominalRatePerSecond": 8.666666666666666,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 440,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "SLEEVER",
+            "equipment": {
+              "mtbfMinutes": 1.4,
+              "mttrMinutes": 0.3,
+              "maximumSpeedBpm": 580
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 1,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 101,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-5",
+          "type": "CONVEYOR",
+          "name": "Sleever discharge conveyor",
+          "nominalRatePerSecond": 7.5,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 450,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 470
+            },
+            "geometry": {
+              "lactMm": 24000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 94,
+              "actualCodingMm": 94
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 94,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 94,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-sleever-to-case-packer",
+              "name": "Sleever discharge accumulation",
+              "backupSensorPositionMm": 3000,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "case-packer-1",
+          "type": "CASE_PACKER",
+          "name": "Case packer",
+          "nominalRatePerSecond": 9.166666666666666,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 460,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "CASE_PACKER",
+            "equipment": {
+              "mtbfMinutes": 1.8,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 600
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 1,
+              "bottlesDischargedAtStop": 4
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 12
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        },
+        {
+          "id": "conveyor-6",
+          "type": "CONVEYOR",
+          "name": "Case packer discharge conveyor",
+          "nominalRatePerSecond": 7.166666666666667,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 430,
+            "accumulationModel": "FlowPilot physical conveyor engineering; L_act, L_p, speed factor, Prime, Back-up, overflow, and recovery are derived with positions measured from upstream discharge toward downstream infeed."
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.04,
+              "minDurationSeconds": 2,
+              "maxDurationSeconds": 5
+            }
+          },
+          "processData": {
+            "role": "CONVEYOR",
+            "machineType": "CONVEYOR",
+            "equipment": {
+              "mtbfMinutes": 1440,
+              "mttrMinutes": 5,
+              "maximumSpeedBpm": 450
+            },
+            "geometry": {
+              "lactMm": 24000,
+              "lpPrimeMm": 400,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 4,
+              "bottlesDischargedAtStop": 2
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 5
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 5,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 102,
+              "additionalParameters": []
+            },
+            "accumulation": {
+              "id": "zone-case-packer-to-palletizer",
+              "name": "Case packer discharge accumulation",
+              "backupSensorPositionMm": 3000,
+              "dischargeRunoutLengthMm": 220,
+              "rejectRunoutLengthMm": 280,
+              "blockedTimeDelaySeconds": 0.5,
+              "clearTimeDelaySeconds": 0.5,
+              "insuranceFactorUnits": 2,
+              "upstreamStopResponseSeconds": 1,
+              "bottlesDischargedAtStop": 4,
+              "downstreamRampUpSeconds": 12,
+              "conveyorSpeedFactorPercent": 100
+            }
+          }
+        },
+        {
+          "id": "palletizer-1",
+          "type": "PALLETIZER",
+          "name": "Palletizer",
+          "nominalRatePerSecond": 9.333333333333334,
+          "initialMode": "AUTO",
+          "characteristics": {
+            "dataClassification": "DEMO_ONLY",
+            "rateBasis": "units per minute",
+            "nominalRateBpm": 480,
+            "isPacemaker": false
+          },
+          "noiseProfile": {
+            "reliability": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4
+            },
+            "microStop": {
+              "probabilityPerMinute": 0.35,
+              "minDurationSeconds": 3,
+              "maxDurationSeconds": 8
+            }
+          },
+          "processData": {
+            "role": "MACHINE",
+            "machineType": "PALLETIZER",
+            "equipment": {
+              "mtbfMinutes": 2,
+              "mttrMinutes": 0.4,
+              "maximumSpeedBpm": 620
+            },
+            "geometry": {
+              "lactMm": null,
+              "lpPrimeMm": null,
+              "actualDischargeMm": 96,
+              "actualCodingMm": 96
+            },
+            "upstream": {
+              "packageLengthMm": 66,
+              "dischargePitchMm": 96,
+              "startupTimeSeconds": 1,
+              "bottlesDischargedAtStop": 3
+            },
+            "downstream": {
+              "infeedPitchMm": 96,
+              "rampUpTimeSeconds": 15
+            },
+            "speedAndSensors": {
+              "conveyorSpeedFactorVsDischargeVelocityPercent": 100,
+              "codingConveyorSpeedFactorVsPreviousConveyorPercent": 100,
+              "additionalParameters": []
+            }
+          }
+        }
+      ],
+      "dynamicConfig": {
+        "durationMode": "SHIFTS",
+        "shiftHours": 8,
+        "shiftCount": 1,
+        "shiftSeconds": 28800,
+        "durationSeconds": 28800,
+        "tickSeconds": 0.25,
+        "sampleEverySeconds": 15,
+        "seed": 20261008,
+        "rounds": 3,
+        "commands": []
+      },
+      "results": null,
+      "scenario": {
+        "origin": "DEMO",
+        "tier": "HIGH",
+        "sourceSimulationId": "simulation-a",
+        "changes": [
+          {
+            "equipmentId": "blowmolder-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.666666666666667,
+            "after": 9.666666666666666,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "blowmolder-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 1,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 24000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-1",
+            "path": "processData.accumulation.backupSensorPositionMm",
+            "before": 1200,
+            "after": 3000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "pucker-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.166666666666667,
+            "after": 9,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "pucker-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 1,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 24000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-2",
+            "path": "processData.accumulation.backupSensorPositionMm",
+            "before": 1200,
+            "after": 3000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "filler-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 1,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 24000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-3",
+            "path": "processData.accumulation.backupSensorPositionMm",
+            "before": 1200,
+            "after": 3000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "depucker-1",
+            "path": "nominalRatePerSecond",
+            "before": 7,
+            "after": 8.333333333333334,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "depucker-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 1,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 24000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-4",
+            "path": "processData.accumulation.backupSensorPositionMm",
+            "before": 1200,
+            "after": 3000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "sleever-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.333333333333333,
+            "after": 8.666666666666666,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "sleever-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 1,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 24000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-5",
+            "path": "processData.accumulation.backupSensorPositionMm",
+            "before": 1200,
+            "after": 3000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "case-packer-1",
+            "path": "nominalRatePerSecond",
+            "before": 7.666666666666667,
+            "after": 9.166666666666666,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "case-packer-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 1,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.accumulation.conveyorSpeedFactorPercent",
+            "before": 15,
+            "after": 100,
+            "unit": "%"
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.geometry.lpPrimeMm",
+            "before": 1800,
+            "after": 400,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.geometry.lactMm",
+            "before": 8000,
+            "after": 24000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "conveyor-6",
+            "path": "processData.accumulation.backupSensorPositionMm",
+            "before": 1200,
+            "after": 3000,
+            "unit": "mm"
+          },
+          {
+            "equipmentId": "palletizer-1",
+            "path": "nominalRatePerSecond",
+            "before": 8,
+            "after": 9.333333333333334,
+            "unit": "units/s"
+          },
+          {
+            "equipmentId": "palletizer-1",
+            "path": "processData.upstream.startupTimeSeconds",
+            "before": 5,
+            "after": 1,
+            "unit": "s",
+            "external": true,
+            "justification": "Synthetic demo assumption: integrated controls upgrade with a 1-second restart target. This target is a hypothesis, not measured plant performance."
+          }
+        ]
+      }
+    }
+  ]
+}

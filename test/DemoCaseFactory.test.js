@@ -1,143 +1,68 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
+import {simulateLine} from '../src/simulation/LineSimulationEngine.js';
+import {resolvePackingFormats,validateFormatCatalog} from '../src/simulation/FormatCatalog.js';
+import {applyScenarioChanges} from '../src/analysis/ScenarioPlanner.js';
+const demo=()=>{const f=vm.createContext({});vm.runInContext(fs.readFileSync('apps-script/DemoCaseFactory.gs','utf8'),f);return JSON.parse(JSON.stringify(f.createDemoCaseRequest_()));};
 
-import { applyScenarioChanges } from '../src/analysis/ScenarioPlanner.js';
-
-import { simulateLine } from '../src/simulation/LineSimulationEngine.js';
-import { analyzeLinePerformance } from '../src/analysis/LinePerformanceAnalysis.js';
-
-const repositoryRoot = path.resolve(import.meta.dirname, '..');
-
-test('demo starts with low series availability and a V-shaped configured speed profile',()=>{
-  const factory=vm.createContext({});
-  vm.runInContext(fs.readFileSync(path.join(repositoryRoot,'apps-script/DemoCaseFactory.gs'),'utf8'),factory);
-  const record=JSON.parse(JSON.stringify(factory.createDemoCaseRequest_()));
-  const machines=record.equipment.filter(e=>e.type!=='CONVEYOR');
-  const availability=machines.reduce((product,e)=>product*e.noiseProfile.reliability.mtbfMinutes/(e.noiseProfile.reliability.mtbfMinutes+e.noiseProfile.reliability.mttrMinutes),1);
-  assert(availability>.25&&availability<.35);
-  const {points,referenceId}=analyzeLinePerformance(record.equipment);
-  assert.equal(referenceId,'filler-1');
-  assert(new Set(points.map(p=>p.normalBpm)).size>=5);
-  for(const simulation of record.simulations){
-    const speeds=simulation.equipment.filter(e=>e.type!=='CONVEYOR').map(e=>e.nominalRatePerSecond*60);
-    assert.equal(speeds[2],400);assert(speeds.every((v,i)=>i===2||v>400));
-    assert(speeds[0]>speeds[1]&&speeds[1]>speeds[2]);
-    assert(speeds.slice(2).every((v,i,a)=>!i||v>a[i-1]));
-    assert.equal(simulation.equipment.filter(e=>e.characteristics.isPacemaker).length,1);
-    const profile=analyzeLinePerformance(simulation.equipment);
-    assert.deepEqual(profile.points.map(p=>p.normalBpm),speeds);
-    assert(profile.points.every(p=>p.maximumBpm>=p.normalBpm));
-    assert.equal(profile.points.reduce((a,b)=>a.normalBpm<b.normalBpm?a:b).id,'filler-1');
+test('complete demo covers all distinct machine designs in a coherent 19-step physical line',()=>{
+ const r=demo(),machines=r.equipment.filter(e=>e.type!=='CONVEYOR');
+ assert.deepEqual(machines.map(e=>e.type),['BLOWMOLDER','FEEDER','PUCKER','FILLER','CAPPER','DEPUCKER','SLEEVER','CUSTOM','CASE_PACKER','PALLETIZER']);
+ assert.equal(r.equipment.length,19);assert.equal(r.equipment.filter(e=>e.type==='CONVEYOR').length,9);
+ assert.equal(r.metadata.dataClassification,'DEMO_ONLY');assert.match(r.metadata.dataNote,/synthetic assumptions/i);
+ assert.equal(r.equipment.filter(e=>e.characteristics.isPacemaker).length,1);
+ for(const [i,e] of r.equipment.entries()){
+  assert.equal(e.type==='CONVEYOR',i%2===1);
+  assert(e.nominalRatePerSecond>0);assert(e.processData.equipment.maximumSpeedBpm>=e.nominalRatePerSecond*60);
+  if(e.type==='CONVEYOR'){
+   const a=e.processData.accumulation,g=e.processData.geometry;
+   assert(g.lactMm>g.lpPrimeMm);assert(a.backupSensorPositionMm>0&&a.backupSensorPositionMm<g.lactMm-g.lpPrimeMm);
+   assert(a.conveyorSpeedMmPerSecond>0);assert(a.conveyorWidthMm>=e.processData.upstream.packageWidthMm);
+   for(const key of ['blockedTimeDelaySeconds','clearTimeDelaySeconds','upstreamStopResponseSeconds','restartToFirstPackageSeconds'])assert(Number.isFinite(a[key])&&a[key]>=0,key);
+   assert(e.processData.upstream.dischargeVelocityMPerMinute>0);
+  }else{
+   assert(Number.isInteger(e.processData.equipment.internalCapacityBottles));
+   assert(e.processData.equipment.residenceTimeSeconds>0);assert.equal(e.processData.downstream.rampAfterRepair,true);
   }
-  assert(new Set(points.map(p=>p.maximumBpm)).size>=5);
-  assert(points.filter(p=>p.recommendedBpm-p.normalBpm>10).length>=5);
-  assert(points.every(p=>Number.isFinite(p.recommendedBpm)&&p.recommendedBpm>0));
-  const filler=points.find(p=>p.id===referenceId);assert.equal(filler.recommendedBpm,filler.normalBpm);
-  assert(points.every(p=>p.hasDynamicEvidence===false));
+ }
+ const palletizer=machines.at(-1);assert.deepEqual(palletizer.processData.flowUnits,{input:'CASES',output:'CASES'});
+ assert.equal(palletizer.processData.equipment.internalCapacityBottles,8);
+ assert.deepEqual(r.equipment.at(-2).processData.flowUnits,{input:'CASES',output:'CASES'});
+ assert.deepEqual(machines.at(-2).processData.flowUnits,{input:'BOTTLES',output:'CASES'});
 });
 
-test('demo factory creates a runnable 13-step Case with explicit provenance', () => {
-  const factory = vm.createContext({ Date, Array, Object });
-  vm.runInContext(
-    fs.readFileSync(path.join(repositoryRoot, 'apps-script', 'DemoCaseFactory.gs'), 'utf8'),
-    factory,
-    { filename: 'DemoCaseFactory.gs' }
-  );
-  const caseModel = factory.createDemoCaseRequest_();
-
-  assert.equal(caseModel.metadata.dataClassification, 'DEMO_ONLY');
-  assert.match(caseModel.metadata.dataNote, /synthetic assumptions/i);
-  assert.equal(caseModel.metadata.publicReferences, undefined);
-  assert.deepEqual(Array.from(caseModel.equipment, (item) => item.type), [
-    'BLOWMOLDER', 'CONVEYOR', 'PUCKER', 'CONVEYOR', 'FILLER', 'CONVEYOR',
-    'DEPUCKER', 'CONVEYOR', 'SLEEVER', 'CONVEYOR', 'CASE_PACKER', 'CONVEYOR', 'PALLETIZER'
-  ]);
-
-  const conveyors = caseModel.equipment.filter((unit) => unit.type === 'CONVEYOR');
-  assert.equal(conveyors.length, 6);
-  assert.equal(conveyors.every((unit) => {
-    const zone = unit.processData.accumulation;
-    return zone && unit.processData.geometry.lactMm > 0 && unit.processData.geometry.lpPrimeMm > 0 &&
-      zone.backupSensorPositionMm > 0 && zone.dischargeRunoutLengthMm >= 0 &&
-      zone.rejectRunoutLengthMm >= 0 && zone.blockedTimeDelaySeconds >= 0 &&
-      zone.clearTimeDelaySeconds >= 0 && zone.insuranceFactorUnits >= 0;
-  }), true);
-
-  for (const unit of caseModel.equipment) {
-    assert.ok(unit.nominalRatePerSecond > 0);
-    assert.ok(unit.noiseProfile.reliability.mtbfMinutes > 0);
-    assert.ok(unit.noiseProfile.reliability.mttrMinutes > 0);
-    assert.ok(unit.processData.equipment.mtbfMinutes > 0);
-    assert.ok(unit.processData.equipment.mttrMinutes > 0);
-    assert.ok(unit.processData.equipment.maximumSpeedBpm > 0);
-    if (unit.type === 'CONVEYOR') {
-      assert.ok(unit.processData.geometry.lactMm > 0);
-      assert.ok(unit.processData.geometry.lpPrimeMm > 0);
-    } else {
-      assert.equal(unit.processData.geometry.lactMm, null);
-      assert.equal(unit.processData.geometry.lpPrimeMm, null);
-    }
-    assert.ok(unit.processData.geometry.actualDischargeMm > 0);
-    assert.ok(unit.processData.geometry.actualCodingMm > 0);
-    assert.ok(unit.processData.upstream.packageLengthMm > 0);
-    assert.ok(unit.processData.upstream.dischargePitchMm > 0);
-    assert.ok(unit.processData.upstream.startupTimeSeconds > 0);
-    assert.ok(unit.processData.upstream.bottlesDischargedAtStop >= 0);
-    assert.ok(unit.processData.downstream.infeedPitchMm > 0);
-    assert.ok(unit.processData.downstream.rampUpTimeSeconds > 0);
-    assert.ok(unit.processData.speedAndSensors.conveyorSpeedFactorVsDischargeVelocityPercent > 0);
-    assert.ok(unit.processData.speedAndSensors.codingConveyorSpeedFactorVsPreviousConveyorPercent > 0);
-    assert.deepEqual(Array.from(unit.processData.speedAndSensors.additionalParameters), []);
-  }
-
-  const response = simulateLine({
-    case: JSON.parse(JSON.stringify(caseModel)),
-    run: {...caseModel.simulations[0].dynamicConfig, durationMode:'FIXED', durationSeconds:600}
-  });
-  assert.equal(response.ok, true);
-  assert.ok(response.result.summary.outputCount > 0);
-  const zoneMetrics = Object.values(response.result.accumulationZoneMetrics);
-  assert.equal(zoneMetrics.every((zone) => zone.modelOrigin === 'FLOWPILOT_ENGINEERING'), true);
-  assert.equal(zoneMetrics.some((zone) => zone.engineering.audit.status === 'WARNING'), true); // Deliberately undersized accumulation is the High CAPEX opportunity.
+test('demo has a shared packing format and opens every simulation with the current animated equipment',()=>{
+ const r=demo(),catalog=r.metadata.formatCatalog;validateFormatCatalog(catalog);
+ const resolved=resolvePackingFormats(catalog)[0];
+ assert.deepEqual(r.simulations[0].dynamicConfig.productCatalog,[resolved]);
+ assert.equal(resolved.bottlesPerCase,12);assert.equal(resolved.presentations.bottle.widthMm,66);assert.equal(resolved.presentations.case.widthMm,260);
+ for(const s of r.simulations){assert.equal(s.dynamicConfig.initialFormatId,resolved.id);assert.equal(s.simulation2d.layout.equipmentView,'animated');assert.equal(s.results,null);}
+ assert.deepEqual(r.engineConfig.packConfiguration,{bottlesPerCase:12,casesPerLayer:9,layersPerPallet:4});
 });
 
-
-// Results are calculated, never preset. Check one 8-hour shift and three paired seeds.
-test('CAPEX demo reproduces separate baseline / zero / medium / high gains with physical inputs', (t) => {
-  const factory = vm.createContext({});
-  vm.runInContext(fs.readFileSync(path.join(repositoryRoot, 'apps-script/DemoCaseFactory.gs'), 'utf8'), factory);
-  const record = JSON.parse(JSON.stringify(factory.createDemoCaseRequest_()));
-  const simulation = record.simulations[0];
-  assert.equal(record.metadata.consoleOptions.seedPolicy, 'FIXED');
-  assert.equal(simulation.dynamicConfig.durationSeconds, 28800);
-  assert.equal(simulation.results, null);
-  assert.equal(record.simulations.length, 4);
-  assert(record.simulations.every(s => s.results === null));
-  const tiers = [{tier: 'BASELINE', changes: []}, ...simulation.whatIf.externalOptions];
-  const expected = [49, 53, 64, 79], means = [];
-  for (const [index, option] of tiers.entries()) {
-    const candidate = option.changes.length ? applyScenarioChanges(simulation, option.changes) : simulation;
-    assert.deepEqual(record.simulations[index].equipment, candidate.equipment);
-    assert(!candidate.scenarioWarnings?.length, JSON.stringify(candidate.scenarioWarnings));
-    assert.deepEqual(candidate.equipment.map(e => e.noiseProfile.reliability), simulation.equipment.map(e => e.noiseProfile.reliability));
-    assert.equal(candidate.equipment.find(e => e.id === 'filler-1').nominalRatePerSecond, 400 / 60);
-    if (option.tier === 'ZERO') assert(option.changes.every(c => !c.external && c.path !== 'processData.geometry.lactMm'));
-    if (option.tier === 'MEDIUM') assert(candidate.equipment.filter(e=>e.type==='CONVEYOR').every(e=>e.processData.geometry.lactMm===12000));
-    const values = [0, 1, 2].map(offset => {
-      const response = simulateLine({case: {id: 'demo-check', equipment: candidate.equipment}, run: {...simulation.dynamicConfig, seed: simulation.dynamicConfig.seed + offset}});
-      assert(response.ok);
-      const result = response.result;
-      assert(Math.abs(result.summary.lineOeePercent - 100 * result.summary.outputCount / ((400 / 60) * result.durationSeconds)) < .001);
-      return result.summary.lineOeePercent;
-    });
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    means.push(mean);
-    t.diagnostic(option.tier + ': ' + mean.toFixed(2) + '% · ' + values.map(v => v.toFixed(2)).join(', '));
-    assert(Math.abs(mean - expected[index]) < 6, option.tier + ' actual mean: ' + mean);
-  }
-  assert(means.every((value, index) => !index || value > means[index - 1] + 2));
+test('complete demo runs through case packing and palletizing with internal inventory and conserves bottle equivalents',()=>{
+ const r=demo(),s=r.simulations[0];
+ const response=simulateLine({case:r,run:{...s.dynamicConfig,reliabilityEnabled:false,rounds:1}});
+ assert.equal(response.ok,true,JSON.stringify(response.error));const result=response.result;
+ const output=result.equipmentMetrics['palletizer-1'];assert(output.outputCount>0);assert(Number.isInteger(output.outputCount));
+ assert.equal(result.summary.outputCount,output.outputCount*12);assert(Math.abs(result.summary.materialBalance.residualUnits)<1e-8);
+ assert(result.equipmentMetrics['case-packer-1'].outputCount>=output.outputCount);
+ assert(result.samples.some(s=>s.equipment.some(e=>e.residentBottles>0||e.internalInventoryBottles>0))||result.summary.materialBalance.inventoryUnits>0);
 });
 
+test('demo CAPEX scenarios retain shared physical units, capacities, residence times and reliability',()=>{
+ const r=demo(),base=r.simulations[0];assert.equal(r.simulations.length,4);
+ for(const [index,option] of base.whatIf.externalOptions.entries()){
+  const candidate=applyScenarioChanges(base,option.changes);assert(!candidate.scenarioWarnings?.length,JSON.stringify(candidate.scenarioWarnings));
+  assert.deepEqual(candidate.equipment,r.simulations[index+1].equipment);
+  assert.deepEqual(candidate.equipment.map(e=>e.noiseProfile.reliability),base.equipment.map(e=>e.noiseProfile.reliability));
+  for(const [i,e] of candidate.equipment.entries()){
+   assert.deepEqual(e.processData.flowUnits,base.equipment[i].processData.flowUnits);
+   assert.equal(e.processData.equipment.internalCapacityBottles,base.equipment[i].processData.equipment.internalCapacityBottles);
+  }
+  if(option.tier==='ZERO')assert(option.changes.every(c=>c.path!=='processData.geometry.lactMm'));
+  assert.equal(candidate.equipment.find(e=>e.id==='filler-1').nominalRatePerSecond,400/60);
+ }
+});

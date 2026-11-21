@@ -291,8 +291,12 @@ test('2D uses the representative seed to calculate new production and preserves 
     const telemetryY=fittedFrame.find(([text])=>text==='upstream')[3]-21*.75*.75;
     const cards=boxes.filter(box=>box.y>=telemetryY&&box.height>=53*.75*.75);
     assert.equal(cards.length,9);
-    const silhouettes=boxes.filter(box=>box.y<telemetryY&&box.width>100&&
-      (box.height===7.5*.75||box.height>170&&box.height<200));
+    const bodies=boxes.filter(box=>box.y<telemetryY&&box.width>100&&box.height>170&&box.height<200);
+    const silhouettes=boxes.filter(box=>bodies.includes(box)||box.y<telemetryY&&box.width>100&&
+      box.height===7.5*.75&&!bodies.some(body=>box.x>=body.x&&box.x+box.width<=body.x+body.width));
+    const representativeBands=boxes.filter(box=>box.height===7.5*.75);
+    assert.equal(representativeBands.length,3);
+    assert.equal(new Set(representativeBands.map(box=>box.y)).size,1,'machine and external belts share one carrying level');
     assert.equal(silhouettes.length,3);
     let firstCardIndex=0;
     for(const [index,silhouette] of silhouettes.entries()){
@@ -922,14 +926,14 @@ test('a palletizer case crosses continuously from belt exit through the machine 
   const items=[{left:100,width:200},{left:400,width:300}];
   const path=context.palletInfeed([belt,machine],items,100);
   assert.equal(path.cases[0].left,363);
-  assert.equal(path.cases[0].top,82);
+  assert.equal(path.cases[0].top,72);
   machine.residenceClock=5;
   const midway=context.palletInfeed([belt,machine],items,100).cases[0];
   assert.equal(midway.left,513);
   machine.residenceClock=10;
   const end=context.palletInfeed([belt,machine],items,100);
   assert.equal(end.cases[0].left,end.pickup);
-  assert.equal(end.cases[0].top,82);assert.equal(midway.top,82,'infeed stays horizontal');
+  assert.equal(end.cases[0].top,72);assert.equal(midway.top,72,'infeed stays horizontal');
   const window={};
   vm.runInNewContext(script('Simulation2DMachines'),{window});
   const cartons=[];
@@ -1228,10 +1232,10 @@ test('palletizer frame no longer draws a second roller track over the case infee
  window.STSimulation2DMachines.draw(ctx,'PALLETIZER',0,0,120,100,{ink:'#111',soft:'#eee',surface:'#fff',accent:'#08f',belt:'#777'},1);
  assert.equal(arcs.length,0,'the roller bed belongs only to the continuous infeed drawing');
  const source=script('Simulation2D');const beams=[],holes=[];
- const context=vm.createContext({window,palletInfeed:()=>({start:10,startBottom:110,pickup:90,caseWidth:20,caseHeight:40,cases:[]})});
+ const context=vm.createContext({window,beltInset:1.125,beltDepth:5.625,palletInfeed:()=>({start:10,startBottom:110,pickup:90,caseWidth:20,caseHeight:40,cases:[]})});
  vm.runInContext(source.slice(source.indexOf('  function drawPalletInfeed('),source.indexOf('  function productionHeight(')),context);
- context.drawPalletInfeed(new Proxy({fillRect(...args){beams.push(args);},arc(...args){holes.push(args);}},{get:(o,k)=>o[k]??(()=>{})}),[],[],0,100,{belt:'#777'});
- assert.deepEqual(beams,[[10,110,100,6]]);assert(holes.length>0);assert(holes.every(([,y])=>y===113),'original perforated beam is horizontal at the conveyor outlet');
+ context.drawPalletInfeed(new Proxy({roundRect(...args){beams.push(args.slice(0,4));},arc(...args){holes.push(args);}},{get:(o,k)=>o[k]??(()=>{})}),[],[],0,100,{belt:'#777'});
+ assert.deepEqual(beams,[[10,111.125,100,5.625]]);assert(holes.length>0);assert(holes.every(([,y])=>y===113.9375),'original perforated beam is horizontal at the conveyor outlet');
 });
 
 
@@ -1647,4 +1651,20 @@ test('zero-residence palletizer still shows case entry, interior travel and pick
  model.time=4;flow=context.palletEntryFlow(line);assert.equal(flow.produced,1);assert.equal(flow.entries.length,0);
  const waiting=context.palletInfeed(line,items,100,{entries:flow.entries,waiting:1});assert.equal(waiting.cases[0].left,waiting.pickup);
  assert.equal(machine.produced,1);assert.equal(belt.produced,1);
+});
+
+
+test('equipment conveyor height and thickness stay fixed across native drawing scales',()=>{
+ const window={};vm.runInNewContext(script('Simulation2DMachines'),{window});
+ const art=window.STSimulation2DMachines;
+ for(const type of ['BLOWER','BLOWMOLDER','PUCKER','DEPUCKER','FEEDER','CUSTOM','CAPPER','FILLER','SLEEVER','CASE_PACKER']){
+  for(const [width,height] of [[120,100],[340,210],[90,155]]){
+   const bands=[];
+   const ctx=new Proxy({roundRect(...args){if(this.fillStyle==='#123456')bands.push(args);}},{get:(o,k)=>o[k]??(()=>{})});
+   assert.equal(art.draw(ctx,type,30,40,width,height,{ink:'#111',soft:'#eee',surface:'#fff',accent:'#08f',belt:'#777',conveyorColor:'#123456',conveyorTop:151.125,conveyorDepth:5.625},1),true,type);
+   assert.equal(bands.length,1,type);
+   assert.equal(bands[0][1],151.125,type+' carrying level');
+   assert.equal(bands[0][3],5.625,type+' thickness');
+  }
+ }
 });

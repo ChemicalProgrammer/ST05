@@ -621,7 +621,7 @@ window.STSimulation2D=(function(){
     return Math.max(0,...definitions.filter(item=>item.kind==='machine').map(displayHeight));
   }
   function sceneHalfHeight(){
-    return Math.max(tallestMachine()/2,0,...definitions.filter(item=>item.kind==='belt').map(item=>showDimensions.checked?productHeight(item)+beltDepth+116:beltHalfHeight(item)));
+    return Math.max(tallestMachine()/2,0,...definitions.filter(item=>item.kind==='belt').map(item=>showDimensions.checked?productHeight(item)+beltDepth+116:productHeight(item)+12));
   }
   function sceneTop(){
     const half=sceneHalfHeight();
@@ -805,7 +805,7 @@ window.STSimulation2D=(function(){
     const {caseWidth,caseHeight}=caseDimensions(line,index);
     const pickup=layout.left+layout.width-caseWidth;
     const start=upstream?.kind==='belt'?layout.left+(layout.inlet||0)-caseWidth:layout.left;
-    const startBottom=upstream?.kind==='belt'?y+productHeight(upstream)-beltHalfHeight(upstream):y;
+    const startBottom=y;
     const cases=transfer?.entries?transfer.entries.map(entry=>({left:start+(pickup-start)*entry.progress,top:startBottom-caseHeight})):(item.resident||[]).map(ready=>{
       const progress=Math.max(0,Math.min(1,1-(ready-item.residenceClock)/Math.max(step,item.residenceSeconds)));
       return {left:start+(pickup-start)*progress,top:startBottom-caseHeight};
@@ -820,9 +820,7 @@ window.STSimulation2D=(function(){
     context.save();
     const left=origin+path.start,right=origin+path.pickup+path.caseWidth;
     // Restore the original perforated beam, aligned with the conveyor carrying surface.
-    context.fillStyle=colors.belt;context.fillRect(left,path.startBottom,right-left,6);
-    context.fillStyle=colors.surface||'#fff';
-    for(let hole=left+7;hole<right-3;hole+=12){context.beginPath();context.arc(hole,path.startBottom+3,1.15,0,2*Math.PI);context.fill();}
+    window.STSimulation2DMachines.drawConveyor(context,left,path.startBottom+beltInset,right-left,beltDepth,colors);
 
     for(const carton of path.cases){
       window.STSimulation2DMachines.drawCase(context,origin+carton.left,carton.top,path.caseWidth,path.caseHeight,colors);
@@ -1452,9 +1450,9 @@ window.STSimulation2D=(function(){
       const {left,width}=geometry,x=origin+left;
       if(x+width<0||x>w)continue;
       if(lane){
-        const beltY=y+productHeight(item)-beltHalfHeight(item);
+        const beltY=y;
         drawBelt(context,x,beltY,width,item,factor,w,accent,beltColor,surface,secondary,machineTypes.get(line[index+1]?.id)!=='PALLETIZER');
-        const sensorY=y-beltHalfHeight(item)-12;
+        const sensorY=y-productHeight(item)-12;
         const dimensions=showDimensions.checked?conveyorDimensions.get(item.id):null;
         const {backup,prime}=item;
         const closeSensors=Number.isFinite(prime)&&Number.isFinite(backup)&&Math.abs(prime-backup)*scale<19;
@@ -1499,7 +1497,7 @@ window.STSimulation2D=(function(){
         const durations=item.durations||{};
         const motionSeconds=reducedMotion?.matches?0:(durations.running||0)+(durations.acceleration||0)+(durations.deceleration||0);
         const detailed=machineDesign(item)&&window.STSimulation2DMachines.draw(context,
-          machineTypes.get(item.id),x,top,width,height,{ink,soft:machineSoft,surface,accent:appearance.equipment||accent,belt:machineColor,resident:item.resident?.length??0,...caseDimensions(line,index)},motionSeconds);
+          machineTypes.get(item.id),x,top,width,height,{ink,soft:machineSoft,surface,accent:appearance.equipment||accent,belt:machineColor,conveyorTop:y+beltInset,conveyorDepth:beltDepth,conveyorColor:beltColor,resident:item.resident?.length??0,...caseDimensions(line,index)},motionSeconds);
         if(!detailed){
           context.fillStyle=appearance.equipment?machineSoft:surface;context.strokeStyle=appearance.equipment||colors[signal.lamp];
           strokeBox(context,x,top,width,height);
@@ -1510,6 +1508,7 @@ window.STSimulation2D=(function(){
             context.beginPath();context.moveTo(x+width/2,top+height*.27);context.lineTo(x+width/2,top+height*.73);context.stroke();
           }
         }
+        if(!detailed)window.STSimulation2DMachines.drawConveyor(context,x+width*.1,y+beltInset,width*.8,beltDepth,{belt:beltColor,surface});
         const sx=x+width/2;
         drawSignal(context,sx,top-14,signal.lamp,colors);
       }

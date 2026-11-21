@@ -167,6 +167,14 @@ window.STSimulation2DMachines=(function(){
     context.strokeRect(x+edge/2,y+edge/2,width-edge,height-edge);
     context.restore();
   }
+  function drawConveyor(context,x,y,width,depth,colors){
+    if(!(width>0&&depth>0))return;
+    context.save();context.fillStyle=colors.conveyorColor||colors.belt;context.strokeStyle=colors.conveyorColor||colors.belt;context.lineWidth=1;
+    context.beginPath();context.roundRect(x,y,width,depth,Math.min(5,width/2,depth/2));context.fill();context.stroke();
+    context.fillStyle=colors.surface||'#fff';
+    for(let hole=x+7;hole<x+width-3;hole+=12){context.beginPath();context.arc(hole,y+depth/2,Math.min(1.15,depth*.2),0,2*Math.PI);context.fill();}
+    context.restore();
+  }
   function draw(context,type,x,y,width,height,colors,seconds){
     const design=dimensions(type);
     if(!design)return false;
@@ -202,11 +210,6 @@ window.STSimulation2DMachines=(function(){
       circle(x,y,2,accent);
     }
     function foot(x,offset=0){box(x,design.floor-3+offset,15,3,belt,1);}
-    function track(){
-      const inset=viewWidth*.1;
-      box(inset,50,viewWidth-2*inset,3,belt,1.5);
-      for(let x=inset+7;x<viewWidth-inset;x+=12)circle(x,51.5,1,surface);
-    }
     switch(design.kind){
       case 'blower':
         // Tall oven with a separate, open mold station.
@@ -221,7 +224,6 @@ window.STSimulation2DMachines=(function(){
         box(58+5*phase,38,12,10,soft);
         box(84-5*phase,38,12,10,soft);
         foot(23);foot(86);
-        track();
         break;
       case 'pucker': {
         box(18,18,84,8,belt,3);box(22,26,7,60,soft);box(91,26,7,60,soft);
@@ -235,7 +237,7 @@ window.STSimulation2DMachines=(function(){
           box(px-3,py-9-lift,6,17,accent,2);box(px-1.5,py-13-lift,3,5,soft,1);
         }
         box(52,26,16,6,accent);line(60,32,60,38+8*phase);
-        line(8,64,30,64);line(89,64,113,64);foot(20);foot(88);
+        foot(20);foot(88);
         break;
       }
       case 'depucker': {
@@ -251,8 +253,7 @@ window.STSimulation2DMachines=(function(){
         }
         box(4,77,42,6,belt,1);line(9,80,40,80);
         for(let puck=0;puck<3;puck++)box(8+puck*11-3*phase,73,9,4,accent,1);
-        box(95,48,20,5,belt,1);line(96,53,107,53);
-        foot(15);foot(84);track();
+        foot(15);foot(84);
         break;
       }
       case 'capper':
@@ -265,7 +266,7 @@ window.STSimulation2DMachines=(function(){
         for(let i=0;i<3;i++)line(60+i*6,headY+3,60+i*6,headY+8);
         box(62,55,9,10,surface,2);box(64,49,5,7,surface,1);
         if(phase>.65)box(63,48,7,3,accent,1);
-        track();foot(22);foot(88);
+        foot(22);foot(88);
         break;
       case 'feeder': {
         // Hopper, elevator and rotary orienting bowl; output is an upright bottle.
@@ -276,7 +277,7 @@ window.STSimulation2DMachines=(function(){
           const a=seconds*.7+i*Math.PI*2/5;
           box(70+16*Math.cos(a),49+7*Math.sin(a),6,10,accent,2);
         }
-        box(96,56,22,6,belt);box(104+5*phase,44,5,13,accent,2);
+        box(104+5*phase,44,5,13,accent,2);
         foot(25);foot(88);
         break;
       }
@@ -288,7 +289,7 @@ window.STSimulation2DMachines=(function(){
         for(let vent=0;vent<4;vent++)line(24,68+vent*3,39,68+vent*3);
         box(94,52,12,30,soft,2);box(96,55,8,3,accent,1);
         box(27+20*phase,35,10,17,accent,3);line(22,57,63,57);
-        foot(19);foot(76);track();
+        foot(19);foot(76);
         break;
       case 'filler':
         // A raised, compact manifold and a separate cap-feed tower.
@@ -308,7 +309,6 @@ window.STSimulation2DMachines=(function(){
         line(147,26,149,34,153,34,155,26);
         line(86,69,86,79);
         foot(33);foot(134);
-        track();
         break;
       case 'sleever':
         // Narrow single column and exposed film reels.
@@ -318,7 +318,6 @@ window.STSimulation2DMachines=(function(){
         line(53,23,74,26);line(72,42,66,47,59,47);
         box(47,41+4*phase,19,5,accent,2);
         foot(44);foot(61);
-        track();
         break;
       case 'packer': {
         // Open loading bay, traversing gripper and offset closing station.
@@ -338,7 +337,6 @@ window.STSimulation2DMachines=(function(){
         line(160,42,164,46,171,46);
         line(163,57,187,57);
         foot(24);foot(140);foot(171,-1);
-        track();
         break;
       }
       case 'palletizer':
@@ -350,6 +348,12 @@ window.STSimulation2DMachines=(function(){
         break;
     }
     context.restore();
+    if(design.kind!=='palletizer'){
+      const left=x+(width-viewWidth*scale)/2+viewWidth*.1*scale;
+      const top=Number.isFinite(colors.conveyorTop)?colors.conveyorTop:y+(height-100*scale)/2+50*scale;
+      const depth=Number.isFinite(colors.conveyorDepth)?colors.conveyorDepth:3*scale;
+      drawConveyor(context,left,top,viewWidth*.8*scale,depth,colors);
+    }
     return true;
   }
   function smooth(value){
@@ -569,6 +573,6 @@ window.STSimulation2DMachines=(function(){
     }
     context.restore();
   }
-  return {draw,dimensions,bottleNeck,drawBottle,drawCase,drawPalletOutput,palletStage,forkliftMotion};
+  return {draw,drawConveyor,dimensions,bottleNeck,drawBottle,drawCase,drawPalletOutput,palletStage,forkliftMotion};
 })();
 </script>

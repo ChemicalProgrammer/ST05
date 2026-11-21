@@ -738,14 +738,18 @@ window.STSimulation2D=(function(){
       const target=available.find(pallet=>pallet.id===animation.forkPalletId);
       if(target)animation.forkPickup=100+target.slot*animation.forkPalletPitch;
     }
+    // Automatic collection follows floor inventory, not the lifetime pallet number.
+    // After M removes a pallet, wait until two full staged pallets exist again
+    // while the active pallet is nearly full (before its final deposit).
+    const nearFull=index>=33&&(!stage.exchange||progress<.6);
+    const automatic=available.length>=2&&nearFull&&animation.autoForkGroup!==group;
     if(reducedMotion?.matches){
-      if(available.length&&(manual||group>=2&&index>=33&&animation.autoForkGroup!==group)){
+      if(available.length&&(manual||automatic)){
         animation.removedPallets.push(available[0].id);if(!manual)animation.autoForkGroup=group;
       }
       result.removedPallets=[...animation.removedPallets];return result;
     }
     if(manual&&finished&&available.length)animation.manualForkRequested=true;
-    const automatic=group>=2&&index>=33&&animation.autoForkGroup!==group;
     const stable=!stage.exchange||progress>=1;
     if((animation.manualForkRequested||automatic)&&finished&&available.length&&stable){
       const target=available[0];

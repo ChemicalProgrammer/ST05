@@ -1548,9 +1548,16 @@ test('manual forklift pickup accepts the first complete pallet, prevents duplica
  model.time=context.palletAnimation.forkPeriod+1;
  context.palletTransfer(item,route,true);assert.equal(context.palletAnimation.forkStarted,0,'an empty staging position cannot be collected twice');
  item.produced=106;Object.assign(context.palletAnimation,{placed:106,settled:106,started:null});
+ context.palletTransfer(item,route);
+ assert.equal(context.palletAnimation.forkStarted,0,'one remaining full pallet must not trigger automatic pickup');
+ assert.equal(context.palletAnimation.autoForkGroup,undefined);
+ item.produced=109;Object.assign(context.palletAnimation,{placed:109,settled:109,started:null});
+ context.palletTransfer(item,route);
+ assert.equal(context.palletAnimation.forkStarted,0,'two full pallets and an empty active pallet are not enough');
+ item.produced=142;Object.assign(context.palletAnimation,{placed:142,settled:142,started:null});
  const automatic=context.palletTransfer(item,route);
  assert.equal(automatic.forkProgress,0);assert.equal(context.palletAnimation.forkPalletId,1);
- assert.equal(context.palletAnimation.autoForkGroup,2,'the normal third-pallet request still runs after a manual collection');
+ assert.equal(context.palletAnimation.autoForkGroup,3,'automatic pickup resumes only with two full pallets and a nearly full active pallet');
 });
 
 test('forklift has an amber beacon above its roof',()=>{

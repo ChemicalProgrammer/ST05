@@ -1221,11 +1221,14 @@ test('layout defaults use Kraft, boat blues and amparo blue while honoring chose
  const context=vm.createContext({window:{STPreferences:{read:()=> '#ff0000'}},canvas:{},getComputedStyle:()=>({getPropertyValue:name=>theme[name]||''})});
  vm.runInContext(source.slice(source.indexOf('  const bottleStyles='),source.indexOf('  function openAppearance(')),context);
  const defaults=context.validAppearance({});
- assert.equal(defaults.liquid,null);assert.equal(defaults.equipment,'#516BB7');assert.equal(defaults.cases,'#b98c5d');assert.equal(defaults.caseLabel,'#4E8AC2');assert.equal(defaults.label,'#4E8AC2');assert.equal(defaults.conveyors,null);
- assert.equal(context.appearanceColors().liquid,'#112233');assert.equal(context.appearanceColors().equipment,'#516BB7');
+ assert.equal(defaults.liquid,null);assert.equal(defaults.equipment,null);assert.equal(defaults.equipmentAccent,'#516BB7');assert.equal(defaults.cases,'#b98c5d');assert.equal(defaults.caseLabel,'#4E8AC2');assert.equal(defaults.label,'#4E8AC2');assert.equal(defaults.conveyors,null);
+ assert.equal(context.appearanceColors().liquid,'#112233');assert.equal(context.appearanceColors().equipment,'#778899');assert.equal(context.appearanceColors().equipmentAccent,'#516BB7');
  theme['--accent']='#345678';assert.equal(context.appearanceColors().liquid,'#345678');
  vm.runInContext('appearance=validAppearance({liquid:"#123456",equipment:"#abcdef",conveyors:"#223344"})',context);
  assert.equal(context.appearanceColors().liquid,'#123456');assert.equal(context.appearanceColors().equipment,'#abcdef');assert.equal(context.appearanceColors().conveyors,'#223344');
+ assert.equal(context.validAppearance({equipment:'#516BB7'}).equipment,null,'previous automatic Amparo body returns to the original grey');
+ const chosen=context.validAppearance({equipment:'#516BB7',equipmentAccent:'#4E8AC2'});
+ assert.equal(chosen.equipment,'#516BB7');assert.equal(chosen.equipmentAccent,'#4E8AC2','explicit body and detail colors stay independent');
 });
 
 test('palletizer frame no longer draws a second roller track over the case infeed',()=>{

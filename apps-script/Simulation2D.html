@@ -180,16 +180,18 @@ window.STSimulation2D=(function(){
   });
   const bottleStyles=[['classic','Classic bottle'],['softener','Compact softener'],['cleaner','Multipurpose cleaner'],['shampoo','Shampoo'],['pump','Pump dispenser'],['jug','Handled jug'],['ribbed','Ribbed cleaner'],['oval-jug','Softener'],['shower','Shower gel']];
   const liquidPalette=[['Boat blues','#4E8AC2'],['Violet','#7c3aed'],['Lavender','#b49be8'],['Blue','#2563eb'],['Aqua','#67d9ed'],['Green','#16a34a'],['Lime','#a3d635'],['Yellow','#facc15'],['Amber','#e8a23a'],['Pink','#f4a0c4'],['White','#f4f3ec'],['Teal','#14b8a6'],['Clear','#d9eef2']];
-  const defaultLayoutColors={equipment:'#516BB7',cases:'#b98c5d',caseLabel:'#4E8AC2',label:'#4E8AC2'};
+  const defaultLayoutColors={equipmentAccent:'#516BB7',cases:'#b98c5d',caseLabel:'#4E8AC2',label:'#4E8AC2'};
   function validAppearance(value={}){
     const color=value=>/^#[0-9a-f]{6}$/i.test(value||'')?value:null;
-    return {bottle:bottleStyles.some(([id])=>id===value.bottle)?value.bottle:'classic',liquid:color(value.liquid),equipment:color(value.equipment)||defaultLayoutColors.equipment,conveyors:color(value.conveyors),cap:color(value.cap),cases:color(value.cases)||defaultLayoutColors.cases,caseLabel:color(value.caseLabel)||defaultLayoutColors.caseLabel,caseLabelShape:['tape','label','round-label','horizontal-band','vertical-band','cross-band','none'].includes(value.caseLabelShape)?value.caseLabelShape:'tape',label:color(value.label)||defaultLayoutColors.label,labelShape:['sticker','wrap','sleeve'].includes(value.labelShape)?value.labelShape:'sticker'};
+    // Undo the former automatic body color in cases saved before accents were separate.
+    const equipment=!value.equipmentAccent&&String(value.equipment||'').toLowerCase()==='#516bb7'?null:color(value.equipment);
+    return {bottle:bottleStyles.some(([id])=>id===value.bottle)?value.bottle:'classic',liquid:color(value.liquid),equipment,equipmentAccent:color(value.equipmentAccent)||defaultLayoutColors.equipmentAccent,conveyors:color(value.conveyors),cap:color(value.cap),cases:color(value.cases)||defaultLayoutColors.cases,caseLabel:color(value.caseLabel)||defaultLayoutColors.caseLabel,caseLabelShape:['tape','label','round-label','horizontal-band','vertical-band','cross-band','none'].includes(value.caseLabelShape)?value.caseLabelShape:'tape',label:color(value.label)||defaultLayoutColors.label,labelShape:['sticker','wrap','sleeve'].includes(value.labelShape)?value.labelShape:'sticker'};
   }
   let appearance=validAppearance({bottle:window.STPreferences?.read('simulation2dBottleStyle')});
   function appearanceColors(){
     const style=getComputedStyle(canvas),primary=style.getPropertyValue('--accent').trim()||'#2473b5';
     const secondary=style.getPropertyValue('--secondary').trim()||'#758497';
-    return {primary,secondary,liquid:appearance.liquid||primary,equipment:appearance.equipment||defaultLayoutColors.equipment,conveyors:appearance.conveyors||secondary,cap:appearance.cap||secondary,cases:appearance.cases||defaultLayoutColors.cases,caseLabel:appearance.caseLabel||defaultLayoutColors.caseLabel,label:appearance.label||defaultLayoutColors.label};
+    return {primary,secondary,liquid:appearance.liquid||primary,equipment:appearance.equipment||secondary,equipmentAccent:appearance.equipmentAccent||defaultLayoutColors.equipmentAccent,conveyors:appearance.conveyors||secondary,cap:appearance.cap||secondary,cases:appearance.cases||defaultLayoutColors.cases,caseLabel:appearance.caseLabel||defaultLayoutColors.caseLabel,label:appearance.label||defaultLayoutColors.label};
   }
   function openAppearance(){
     if(document.getElementById('simulation2d-appearance-dialog'))return;
@@ -295,7 +297,7 @@ window.STSimulation2D=(function(){
       popup.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closePicker();trigger.focus();}});
       color.oninput=()=>{draft[key]=color.value;refresh();};paletteSyncs.push(sync);sync();popup.append(palette,color);dialog.append(popup);group.append(label,trigger);colorFields.append(group);
     }
-    paletteField('liquid','Liquid color',liquidPalette);paletteField('cap','Cap color',[['White','#f4f3ec'],['Black','#252a30'],['Blue','#2563eb'],['Red','#dc2626'],['Green','#16a34a'],['Yellow','#facc15'],['Violet','#7c3aed'],['Pink','#f4a0c4'],['Silver','#b2bbc2']]);paletteField('label','Label color',[['White','#f4f3ec'],['Black','#252a30'],...liquidPalette.filter(([name])=>name!=='White')]);paletteField('equipment','Equipment color',industrial);paletteField('conveyors','Conveyor color',industrial);paletteField('cases','Case color',[['Kraft','#b98c5d'],['Light cardboard','#d6b78f'],['Dark cardboard','#8a6140'],['White','#f4f3ec'],['Black','#252a30'],...industrial]);paletteField('caseLabel','Case label / band color',liquidPalette);
+    paletteField('liquid','Liquid color',liquidPalette);paletteField('cap','Cap color',[['White','#f4f3ec'],['Black','#252a30'],['Blue','#2563eb'],['Red','#dc2626'],['Green','#16a34a'],['Yellow','#facc15'],['Violet','#7c3aed'],['Pink','#f4a0c4'],['Silver','#b2bbc2']]);paletteField('label','Label color',[['White','#f4f3ec'],['Black','#252a30'],...liquidPalette.filter(([name])=>name!=='White')]);paletteField('equipment','Equipment color',industrial);paletteField('equipmentAccent','Equipment accent color',industrial);paletteField('conveyors','Conveyor color',industrial);paletteField('cases','Case color',[['Kraft','#b98c5d'],['Light cardboard','#d6b78f'],['Dark cardboard','#8a6140'],['White','#f4f3ec'],['Black','#252a30'],...industrial]);paletteField('caseLabel','Case label / band color',liquidPalette);
     dialog.addEventListener('click',event=>{if(activePicker&&!activePicker.popup.contains(event.target)&&!activePicker.trigger.contains(event.target))closePicker();});
     body.addEventListener('scroll',positionPicker);window.addEventListener('resize',positionPicker);
     const footer=document.createElement('footer');footer.className='dialog-actions';
@@ -1428,7 +1430,7 @@ window.STSimulation2D=(function(){
     const colors=Object.fromEntries(Object.entries(lampTokens).map(([token,fallback])=>
       [token,style.getPropertyValue('--'+token).trim()||fallback]));
     const secondary=style.getPropertyValue('--secondary').trim()||border;
-    const beltColor=appearance.conveyors||secondary,machineColor=appearance.equipment||defaultLayoutColors.equipment;
+    const beltColor=appearance.conveyors||secondary,machineColor=appearance.equipment||secondary;
     const machineSoft=appearance.equipment?appearance.equipment+'26':soft;
     context.setTransform(dpr,0,0,dpr,0,0);
     context.clearRect(0,0,screenWidth,h);
@@ -1443,7 +1445,7 @@ window.STSimulation2D=(function(){
     const flow=output.pallets?palletEntryFlow(line):null;
     const transfer=flow?palletTransfer({...line.at(-1),produced:flow.produced},forkliftRoute(output)):null;
     if(transfer){transfer.entries=flow.entries;transfer.infeedPending=flow.pending;}
-    const palletColors={exitX:Number.isFinite(transfer?.forkExitOffset)?origin+output.start+transfer.forkExitOffset:undefined,pickupY:transfer?palletInfeed(line,items,y).startBottom:y,ink,soft:machineSoft,surface,accent:appearance.equipment||defaultLayoutColors.equipment,belt:machineColor,caseColor:appearance.cases||defaultLayoutColors.cases,caseAccent:appearance.caseLabel||defaultLayoutColors.caseLabel,caseMarkShape:appearance.caseLabelShape,palletColor:secondary,caseWidth:output.caseWidth,caseHeight:output.caseHeight,forkProgress:transfer?.forkProgress,forkGroup:transfer?.forkGroup,removedPallets:transfer?.removedPallets,forkPickupX:Number.isFinite(transfer?.forkPickupOffset)?origin+output.start+transfer.forkPickupOffset:undefined,batch:transfer?.batch};
+    const palletColors={exitX:Number.isFinite(transfer?.forkExitOffset)?origin+output.start+transfer.forkExitOffset:undefined,pickupY:transfer?palletInfeed(line,items,y).startBottom:y,ink,soft:machineSoft,surface,accent:appearance.equipmentAccent||defaultLayoutColors.equipmentAccent,belt:machineColor,caseColor:appearance.cases||defaultLayoutColors.cases,caseAccent:appearance.caseLabel||defaultLayoutColors.caseLabel,caseMarkShape:appearance.caseLabelShape,palletColor:secondary,caseWidth:output.caseWidth,caseHeight:output.caseHeight,forkProgress:transfer?.forkProgress,forkGroup:transfer?.forkGroup,removedPallets:transfer?.removedPallets,forkPickupX:Number.isFinite(transfer?.forkPickupOffset)?origin+output.start+transfer.forkPickupOffset:undefined,batch:transfer?.batch};
     if(transfer){
       const pickup=origin+palletInfeed(line,items,y).pickup;
       for(const plane of ['robot','staging','load'])window.STSimulation2DMachines.drawPalletOutput(context,origin+output.start,y,
@@ -1533,7 +1535,7 @@ window.STSimulation2D=(function(){
         const durations=item.durations||{};
         const motionSeconds=reducedMotion?.matches?0:(durations.running||0)+(durations.acceleration||0)+(durations.deceleration||0);
         const detailed=machineDesign(item)&&window.STSimulation2DMachines.draw(context,
-          machineTypes.get(item.id),x,top,width,height,{ink,soft:machineSoft,surface,accent:appearance.equipment||defaultLayoutColors.equipment,belt:machineColor,conveyorTop:y+beltInset,conveyorDepth:beltDepth,conveyorColor:beltColor,resident:item.resident?.length??0,...caseDimensions(line,index)},motionSeconds);
+          machineTypes.get(item.id),x,top,width,height,{ink,soft:machineSoft,surface,accent:appearance.equipmentAccent||defaultLayoutColors.equipmentAccent,belt:machineColor,conveyorTop:y+beltInset,conveyorDepth:beltDepth,conveyorColor:beltColor,resident:item.resident?.length??0,...caseDimensions(line,index)},motionSeconds);
         if(!detailed){
           context.fillStyle=appearance.equipment?machineSoft:surface;context.strokeStyle=appearance.equipment||colors[signal.lamp];
           strokeBox(context,x,top,width,height);

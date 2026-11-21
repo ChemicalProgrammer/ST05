@@ -3309,6 +3309,7 @@ test('UI: layout appearance dialog saves bottle and liquid choices without chang
    assert.equal(dialog.querySelector('select[aria-label="Cap shape"]'),null);
 
    chooseColor('Equipment color','Blue steel');
+   chooseColor('Equipment accent color','Boat blues');
    chooseColor('Conveyor color','Graphite');
    chooseColor('Case color','Kraft');chooseColor('Case label / band color','Violet');
    const caseShape=dialog.querySelector('select[aria-label="Case label / band shape"]');caseShape.value='cross-band';caseShape.dispatchEvent(new h.w.Event('change'));
@@ -3326,6 +3327,7 @@ test('UI: layout appearance dialog saves bottle and liquid choices without chang
    assert.equal(h.storedCases()[0].simulations[0].simulation2d.appearance.labelShape,'sleeve');
    assert.equal(h.storedCases()[0].simulations[0].simulation2d.appearance.capShape,undefined);
    assert.equal(h.storedCases()[0].simulations[0].simulation2d.appearance.equipment,'#52718a');
+   assert.equal(h.storedCases()[0].simulations[0].simulation2d.appearance.equipmentAccent,'#4E8AC2');
    assert.equal(h.storedCases()[0].simulations[0].simulation2d.appearance.conveyors,'#414b57');
    assert.equal(h.storedCases()[0].simulations[0].simulation2d.appearance.cases,'#b98c5d');
    assert.equal(h.storedCases()[0].simulations[0].simulation2d.appearance.caseLabel,'#7c3aed');

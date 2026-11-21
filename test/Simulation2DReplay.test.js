@@ -1606,7 +1606,7 @@ test('conveyor band height is fixed at 75 percent and independent of conveyor le
 
 test('straight conveyor extensions reach the equipment when wider cards require spacing',()=>{
  const source=script('Simulation2D');
- const context=vm.createContext({displayWidth:item=>item.width,machineDesign:item=>item.animated?{}:null,conveyorGroupWidth:400,telemetryGroupWidth:450,telemetryCardHeight:190,cardGap:24});
+ const context=vm.createContext({measureTelemetry(){},displayWidth:item=>item.width,machineDesign:item=>item.animated?{}:null,conveyorGroupWidth:400,telemetryGroupWidth:450,telemetryCardHeight:190,cardGap:24});
  vm.runInContext(source.slice(source.indexOf('  function equipmentLayout('),source.indexOf('  function caseDimensions(')),context);
  for(const animated of [false,true]){
    const line=[{kind:'machine',width:180,animated},{kind:'belt',width:90},{kind:'machine',width:200,animated},{kind:'belt',width:900},{kind:'machine',width:220,animated}];
@@ -1667,4 +1667,53 @@ test('equipment conveyor height and thickness stay fixed across native drawing s
    assert.equal(bands[0][3],5.625,type+' thickness');
   }
  }
+});
+
+
+test('telemetry columns fit full labels, large counts, units and a separate geometry verdict',()=>{
+ const source=script('Simulation2D'),texts=[],capsules=[],boxes=[];
+ const ctx=new Proxy({
+  measureText(value){return {width:String(value).length*(this.font?.startsWith('600 ')?4.1:3.7)};},
+  fillText(text,x,y){texts.push({text,x,y,font:this.font,align:this.textAlign});},
+  roundRect(x,y,w,h){capsules.push({x,y,w,h});}
+ },{get:(o,k)=>o[k]??(()=>{})});
+ const design={status:'NOT EVALUATED',statusReason:'Missing input',rows:[
+  {label:'Accumulation Zone (Lba)',value:-41943.333},
+  {label:'Overflow',value:27143.333}
+ ]};
+ const item={id:'belt',kind:'belt',name:'Conveyor PAC-PAL with a long descriptive title',unit:'CASES',speed:200,
+  rate:4,ratePerMinute:24,produced:18256,bottlesPerUnit:12,backup:973.44,prime:25200,
+  durations:{empty:167.6,flowing:84525.73,accumulating:1475.83},items:[]};
+ const signal={state:'Completed',lamp:'muted'};
+ const context=vm.createContext({canvas:{getContext:()=>ctx},window:{STConveyorAnalysis:{verdictColors:{'NOT EVALUATED':'#777'}}},
+  conveyorDimensions:new Map([['belt',design]]),bottleStages:new Map(),beltSignal:()=>signal,machineSignal:()=>signal,
+  num:value=>Number.isFinite(value)?value.toLocaleString('en-US',{maximumFractionDigits:2}):'—',
+  strokeBox:(c,x,y,w,h)=>boxes.push({x,y,w,h}),camera:{scale:.09},verdictHitBoxes:[]});
+ vm.runInContext(source.slice(source.indexOf('  const tableScale='),source.indexOf('  const machineHeight='))+
+  source.slice(source.indexOf('  function conveyorGeometryRows('),source.indexOf('  function productWidth(')),context);
+ context.measureTelemetry([item]);
+ context.drawTelemetry(ctx,item,0,0,signal,'#111','#ccc','#fff','#666','#eee',{muted:'#777'});
+ for(const text of ['219,072','bottles','84,525.73','1,475.83','Accumulation Zone (Lba)','-41,943.33','NOT EVALUATED',item.name]){
+  assert(texts.some(entry=>entry.text===text),'full text drawn: '+text);
+ }
+ assert(!texts.some(entry=>String(entry.text).includes('…')));
+ const cards=context.telemetryData(item,signal);
+ for(const [i,card] of cards.entries()){
+  const box=boxes[i],rows=texts.filter(entry=>entry.y>45*.5625&&entry.x>=box.x&&entry.x<=box.x+box.w);
+  for(const row of card.rows){
+   const entries=rows.filter(entry=>entry.text===row[0]);assert(entries.length>0,row[0]);
+   const label=entries[0],value=rows.find(entry=>entry.y===label.y&&entry.align==='right');
+   const unit=rows.find(entry=>entry.y===label.y&&entry.x>value.x);
+   ctx.font=label.font;const labelEnd=label.x+ctx.measureText(label.text).width;
+   ctx.font=value.font;const valueStart=value.x-ctx.measureText(value.text).width;
+   assert(labelEnd<valueStart,row[0]+' label and value do not overlap');
+   ctx.font=unit.font;assert(unit.x+ctx.measureText(unit.text).width<=box.x+box.w,row[0]+' unit stays inside');
+  }
+ }
+ const geometry=boxes[2],verdict=capsules.at(-1);
+ ctx.font='600 6.75px system-ui';
+ assert(verdict.x>geometry.x+7*.5625+ctx.measureText('Conveyor Geometry').width,'title and verdict have separate space');
+ const widths=vm.runInContext('telemetryWidths.slice()',context);
+ item.durations.flowing=1;item.produced=1;context.measureTelemetry([item]);
+ assert.deepEqual(vm.runInContext('telemetryWidths.slice()',context),widths,'columns do not shrink or jitter during a run');
 });

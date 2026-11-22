@@ -34,7 +34,7 @@ window.STLinePerformance = (function() {
       return text.length*size*.58;
     }
     function wrapEquipmentName(name,available,size){
-      var words=String(name||'').trim().split(/\\s+/).filter(Boolean),lines=[''];
+      var words=String(name||'').trim().split(/\s+/).filter(Boolean),lines=[''];
       words.forEach(function(word){
         var index=lines.length-1,combined=lines[index]?lines[index]+' '+word:word;
         if(labelWidth(combined,size)<=available||!lines[index])lines[index]=combined;

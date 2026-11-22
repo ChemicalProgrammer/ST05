@@ -878,14 +878,15 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
 }
 
 
-/* Keep the simulation start action visible in Basic when event scheduling opens. */
-html[data-ui-mode=basic] #run-panel > .section-heading {
-  display:flex!important;
-  justify-content:flex-end;
-  min-height:var(--control-height);
-  margin:0 0 var(--space-2);
+/* El inicio de Simulation ocurre en Simulation playback; este encabezado
+   legacy no debe reservar espacio en Basic ni Advance. */ 
+html[data-ui-mode=basic] #run-panel > .section-heading,
+html[data-ui-mode=advance] #run-panel > .section-heading {
+  display:none!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
 }
-html[data-ui-mode=basic] #run-panel > .section-heading > .button-row {display:flex!important;}
 
 /* Event selection toolbar follows the same spacing as other sub-section toolbars. */
 #simulation-event-content {min-width:0;}
@@ -1272,6 +1273,9 @@ dialog[open] .table-scroll {max-inline-size:100%;min-inline-size:0;scrollbar-gut
 #run-panel > #simulation-event-home:has(#simulation-event-section:not(.hidden)),
 #results-body > #line-performance {
   margin-block-start:var(--subsection-gap);
+}
+html[data-header-view=vgraph] #results-body > #line-performance {
+  margin-block-start:0;
 }
 #simulation2d-panel {
   padding-block-start:var(--panel-padding);

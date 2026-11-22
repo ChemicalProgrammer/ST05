@@ -115,7 +115,10 @@
       // snapshot even when the case-level mirror still contains the line.
       // Recover only from the *same active simulation's* case mirror.
       var mirror=state.activeCase.equipment,stored=Array.isArray(simulation.equipment)?simulation.equipment:[];
-      var useMirror=initial&&state.activeCase.activeSimulationId===simulation.id&&stored.length===0&&Array.isArray(mirror)&&mirror.length>0;
+      var isActiveSnapshot=state.activeCase.activeSimulationId
+        ?state.activeCase.activeSimulationId===simulation.id
+        :state.activeCase.simulations?.[0]?.id===simulation.id;
+      var useMirror=initial&&isActiveSnapshot&&stored.length===0&&Array.isArray(mirror)&&mirror.length>0;
       state.activeCase.equipment=cloneJson(useMirror?mirror:stored);
       state.run.commands = cloneJson(simulation.dynamicConfig?.commands || []);
       state.run.plannedStops=simulation.dynamicConfig?.plannedStops===undefined?undefined:

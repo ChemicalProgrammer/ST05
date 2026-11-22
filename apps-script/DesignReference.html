@@ -13,71 +13,198 @@
     <button role="tab" type="button" id="design-ref-tab-spacing" aria-controls="design-ref-spacing" aria-selected="false" tabindex="-1">Márgenes</button>
     <button role="tab" type="button" id="design-ref-tab-cards" aria-controls="design-ref-cards" aria-selected="false" tabindex="-1">Tarjetas</button>
   </div>
+
   <div class="dialog-body design-reference-body">
     <section id="design-ref-controls" role="tabpanel" aria-labelledby="design-ref-tab-controls" tabindex="0">
-      <div class="design-reference-grid">
-        <article class="design-reference-example">
-          <h3>Subsección</h3><p>Bloque plegable con título, herramientas y contenido. Reutiliza <code>.fold-card</code>, <code>.fold-heading</code> y <code>.fold-content</code>.</p>
-          <section class="fold-card design-reference-subsection">
-            <div class="fold-heading"><h3><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="design-ref-subsection-content">Ejemplo de Subsección</button></h3>
-              <div class="fold-tools button-row"><button type="button" class="secondary icon-button design-reference-counter-button" aria-label="Añadir al ejemplo" title="Añadir al ejemplo">+</button></div>
-            </div>
-            <div id="design-ref-subsection-content" class="fold-content"><span class="chart-note">Las herramientas se mantienen en una fila mientras hay espacio.</span> <output id="design-ref-counter" aria-live="polite">0</output></div>
-          </section>
-        </article>
-        <article class="design-reference-example">
-          <h3>Botón/Icono</h3><p>Acciones compactas con texto accesible, foco y estados. Clase <code>.icon-button</code>.</p>
-          <div class="design-reference-control-row"><button type="button" class="secondary icon-button" title="Ejemplo de añadir" aria-label="Ejemplo de añadir">+</button><button type="button" class="secondary icon-button" title="Ejemplo de actualizar" aria-label="Ejemplo de actualizar">↻</button><span class="badge ready">READY</span><span class="badge critical">FAULTED</span></div>
-        </article>
-        <article class="design-reference-example">
-          <h3>Valor + unidad</h3><p>Los inputs conservan el número escrito; los outputs convierten el valor a la unidad seleccionada. Módulo <code>STTimeControls</code>.</p>
-          <div class="design-reference-control-row"><label>Input <span class="time-value-control"><input type="number" value="5" step="any" aria-label="Cantidad demostrativa"><select aria-label="Unidad de entrada demostrativa"><option>s</option><option>min</option><option>h</option></select></span></label><label>Output <span id="design-ref-time-output"></span></label></div>
-        </article>
-        <article class="design-reference-example">
-          <h3>Selector, checkbox y estado</h3><p>Controles de formularios reutilizables. Utilizar las variables de altura, espacio y colores de <code>DesignTokens.html</code>.</p>
-          <div class="design-reference-control-row"><select aria-label="Formato de ejemplo"><option>500 mL</option><option>1,000 mL</option></select><label class="checkbox-label"><input type="checkbox" checked> Incluir eventos</label><span class="badge ready">PASS</span></div>
-        </article>
+      
+      <div class="design-reference-catalog" role="table" aria-label="Catálogo de controles reutilizables">
+        <div class="design-reference-column-heads" role="row">
+          <span role="columnheader">Control o diseño</span>
+          <span role="columnheader">Explicación</span>
+          <span role="columnheader">Nombre del control</span>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><section class="fold-card design-reference-subsection"><div class="fold-heading"><h3><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="design-ref-subsection-content">Ejemplo de Subsección</button></h3><div class="fold-tools button-row"><button type="button" class="secondary icon-button design-reference-counter-button" aria-label="Añadir al ejemplo" title="Añadir al ejemplo">+</button></div></div><div id="design-ref-subsection-content" class="fold-content"><span class="chart-note">Contenido plegable</span> <output id="design-ref-counter" aria-live="polite">0</output></div></section></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Contenedor plegable con título, barra de herramientas y contenido. Su encabezado permanece visible al contraerlo.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Subsección</strong><code>.fold-card · .fold-heading · .fold-content</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><button type="button" class="secondary icon-button" title="Ejemplo de añadir" aria-label="Ejemplo de añadir">+</button><button type="button" class="secondary icon-button" title="Ejemplo de actualizar" aria-label="Ejemplo de actualizar">↻</button></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Acciones compactas con ícono, foco visible y nombre accesible. Se usan en Header y barras de herramientas.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Botón/Icono</strong><code>.icon-button</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><div class="fold-tools button-row"><button type="button" class="secondary icon-button" aria-label="Ejemplo de exportar" title="Ejemplo de exportar">↓</button><button type="button" class="secondary icon-button" aria-label="Ejemplo de ajustes" title="Ejemplo de ajustes">⚙</button></div></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Agrupa acciones en la cabecera de una Subsección, con espaciado y alineación compartidos.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Barra de herramientas</strong><code>.fold-tools · .button-row</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><label>Input <span class="time-value-control"><input type="number" value="5" step="any" aria-label="Cantidad demostrativa"><select aria-label="Unidad de entrada demostrativa"><option>s</option><option selected>min</option><option>h</option></select></span></label><label>Output <span id="design-ref-time-output"></span></label></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">El input conserva la cifra escrita; el output convierte la cifra al cambiar de unidad.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Valor–unidad</strong><code>.time-value-control · STTimeControls.output()</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><select aria-label="Formato de ejemplo"><option>500 mL</option><option>1,000 mL</option></select></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Lista de una sola elección con altura, tipografía y estados comunes de formulario.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Selector de opciones</strong><code>select</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><label class="checkbox-label"><input type="checkbox" checked> Incluir eventos</label></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Activa o desactiva una opción conservando la asociación entre casilla y etiqueta.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Casilla de verificación</strong><code>.checkbox-label</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><span class="badge ready">READY</span><span class="badge critical">FAULTED</span></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Comunica un estado con texto y color semántico; nunca depende únicamente del color.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Etiqueta de estado</strong><code>.badge · .ready · .critical</code></div>
+        </div>
       </div>
     </section>
     <section id="design-ref-typography" role="tabpanel" aria-labelledby="design-ref-tab-typography" tabindex="0" hidden>
-      <p class="chart-note">La escala se define en <code>DesignTokens.html</code>; las mismas tipografías se aplican en Basic y Advance.</p>
-      <div class="design-reference-type-list">
-        <div><span class="design-reference-type-label">Nivel 1 · Leyendas <code>--font-caption</code></span><span style="font-size:var(--font-caption)">Muestra de leyenda y unidades</span><output data-design-token="--font-caption"></output></div>
-        <div><span class="design-reference-type-label">Nivel 2 · Secundario <code>--font-secondary</code></span><span style="font-size:var(--font-secondary)">Ayuda, notas y etiquetas</span><output data-design-token="--font-secondary"></output></div>
-        <div><span class="design-reference-type-label">Nivel 3 · Normal <code>--font-body</code></span><span style="font-size:var(--font-body)">Texto de formulario y cuerpo</span><output data-design-token="--font-body"></output></div>
-        <div><span class="design-reference-type-label">Nivel 4 · Sección <code>--font-section</code></span><span style="font-size:var(--font-section);font-weight:600">Subtítulo de información</span><output data-design-token="--font-section"></output></div>
-        <div><span class="design-reference-type-label">Nivel 5 · KPI <code>--font-kpi</code></span><span style="font-size:var(--font-kpi);font-weight:600">75.0%</span><output data-design-token="--font-kpi"></output></div>
+      
+      <div class="design-reference-catalog" role="table" aria-label="Catálogo de tipografía y estilos">
+        <div class="design-reference-column-heads" role="row">
+          <span role="columnheader">Control o diseño</span>
+          <span role="columnheader">Explicación</span>
+          <span role="columnheader">Nombre del control</span>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-size:var(--font-caption)">Muestra de leyenda y unidades</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Textos auxiliares y leyendas pequeñas. <span class="design-reference-token-value">Valor actual: <output data-design-token="--font-caption">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tipografía · Leyenda</strong><code>--font-caption</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-size:var(--font-secondary)">Ayuda, notas y etiquetas</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Texto secundario en tarjetas y explicaciones breves. <span class="design-reference-token-value">Valor actual: <output data-design-token="--font-secondary">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tipografía · Secundario</strong><code>--font-secondary</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-size:var(--font-body)">Texto de formulario y cuerpo</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Lectura habitual de contenidos, etiquetas y formularios. <span class="design-reference-token-value">Valor actual: <output data-design-token="--font-body">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tipografía · Normal</strong><code>--font-body</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-size:var(--font-section);font-weight:var(--weight-semibold)">Título de Subsección</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Títulos de bloques y encabezados de información. <span class="design-reference-token-value">Valor actual: <output data-design-token="--font-section">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tipografía · Sección</strong><code>--font-section</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-size:var(--font-kpi);font-weight:var(--weight-semibold)">75.0%</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Cifras de primer nivel de un KPI destacado. <span class="design-reference-token-value">Valor actual: <output data-design-token="--font-kpi">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tipografía · KPI</strong><code>--font-kpi</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-weight:var(--weight-regular)">Texto regular</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Peso estándar para lectura y contenido. <span class="design-reference-token-value">Valor actual: <output data-design-token="--weight-regular">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Peso · Regular</strong><code>--weight-regular</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-weight:var(--weight-medium)">Texto medio</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Jerarquía intermedia para controles y etiquetas. <span class="design-reference-token-value">Valor actual: <output data-design-token="--weight-medium">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Peso · Medio</strong><code>--weight-medium</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="font-weight:var(--weight-semibold)">Texto seminegrita</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Encabezados y valores que deben destacar. <span class="design-reference-token-value">Valor actual: <output data-design-token="--weight-semibold">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Peso · Seminegrita</strong><code>--weight-semibold</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="color:var(--ink)">Texto principal</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Color de alta legibilidad para contenido y cifras. <span class="design-reference-token-value">Valor actual: <output data-design-token="--ink">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Color de texto · Principal</strong><code>--ink</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="color:var(--muted)">Texto secundario</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Color de menor énfasis para leyendas. <span class="design-reference-token-value">Valor actual: <output data-design-token="--muted">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Color de texto · Secundario</strong><code>--muted</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><span class="design-reference-type-sample" style="color:var(--accent)">Texto primario</span></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Color de acento para elementos destacados o activos. <span class="design-reference-token-value">Valor actual: <output data-design-token="--accent">—</output></span></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Color de texto · Primario</strong><code>--accent</code></div>
+        </div>
       </div>
-      <p class="chart-note">Pesos utilizados: normal <code>--weight-regular</code>, medio <code>--weight-medium</code>, encabezado <code>--weight-semibold</code>. Color: <code>--ink</code>, <code>--muted</code>, <code>--accent</code>, y estados semánticos.</p>
     </section>
     <section id="design-ref-spacing" role="tabpanel" aria-labelledby="design-ref-tab-spacing" tabindex="0" hidden>
-      <p class="chart-note">El margen superior, lateral y entre Subsecciones se modifica desde un único token: <code>--workspace-gutter</code>.</p>
-      <div class="design-reference-token-grid">
-        <div><code>--workspace-gutter</code><output data-design-token="--workspace-gutter"></output><small>Margen principal</small></div>
-        <div><code>--subsection-gap</code><output data-design-token="--subsection-gap"></output><small>Entre Subsecciones</small></div>
-        <div><code>--subsection-padding</code><output data-design-token="--subsection-padding"></output><small>Interior de Subsección</small></div>
-        <div><code>--space-3</code><output data-design-token="--space-3"></output><small>Encabezado a contenido</small></div>
-        <div><code>--space-2</code><output data-design-token="--space-2"></output><small>Separación de controles</small></div>
-        <div><code>--control-height</code><output data-design-token="--control-height"></output><small>Altura de control</small></div>
-      </div>
-      <div class="design-reference-spacing-demo" aria-label="Ejemplo visual de márgenes">
-        <div class="design-reference-spacing-stack"><div class="design-reference-spacing-card">Subsección A</div><div class="design-reference-spacing-card">Subsección B</div></div>
+      
+      <div class="design-reference-catalog" role="table" aria-label="Catálogo de márgenes y espaciados">
+        <div class="design-reference-column-heads" role="row">
+          <span role="columnheader">Control o diseño</span>
+          <span role="columnheader">Explicación</span>
+          <span role="columnheader">Nombre del control</span>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-space-box design-reference-space-box--gutter"><span>Contenido</span></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Margen exterior uniforme en los laterales y parte superior del área de trabajo. Valor actual: <output data-design-token="--workspace-gutter">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Margen de trabajo</strong><code>--workspace-gutter</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-space-stack" style="gap:var(--subsection-gap)"><span>Subsección A</span><span>Subsección B</span></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Distancia vertical entre Subsecciones. Valor actual: <output data-design-token="--subsection-gap">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Separación entre subsecciones</strong><code>--subsection-gap</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-space-box design-reference-space-box--padding"><span>Contenido interior</span></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Relleno interior entre el borde de una Subsección y sus elementos. Valor actual: <output data-design-token="--subsection-padding">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Relleno de subsección</strong><code>--subsection-padding</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-space-stack" style="gap:var(--space-3)"><span>Encabezado</span><span>Contenido</span></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Distancia de 12 px por token entre encabezado y contenido. Valor actual: <output data-design-token="--space-3">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Espacio medio</strong><code>--space-3</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row" style="gap:var(--space-2)"><button type="button" class="secondary icon-button" aria-label="Ejemplo anterior" title="Ejemplo anterior">←</button><button type="button" class="secondary icon-button" aria-label="Ejemplo siguiente" title="Ejemplo siguiente">→</button></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Espacio compacto entre acciones y controles cercanos. Valor actual: <output data-design-token="--space-2">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Espacio entre controles</strong><code>--space-2</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><button type="button" class="secondary design-reference-height-button">Control</button></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Altura compartida para los controles interactivos. Valor actual: <output data-design-token="--control-height">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Altura de control</strong><code>--control-height</code></div>
+        </div>
       </div>
     </section>
     <section id="design-ref-cards" role="tabpanel" aria-labelledby="design-ref-tab-cards" tabindex="0" hidden>
-      <p class="chart-note">Cada tipo de tarjeta tiene un propósito, tamaño y tratamiento propios; comparten variables de superficie, borde, espaciado y estados.</p>
-      <div class="design-reference-card-grid">
-        <article class="metric-card metric-card--featured"><span>Tarjeta KPI destacado</span><strong>75.0%</strong><small>Ideal para eficiencia y métricas relevantes · <code>.metric-card--featured</code></small></article>
-        <article class="metric-card metric-card--result"><span>Tarjeta de resultado</span><strong>435.341 <small>min</small></strong><small>Resultados de reproducción · <code>.metric-card--result</code></small></article>
-        <article class="metric-card metric-card--scenario"><span class="badge ready">Zero CAPEX</span><strong>38.2%</strong><small>Escenarios y opciones de inversión · <code>.metric-card--scenario</code></small></article>
-        <article class="metric-card metric-card--status"><span>Tarjeta de estado</span><strong><span class="badge ready">RUNNING</span></strong><small>Estado de máquina, veredicto o validación · <code>.metric-card--status</code></small></article>
+      
+      <div class="design-reference-catalog" role="table" aria-label="Catálogo de tarjetas reutilizables">
+        <div class="design-reference-column-heads" role="row">
+          <span role="columnheader">Control o diseño</span>
+          <span role="columnheader">Explicación</span>
+          <span role="columnheader">Nombre del control</span>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--featured design-reference-card-sample"><span>Eficiencia</span><strong>75.0%</strong></article></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Indicador principal: fondo diferenciado, franja superior en el color primario y cifra grande. Ahora también se usa en Simulation Playback.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>KPI destacado</strong><code>.metric-card--featured</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--result design-reference-card-sample"><span>Tiempo de ejecución</span><strong>435.34 min</strong></article></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Resultado secundario de lectura compacta. Mantiene una jerarquía menor que el KPI destacado.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tarjeta de resultado</strong><code>.metric-card--result</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--scenario design-reference-card-sample"><span class="badge ready">Zero CAPEX</span><strong>38.2%</strong></article></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Alternativas de What-if y CAPEX; la franja lateral indica su categoría.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tarjeta de escenario</strong><code>.metric-card--scenario</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--status design-reference-card-sample"><span>Estado</span><strong><span class="badge ready">RUNNING</span></strong></article></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Estados, verificaciones y diagnósticos en una variante compacta.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tarjeta de estado</strong><code>.metric-card--status</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><article class="live-equipment-card design-reference-card-sample design-reference-equipment-sample"><strong>Conveyor 01</strong><span class="badge ready">RUNNING</span><small>Availability 97%</small></article></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Tarjeta específica para visualizar un equipo; conserva su jerarquía y no hereda el KPI destacado.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tarjeta de equipo</strong><code>.live-equipment-card</code></div>
+        </div>
       </div>
     </section>
   </div>
 </dialog>
 <style>
-/* Catálogo accesible de estándares (independiente de la simulación). */
-.design-reference-dialog {--dialog-width:980px;width:min(980px,calc(100vw - 24px));max-height:calc(100dvh - 24px);display:none;grid-template-rows:auto auto minmax(0,1fr);}
+/* Catálogo: vista previa, explicación y nombre reutilizable en las cuatro pestañas. */
+.design-reference-dialog {--dialog-width:1120px;width:min(1120px,calc(100vw - 24px));max-height:calc(100dvh - 24px);display:none;grid-template-rows:auto auto minmax(0,1fr);}
 .design-reference-dialog[open] {display:grid;}
 .design-reference-heading {display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);}
 .design-reference-heading .chart-note {margin:var(--space-1) 0 0;}
@@ -87,39 +214,45 @@
 .design-reference-tabs button:focus-visible {outline:var(--focus-width) solid var(--accent);outline-offset:2px;}
 .design-reference-body {overflow:auto;min-height:0;max-height:none!important;}
 .design-reference-body > section[hidden] {display:none!important;}
-.design-reference-grid,.design-reference-card-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:var(--space-3);align-items:start;}
-.design-reference-example {min-width:0;border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);background:var(--surface);}
-.design-reference-example h3 {font-size:var(--font-card);margin:0 0 var(--space-2);}
-.design-reference-example p,.design-reference-body p.chart-note {font-size:var(--font-secondary);line-height:1.5;}
-.design-reference-example p {margin:0 0 var(--space-3);}
-.design-reference-example code,.design-reference-body code {font-size:var(--font-caption);padding:1px 3px;border-radius:3px;background:var(--surface-soft);}
-.design-reference-example .design-reference-subsection {margin:0;padding:var(--space-3);}
+/* En pantallas pequeñas se desplaza horizontalmente la tabla, no se mezclan columnas. */
+.design-reference-catalog {max-width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);}
+.design-reference-column-heads,.design-reference-row {display:grid;grid-template-columns:minmax(290px,1.22fr) minmax(260px,1.1fr) minmax(200px,.78fr);min-width:750px;}
+.design-reference-column-heads {background:var(--surface-soft);border-bottom:1px solid var(--line-strong);}
+.design-reference-column-heads > span {padding:var(--space-3) var(--space-4);font-size:var(--font-secondary);font-weight:var(--weight-semibold);color:var(--muted);}
+.design-reference-row:not(:last-child) {border-bottom:1px solid var(--line);}
+.design-reference-cell {min-width:0;padding:var(--space-3) var(--space-4);font-size:var(--font-body);line-height:var(--leading-body);overflow-wrap:anywhere;}
+.design-reference-preview {display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);}
+.design-reference-preview > * {max-width:100%;}
+.design-reference-explanation {color:var(--muted);}
+.design-reference-control-name {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);}
+.design-reference-control-name strong {color:var(--ink);font-size:var(--font-body);font-weight:var(--weight-semibold);}
+.design-reference-control-name code,.design-reference-body code {font-size:var(--font-caption);padding:1px 4px;border-radius:var(--radius-sm);background:var(--surface-soft);overflow-wrap:anywhere;}
+.design-reference-subsection {margin:0;width:100%;padding:var(--space-3);}
+.design-reference-subsection .fold-heading {gap:var(--space-2);}
+.design-reference-subsection .fold-heading h3 {min-width:0;}
+.design-reference-subsection .fold-content {font-size:var(--font-secondary);}
 .design-reference-control-row {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);}
-.design-reference-control-row > label {display:flex;flex-direction:column;align-items:start;gap:var(--space-2);}
-.design-reference-control-row label.checkbox-label {flex-direction:row;align-items:center;}
-.design-reference-control-row .time-value-control {width:min(190px,100%);}
+.design-reference-control-row > label {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);font-size:var(--font-secondary);}
+.design-reference-control-row > label.checkbox-label {flex-direction:row;align-items:center;}
+.design-reference-preview > .checkbox-label {margin:0;}
+.design-reference-control-row .time-value-control {width:min(170px,100%);}
 .design-reference-control-row > label > select {max-width:180px;}
-.design-reference-type-list {display:grid;gap:var(--space-2);margin-block:var(--space-3);}
-.design-reference-type-list > div {display:grid;grid-template-columns:minmax(170px,1fr) minmax(0,1fr) auto;gap:var(--space-3);align-items:center;border-bottom:1px solid var(--line);padding:var(--space-3);}
-.design-reference-type-label {font-size:var(--font-secondary);color:var(--muted);}
-.design-reference-type-list output {font-size:var(--font-secondary);color:var(--accent);font-variant-numeric:tabular-nums;}
-.design-reference-token-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--space-2);margin-block:var(--space-3);}
-.design-reference-token-grid > div {display:flex;flex-direction:column;align-items:start;gap:var(--space-2);background:var(--surface-soft);padding:var(--space-3);border-radius:var(--radius-md);}
-.design-reference-token-grid output {font-size:var(--font-section);font-weight:var(--weight-semibold);color:var(--accent);}
-.design-reference-token-grid small {font-size:var(--font-caption);color:var(--muted);}
-.design-reference-spacing-demo {border:1px dashed var(--line-strong);background:var(--page);padding:var(--workspace-gutter);border-radius:var(--radius-md);}
-.design-reference-spacing-stack {display:grid;gap:var(--subsection-gap);}
-.design-reference-spacing-card {background:var(--surface);border:1px solid var(--line);padding:var(--subsection-padding);border-radius:var(--radius-md);}
-.design-reference-card-grid .metric-card {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);}
-.design-reference-card-grid .metric-card > span {font-size:var(--font-secondary);}
-.design-reference-card-grid .metric-card > strong {font-size:var(--font-kpi);font-weight:var(--weight-semibold);}
-.design-reference-card-grid .metric-card > small {font-size:var(--font-caption);color:var(--muted);}
-.design-reference-card-grid .metric-card--result > strong {font-size:var(--font-section);}
-@media(max-width:650px){
- .design-reference-type-list > div {grid-template-columns:1fr auto;}
- .design-reference-type-list > div > span:nth-child(2) {grid-column:1/-1;grid-row:2;}
- .design-reference-type-list output {grid-column:2;grid-row:1;}
-}
+.design-reference-type-sample {display:inline-block;line-height:var(--leading-body);}
+.design-reference-token-value {display:block;margin-top:var(--space-2);font-size:var(--font-secondary);}
+.design-reference-token-value output,.design-reference-explanation output {color:var(--accent);font-variant-numeric:tabular-nums;font-weight:var(--weight-semibold);}
+.design-reference-space-box {width:100%;border:1px dashed var(--line-strong);background:var(--page);border-radius:var(--radius-sm);}
+.design-reference-space-box > span {display:block;border:1px solid var(--line);background:var(--surface-soft);border-radius:var(--radius-sm);padding:var(--space-2);}
+.design-reference-space-box--gutter {padding:var(--workspace-gutter);}
+.design-reference-space-box--padding {padding:var(--subsection-padding);}
+.design-reference-space-stack {display:grid;width:100%;}
+.design-reference-space-stack > span {background:var(--surface-soft);border:1px solid var(--line);border-radius:var(--radius-sm);padding:var(--space-1) var(--space-2);font-size:var(--font-caption);}
+.design-reference-height-button {min-height:var(--control-height);}
+.design-reference-card-sample {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);width:min(100%,260px);margin:0;}
+.design-reference-card-sample > span {font-size:var(--font-secondary);}
+.design-reference-card-sample > strong {font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;}
+.design-reference-card-sample.metric-card--result > strong {font-size:var(--font-section);}
+.design-reference-card-sample.metric-card--scenario > strong {font-size:var(--font-section);}
+.design-reference-equipment-sample > small {font-size:var(--font-caption);color:var(--muted);}
 </style>
 <script>
 (function(){

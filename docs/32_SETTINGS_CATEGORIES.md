@@ -43,8 +43,10 @@ In Advance, equipment chart colors appear in a table in line order with complete
 wrapping names, circular swatches and HEX values. Only actual equipment is listed.
 V-Graph series colors are edited directly in the V-Graph legend: Current and
 Recommended each have a clickable circular swatch that opens the same series-color
-dialog (color map, hue, RGB, HEX and Apply/Cancel). The former V-Graph Series
-Colors section has been removed from Settings > Case. Colors retain the existing
+dialog (color map, hue, RGB, HEX and Apply/Cancel). The picker also has
+**Reset default** for the selected V-Graph series, replacing the old global reset.
+The former V-Graph Series Colors section has been removed from Settings > Case.
+Colors retain the existing
 `metadata.vgraphColors.current` / `metadata.vgraphColors.recommended` fields;
 saved cases keep their overrides, and the legend and graph use the same color
 tokens. The equipment color table in Settings retains its separate Reset colors

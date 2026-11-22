@@ -63,7 +63,7 @@ Implementación central: [UiStandards.html](../apps-script/UiStandards.html), se
 
 ## Catálogo de componentes reutilizables
 
-Para consultar las muestras directamente en la aplicación, abre el diálogo **Sistema de diseño · SimuLine** con **Ctrl + Shift + S** (en Mac también Cmd + Shift + S), cuando el foco esté dentro de la aplicación de Apps Script. El módulo vive en [DesignReference.html](../apps-script/DesignReference.html), con pestañas **Controles**, **Tipografía**, **Márgenes** y **Tarjetas**. No modifica casos ni resultados. Los controles de ejemplo son independientes del motor.
+Para consultar las muestras directamente en la aplicación, abre el diálogo **Sistema de diseño · SimuLine** con **Ctrl + Shift + S** (en Mac también Cmd + Shift + S), cuando el foco esté dentro de la aplicación de Apps Script. El catálogo y su interacción viven en [DesignReference.html](../apps-script/DesignReference.html), con pestañas **Controles**, **Tipografía**, **Márgenes** y **Tarjetas**. Los estilos de tarjetas y botones reutilizables viven en [ComponentStyles.html](../apps-script/ComponentStyles.html), incluidos en el encabezado de la aplicación después de los estilos de tema. No modifica casos ni resultados. Los controles de ejemplo son independientes del motor.
 
 | Nombre oficial | Clase/módulo | Función y alcance |
 | --- | --- | --- |
@@ -80,6 +80,7 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 ### Reglas de comportamiento y aspecto
 
 - **Un componente, una responsabilidad.** No aplicar la jerarquía visual del KPI destacado a todas las tarjetas: los resultados secundarios, escenarios y estados requieren variantes diferentes.
+- **Propiedad de estilos:** modificar las variantes `.metric-card` y la apariencia compartida de los botones de Header en `ComponentStyles.html`, no en el archivo del diálogo. `DesignReference.html` contiene solamente la galería, sus ejemplos y el atajo.
 - **Color de fondo:** `--surface-soft` para Tarjeta de resultado y KPI destacado; `--surface` como superficie normal de Subsección. Evita mezclas de blancos sin contraste entre contenedores anidados.
 - **Valor–unidad:** tipografía del número coherente con los demás valores del grupo, unidades de menor énfasis y una separación natural (2 px). Las unidades son seleccionables, sin flecha visible.
 - **Relieve al pasar el mouse:** solamente en subtarjetas de resultados, escenarios y KPI. Se usa una sombra ligera sin `will-change`, exclusivamente si existe `hover`; nunca modificar producción ni ejecutar un recálculo.

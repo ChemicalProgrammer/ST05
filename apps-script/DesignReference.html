@@ -1,0 +1,248 @@
+<!-- Catálogo interno de componentes reutilizables de SimuLine.
+     Atajo de teclado: Ctrl+Shift+S (Cmd+Shift+S en Mac). No modifica el caso. -->
+<dialog id="design-reference-dialog" class="design-reference-dialog" aria-labelledby="design-reference-title" aria-modal="true">
+  <header class="dialog-heading design-reference-heading">
+    <div><h2 id="design-reference-title">Sistema de diseño · SimuLine</h2>
+      <p class="chart-note">Controles reutilizables, tipografía, márgenes y familias de tarjetas · Ctrl + Shift + S</p>
+    </div>
+    <button id="design-reference-close" class="secondary icon-button" type="button" aria-label="Cerrar catálogo" title="Cerrar">×</button>
+  </header>
+  <div class="design-reference-tabs" role="tablist" aria-label="Catálogo de interfaz">
+    <button role="tab" type="button" id="design-ref-tab-controls" aria-controls="design-ref-controls" aria-selected="true" tabindex="0">Controles</button>
+    <button role="tab" type="button" id="design-ref-tab-typography" aria-controls="design-ref-typography" aria-selected="false" tabindex="-1">Tipografía</button>
+    <button role="tab" type="button" id="design-ref-tab-spacing" aria-controls="design-ref-spacing" aria-selected="false" tabindex="-1">Márgenes</button>
+    <button role="tab" type="button" id="design-ref-tab-cards" aria-controls="design-ref-cards" aria-selected="false" tabindex="-1">Tarjetas</button>
+  </div>
+  <div class="dialog-body design-reference-body">
+    <section id="design-ref-controls" role="tabpanel" aria-labelledby="design-ref-tab-controls" tabindex="0">
+      <div class="design-reference-grid">
+        <article class="design-reference-example">
+          <h3>Subsección</h3><p>Bloque plegable con título, herramientas y contenido. Reutiliza <code>.fold-card</code>, <code>.fold-heading</code> y <code>.fold-content</code>.</p>
+          <section class="fold-card design-reference-subsection">
+            <div class="fold-heading"><h3><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="design-ref-subsection-content">Ejemplo de Subsección</button></h3>
+              <div class="fold-tools button-row"><button type="button" class="secondary icon-button design-reference-counter-button" aria-label="Añadir al ejemplo" title="Añadir al ejemplo">+</button></div>
+            </div>
+            <div id="design-ref-subsection-content" class="fold-content"><span class="chart-note">Las herramientas se mantienen en una fila mientras hay espacio.</span> <output id="design-ref-counter" aria-live="polite">0</output></div>
+          </section>
+        </article>
+        <article class="design-reference-example">
+          <h3>Botón/Icono</h3><p>Acciones compactas con texto accesible, foco y estados. Clase <code>.icon-button</code>.</p>
+          <div class="design-reference-control-row"><button type="button" class="secondary icon-button" title="Ejemplo de añadir" aria-label="Ejemplo de añadir">+</button><button type="button" class="secondary icon-button" title="Ejemplo de actualizar" aria-label="Ejemplo de actualizar">↻</button><span class="badge ready">READY</span><span class="badge critical">FAULTED</span></div>
+        </article>
+        <article class="design-reference-example">
+          <h3>Valor + unidad</h3><p>Los inputs conservan el número escrito; los outputs convierten el valor a la unidad seleccionada. Módulo <code>STTimeControls</code>.</p>
+          <div class="design-reference-control-row"><label>Input <span class="time-value-control"><input type="number" value="5" step="any" aria-label="Cantidad demostrativa"><select aria-label="Unidad de entrada demostrativa"><option>s</option><option>min</option><option>h</option></select></span></label><label>Output <span id="design-ref-time-output"></span></label></div>
+        </article>
+        <article class="design-reference-example">
+          <h3>Selector, checkbox y estado</h3><p>Controles de formularios reutilizables. Utilizar las variables de altura, espacio y colores de <code>DesignTokens.html</code>.</p>
+          <div class="design-reference-control-row"><select aria-label="Formato de ejemplo"><option>500 mL</option><option>1,000 mL</option></select><label class="checkbox-label"><input type="checkbox" checked> Incluir eventos</label><span class="badge ready">PASS</span></div>
+        </article>
+      </div>
+    </section>
+    <section id="design-ref-typography" role="tabpanel" aria-labelledby="design-ref-tab-typography" tabindex="0" hidden>
+      <p class="chart-note">La escala se define en <code>DesignTokens.html</code>; las mismas tipografías se aplican en Basic y Advance.</p>
+      <div class="design-reference-type-list">
+        <div><span class="design-reference-type-label">Nivel 1 · Leyendas <code>--font-caption</code></span><span style="font-size:var(--font-caption)">Muestra de leyenda y unidades</span><output data-design-token="--font-caption"></output></div>
+        <div><span class="design-reference-type-label">Nivel 2 · Secundario <code>--font-secondary</code></span><span style="font-size:var(--font-secondary)">Ayuda, notas y etiquetas</span><output data-design-token="--font-secondary"></output></div>
+        <div><span class="design-reference-type-label">Nivel 3 · Normal <code>--font-body</code></span><span style="font-size:var(--font-body)">Texto de formulario y cuerpo</span><output data-design-token="--font-body"></output></div>
+        <div><span class="design-reference-type-label">Nivel 4 · Sección <code>--font-section</code></span><span style="font-size:var(--font-section);font-weight:600">Subtítulo de información</span><output data-design-token="--font-section"></output></div>
+        <div><span class="design-reference-type-label">Nivel 5 · KPI <code>--font-kpi</code></span><span style="font-size:var(--font-kpi);font-weight:600">75.0%</span><output data-design-token="--font-kpi"></output></div>
+      </div>
+      <p class="chart-note">Pesos utilizados: normal <code>--weight-regular</code>, medio <code>--weight-medium</code>, encabezado <code>--weight-semibold</code>. Color: <code>--ink</code>, <code>--muted</code>, <code>--accent</code>, y estados semánticos.</p>
+    </section>
+    <section id="design-ref-spacing" role="tabpanel" aria-labelledby="design-ref-tab-spacing" tabindex="0" hidden>
+      <p class="chart-note">El margen superior, lateral y entre Subsecciones se modifica desde un único token: <code>--workspace-gutter</code>.</p>
+      <div class="design-reference-token-grid">
+        <div><code>--workspace-gutter</code><output data-design-token="--workspace-gutter"></output><small>Margen principal</small></div>
+        <div><code>--subsection-gap</code><output data-design-token="--subsection-gap"></output><small>Entre Subsecciones</small></div>
+        <div><code>--subsection-padding</code><output data-design-token="--subsection-padding"></output><small>Interior de Subsección</small></div>
+        <div><code>--space-3</code><output data-design-token="--space-3"></output><small>Encabezado a contenido</small></div>
+        <div><code>--space-2</code><output data-design-token="--space-2"></output><small>Separación de controles</small></div>
+        <div><code>--control-height</code><output data-design-token="--control-height"></output><small>Altura de control</small></div>
+      </div>
+      <div class="design-reference-spacing-demo" aria-label="Ejemplo visual de márgenes">
+        <div class="design-reference-spacing-stack"><div class="design-reference-spacing-card">Subsección A</div><div class="design-reference-spacing-card">Subsección B</div></div>
+      </div>
+    </section>
+    <section id="design-ref-cards" role="tabpanel" aria-labelledby="design-ref-tab-cards" tabindex="0" hidden>
+      <p class="chart-note">Cada tipo de tarjeta tiene un propósito, tamaño y tratamiento propios; comparten variables de superficie, borde, espaciado y estados.</p>
+      <div class="design-reference-card-grid">
+        <article class="metric-card metric-card--featured"><span>Tarjeta KPI destacado</span><strong>75.0%</strong><small>Ideal para eficiencia y métricas relevantes · <code>.metric-card--featured</code></small></article>
+        <article class="metric-card metric-card--result"><span>Tarjeta de resultado</span><strong>435.341 <small>min</small></strong><small>Resultados de reproducción · <code>.metric-card--result</code></small></article>
+        <article class="metric-card metric-card--scenario"><span class="badge ready">Zero CAPEX</span><strong>38.2%</strong><small>Escenarios y opciones de inversión · <code>.metric-card--scenario</code></small></article>
+        <article class="metric-card metric-card--status"><span>Tarjeta de estado</span><strong><span class="badge ready">RUNNING</span></strong><small>Estado de máquina, veredicto o validación · <code>.metric-card--status</code></small></article>
+      </div>
+    </section>
+  </div>
+</dialog>
+<style>
+/* ─── Tipos de tarjetas reutilizables de SimuLine ───
+   No se cambia el valor ni la frecuencia de los resultados: CSS-only.
+   El relieve aparece únicamente al pasar el puntero, sin will-change. */
+.metric-card {min-width:0;border:var(--border-width) solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);background:var(--surface);}
+.metric-card--result,#simulation-playback-metrics > article,#results-kpis .result-kpi,.result-loss-kpis .result-kpi {
+  background:var(--surface-soft);border:var(--border-width) solid var(--line-strong);
+  border-radius:var(--radius-md);padding:var(--space-3);min-width:0;
+}
+.metric-card--featured,html[data-ui-mode=basic] #basic-efficiencies > div {
+  background:var(--surface-soft);border:var(--border-width) solid var(--line);
+  border-top:4px solid var(--accent);border-radius:var(--radius-md);
+  padding:var(--space-3);min-width:0;
+}
+.metric-card--featured > strong {display:block;font-size:var(--font-kpi);line-height:1.15;margin-top:var(--space-2);font-variant-numeric:tabular-nums;}
+.metric-card--scenario {border-inline-start:var(--state-border-width) solid var(--accent);}
+.metric-card--status {background:var(--surface-soft);}
+#simulation-playback-metrics > article > span {display:block;font-size:var(--font-secondary);color:var(--muted);}
+#simulation-playback-metrics > article > strong {
+  display:block;font-size:var(--font-section);line-height:1.25;
+  font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;
+  margin-block-start:var(--space-2);
+}
+#simulation-playback-metrics > article > strong .st-time-output {display:inline-flex!important;align-items:baseline;gap:2px!important;font-size:inherit!important;line-height:inherit;}
+#simulation-playback-metrics > article > strong .st-time-output b {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--ink);}
+#simulation-playback-metrics > article > strong .st-time-output select {font-size:var(--font-secondary)!important;min-height:0!important;height:auto!important;width:auto!important;min-width:0!important;padding:0!important;margin:0!important;line-height:inherit!important;vertical-align:baseline;color:var(--muted);}
+@media(hover:hover) and (pointer:fine) {
+  :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
+       #simulation-playback-metrics > article,#results-kpis .result-kpi,
+       .result-loss-kpis .result-kpi,.scenario-tier-grid > .analysis-recommendation) {
+    transition:box-shadow 140ms ease,transform 140ms ease;
+  }
+  :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
+       #simulation-playback-metrics > article,#results-kpis .result-kpi,
+       .result-loss-kpis .result-kpi,.scenario-tier-grid > .analysis-recommendation):hover {
+    box-shadow:0 5px 14px color-mix(in srgb,var(--ink) 11%,transparent);
+    transform:translateY(-1px);
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
+       #simulation-playback-metrics > article,#results-kpis .result-kpi,
+       .result-loss-kpis .result-kpi,.scenario-tier-grid > .analysis-recommendation) {
+    transition:none!important;transform:none!important;
+  }
+}
+/* Barra de iconos: botones homogéneos en Header y menú Basic. */
+:is(.topbar,#basic-case-actions) button.icon-button {
+  width:var(--control-height);height:var(--control-height);
+  min-width:var(--control-height);min-height:var(--control-height);
+  flex-shrink:0;padding:0;border:var(--border-width) solid var(--line-strong);
+  border-radius:var(--radius-md);background:var(--surface);box-shadow:none;
+  color:var(--muted);
+}
+:is(.topbar,#basic-case-actions) button.icon-button:not(:disabled):hover {
+  color:var(--accent);border-color:var(--accent);background:var(--surface-hover);
+}
+:is(.topbar,#basic-case-actions) button.icon-button:focus-visible {
+  outline:var(--focus-width) solid var(--accent);outline-offset:2px;
+}
+.topbar #pin-header[aria-pressed=true],
+.topbar #save-case.has-changes {background:var(--selected);color:var(--accent);}
+#whatif-subsection .simulation-analysis {margin:0;padding:0;border:0;background:transparent;}
+#whatif-subsection .whatif-context {margin:0 0 var(--space-3);max-width:100%;}
+#whatif-subsection .fold-heading .fold-tools {margin-inline-start:auto;}
+/* Catálogo accesible de estándares (independiente de la simulación). */
+.design-reference-dialog {--dialog-width:980px;width:min(980px,calc(100vw - 24px));max-height:calc(100dvh - 24px);display:none;grid-template-rows:auto auto minmax(0,1fr);}
+.design-reference-dialog[open] {display:grid;}
+.design-reference-heading {display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);}
+.design-reference-heading .chart-note {margin:var(--space-1) 0 0;}
+.design-reference-tabs {display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-4);border-bottom:1px solid var(--line);overflow-x:auto;}
+.design-reference-tabs button {min-height:var(--control-height);white-space:nowrap;flex:0 0 auto;background:transparent;border:0;color:var(--muted);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);}
+.design-reference-tabs button[aria-selected=true] {background:var(--selected);color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent);}
+.design-reference-tabs button:focus-visible {outline:var(--focus-width) solid var(--accent);outline-offset:2px;}
+.design-reference-body {overflow:auto;min-height:0;max-height:none!important;}
+.design-reference-body > section[hidden] {display:none!important;}
+.design-reference-grid,.design-reference-card-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:var(--space-3);align-items:start;}
+.design-reference-example {min-width:0;border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);background:var(--surface);}
+.design-reference-example h3 {font-size:var(--font-card);margin:0 0 var(--space-2);}
+.design-reference-example p,.design-reference-body p.chart-note {font-size:var(--font-secondary);line-height:1.5;}
+.design-reference-example p {margin:0 0 var(--space-3);}
+.design-reference-example code,.design-reference-body code {font-size:var(--font-caption);padding:1px 3px;border-radius:3px;background:var(--surface-soft);}
+.design-reference-example .design-reference-subsection {margin:0;padding:var(--space-3);}
+.design-reference-control-row {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);}
+.design-reference-control-row > label {display:flex;flex-direction:column;align-items:start;gap:var(--space-2);}
+.design-reference-control-row label.checkbox-label {flex-direction:row;align-items:center;}
+.design-reference-control-row .time-value-control {width:min(190px,100%);}
+.design-reference-control-row > label > select {max-width:180px;}
+.design-reference-type-list {display:grid;gap:var(--space-2);margin-block:var(--space-3);}
+.design-reference-type-list > div {display:grid;grid-template-columns:minmax(170px,1fr) minmax(0,1fr) auto;gap:var(--space-3);align-items:center;border-bottom:1px solid var(--line);padding:var(--space-3);}
+.design-reference-type-label {font-size:var(--font-secondary);color:var(--muted);}
+.design-reference-type-list output {font-size:var(--font-secondary);color:var(--accent);font-variant-numeric:tabular-nums;}
+.design-reference-token-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--space-2);margin-block:var(--space-3);}
+.design-reference-token-grid > div {display:flex;flex-direction:column;align-items:start;gap:var(--space-2);background:var(--surface-soft);padding:var(--space-3);border-radius:var(--radius-md);}
+.design-reference-token-grid output {font-size:var(--font-section);font-weight:var(--weight-semibold);color:var(--accent);}
+.design-reference-token-grid small {font-size:var(--font-caption);color:var(--muted);}
+.design-reference-spacing-demo {border:1px dashed var(--line-strong);background:var(--page);padding:var(--workspace-gutter);border-radius:var(--radius-md);}
+.design-reference-spacing-stack {display:grid;gap:var(--subsection-gap);}
+.design-reference-spacing-card {background:var(--surface);border:1px solid var(--line);padding:var(--subsection-padding);border-radius:var(--radius-md);}
+.design-reference-card-grid .metric-card {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);}
+.design-reference-card-grid .metric-card > span {font-size:var(--font-secondary);}
+.design-reference-card-grid .metric-card > strong {font-size:var(--font-kpi);font-weight:var(--weight-semibold);}
+.design-reference-card-grid .metric-card > small {font-size:var(--font-caption);color:var(--muted);}
+.design-reference-card-grid .metric-card--result > strong {font-size:var(--font-section);}
+@media(max-width:650px){
+ .design-reference-type-list > div {grid-template-columns:1fr auto;}
+ .design-reference-type-list > div > span:nth-child(2) {grid-column:1/-1;grid-row:2;}
+ .design-reference-type-list output {grid-column:2;grid-row:1;}
+}
+</style>
+<script>
+(function(){
+  'use strict';
+  var dialog=document.getElementById('design-reference-dialog');
+  if(!dialog)return;
+  var tabs=Array.from(dialog.querySelectorAll('[role=tab]'));
+  function activate(tab,focus){
+    tabs.forEach(function(item){
+      var selected=item===tab;
+      item.setAttribute('aria-selected',String(selected));
+      item.tabIndex=selected?0:-1;
+      var target=document.getElementById(item.getAttribute('aria-controls'));
+      if(target)target.hidden=!selected;
+    });
+    if(focus)tab.focus();
+  }
+  tabs.forEach(function(tab){
+    tab.addEventListener('click',function(){activate(tab,false);});
+    tab.addEventListener('keydown',function(event){
+      if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;
+      event.preventDefault();
+      var offset=event.key==='ArrowRight'?1:-1;
+      activate(tabs[(tabs.indexOf(tab)+offset+tabs.length)%tabs.length],true);
+    });
+  });
+  function refreshTokens(){
+    var rootStyles=getComputedStyle(document.documentElement);
+    dialog.querySelectorAll('[data-design-token]').forEach(function(node){
+      var key=node.getAttribute('data-design-token');
+      node.textContent=rootStyles.getPropertyValue(key).trim()||'—';
+    });
+  }
+  var exampleOutput=document.getElementById('design-ref-time-output');
+  if(exampleOutput&&window.STTimeControls){
+    exampleOutput.append(window.STTimeControls.output(300,{unit:'min',label:'Unidad de output de ejemplo',gap:2}));
+  }
+  var count=0;
+  dialog.querySelector('.design-reference-counter-button').addEventListener('click',function(){
+    document.getElementById('design-ref-counter').textContent=String(++count);
+  });
+  function open(){
+    if(dialog.open)return;
+    refreshTokens();
+    activate(tabs[0],false);
+    dialog.showModal();
+    tabs[0].focus();
+  }
+  function close(){if(dialog.open)dialog.close();}
+  document.getElementById('design-reference-close').addEventListener('click',close);
+  window.addEventListener('keydown',function(event){
+    // Se captura el atajo mientras el foco está en la aplicación; nunca
+    // guarda ni sobrescribe el caso, solo abre el catálogo de diseño.
+    if(!(event.ctrlKey||event.metaKey)||!event.shiftKey||event.altKey)return;
+    if(event.code!=='KeyS'&&String(event.key).toLowerCase()!=='s')return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    open();
+  },true);
+  window.STDesignReference={open:open,close:close};
+}());
+</script>

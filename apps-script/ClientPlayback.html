@@ -152,7 +152,9 @@
       document.getElementById('metric-overflow').textContent = formatNumber(sum((sample.accumulationZones || []).map(function(zone) { return zone.overflowUnits || 0; })));
       STTimeControls.setOutput(document.getElementById('metric-backup-stop'),sum(sample.equipment.map(function(unit) { return unit.backupStopSeconds || 0; })),{unit:'min',label:'Change Back-up Stop unit'});
       document.getElementById('metric-line-oee').textContent = formatLineOeeAtSample(sample);
-      setPlaybackStatus((state.run.result.batch?__ST_TEXT__('batch.round')+' '+(state.run.roundIndex+1)+' / '+state.run.result.batch.rounds+' · ':'')+(state.run.playing ? 'Playing' : 'At') + ' ' + formatNumber(time) + __ST_TEXT__('client.s_frame') + state.run.sampleIndex + ' / ' + (state.run.result.samples.length - 1));
+      // Se conservan las mediciones técnicas internamente, pero el encabezado
+      // sólo comunica el estado de reproducción y el avance porcentual.
+      setPlaybackStatus(state.run.playing?'Playing':(time>0?'Paused':'Ready'));
       if (state.uiView === 'simulation') renderLiveEquipment(sample);
       drawSimulationChart();
       drawEquipmentSpeedChart();

@@ -5,11 +5,11 @@
    No se cambia el valor ni la frecuencia de los resultados: CSS-only.
    El relieve aparece únicamente al pasar el puntero, sin will-change. */
 .metric-card {min-width:0;border:var(--border-width) solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);background:var(--surface);}
-.metric-card--result,#simulation-playback-metrics > article,#results-kpis .result-kpi,.result-loss-kpis .result-kpi {
+.metric-card--result,#results-kpis .result-kpi,.result-loss-kpis .result-kpi {
   background:var(--surface-soft);border:var(--border-width) solid var(--line-strong);
   border-radius:var(--radius-md);padding:var(--space-3);min-width:0;
 }
-.metric-card--featured,html[data-ui-mode=basic] #basic-efficiencies > div {
+.metric-card--featured,#simulation-playback-metrics > article.metric-card--featured,html[data-ui-mode=basic] #basic-efficiencies > div {
   background:var(--surface-soft);border:var(--border-width) solid var(--line);
   border-top:4px solid var(--accent);border-radius:var(--radius-md);
   padding:var(--space-3);min-width:0;
@@ -24,7 +24,7 @@
 .metric-card--status {background:var(--surface-soft);}
 #simulation-playback-metrics > article > span {display:block;font-size:var(--font-secondary);color:var(--muted);}
 #simulation-playback-metrics > article > strong {
-  display:block;font-size:var(--font-section);line-height:1.25;
+  display:block;font-size:var(--font-kpi);line-height:1.15;
   font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;
   margin-block-start:var(--space-2);
 }

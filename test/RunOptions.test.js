@@ -41,7 +41,7 @@ test('automatic long batches stream round one while explicit calculation modes a
 test('Simulation setup owns event and calendar switches without changing saved calendar data',()=>{
  const dom=new JSDOM(fs.readFileSync('apps-script/WebApp.html','utf8'),{runScripts:'outside-only'}),w=dom.window;
  try{
-  w.eval(fs.readFileSync('apps-script/RunOptions.html','utf8').replace(/<\\/?script>/g,''));
+  w.eval(fs.readFileSync('apps-script/RunOptions.html','utf8').replace('<script>','').replace('</script>',''));
   const event=w.document.getElementById('run-events-enabled');
   const calendar=w.document.getElementById('run-calendar-enabled');
   assert.ok(event.closest('#simulation-duration-content'));

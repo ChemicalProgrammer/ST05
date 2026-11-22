@@ -271,12 +271,21 @@ window.STRealData=(function(){
       buckets[groups.findIndex(([, ,matches])=>matches(r))].rows.push(r);
     }
     return buckets.filter(g=>g.rows.length).map(g=>{
-      return '<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="'+g.id+'" open><summary>'+esc(g.label)+'</summary><div class="real-data-comparison-scroll"><table class="real-data-main-table"><thead><tr><th>Parámetro</th><th>Unidad</th><th class="numeric">Real</th><th class="numeric">Simulado</th><th class="numeric">Diferencia</th></tr></thead><tbody>'+g.rows.map(r=>{
+      var guidance={
+        calendar:'Desglosa el tiempo total, las exclusiones externas y la disponibilidad de planta.',
+        planned:'Compara las paradas planificadas y el tiempo disponible para producir.',
+        operation:'Analiza paradas no planificadas y tiempo real de operación.',
+        losses:'Muestra las pérdidas de velocidad y el tiempo efectivo.',
+        production:'Compara unidades producidas y resultados de la línea.',
+        inputs:'Revisa los parámetros base empleados para la comparación.',
+        indicators:'Compara los indicadores calculados de desempeño.'
+      };
+      return '<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="'+g.id+'" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title">'+esc(g.label)+'</span><span class="subsection-description">'+esc(guidance[g.id]||'Compara los valores reales y simulados.')+'</span></span></summary><div class="real-data-comparison-scroll"><table class="real-data-main-table"><thead><tr><th>Parámetro</th><th>Unidad</th><th class="numeric">Real</th><th class="numeric">Simulado</th><th class="numeric">Diferencia</th></tr></thead><tbody>'+g.rows.map(r=>{
         const text=displayText(r.formula)+' Real mostrado: '+r.realSource+'. '+(r.reported!=null?' Reportado en planta: '+fmt(r.reported)+' '+r.unit+'.':'')+' Diferencia = simulado − real.'+(r.unit==='%'?' La diferencia se expresa en pp.':'');
         const attrs=' title="'+esc(text)+'" aria-description="'+esc(text)+'" tabindex="0"';
         return '<tr data-metric="'+esc(r.id)+'"><th scope="row"'+attrs+'>'+esc(displayText(r.metric))+(r.reported!=null&&r.realSource!=='reportado'?'<small class="real-data-reported">Reportado: '+fmt(r.reported)+' '+esc(r.unit)+'</small>':'')+'</th><td>'+esc(r.unit)+'</td>'+[r.real,r.simulated,r.delta].map(v=>'<td class="numeric"'+attrs+'>'+fmt(v)+'</td>').join('')+'</tr>';
       }).join('')+'</tbody></table></div></details>';
-    }).join('')+'<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="equipment-downtime" open><summary>Downtime por equipo</summary><div class="real-data-comparison-scroll" role="region" aria-label="Tabla de downtime por equipo" tabindex="0">'+downtimeHtml(result.downtime)+'</div></details>';
+    }).join('')+'<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="equipment-downtime" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title">Downtime por equipo</span><span class="subsection-description">Compara los minutos de parada por equipo y su contribución a las diferencias.</span></span></summary><div class="real-data-comparison-scroll" role="region" aria-label="Tabla de downtime por equipo" tabindex="0">'+downtimeHtml(result.downtime)+'</div></details>';
   }
   function calibrationHtml(result){
     const columns=result.calibration.columns;

@@ -46,14 +46,15 @@ Prefiere `gap` en grillas y contenedores flexibles. Usa márgenes lógicos para 
 | Herramientas | `.fold-tools` | Botones/iconos alineados a la derecha |
 | Contenido | `.fold-content` | Contenedor con separación uniforme respecto al encabezado |
 
-### Regla única de espaciado de Subsecciones
+### Regla única de espaciado y superficie de Subsecciones
 
-- **Primera Subsección de una pantalla:** no suma margen superior propio. El contenedor principal da la misma separación superior y lateral mediante `--panel-padding` (habitualmente `--space-5`, 20 px; en pantallas pequeñas 12 px).
+- **Lienzo exterior eliminado:** las secciones principales del workspace (`.workspace-content > section.card`) funcionan como contenedores de distribución transparentes, sin tarjeta, borde ni sombra propios. El fondo original `--surface` se traslada a la superficie de cada Subsección (`.fold-card` y `.fold-native`). **No cambies todavía** los colores de las tarjetas de datos, inputs o controles internos.
+- **Primera Subsección de una pantalla:** no suma margen superior propio. El workspace aporta el mismo espacio superior y lateral mediante `--page-padding` (24 px; proporcional a la disposición y el modo). El fondo alrededor de cada Subsección es `--page`.
 - **Entre Subsecciones consecutivas:** exclusivamente `--subsection-gap = --space-4` (16 px), **no** la suma de dos márgenes.
 - **Interior de la Subsección:** `--subsection-padding = --space-4` (16 px) en los cuatro lados.
 - **Encabezado al contenido:** `--space-3` (12 px). Subsecciones colapsadas u ocultas no deben reservar espacio.
 - **Pantallas sin tarjeta externa**, como Simulation 2D: el contenedor debe aportar el inset superior equivalente; no debe compensarse duplicando `margin-top` en cada Subsección.
-- **Temas Classic y Elegant, Basic y Advance:** se aplica el mismo contrato. Los estilos específicos pueden cambiar el color y la tipografía, pero no duplicar márgenes.
+- **Temas Classic y Elegant, Basic y Advance:** se aplica el mismo contrato. Ningún tema debe restaurar el lienzo exterior ni duplicar márgenes. Los cambios futuros de paleta deben separarse de la estructura del componente.
 
 Implementación central: [UiStandards.html](../apps-script/UiStandards.html), sección **«Subsección / Subsection · ritmo compartido de pantallas»**. La adaptación de `workspace-content` del tema Elegant vive en [ElegantStyles.html](../apps-script/ElegantStyles.html). Al agregar una nueva Subsección, reutiliza estas clases y **evita** márgenes superiores particulares salvo una excepción justificada y documentada.
 

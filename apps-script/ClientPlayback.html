@@ -510,7 +510,12 @@ function summarizeGeometrySources(sources, assumptions) {
       var sample = state.run.result && state.run.result.samples[state.run.sampleIndex];
       var isAtRunEnd = !sample || sample.virtualSecond >= state.run.result.durationSeconds;
       if(state.run.result?.batch&&state.run.roundIndex!==0){button.disabled=true;button.title=__ST_TEXT__('batch.later_controls');return;}
-      button.disabled = !document.getElementById('run-events-enabled').checked||state.run.result?.detailCoverage?.recordingMode==='SUMMARY'||isAtRunEnd||Boolean(roundSession?.firstUpdating);
+      var eventsEnabled = document.getElementById('run-events-enabled').checked;
+      button.disabled = !eventsEnabled||state.run.result?.detailCoverage?.recordingMode==='SUMMARY'||isAtRunEnd||Boolean(roundSession?.firstUpdating);
+      if (!eventsEnabled) {
+        button.title = (button.dataset.actionLabel || '') + ' — Enable events in Simulation to use individual controls.';
+        return;
+      }
       button.title = (button.dataset.actionLabel || '') + ' — ' + (isAtRunEnd
         ? __ST_TEXT__('client.reset_playback_to_an_earlier_virtual_time_before_applying_a_scenario_contro')
         : __ST_TEXT__('client.apply_at_the_displayed_virtual_second_and_recalculate_this_simulation_scena'));

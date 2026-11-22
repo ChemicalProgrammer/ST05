@@ -36,7 +36,7 @@ test('V-Graph keeps complete machine names using multiline SVG labels instead of
       unitOfFlow:'bottles',durationSeconds:3600,outputCount:2400
     })};
     dom.window.__ST_TEXT__=key=>key;
-    dom.window.eval(fs.readFileSync('apps-script/LinePerformance.html','utf8').replace(/^<script>|<\\/script>\\s*$/g,''));
+    dom.window.eval(fs.readFileSync('apps-script/LinePerformance.html','utf8').replace('<script>','').replace('</script>',''));
     const target=dom.window.document.getElementById('vgraph-plot');
     Object.defineProperty(target,'clientWidth',{value:270});
     dom.window.STLinePerformance.render(null,[]);

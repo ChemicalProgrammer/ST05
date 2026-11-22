@@ -352,33 +352,49 @@
       heading.append(cardToggle);
       card.dataset.cardCollapsed='false';
       cardToggle.addEventListener('click',function(){
-        // Freeze the current height before changing the layout so the card
-        // does not jump when the detail sections are hidden or restored.
-        if(card._cardAnimation){card._cardAnimation.cancel();card._cardAnimation=null;}
-        var before=card.getBoundingClientRect().height;
+        if(card._cardTransitioning)return;
+        card._cardTransitioning=true;
         var compact=card.dataset.cardCollapsed!=='true';
-        card.dataset.cardCollapsed=String(compact);
-        cardToggle.setAttribute('aria-expanded',String(!compact));
-        cardToggle.setAttribute('aria-label',compact?'Expand equipment details':'Collapse equipment details');
-        cardToggle.title=compact?'Expand equipment details':'Collapse equipment details';
-        var after=card.getBoundingClientRect().height;
+        var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var details=card.querySelector('.live-equipment-detail-grid');
         function redraw(){
           var index=state.activeCase?.equipment?.findIndex(function(item){return item.id===equipmentId;});
           if(Number.isInteger(index)&&index>=0&&state.run.result?.samples?.[state.run.sampleIndex]){
-            var model=state.activeCase.equipment[index];
-            drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,model);
+            drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),
+              index,state.activeCase.equipment[index]);
           }
         }
-        var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if(Math.abs(after-before)>1&&typeof card.animate==='function'&&!reduced){
-          var animation=card.animate(
-            [{height:before+'px',clipPath:'inset(0 0 0 0)'},
-             {height:after+'px',clipPath:'inset(0 0 0 0)'}],
-            {duration:300,easing:'cubic-bezier(.22,.7,.22,1)'});
-          card._cardAnimation=animation;
-          animation.onfinish=function(){if(card._cardAnimation===animation)card._cardAnimation=null;redraw();};
-          animation.oncancel=function(){if(card._cardAnimation===animation)card._cardAnimation=null;redraw();};
-        }else window.requestAnimationFrame(redraw);
+        function finish(){
+          card._cardAnimation=null;card._cardTransitioning=false;redraw();
+        }
+        function applyLayout(){
+          var before=card.getBoundingClientRect().height;
+          card.dataset.cardCollapsed=String(compact);
+          cardToggle.setAttribute('aria-expanded',String(!compact));
+          cardToggle.setAttribute('aria-label',compact?'Expand equipment details':'Collapse equipment details');
+          cardToggle.title=compact?'Expand equipment details':'Collapse equipment details';
+          var after=card.getBoundingClientRect().height;
+          if(!compact&&details&&typeof details.animate==='function'&&!reduced){
+            details.animate([{opacity:0,transform:'translateY(-5px)'},
+              {opacity:1,transform:'translateY(0)'}],
+              {duration:200,easing:'ease-out'});
+          }
+          if(Math.abs(after-before)>1&&typeof card.animate==='function'&&!reduced){
+            var animation=card.animate([{height:before+'px'},{height:after+'px'}],
+              {duration:290,easing:'cubic-bezier(.22,.7,.22,1)'});
+            card._cardAnimation=animation;
+            animation.onfinish=finish;
+            animation.oncancel=finish;
+          }else window.requestAnimationFrame(finish);
+        }
+        // Fade the detailed metrics first; then smoothly resize and expand the chart.
+        if(compact&&details&&typeof details.animate==='function'&&!reduced){
+          var fade=details.animate([{opacity:1,transform:'translateY(0)'},
+            {opacity:0,transform:'translateY(-5px)'}],
+            {duration:110,easing:'ease-in'});
+          fade.onfinish=applyLayout;
+          fade.oncancel=applyLayout;
+        }else applyLayout();
       });
       var residence=document.createElement('span');residence.className='live-residence';residence.hidden=true;
       card.querySelector('.live-processed').after(residence);

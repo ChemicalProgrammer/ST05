@@ -367,6 +367,42 @@
       activate(tabs[(tabs.indexOf(tab)+offset+tabs.length)%tabs.length],true);
     });
   });
+  // Preview navigation is isolated: selecting it cannot change the real view.
+  dialog.querySelectorAll('[data-design-preview-group]').forEach(function(group){
+    var options=Array.from(group.querySelectorAll('[data-design-preview-option]'));
+    function choose(chosen,focus){
+      options.forEach(function(item){
+        var active=item===chosen;
+        if(group.dataset.designPreviewGroup==='selected'){
+          item.setAttribute('aria-selected',String(active));
+          item.tabIndex=active?0:-1;
+        }else item.setAttribute('aria-current',active?'page':'false');
+      });
+      if(focus)chosen.focus();
+    }
+    options.forEach(function(item,index){
+      item.addEventListener('click',function(){choose(item,false);});
+      item.addEventListener('keydown',function(event){
+        if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;
+        event.preventDefault();
+        choose(options[(index+(event.key==='ArrowRight'?1:-1)+options.length)%options.length],true);
+      });
+    });
+  });
+  var actionCount=0;
+  dialog.querySelectorAll('[data-design-preview-action]').forEach(function(button){
+    button.addEventListener('click',function(){
+      var output=dialog.querySelector('#design-ref-action-output');
+      if(output)output.textContent=String(++actionCount);
+    });
+  });
+  dialog.querySelectorAll('[data-design-preview-swatch]').forEach(function(button){
+    button.addEventListener('click',function(){
+      var changed=button.dataset.previewColor==='recommended';
+      button.dataset.previewColor=changed?'current':'recommended';
+      button.style.backgroundColor=changed?'var(--vgraph-current)':'var(--vgraph-recommended)';
+    });
+  });
   function refreshTokens(){
     var rootStyles=getComputedStyle(document.documentElement);
     dialog.querySelectorAll('[data-design-token]').forEach(function(node){

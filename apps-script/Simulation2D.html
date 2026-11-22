@@ -112,6 +112,31 @@
 .simulation2d-viewport-zoom:hover,.simulation2d-viewport-zoom:focus-within { opacity:1; }
 .simulation2d-viewport-zoom input[type=range] { width:90px; min-width:40px; max-width:100%; margin:0; padding:0; accent-color:var(--accent); }
 .simulation2d-viewport-zoom output { min-width:5ch; margin:0; padding:0; text-align:right; color:var(--muted); font-size:var(--font-secondary); font-variant-numeric:tabular-nums; }
+/* Analysis is opened only from the status capsule, not from the table heading. */
+.simulation2d-analysis-action {
+  display:inline-flex;align-items:center;justify-content:center;
+  position:absolute;z-index:2;pointer-events:auto;
+  padding:2px 9px;min-width:0;min-height:20px;
+  border:0;border-radius:999px;font-size:12px;font-weight:700;
+  line-height:1.2;white-space:nowrap;color:#fff;
+  background:#4b5563;cursor:pointer;
+}
+.simulation2d-analysis-action.simulation2d-verdict-pass {background:#216343;}
+.simulation2d-analysis-action.simulation2d-verdict-fail {background:#a12b36;}
+.simulation2d-analysis-action.simulation2d-verdict-at-limit {background:#805200;}
+.simulation2d-analysis-action:hover {color:#fff;filter:brightness(1.08);}
+.simulation2d-analysis-action:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
+#simulation2d-panel .simulation2d-machine-actions .icon-button[aria-pressed="true"],
+#simulation2d-panel .simulation2d-machine-actions .icon-button[aria-pressed="true"]:disabled {
+  color:#fff!important;opacity:1!important;
+}
+#simulation2d-panel .simulation2d-machine-actions .icon-button[aria-pressed="true"] svg {
+  color:#fff!important;stroke:#fff!important;
+}
+#simulation2d-panel .simulation2d-machine-actions .icon-button[aria-pressed="true"]:has(svg) {
+  background:var(--accent);border-color:var(--accent);
+}
+
 </style>
 <script>
 window.STSimulation2D=(function(){
@@ -474,10 +499,11 @@ window.STSimulation2D=(function(){
       if(item.kind==='belt'){
         const button=document.createElement('button');
         button.type='button';button.className='simulation2d-analysis-action';
-        button.textContent='Conveyor Geometry';
-        button.style.font='600 '+telemetryFont;
-        button.title='Open conveyor analysis';
-        button.setAttribute('aria-label','Conveyor Geometry · '+item.name);
+        var verdict=conveyorDimensions.get(item.id)?.status||'NOT EVALUATED';
+        button.textContent=verdict;
+        button.classList.add('simulation2d-verdict-'+verdict.toLowerCase().replace(/[^a-z]+/g,'-'));
+        button.title='Open conveyor analysis · '+item.name;
+        button.setAttribute('aria-label','Open conveyor analysis '+verdict+' · '+item.name);
         button.setAttribute('aria-haspopup','dialog');
         button.setAttribute('aria-controls','conveyor-analysis-dialog');
         button.onclick=()=>window.STConveyorAnalysis.open(item.name,conveyorWorksheets.get(item.id));
@@ -1125,19 +1151,10 @@ window.STSimulation2D=(function(){
         context.textAlign='center';
         text(title,left+width/2,y+21*tableScale,capsuleWidth-20*tableScale);
       }else if(verdict){
-        const capsuleWidth=context.measureText(verdict).width+16*tableScale;
-        const end=left+width-8*tableScale;
-        context.fillStyle=window.STConveyorAnalysis.verdictColors[verdict];
-        context.beginPath();
-        context.roundRect(end-capsuleWidth,y+8*tableScale,capsuleWidth,telemetryRowHeight,telemetryRowHeight/2);
-        context.fill();
-        context.fillStyle='#fff';
-        context.textAlign='center';
-        context.fillText(verdict,end-capsuleWidth/2,y+21*tableScale);
-        const factor=camera.scale/sceneScale;
-        verdictHitBoxes.push({left:(end-capsuleWidth)*factor,right:end*factor,
-          top:(y+8*tableScale)*factor,bottom:(y+8*tableScale+telemetryRowHeight)*factor,
-          reason:conveyorDimensions.get(item.id)?.statusReason});
+        // The title is ordinary text. The clickable verdict capsule is a
+        // real accessible button in the control overlay at the right.
+        context.fillStyle=ink;
+        text(title,parameterX,y+21*tableScale,width-2*telemetryPadding);
       }else if(title){
         context.fillStyle=ink;
         text(title,parameterX,y+21*tableScale,width-2*telemetryPadding);
@@ -1491,10 +1508,12 @@ window.STSimulation2D=(function(){
       const analysisButton=analysisButtons.get(item.id);
       if(analysisButton){
         const left=origin+items[index].center-items[index].telemetryWidth/2+telemetryPairWidth+telemetryGap;
-        const cx=(left+telemetryPadding)*factor,cy=(telemetryY+items[index].telemetryOffset+17.5*tableScale)*factor;
+        const cx=(left+telemetryWidths[3]-8*tableScale)*factor;
+        const cy=(telemetryY+items[index].telemetryOffset+17.5*tableScale)*factor;
         analysisButton.style.left=cx+'px';analysisButton.style.top=cy+'px';
-        analysisButton.style.transform='translateY(-50%) scale('+factor+')';
-        analysisButton.hidden=cx+analysisButton.offsetWidth*factor<=0||cx>=screenWidth||cy<0||cy>h;
+        analysisButton.style.transform='translate(-100%,-50%) scale('+factor+')';
+        analysisButton.style.transformOrigin='right center';
+        analysisButton.hidden=cx<=0||cx-analysisButton.offsetWidth*factor>=screenWidth||cy<0||cy>h;
       }
       const controls=machineControls.get(item.id);
       if(!controls)continue;

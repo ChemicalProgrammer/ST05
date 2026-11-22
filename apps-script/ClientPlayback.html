@@ -276,10 +276,20 @@
         group.dataset.collapsed='true';
         var toggle=group.firstElementChild;
         toggle.setAttribute('aria-expanded','false');
+        toggle.innerHTML='<span class="numeric-section-title">'+toggle.innerHTML+'</span><span class="numeric-collapse-chevron" aria-hidden="true"></span>';
         toggle.addEventListener('click',function(){
+          var from=group.getBoundingClientRect().height;
           var collapsed=group.dataset.collapsed!=='true';
           group.dataset.collapsed=String(collapsed);
           toggle.setAttribute('aria-expanded',String(!collapsed));
+          var to=group.getBoundingClientRect().height;
+          if(group._collapseAnimation)group._collapseAnimation.cancel();
+          if(Math.abs(to-from)>1&&typeof group.animate==='function'&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+            group._collapseAnimation=group.animate([{height:from+'px'},{height:to+'px'}],
+              {duration:220,easing:'cubic-bezier(.2,.75,.25,1)'});
+            group._collapseAnimation.onfinish=function(){group._collapseAnimation=null;};
+            group._collapseAnimation.oncancel=function(){group._collapseAnimation=null;};
+          }
         });
       });
       detailGrid.append(summaryPanel,statePanel,performanceGroup,geometryGroup);
@@ -321,7 +331,14 @@
       card.querySelector('.live-equipment-identity strong').title=__ST_TEXT__('client.equipment_unit_label')+': '+(window.STBasicMode?.unitLabel(model.unitOfFlow)||model.unitOfFlow||'units')+' · '+__ST_TEXT__('client.equipment_unit_help');
       card.querySelector('.live-state').textContent = availabilityState.replace(/_/g,' ');
       card.querySelector('.critical-label').textContent = model.processData?.role === 'PACEMAKER' ? __ST_TEXT__('client.critical_pacemaker') : model.processData?.role === 'CRITICAL_MACHINE' ? __ST_TEXT__('client.critical_equipment') : '';
-      card.querySelector('.reliability-label').textContent = model.noiseProfile?.reliability ? __ST_TEXT__('client.mtbf')+formatNumber(model.noiseProfile?.reliability.mtbfMinutes)+__ST_TEXT__('client.min_mttr')+formatNumber(model.noiseProfile?.reliability.mttrMinutes)+__ST_TEXT__('client.min') : '';
+      var reliability=model.noiseProfile?.reliability;
+      var enabledReliability=state.run.configuration?.reliabilityEnabled!==false
+        &&(document.getElementById('run-failures-enabled')?.checked!==false);
+      var reliabilityVisible=enabledReliability&&Number.isFinite(reliability?.mtbfMinutes)
+        &&reliability.mtbfMinutes>0&&Number.isFinite(reliability?.mttrMinutes)&&reliability.mttrMinutes>0;
+      card.querySelector('.reliability-label').textContent=reliabilityVisible
+        ?__ST_TEXT__('client.mtbf')+formatNumber(reliability.mtbfMinutes)+__ST_TEXT__('client.min_mttr')+formatNumber(reliability.mttrMinutes)+__ST_TEXT__('client.min'):'';
+      card.querySelector('.reliability-label').hidden=!reliabilityVisible;
       card.querySelector('.live-command').textContent = __ST_TEXT__('client.command') + unit.mode;
       card.querySelector('.live-flow-label').textContent = index === 0 ? 'Produced' : 'Processed';
       card.querySelector('.live-processed').textContent = formatNumber(unit.processedUnits === undefined ? unit.outputCount : unit.processedUnits);

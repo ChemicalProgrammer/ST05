@@ -3,12 +3,19 @@
   :root[data-theme=dark] { --vgraph-current:#4ade80; --vgraph-recommended:#e879f9; }
   .line-performance { margin-top: var(--space-5); border-top: var(--border-width) solid var(--line); padding-top: var(--space-4); }
   .line-performance h3 { font-size: var(--font-card); }
-  .vgraph-legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: calc(var(--font-secondary) * 1.5); color: var(--muted); }
-  .vgraph-key { display: inline-flex; align-items: center; gap: var(--space-2); }
-  .vgraph-key-normal { color:var(--vgraph-current); }
-  .vgraph-key-recommended { color:var(--vgraph-recommended); }
-  .vgraph-key::before { content: ''; width: var(--size-16); border-top: var(--focus-width) solid var(--vgraph-current); }
-  .vgraph-key-recommended::before { border-color: var(--vgraph-recommended); }
+  .vgraph-legend { display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-4);font-size:calc(var(--font-secondary) * 1.5);color:var(--muted); }
+  .vgraph-key { display:inline-flex;align-items:center;gap:var(--space-2); }
+  /* The series swatch is interactive, independent of the adjacent legend label. */
+  .vgraph-color-trigger { display:inline-block;flex:0 0 var(--space-4);width:var(--space-4);height:var(--space-4);
+    min-width:var(--space-4);min-height:var(--space-4);padding:0;margin:0;
+    border:var(--border-width) solid var(--line-strong);border-radius:50%;
+    background:var(--surface);box-shadow:0 0 0 2px var(--surface);cursor:pointer;
+    transition:box-shadow var(--duration-fast),transform var(--duration-fast); }
+  .vgraph-color-trigger-current { background:var(--vgraph-current); }
+  .vgraph-color-trigger-recommended { background:var(--vgraph-recommended); }
+  .vgraph-color-trigger:hover { box-shadow:0 0 0 3px var(--selected);transform:scale(1.08); }
+  .vgraph-color-trigger:focus-visible {outline:var(--focus-width) solid var(--accent);outline-offset:3px;}
+  @media(prefers-reduced-motion:reduce) { .vgraph-color-trigger {transition:none;} .vgraph-color-trigger:hover {transform:none;} }
   .vgraph-plot { width:100%; min-width:0; max-width:100%; overflow:hidden; }
   .vgraph-plot svg { display: block; width: 100%; height: var(--vgraph-height); min-width:0; max-width:100%; }
   .vgraph-grid { stroke: var(--chart-grid); stroke-width: var(--border-width); }

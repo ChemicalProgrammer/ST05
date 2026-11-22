@@ -330,6 +330,44 @@
       heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');title.before(heading);heading.append(symbol,title);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
       var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);headerDetails.append(card.querySelector('.live-equipment-identity'));heading.append(card.querySelector('.live-state'));
+      // Card-level disclosure is independent from the three data group disclosures.
+      var cardToggle=document.createElement('button');
+      cardToggle.type='button';cardToggle.className='numeric-card-toggle';
+      cardToggle.setAttribute('aria-label','Collapse equipment details');
+      cardToggle.setAttribute('aria-expanded','true');
+      cardToggle.title='Collapse equipment details';
+      var cardChevron=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      cardChevron.setAttribute('viewBox','0 0 24 24');cardChevron.setAttribute('aria-hidden','true');
+      cardChevron.setAttribute('fill','none');cardChevron.setAttribute('stroke','currentColor');
+      cardChevron.setAttribute('stroke-width','2');cardChevron.setAttribute('stroke-linecap','round');
+      var cardPath=document.createElementNS('http://www.w3.org/2000/svg','path');
+      cardPath.setAttribute('d','m6 9 6 6 6-6');cardChevron.append(cardPath);cardToggle.append(cardChevron);
+      heading.append(cardToggle);
+      card.dataset.cardCollapsed='false';
+      cardToggle.addEventListener('click',function(){
+        var before=card.getBoundingClientRect().height;
+        var compact=card.dataset.cardCollapsed!=='true';
+        card.dataset.cardCollapsed=String(compact);
+        cardToggle.setAttribute('aria-expanded',String(!compact));
+        cardToggle.setAttribute('aria-label',compact?'Expand equipment details':'Collapse equipment details');
+        cardToggle.title=compact?'Expand equipment details':'Collapse equipment details';
+        var after=card.getBoundingClientRect().height;
+        if(card._cardAnimation)card._cardAnimation.cancel();
+        if(Math.abs(after-before)>1&&typeof card.animate==='function'
+          &&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+          card._cardAnimation=card.animate([{height:before+'px'},{height:after+'px'}],
+            {duration:260,easing:'cubic-bezier(.2,.75,.25,1)'});
+          card._cardAnimation.onfinish=function(){card._cardAnimation=null;};
+          card._cardAnimation.oncancel=function(){card._cardAnimation=null;};
+        }
+        window.requestAnimationFrame(function(){
+          if(state.run.result?.samples?.[state.run.sampleIndex]){
+            var model=state.activeCase?.equipment?.find(function(item){return item.id===equipmentId;});
+            var index=state.activeCase?.equipment?.findIndex(function(item){return item.id===equipmentId;});
+            if(model&&index>=0)drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,model);
+          }
+        });
+      });
       var residence=document.createElement('span');residence.className='live-residence';residence.hidden=true;
       card.querySelector('.live-processed').after(residence);
       var losses=document.createElement('button');losses.className='ghost loss-toggle';losses.type='button';losses.innerHTML=STIcons.svg('chart');losses.title=__ST_TEXT__('client.time_losses');losses.setAttribute('aria-label',__ST_TEXT__('client.time_losses'));losses.setAttribute('aria-expanded','false');losses.onclick=function(){var open=card.dataset.losses!=='open';card.dataset.losses=open?'open':'closed';card.classList.toggle('show-losses',open);losses.setAttribute('aria-expanded',String(open));if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}};card.querySelector('.live-equipment-controls').appendChild(losses);

@@ -233,9 +233,7 @@
             <h2 id="run-title" class="sr-only"><?= __ST_TEXT__('shell.simulation') ?></h2>
             <p id="run-case-meta"><?= __ST_TEXT__('view.select_a_saved_case_to_run_it') ?></p>
           </div>
-          <div class="button-row">
-            <button id="run-simulation" data-icon="play" type="button"><?= __ST_TEXT__('view.run_simulation') ?></button>
-          </div>
+          <div class="button-row"></div>
         </div>
 
         <div id="run-not-ready" class="notice hidden"><?= __ST_TEXT__('view.save_a_valid_physical_line_before_running_machine_conveyor_machine_with_geo') ?></div>
@@ -280,8 +278,7 @@
           <div id="simulation-event-content" class="fold-content"><div id="event-time-tools" class="event-time-tools"></div><div class="event-selection-toolbar button-row"><label class="checkbox-label"><input id="select-all-control-events" type="checkbox">Select all events</label><button id="delete-selected-control-events" type="button" class="ghost icon-button" data-icon="trash" aria-label="Delete selected events" title="Delete selected events" disabled></button><button id="delete-all-control-events" type="button" class="ghost icon-button" data-icon="trashAll" aria-label="Delete all events" title="Delete all events" disabled></button><span id="control-event-selection-status" class="chart-note" role="status" aria-live="polite"></span></div><p class="chart-note event-selection-hint">Click a row to select it. Ctrl/Cmd adds or removes rows; Shift selects a range. Checkboxes also allow multiple selection.</p><div id="control-events" class="control-events"></div><div id="planned-line-events" class="table-scroll"></div></div></section>
         </div>
 
-        <div id="simulation-results" class="hidden">
-          <section id="simulation-playback" class="fold-card">
+        <section id="simulation-playback" class="fold-card">
           <div class="fold-heading">
             <div><h3><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-playback-content">Simulation playback</button></h3>
             <p id="simulation-playback-status"><span id="playback-status"><?= __ST_TEXT__('casegallery.ready') ?></span><output id="playback-progress" aria-label="Simulation progress">0%</output></p></div>
@@ -318,6 +315,7 @@
           <!-- El avance y la cancelación de las rondas quedan disponibles al plegar la reproducción. -->
           <section id="batch-dialog" class="round-background hidden" aria-labelledby="batch-title"><strong id="batch-title"><?= __ST_TEXT__('batch.title') ?></strong><progress id="batch-progress" max="1" value="0"></progress><span id="batch-status" role="status" aria-live="polite"></span><button id="batch-cancel" type="button" class="ghost icon-button" data-icon="stop" aria-label="<?= __ST_TEXT__('view.cancel') ?>" title="<?= __ST_TEXT__('view.cancel') ?>"></button></section><p id="rounds-warning" class="round-warning hidden" role="alert"></p>
           </section>
+          <div id="simulation-results" class="hidden">
           <section id="simulation-equipment" class="fold-card">
           <div class="fold-heading"><div><h3 id="simulation-equipment-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-equipment-content">Equipment performance</button></h3>
           <p class="live-controls-help"><?= __ST_TEXT__('view.scenario_controls_apply_at_the_displayed_virtual_second_and_deterministical') ?></p></div></div>

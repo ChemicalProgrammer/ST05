@@ -35,7 +35,10 @@ window.STBasicMode=(function(){
     sync(current);
   }
   function mountEquipmentLayout(separate){
-    if(separate===splitMounted)return;
+    // A layout toggle is not sufficient evidence that the equipment list is
+    // mounted in its visible parent. Recover it after interrupted renders.
+    var expectedParent=separate?layout:listHome;
+    if(separate===splitMounted&&list.parentNode===expectedParent)return;
     STEquipmentInspector.release();STEquipmentInspector.hide();
     if(separate){layout.insertBefore(list,panel);panel.insertBefore(inspector,conveyorSummary);}
     else{listHome.insertBefore(list,layout);inspectorHome.insertBefore(inspector,inspectorNext);STEquipmentFilter.set('all');}

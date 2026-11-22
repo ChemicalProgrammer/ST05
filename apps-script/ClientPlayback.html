@@ -392,7 +392,10 @@
       heading.append(card.querySelector('.live-state'));
       // A conveyor's PASS / FAIL action lives in the identity panel, not in Geometry.
       geometryVerdict.classList.add('numeric-conveyor-verdict');
-      heading.after(geometryVerdict);
+      // Keep a stable reference: the verdict button was moved out of the
+      // Geometry section and must not be assumed to exist in older cards.
+      headerDetails.append(geometryVerdict);
+      card._numericConveyorVerdict=geometryVerdict;
       // The equipment name itself is the accessible card disclosure control.
       cardToggle.setAttribute('aria-label','Collapse equipment details');
       cardToggle.setAttribute('aria-expanded','true');
@@ -493,7 +496,9 @@
       card._numericConveyor=isConveyor;
       card.querySelector('.live-equipment-performance-group').hidden=isConveyor;
       card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor;
-      card.querySelector('.numeric-conveyor-verdict').hidden=!isConveyor;
+      var conveyorVerdict=card._numericConveyorVerdict
+        ||card.querySelector('.numeric-conveyor-verdict');
+      if(conveyorVerdict)conveyorVerdict.hidden=!isConveyor;
       updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
       if(isConveyor)updateNumericalConveyorGeometry(card,model,zone);
       var efficiencyCard=card.querySelector('.live-equipment-efficiency');
@@ -715,7 +720,9 @@
         }
       }
       status=card._numericalConveyorAnalysis?.status||status;
-      var badge=card.querySelector('.live-equipment-geometry-verdict');
+      var badge=card._numericConveyorVerdict
+        ||card.querySelector('.live-equipment-geometry-verdict');
+      if(!badge)return;
       badge.textContent=status.replace(/_/g,' ');
       badge.className='live-equipment-geometry-verdict '+(status==='FAIL'?'is-fail':status==='PASS'?'is-pass':status==='AT LIMIT'?'is-limit':'');
       badge.setAttribute('aria-label','Open conveyor analysis · '+status.replace(/_/g,' '));

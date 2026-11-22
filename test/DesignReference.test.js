@@ -48,7 +48,7 @@ test('What-if tiene exportación y título en la barra de herramientas única',(
 });
 
 test('KPI, resultado y escenario tienen nombres y reglas distintas',()=>{
-  const style=fs.readFileSync('apps-script/DesignReference.html','utf8');
+  const style=fs.readFileSync('apps-script/ComponentStyles.html','utf8');
   const basic=fs.readFileSync('apps-script/BasicMode.html','utf8');
   const whatif=fs.readFileSync('apps-script/WhatIf.html','utf8');
   const web=fs.readFileSync('apps-script/WebApp.html','utf8');
@@ -59,4 +59,5 @@ test('KPI, resultado y escenario tienen nombres y reglas distintas',()=>{
   assert.match(basic,/row\.classList\.add\('metric-card','metric-card--featured'\)/);
   assert.match(whatif,/metric-card--scenario/);
   assert.match(web,/metric-card--result/);
+  assert.match(web,/include_\('ComponentStyles'\)/);
 });

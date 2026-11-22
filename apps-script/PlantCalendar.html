@@ -59,7 +59,7 @@ window.STPlantCalendar=(function(){
       checkbox.disabled=!!locked();checkbox.onchange=function(){save('enabled',checkbox.checked);refreshPlan();};refreshPlan();update();
     }return render;
   }
-  function renderResults(target,result,simulation){target.replaceChildren();var data=simulation?.dynamicConfig?.plantCalendar;target.classList.toggle('comparison-section',!!data?.enabled);if(!data?.enabled)return;
+  function renderResults(target,result,simulation){target.replaceChildren();var data=simulation?.dynamicConfig?.plantCalendar,applied=simulation?.dynamicConfig?.includePlantCalendar!==false&&data?.enabled===true;target.classList.toggle('comparison-section',!!applied);if(!applied)return;
     var c=calculate(data.application==='EVENTS'&&data.appliedCalendar?data.appliedCalendar:data),heading=document.createElement('h3');heading.textContent='Plant calendar';target.append(heading);
     var note=document.createElement('p');note.className='chart-note';target.append(note);if(c.errors.length){note.textContent=c.errors.join(' ');return;}
     var efficiency=result?.batch?.statistics?.lineOeePercent?.mean??result?.summary?.lineOeePercent;

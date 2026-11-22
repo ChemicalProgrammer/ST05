@@ -554,7 +554,11 @@ function numericInputValue(input) {
     }
 
     function basicEquipmentPreview(){
-      return Array.from(document.querySelectorAll('#equipment-list .equipment-card')).map(function(card){
+      var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
+      // El editor puede estar desmontado mientras se simula: usar el modelo,
+      // sin interpretar la ausencia visual como una línea sin equipos.
+      if(!cards.length&&state.activeCase?.equipment?.length)return cloneJson(state.activeCase.equipment);
+      return cards.map(function(card){
         var type=equipmentField(card,'.equipment-type').value,data=parseJsonForPreview(equipmentField(card,'.equipment-process-data').value);
         var characteristics=parseJsonForPreview(equipmentField(card,'.equipment-characteristics').value),noise=parseJsonForPreview(equipmentField(card,'.equipment-noise-profile').value);
         var critical=type!=='CONVEYOR'&&equipmentField(card,'.equipment-pacemaker').checked;
@@ -578,9 +582,15 @@ function numericInputValue(input) {
     function syncEquipmentFromEditor() {
       if (!state.activeCase) return false;
       var cards = Array.prototype.slice.call(document.querySelectorAll('#equipment-list .equipment-card'));
-      // Missing DOM cards are not the same as an intentionally empty line.
-      if(!cards.length&&(state.activeCase.equipment?.length||0)>0){
-        showError({code:'EQUIPMENT_EDITOR_NOT_RENDERED',message:'The equipment editor did not render the saved line. Reopen Equipment before saving; existing equipment was preserved.'});
+      // Las tarjetas ocultas/desmontadas no equivalen a eliminar equipos:
+      // el modelo del caso ya contiene la última configuración comprometida.
+      // Este caso es normal al simular, guardar resultados o desactivar tarjetas.
+      var savedCount=state.activeCase.equipment?.length||0;
+      if(!cards.length&&savedCount>0)return true;
+      // Una lista parcialmente montada sí es un riesgo: no sobrescribir el caso.
+      if(cards.length&&cards.length!==savedCount){
+        showError({code:'EQUIPMENT_EDITOR_INCOMPLETE',
+          message:'Equipment editor is incomplete. The saved line was preserved. Open Equipment to reload the full line before editing it.'});
         return false;
       }
       var equipment = [];

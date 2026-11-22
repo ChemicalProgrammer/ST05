@@ -1,5 +1,7 @@
 <script>
 window.STCharts=function(state,formatNumber){
+  var rollingCache=null;
+  var markerCache={result:null,events:null,calendar:null,count:-1,calendarCount:-1,byEquipment:new Map()};
   function numeric(name){return parseFloat(token(name));}
   function chartPadding(){return {left:numeric('--chart-pad-left'),right:numeric('--chart-pad-right'),top:numeric('--chart-pad-top'),bottom:numeric('--chart-pad-bottom')};}
   function token(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
@@ -157,7 +159,7 @@ window.STCharts=function(state,formatNumber){
         speedColor(equipmentIndex),
         1.8
       );
-      var markers=(state.run.result?.events||[]).filter(function(event){return event.equipmentId===model.id&&/FAILURE_STARTED|EQUIPMENT_START_SEQUENCE_REQUESTED/.test(event.type);}).map(function(event){return event.atVirtualSecond;}).concat((state.run.result?.plantCalendar?.events||[]).flatMap(function(event){return [event.startSeconds,event.endSeconds];}));
+      var markers=getEquipmentEventMarkers(model.id);
       context.strokeStyle=token('--danger');context.globalAlpha=.35;context.setLineDash?.([2,3]);context.beginPath();markers.filter(function(time){return time>=startTime&&time<=endTime;}).forEach(function(time){var x=padding.left+(time-startTime)/timeRange*plotWidth;context.moveTo(x,padding.top);context.lineTo(x,padding.top+plotHeight);});context.stroke();context.setLineDash?.([]);context.globalAlpha=1;
 
     }
@@ -181,13 +183,46 @@ window.STCharts=function(state,formatNumber){
     }
 
     function getRollingSpeedSamples() {
-      if (!state.run.result || !state.run.result.samples) return [];
-      var allSamples = state.uiView === "results" ? state.run.result.samples : state.run.result.samples.slice(0,state.run.sampleIndex+1);
-      if (!allSamples.length) return [];
-      var endTime = allSamples[allSamples.length - 1].virtualSecond;
-      var startTime = Math.max(0, endTime - STRunOptions.windowSeconds(endTime,(state.run.configuration?.shiftHours||8)*3600));
-      var recent=allSamples.filter(function(sample) { return sample.virtualSecond >= startTime; });
-      return recent.length<2&&allSamples.length>1?allSamples.slice(-2):recent;
+      var result=state.run.result;
+      var all=result?.samples;
+      if(!all?.length)return [];
+      var endIndex=state.uiView==='results'?all.length-1:Math.min(state.run.sampleIndex,all.length-1);
+      if(endIndex<0)return [];
+      var endTime=all[endIndex].virtualSecond;
+      var windowSeconds=STRunOptions.windowSeconds(endTime,(state.run.configuration?.shiftHours||8)*3600);
+      if(rollingCache&&rollingCache.samples===all&&rollingCache.length===all.length
+        &&rollingCache.index===endIndex&&rollingCache.window===windowSeconds)return rollingCache.recent;
+      var startTime=Math.max(0,endTime-windowSeconds);
+      // Indexed times are sorted. Binary search prevents a full filter per
+      // sparkline, and all cards reuse one selection for this playback frame.
+      var low=0,high=endIndex;
+      while(low<high){
+        var middle=(low+high)>>1;
+        if(all[middle].virtualSecond<startTime)low=middle+1;
+        else high=middle;
+      }
+      var recent=all.slice(low,endIndex+1);
+      if(recent.length<2&&endIndex>0)recent=all.slice(endIndex-1,endIndex+1);
+      rollingCache={samples:all,length:all.length,index:endIndex,window:windowSeconds,recent:recent};
+      return recent;
+    }
+    function getEquipmentEventMarkers(equipmentId){
+      var result=state.run.result,events=result?.events||[],calendar=result?.plantCalendar?.events||[];
+      if(markerCache.result!==result||markerCache.events!==events||markerCache.calendar!==calendar
+        ||markerCache.count!==events.length||markerCache.calendarCount!==calendar.length){
+        markerCache={result:result,events:events,calendar:calendar,count:events.length,
+          calendarCount:calendar.length,byEquipment:new Map()};
+      }
+      if(markerCache.byEquipment.has(equipmentId))return markerCache.byEquipment.get(equipmentId);
+      var markers=[];
+      events.forEach(function(event){
+        if(event.equipmentId===equipmentId&&/FAILURE_STARTED|EQUIPMENT_START_SEQUENCE_REQUESTED/.test(event.type)){
+          markers.push(event.atVirtualSecond);
+        }
+      });
+      calendar.forEach(function(event){markers.push(event.startSeconds,event.endSeconds);});
+      markerCache.byEquipment.set(equipmentId,markers);
+      return markers;
     }
 
     function prepareLineCanvas(canvas, height) {

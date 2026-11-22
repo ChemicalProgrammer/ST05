@@ -16,7 +16,7 @@ window.STBasicMode=(function(){
     sections.forEach(function(s){var b=button(s[1],s[2],function(){
       var previous=state.basicView;state.basicView=s[0];
       if(actions.navigate(s[3])===false){state.basicView=previous;actions.refresh();}
-    });b.dataset.basicView=s[0];nav.appendChild(b);});sectionRow.appendChild(nav);
+    });b.dataset.basicView=s[0];b.classList.add('app-section-tab');nav.appendChild(b);});sectionRow.appendChild(nav);
     tools=document.createElement('div');tools.id='basic-case-actions';tools.className='basic-utilities';
     var utilityRow=document.createElement('div');utilityRow.className='button-row';tools.appendChild(utilityRow);
     headerActions=document.getElementById('header-case-actions');

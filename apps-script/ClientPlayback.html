@@ -268,9 +268,28 @@
       summaryPanel.append(summaryHeading,summaryRows);
       var geometryGroup=document.createElement('section');geometryGroup.className='live-equipment-geometry-group';
       var geometryHeader=document.createElement('button');geometryHeader.type='button';geometryHeader.className='live-equipment-2d-section-heading';
-      geometryHeader.innerHTML='<strong>Conveyor Geometry</strong><span class="live-equipment-geometry-verdict"></span>';
+      geometryHeader.innerHTML='<strong>Conveyor Geometry</strong>';
       var geometryRows=document.createElement('div');geometryRows.className='live-equipment-2d-rows';
-      geometryGroup.append(geometryHeader,geometryRows);
+      var geometryVerdict=document.createElement('button');
+      geometryVerdict.type='button';geometryVerdict.className='live-equipment-geometry-verdict';
+      geometryVerdict.setAttribute('aria-haspopup','dialog');
+      geometryVerdict.setAttribute('aria-controls','conveyor-analysis-dialog');
+      geometryVerdict.title='Open conveyor analysis';
+      geometryVerdict.addEventListener('click',function(event){
+        event.stopPropagation();
+        var equipment=state.activeCase?.equipment||[];
+        var index=equipment.findIndex(function(item){return item.id===equipmentId;});
+        if(index<0||!window.STConveyorAnalysis)return;
+        var format=window.STProducts?.currentFormat?.()||null;
+        var formats=window.STProducts?.formats?.()||[];
+        var resolved=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
+        var model=resolved.models[index],zone=resolved.zones[index];
+        if(!zone)return;
+        window.STConveyorAnalysis.open(model.name||model.id,{
+          zone:zone,data:model.processData||{},designProfiles:resolved.designProfiles,index:index
+        });
+      });
+      geometryGroup.append(geometryHeader,geometryVerdict,geometryRows);
       // Keep a compact row preview visible even when a group is collapsed.
       [summaryPanel,statePanel,performanceGroup,geometryGroup].forEach(function(group){
         group.dataset.collapsed='true';
@@ -536,9 +555,18 @@
       card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatNumber(belt.capacityPerSecond*60)+' unid/min a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatNumber(model.processData.equipment.maximumSpeedBpm) + __ST_TEXT__('client.min_2') : '');
       card.querySelector('.live-sparkline-nominal-rate').textContent = formatRatePerMinute(belt?belt.capacityPerSecond:model.nominalRatePerSecond);
       card.querySelector('.equipment-speed-sparkline-heading span').textContent=state.run.result?.detailCoverage?.recordingMode==='SUMMARY'?'Summary · endpoint snapshots':STRunOptions.windowLabel()+(state.run.result?.detailCoverage?.aggregated?' · aggregated':'');
+      var action=card.dataset.lastControlAction;
+      if(!action){
+        action=unit.mode==='STOP'?'STOP':unit.mode==='PAUSE'?'PAUSE'
+          :unit.emergencyStopLatched||availabilityState==='EMERGENCY_STOP'?'EMERGENCY_STOP':'RUN';
+      }
+      card.querySelectorAll('.live-equipment-controls button[data-scenario-action]').forEach(function(button){
+        button.setAttribute('aria-pressed',String(button.dataset.scenarioAction===action));
+      });
       Array.prototype.forEach.call(card.querySelectorAll('.live-equipment-controls button:not(.loss-toggle)'), updateLiveEquipmentControl);
 
-      updateAccumulationZoneDetails(card.querySelector('.live-equipment-zone'), zone);
+      // The conveyor analysis now opens from the Geometry PASS / FAIL badge.
+      // Omit the redundant detailed accumulation panel from numerical cards.
       return belt?{...model,nominalRatePerSecond:belt.capacityPerSecond}:model;
     }
 
@@ -823,7 +851,15 @@ function summarizeGeometrySources(sources, assumptions) {
     }
 
     function bindLiveEquipmentControl(button, equipmentId, action) {
+      button.dataset.scenarioAction=action;
       button.addEventListener('click', function() {
+        if(button.disabled)return;
+        var card=button.closest('.live-equipment-card');
+        if(card){card.dataset.lastControlAction=action;
+          card.querySelectorAll('.numeric-equipment-control-dock button[data-scenario-action]').forEach(function(other){
+            other.setAttribute('aria-pressed',String(other===button));
+          });
+        }
         applyLiveScenarioControl(equipmentId, action);
       });
     }

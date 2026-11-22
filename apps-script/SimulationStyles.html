@@ -137,8 +137,7 @@
   #simulation-playback-status { display:flex; flex-wrap:wrap; gap:var(--space-2); }
   #simulation-playback-efficiencies > #basic-efficiencies { margin:0 0 var(--space-3); }
   /* Muestra el avance inicial sin exponer datos de una reproducción anterior. */
-  #simulation-results.hidden:has(#batch-dialog:not(.hidden)) { display:block !important; }
-  #simulation-results.hidden :is(.playback-toolbar,#simulation-playback-status,#simulation-playback-content,#simulation-equipment) { display:none; }
+  /* Playback remains visible before the first run; only equipment results are gated. */
   .result-kpi small { display:block; color:var(--muted); margin-top:var(--size-6); }
   @media(max-width:600px){.event-generator-fields,.event-generator-equipment{grid-template-columns:1fr;}}
 </style>

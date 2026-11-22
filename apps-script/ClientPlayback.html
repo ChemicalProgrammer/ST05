@@ -241,6 +241,16 @@
         name.textContent=label;value.dataset.efficiency=key;metric.append(name,value);efficiency.append(metric);
       });
       card.querySelector('.live-equipment-zone').before(efficiency);
+      // Match the detailed state-duration information shown by Simulation 2D,
+      // while retaining the numerical playback speed sparkline and event controls.
+      var statePanel=document.createElement('section');
+      statePanel.className='live-equipment-state-details';
+      var stateHeading=document.createElement('strong');
+      stateHeading.textContent='States';
+      var stateGrid=document.createElement('div');
+      stateGrid.className='live-equipment-state-grid';
+      statePanel.append(stateHeading,stateGrid);
+      card.querySelector('.live-equipment-zone').before(statePanel);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');
       heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');title.before(heading);heading.append(symbol,title);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
@@ -300,6 +310,30 @@
       rate.textContent=belt?formatNumber(belt.speedMmPerSecond*0.06)+' m/min de banda · '+formatNumber((unit.actualRatePerSecond??0)*60)+' unid/min de flujo':formatRatePerMinute(machineRate);
       rate.title=belt?'Velocidad de banda y flujo de producto procesado. La banda puede moverse aunque reciba menos producto o esté vacía.':'';
 
+      var stateDetails=card.querySelector('.live-equipment-state-grid');
+      var stateDurations=unit.stateSeconds||{};
+      var stateLabels={
+        RUNNING:'Running',READY:'Ready',STARVED:'Starved',BLOCKED:'Blocked',
+        FAILURE:'Faulted',FAULTED:'Faulted',STOPPED:'Stopped',PAUSED:'Paused',
+        STARTING:'Starting',RAMPING_UP:'Ramp up',RAMPING_DOWN:'Ramp down',
+        WAITING_FOR_PRIME:'Waiting for Prime',BACKUP_STOP:'Back-up stop',
+        BACKUP_STOPPING:'Back-up stopping',EMERGENCY_STOP:'Emergency stop',
+        PLANNED_STOP:'Planned stop',MICRO_STOP:'Micro stop',DISABLED:'Disabled'
+      };
+      var stateOrder=['RUNNING','STARVED','BLOCKED','FAILURE','FAULTED','STOPPED','STARTING',
+        'RAMPING_UP','RAMPING_DOWN','PAUSED','EMERGENCY_STOP','PLANNED_STOP','BACKUP_STOP',
+        'BACKUP_STOPPING','WAITING_FOR_PRIME','READY','MICRO_STOP','DISABLED'];
+      var states=Object.keys(stateDurations);
+      stateOrder.forEach(function(key){if(states.indexOf(key)<0)states.push(key);});
+      stateDetails.replaceChildren();
+      states.forEach(function(key){
+        var seconds=Number(stateDurations[key]||0);
+        if(!seconds && !['RUNNING','STARVED','BLOCKED','FAILURE','STOPPED'].includes(key))return;
+        var cell=document.createElement('div'),label=document.createElement('span'),value=document.createElement('b');
+        label.textContent=stateLabels[key]||key.replace(/_/g,' ').toLowerCase();
+        value.textContent=formatMinutes(seconds);
+        cell.append(label,value);stateDetails.append(cell);
+      });
       card.querySelector('.live-starved').textContent = formatMinutes(unit.starvedSeconds);
       card.querySelector('.live-blocked').textContent = formatMinutes(unit.blockedSeconds);
       card.querySelector('.live-waiting-prime').textContent = formatMinutes(unit.waitingForPrimeSeconds);

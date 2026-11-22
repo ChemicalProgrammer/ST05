@@ -18,10 +18,14 @@ window.STLinePerformance = (function() {
     var minimum = Math.max(0, Math.floor((Math.min.apply(null, all) - 10) / 10) * 10);
     var maximum = Math.ceil((Math.max.apply(null, all) + 10) / 10) * 10;
     if (minimum === maximum) maximum += 10;
-    var style=getComputedStyle(document.documentElement),height=parseFloat(style.getPropertyValue('--vgraph-height'))||260;
-    var width=Math.max(240,target.clientWidth||740);
+    // Fill the available viewport below the graph heading, rather than
+    // pinning the drawing to the old 260px design height.
+    var bounds=target.getBoundingClientRect();
+    var viewportHeight=window.innerHeight||document.documentElement.clientHeight||700;
+    var height=Math.max(360,Math.floor(viewportHeight-bounds.top-32));
+    var width=Math.max(240,Math.floor(target.clientWidth||740));
     var chart = svg('svg', {viewBox:'0 0 '+width+' '+height, role:'img', 'aria-label':__ST_TEXT__('performance.chart_label'), preserveAspectRatio:'xMidYMid meet'});
-    chart.style.minWidth='0';chart.style.width='100%';
+    chart.style.minWidth='0';chart.style.width='100%';chart.style.height=height+'px';chart.style.display='block';
     var basic=document.documentElement.dataset.uiMode==='basic';
     var left=Math.min(100,width*.24),right=width-24,bottom=height-110,top=36;
     var spacing=(right-left)/Math.max(1,valid.length-1),compact=spacing<100;
@@ -82,7 +86,7 @@ window.STLinePerformance = (function() {
       if (p.isPacemaker) chart.appendChild(svg('text', {x:x(i), y:height-24, class:'vgraph-reference', 'text-anchor':'middle'}, spacing<45?'★':__ST_TEXT__('performance.reference_short')));
     });
     target.appendChild(chart);
-    if(!target._vgraphResize){target._vgraphWidth=target.clientWidth;target._vgraphResize=function(){if(target.clientWidth!==target._vgraphWidth){target._vgraphWidth=target.clientWidth;plot(target,target._vgraphPoints);}};window.addEventListener('resize',target._vgraphResize);if(window.ResizeObserver){target._vgraphObserver=new ResizeObserver(target._vgraphResize);target._vgraphObserver.observe(target);}}
+    if(!target._vgraphResize){target._vgraphWidth=target.clientWidth;target._vgraphHeight=height;target._vgraphResize=function(){var nextHeight=Math.max(360,Math.floor((window.innerHeight||700)-target.getBoundingClientRect().top-32));if(target.clientWidth!==target._vgraphWidth||Math.abs(nextHeight-target._vgraphHeight)>2){target._vgraphWidth=target.clientWidth;target._vgraphHeight=nextHeight;plot(target,target._vgraphPoints);}};window.addEventListener('resize',target._vgraphResize);if(window.ResizeObserver){target._vgraphObserver=new ResizeObserver(target._vgraphResize);target._vgraphObserver.observe(target);}}
   }
   function render(result, equipment) {
     if (!document.getElementById('line-performance')) return;

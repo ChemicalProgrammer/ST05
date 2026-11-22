@@ -277,17 +277,10 @@
       geometryVerdict.title='Open conveyor analysis';
       geometryVerdict.addEventListener('click',function(event){
         event.stopPropagation();
-        var equipment=state.activeCase?.equipment||[];
-        var index=equipment.findIndex(function(item){return item.id===equipmentId;});
-        if(index<0||!window.STConveyorAnalysis)return;
-        var format=window.STProducts?.currentFormat?.()||null;
-        var formats=window.STProducts?.formats?.()||[];
-        var resolved=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
-        var model=resolved.models[index],zone=resolved.zones[index];
-        if(!zone)return;
-        window.STConveyorAnalysis.open(model.name||model.id,{
-          zone:zone,data:model.processData||{},designProfiles:resolved.designProfiles,index:index
-        });
+        var worksheet=numericalConveyorWorksheet(equipmentId);
+        if(!worksheet)return;
+        var equipment=state.activeCase?.equipment?.find(function(item){return item.id===equipmentId;});
+        window.STConveyorAnalysis.open(equipment?.name||equipmentId,worksheet);
       });
       geometryGroup.append(geometryHeader,geometryVerdict,geometryRows);
       // Keep a compact row preview visible even when a group is collapsed.
@@ -632,6 +625,19 @@
       }
       updateNumerical2DRows(card.querySelector('.live-equipment-2d-summary .live-equipment-2d-rows'),rows,'summary',card);
     }
+    function numericalConveyorWorksheet(equipmentId){
+      if(!window.STConveyorAnalysis||!window.SimulatorEngine)return null;
+      var equipment=state.activeCase?.equipment||[];
+      var index=equipment.findIndex(function(item){return item.id===equipmentId;});
+      if(index<0)return null;
+      var format=window.STProducts?.currentFormat?.()||null;
+      var formats=window.STProducts?.formats?.()||[];
+      try{
+        var resolved=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
+        var model=resolved.models[index],zone=resolved.zones[index];
+        return zone?{zone:zone,data:model.processData||{},designProfiles:resolved.designProfiles,index:index}:null;
+      }catch(error){return null;}
+    }
     function updateNumericalConveyorGeometry(card,model,zone){
       var eng=state.run.result?.accumulationZoneMetrics?.[zone?.id]?.engineering;
       var cal=eng?.calculated||{},geo=zone?.geometry||{},input=model.processData?.accumulation||{};
@@ -650,9 +656,21 @@
         ['Max Run-out point',mm(first(cal.runoutLengthMm,geo.runoutLengthMm)),'mm'],
         ['Recovery Point',mm(first(cal.recoveryPointMm)),'mm']];
       var status=eng?.audit?.status||'NOT EVALUATED';
+      // Prefer the same conveyor engineering worksheet that powers the 2D dialog.
+      // Cache only within this result/card so repeated playback frames stay inexpensive.
+      if(!card._numericalConveyorAnalysis){
+        var worksheet=numericalConveyorWorksheet(model.id);
+        if(worksheet){
+          try{card._numericalConveyorAnalysis=window.STConveyorAnalysis.calculate(worksheet).geometry;}
+          catch(error){card._numericalConveyorAnalysis={status:'NOT EVALUATED'};}
+        }
+      }
+      status=card._numericalConveyorAnalysis?.status||status;
       var badge=card.querySelector('.live-equipment-geometry-verdict');
       badge.textContent=status.replace(/_/g,' ');
-      badge.className='live-equipment-geometry-verdict '+(status==='FAIL'?'is-fail':status==='PASS'?'is-pass':'');
+      badge.className='live-equipment-geometry-verdict '+(status==='FAIL'?'is-fail':status==='PASS'?'is-pass':status==='AT LIMIT'?'is-limit':'');
+      badge.setAttribute('aria-label','Open conveyor analysis · '+status.replace(/_/g,' '));
+      badge.title='Open conveyor analysis · '+status.replace(/_/g,' ');
       updateNumerical2DRows(card.querySelector('.live-equipment-geometry-group .live-equipment-2d-rows'),rows,'geometry',card);
     }
 

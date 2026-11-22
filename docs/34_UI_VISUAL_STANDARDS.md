@@ -68,21 +68,26 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | Nombre oficial | Clase/módulo | Función y alcance |
 | --- | --- | --- |
 | **Subsección** | `.fold-card`, `.fold-heading`, `.fold-toggle`, `.fold-content`, `.fold-tools` | Contenedor plegable de información con una sola barra de herramientas |
+| **Título de subsección** | `.subsection-heading-title` | Título seminegrita en color primario; se mantiene legible al plegar |
+| **Descripción de subsección** | `.subsection-description`, `.subsection-heading-copy` | Breve explicación opcional debajo del título; no sustituye mensajes de estado ni herramientas |
+| **Separador interno de subsección** | `.subsection-fieldset`, `.subsection-divider` | Agrupa controles interiores con una línea fina y una leyenda seminegrita en color primario |
 | **Botón/Icono** | `.icon-button` | Acción sin texto visible con `aria-label` y `title`. Igual estilo en Header, Subsecciones y herramientas |
-| **Valor–unidad** | `STTimeControls.output()`, `STTimeControls.setOutput()`, `.time-value-control` | Output: convierte la cifra cuando cambia la unidad. Input: conserva la cifra y ajusta su interpretación al calcular |
+| **Valor–unidad** | `STTimeControls.output()`, `STTimeControls.setOutput()`, `.time-value-control` | Input: conserva la cifra. Output: convierte la cifra. Ambos usan `--time-unit-gap` (2 px) y `--time-unit-slot` (3.25 em) para que el ancho de la unidad no desplace el valor |
 | **Etiqueta de estado** | `.badge`, clases semánticas | RUNNING, PASS, FAIL y otros estados sin depender solamente del color |
-| **Tarjeta de resultado** | `.metric-card.metric-card--result` | Métricas secundarias en otras pantallas de resultados, con tipografía más compacta que el KPI destacado |
-| **KPI destacado** | `.metric-card.metric-card--featured` | Indicadores de eficiencia y, expresamente, las diez tarjetas de **Simulation Playback**. Valor grande y **borde superior grueso en color primario** |
+| **Tarjeta de resultado** | `.metric-card.metric-card--result` | Las **diez** tarjetas de Simulation Playback (Virtual time, Output, Effective Runtime, Runtime Losses y demás) y resultados secundarios. `STTimeControls.output()` hereda el tamaño del valor del contenedor |
+| **KPI destacado** | `.metric-card.metric-card--featured` | Dentro de Simulation Playback, **solo** Theoretical equipment efficiency y Simulated efficiency. Valor grande y borde superior grueso en color primario |
 | **Tarjeta de escenario** | `.metric-card.metric-card--scenario` | Alternativas de What-if/CAPEX, con un borde lateral semántico y acciones del escenario |
 | **Tarjeta de estado** | `.metric-card.metric-card--status` | Resultado de validación, estado o diagnóstico; compacta y con etiqueta semántica |
 | **Tarjeta de equipo** | `.live-equipment-card` | Encabezado, estado, OEE y gráfico, con subsecciones internas configurables; no debe adoptar el estilo de KPI destacado |
 
 ### Reglas de comportamiento y aspecto
 
-- **Un componente, una responsabilidad.** La jerarquía visual del KPI destacado se usa en las tarjetas de **Simulation Playback** por decisión de diseño. No debe trasladarse automáticamente a otros resultados secundarios, escenarios o estados.
+- **Un componente, una responsabilidad.** Las dos eficiencias de Simulation Playback son **KPI destacado**; las otras diez tarjetas son **Tarjeta de resultado**. No debe trasladarse automáticamente la jerarquía destacada a otros resultados secundarios, escenarios o estados.
 - **Propiedad de estilos:** modificar las variantes `.metric-card` y la apariencia compartida de los botones de Header en `ComponentStyles.html`, no en el archivo del diálogo. `DesignReference.html` contiene solamente la galería, sus ejemplos y el atajo.
 - **Color de fondo:** `--surface-soft` para Tarjeta de resultado y KPI destacado; `--surface` como superficie normal de Subsección. Evita mezclas de blancos sin contraste entre contenedores anidados.
-- **Valor–unidad:** tipografía del número coherente con los demás valores del grupo, unidades de menor énfasis y una separación natural (2 px). Las unidades son seleccionables, sin flecha visible.
+- **Valor–unidad:** el output dentro de una Tarjeta de resultado hereda el tamaño del valor contenedor (incluido el número de `STTimeControls.output()`); la unidad usa una escala relativa menor. Inputs y outputs comparten un espacio fijo de 2 px y un slot de unidad de anchura fija (3.25 em), sin flecha visible. Los cambios de unidad no desplazan el input ni el inicio del output.
+- **Subsección y descripción:** cada Subsección utilizada incluye una frase contextual breve bajo el título (o una descripción visible dentro de `summary` cuando es `fold-native`). La descripción es opcional para futuras subsecciones; usar `.subsection-description` y no reemplazar estados como Ready/0%.
+- **Separador interno:** reutilizar `<fieldset class="subsection-fieldset"><legend class="subsection-divider">…</legend>` para controles agrupados; `Options` en Simulation 2D lo ejemplifica. El título del control es `.subsection-heading-title`.
 - **Relieve al pasar el mouse:** solamente en subtarjetas de resultados, escenarios y KPI. Se usa una sombra ligera sin `will-change`, exclusivamente si existe `hover`; nunca modificar producción ni ejecutar un recálculo.
 - **Herramientas de What-if:** `Scenario options` y la exportación están en la misma barra de la Subsección. Los controles se mantienen fuera del contenido plegable para permanecer accesibles.
 - **Iconos del Header:** usan dimensiones, fondo, borde y estados de foco compatibles con `.icon-button`. No suprimir atributos accesibles ni convertir acciones en elementos sin botón.

@@ -63,7 +63,7 @@ Implementación central: [UiStandards.html](../apps-script/UiStandards.html), se
 
 ## Catálogo de componentes reutilizables
 
-Para consultar las muestras directamente en la aplicación, abre el diálogo **Sistema de diseño · SimuLine** con **Ctrl + Shift + S** (en Mac también Cmd + Shift + S), cuando el foco esté dentro de la aplicación de Apps Script. El catálogo y su interacción viven en [DesignReference.html](../apps-script/DesignReference.html), con pestañas **Controles**, **Tipografía**, **Márgenes** y **Tarjetas**. **Todas las pestañas muestran exactamente tres columnas:** **Control o diseño** (vista previa), **Explicación** (cuándo usarlo) y **Nombre del control** (nombre oficial y selector/token para pedir cambios). En pantallas estrechas, las tres columnas se mantienen mediante desplazamiento horizontal. Los estilos de tarjetas y botones reutilizables viven en [ComponentStyles.html](../apps-script/ComponentStyles.html), incluidos en el encabezado de la aplicación después de los estilos de tema. No modifica casos ni resultados. Los controles de ejemplo son independientes del motor.
+Para consultar las muestras directamente en la aplicación, abre el diálogo **Sistema de diseño · SimuLine** con **Ctrl + Shift + S** (en Mac también Cmd + Shift + S), cuando el foco esté dentro de la aplicación de Apps Script. El catálogo y su interacción viven en [DesignReference.html](../apps-script/DesignReference.html), con pestañas **Controles**, **Navegación**, **Tipografía**, **Márgenes** y **Tarjetas**. **Todas las pestañas muestran exactamente tres columnas:** **Control o diseño** (vista previa), **Explicación** (cuándo usarlo) y **Nombre del control** (nombre oficial y selector/token para pedir cambios). En pantallas estrechas, las tres columnas se mantienen mediante desplazamiento horizontal. Los estilos de tarjetas y botones reutilizables viven en [ComponentStyles.html](../apps-script/ComponentStyles.html), incluidos en el encabezado de la aplicación después de los estilos de tema. No modifica casos ni resultados. Los controles de ejemplo son independientes del motor.
 
 | Nombre oficial | Clase/módulo | Función y alcance |
 | --- | --- | --- |
@@ -71,6 +71,30 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Título de subsección** | `.subsection-heading-title` | Título seminegrita en color primario; se mantiene legible al plegar |
 | **Descripción de subsección** | `.subsection-description`, `.subsection-heading-copy` | Texto en una línea independiente, debajo del título. Se ajusta hasta dos líneas cuando el espacio es reducido; nunca comparte renglón con el título |
 | **Separador interno de subsección** | `.subsection-fieldset`, `.subsection-divider` | Agrupa controles interiores con una línea fina y una leyenda seminegrita en color primario |
+| **Pestaña de navegación principal** | `.app-section-tab`, `#basic-navigation` | Botones de Equipo/Conveyors/Simulation/Results en el header, con `aria-current=page` para la vista activa |
+| **Pestañas de cuadro de diálogo** | `.settings-tabs [role=tab]` | Navegación interna de Settings y del selector de tema, con `aria-selected` |
+| **Pestaña de simulación** | `.simulation-navigation .workspace-tab` | Cambia entre escenarios guardados y comparación |
+| **Selector de simulación** | `.simulation-picker`, `#simulation-selector` | Desplegable de simulaciones del header |
+| **Ruta del caso (breadcrumb)** | `.breadcrumb` | Nombre del caso y sección actual |
+| **Pestañas del catálogo** | `.design-reference-tabs [role=tab]` | Variante propia del diálogo de sistema de diseño |
+| **Botón principal** | `button` | Acción de mayor prioridad |
+| **Botón secundario** | `button.secondary` | Acción alternativa |
+| **Botón discreto** | `button.ghost` | Acción de menor énfasis |
+| **Botón de peligro** | `button.danger` | Acción destructiva |
+| **Botón deshabilitado** | `button:disabled` | Acción temporalmente no disponible |
+| **Menú desplegable de acciones** | `.export-menu` | Agrupa opciones de importación/exportación en toolbar |
+| **Campo de texto / Campo numérico / Campo de búsqueda** | `input[type=text]`, `input[type=number]`, `.search-field` | Captura de datos y búsqueda en catálogo |
+| **Área de texto** | `textarea` | Contenido multilinea |
+| **Opción única (radio)** | `input[type=radio]` | Selección exclusiva de filtros |
+| **Control deslizante** | `input[type=range]` | Selección de valores graduables |
+| **Valor manual activable** | `.switchable-value` | Casilla junto a override editable |
+| **Valor calculado** | `.calculated-value` | Output no editable con estilo distinto |
+| **Selector circular de color** | `.vgraph-color-trigger` | Muestra el color de la serie y permite abrir su editor |
+| **Encabezado y pie de diálogo** | `.dialog-heading`, `.dialog-actions` | Estructura compartida de ventanas modales |
+| **Subsección nativa** | `.fold-native`, `summary` | Control plegable semántico con título/descripcion |
+| **Aviso contextual** | `.notice` | Advertencia no modal |
+| **Indicador de progreso** | `progress` | Porcentaje de ronda, cálculo o importación |
+| **Estado vacío** | `.empty` | Lista sin datos |
 | **Botón/Icono** | `.icon-button` | Acción sin texto visible con `aria-label` y `title`. Igual estilo en Header, Subsecciones y herramientas |
 | **Valor–unidad** | `STTimeControls.output()`, `STTimeControls.setOutput()`, `.time-value-control` | Input: conserva la cifra. Output: convierte la cifra. Ambos usan `--time-unit-gap` (2 px) y `--time-unit-slot` (3.25 em) para que el ancho de la unidad no desplace el valor |
 | **Etiqueta de estado** | `.badge`, clases semánticas | RUNNING, PASS, FAIL y otros estados sin depender solamente del color |
@@ -79,6 +103,14 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Tarjeta de escenario** | `.metric-card.metric-card--scenario` | Alternativas de What-if/CAPEX, con un borde lateral semántico y acciones del escenario |
 | **Tarjeta de estado** | `.metric-card.metric-card--status` | Resultado de validación, estado o diagnóstico; compacta y con etiqueta semántica |
 | **Tarjeta de equipo** | `.live-equipment-card` | Encabezado, estado, OEE y gráfico, con subsecciones internas configurables; no debe adoptar el estilo de KPI destacado |
+| **KPI de resultado** | `.result-kpi`, `.metric-card--result` | Indicadores KPI en Results, no equivalentes a los KPI destacados de eficiencia |
+| **Panel de gráfica** | `.chart-panel` | Contenedor de gráficos y sus títulos |
+| **Tabla de datos** | `.table-scroll`, `table` | Tabla con columnas optimizadas y scroll horizontal |
+| **Fila de caso** | `.case-row` | Vista de un caso en el catálogo |
+| **Tarjeta de configuración de equipo** | `.equipment-card` | Formulario/tarjeta de máquina o conveyor, distinto de resultado en vivo |
+
+### Cobertura de muestras
+El catálogo mantiene los nombres oficiales en la **tercera columna de todas las pestañas**. Incluye navegación real del Header, pestañas de diálogos, navegación entre simulaciones, variantes de botones, campos, menús, estado/progreso, tablas, gráficas y las familias de tarjetas. Los ejemplos interactivos están aislados: cambiar la pestaña o el color de un ejemplo no modifica el caso, su simulación, ni el selector de colores real. Los estilos viven en sus módulos propietarios; `DesignReference.html` incluye sólo la vista previa y su interacción.
 
 ### Reglas de comportamiento y aspecto
 
@@ -88,7 +120,7 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 - **V-Graph:** los colores de Current y Recommended se editan con los botones circulares `.vgraph-color-trigger` dentro de la leyenda `.vgraph-legend`. Ambos invocan el cuadro de diálogo `#series-color-dialog`, actualizan `metadata.vgraphColors` y respetan la paleta del caso. La sección redundante de Settings > Case se eliminó.
 - **Protección de datos del editor:** al abrir un caso se restaura su nombre y se montan las tarjetas antes del cambio de presentación Equipment/Conveyors. No se debe serializar una lista DOM vacía como eliminación de equipos cuando el caso guardado conserva máquinas. Si falla el montaje, se bloquea el guardado destructivo y se puede cerrar Settings sin perder el nombre original.
 - **Valor–unidad:** el output dentro de una Tarjeta de resultado hereda el tamaño del valor contenedor (incluido el número de `STTimeControls.output()`); la unidad usa una escala relativa menor. Inputs y outputs comparten un espacio fijo de 2 px y un slot de unidad de anchura fija (3.25 em), sin flecha visible. Los cambios de unidad no desplazan el input ni el inicio del output.
-- **Subsección y descripción:** el título siempre ocupa su propia línea y la descripción se presenta en la siguiente. La descripción muestra una línea cuando cabe, puede ocupar hasta dos líneas en pantallas estrechas y se trunca visualmente después de la segunda; esto aplica a `.subsection-heading-copy` y `fold-native`. Las herramientas siguen a la derecha y sólo cambian de fila cuando falta ancho. El estado de Simulation Playback (Ready/Playing/Paused/Completed y porcentaje) va debajo de la descripción, no junto a ella.
+- **Subsección y descripción:** el título siempre ocupa su propia línea y la descripción se presenta en la siguiente. En escritorio amplio (más de 1100 px), la descripción conserva una sola línea; en pantallas de 1100 px o menos puede ocupar hasta dos líneas, truncándose después de la segunda; esto aplica a `.subsection-heading-copy` y `fold-native`. Las herramientas siguen a la derecha y sólo cambian de fila cuando falta ancho. El estado de Simulation Playback (Ready/Playing/Paused/Completed y porcentaje) va debajo de la descripción, no junto a ella.
 - **Simulation Playback:** en su encabezado sólo se muestran el estado de ejecución (Ready/Playing/Paused/Completed) y el porcentaje de avance; los frames, la frecuencia FPS y los tiempos de renderizado/calculo no se muestran al usuario final. Las mediciones técnicas internas permanecen disponibles sin alterar la simulación.
 - **KPI destacado (eficiencias):** además de la clase `.metric-card--featured`, los selectores de `#simulation-playback-efficiencies #basic-efficiencies` tienen precedencia sobre estilos antiguos de Basic, para garantizar el borde superior primario, fondo y tamaño KPI de las dos tarjetas.
 - **Separador interno:** reutilizar `<fieldset class="subsection-fieldset"><legend class="subsection-divider">…</legend>` para controles agrupados; `Options` en Simulation 2D lo ejemplifica. El título del control es `.subsection-heading-title`.

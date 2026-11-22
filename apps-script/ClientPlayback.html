@@ -240,20 +240,29 @@
         var metric=document.createElement('div'),name=document.createElement('span'),value=document.createElement('b');
         name.textContent=label;value.dataset.efficiency=key;metric.append(name,value);efficiency.append(metric);
       });
-      card.querySelector('.live-equipment-zone').before(efficiency);
-      // Match the detailed state-duration information shown by Simulation 2D,
-      // while retaining the numerical playback speed sparkline and event controls.
+      // Same information groups as 2D: equipment summary (top), states and
+      // efficiency (compact side-by-side), plus the existing speed chart.
+      var detailGrid=document.createElement('div');
+      detailGrid.className='live-equipment-detail-grid';
       var statePanel=document.createElement('section');
       statePanel.className='live-equipment-state-details';
       var stateHeading=document.createElement('strong');
       stateHeading.textContent='States';
       var stateGrid=document.createElement('div');
       stateGrid.className='live-equipment-state-grid';
+      stateGrid.addEventListener('change',function(event){
+        if(event.target.matches('.st-time-unit'))card.dataset.stateTimeUnit=event.target.value;
+      });
       statePanel.append(stateHeading,stateGrid);
-      card.querySelector('.live-equipment-zone').before(statePanel);
+      var performanceGroup=document.createElement('section');
+      performanceGroup.className='live-equipment-performance-group';
+      var performanceHeading=document.createElement('strong');
+      performanceHeading.textContent='Equipment efficiency';
       var extraDetails=document.createElement('div');
       extraDetails.className='live-equipment-summary-details';
-      card.querySelector('.live-equipment-zone').before(extraDetails);
+      performanceGroup.append(performanceHeading,efficiency,extraDetails);
+      detailGrid.append(statePanel,performanceGroup);
+      card.querySelector('.live-equipment-zone').before(detailGrid);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');
       heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');title.before(heading);heading.append(symbol,title);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
@@ -320,12 +329,19 @@
         ['Stop transitions',formatNumber(unit.stopTransitionCount||0)]
       ];
       if(model.type!=='CONVEYOR'&&Number.isFinite(unit.estimatedResidenceSeconds)){
-        detailItems.push(['Residence time',formatNumber(unit.estimatedResidenceSeconds)+' s']);
+        detailItems.push(['Residence time',unit.estimatedResidenceSeconds,'time']);
       }
       extraDetails.replaceChildren();
       detailItems.forEach(function(entry){
         var block=document.createElement('div'),name=document.createElement('span'),value=document.createElement('b');
-        name.textContent=entry[0];value.textContent=entry[1];block.append(name,value);extraDetails.append(block);
+        name.textContent=entry[0];
+        if(entry[2]==='time'){
+          var timeOutput=STTimeControls.output(entry[1],{unit:card.dataset.residenceTimeUnit||'s',
+            scope:extraDetails,label:'Change residence time unit'});
+          timeOutput.querySelector('select').addEventListener('change',function(event){card.dataset.residenceTimeUnit=event.target.value;});
+          block.append(name,timeOutput);
+        }else{value.textContent=entry[1];block.append(name,value);}
+        extraDetails.append(block);
       });
       var stateDetails=card.querySelector('.live-equipment-state-grid');
       var stateDurations=unit.stateSeconds||{};
@@ -346,27 +362,10 @@
       states.forEach(function(key){
         var seconds=Number(stateDurations[key]||0);
         if(!seconds && !['RUNNING','STARVED','BLOCKED','FAILURE','STOPPED'].includes(key))return;
-        var cell=document.createElement('div'),label=document.createElement('span'),value=document.createElement('b');
+        var cell=document.createElement('div'),label=document.createElement('span');
         label.textContent=stateLabels[key]||key.replace(/_/g,' ').toLowerCase();
-        var units={s:1,min:60,h:3600,d:86400,wk:604800};
-        var selectedUnit=card.dataset.stateTimeUnit||'min';
-        var valueUnit=document.createElement('span');
-        valueUnit.className='time-output-value';
-        var unitMenu=document.createElement('select');
-        unitMenu.setAttribute('aria-label','Time unit for equipment states');
-        Object.keys(units).forEach(function(u){var option=document.createElement('option');option.value=u;option.textContent=u;unitMenu.append(option);});
-        unitMenu.value=selectedUnit;
-        value.textContent=formatNumber(seconds/units[selectedUnit]);
-        unitMenu.addEventListener('change',function(){
-          card.dataset.stateTimeUnit=unitMenu.value;
-          card.querySelectorAll('.live-equipment-state-grid .time-output-value').forEach(function(group){
-            var sec=Number(group.dataset.seconds);
-            group.querySelector('b').textContent=formatNumber(sec/units[unitMenu.value]);
-            group.querySelector('select').value=unitMenu.value;
-          });
-        });
-        valueUnit.dataset.seconds=String(seconds);
-        valueUnit.append(value,unitMenu);
+        var valueUnit=STTimeControls.output(seconds,{unit:card.dataset.stateTimeUnit||'min',
+          scope:stateDetails,label:'Change equipment state time unit'});
         cell.append(label,valueUnit);stateDetails.append(cell);
       });
       card.querySelector('.live-starved').textContent = formatMinutes(unit.starvedSeconds);

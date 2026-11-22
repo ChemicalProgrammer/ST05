@@ -3,7 +3,10 @@
     // rate-limited. Measurements are per-frame and never saved in case data.
     var playbackRenderStats={lastPaintAt:-Infinity,totalMs:0,frames:0,lastReportAt:0,
       windowStartedAt:0,windowFrames:0,observedFps:0};
-    var playbackRefreshIntervalMs=100; // 10 FPS, independent of display sampling and tick size
+    function playbackRefreshIntervalMs(){
+      var choice=Number(document.getElementById('run-display-fps')?.value||10);
+      return 1000/([5,10,20,30].includes(choice)?choice:10);
+    }
     function updatePlaybackPerformanceLabel(){
       var target=document.getElementById('playback-performance');
       if(!target)return;
@@ -72,7 +75,7 @@
       playbackClock={frame,offset,rate,started:performance.now()};
       var now=performance.now();
       var ending=!next&&!roundSession?.streaming;
-      if(ending||now-playbackRenderStats.lastPaintAt>=playbackRefreshIntervalMs
+      if(ending||now-playbackRenderStats.lastPaintAt>=playbackRefreshIntervalMs()
         ||playbackRenderStats.lastPaintAt===-Infinity){
         renderPlaybackFrame();
       }

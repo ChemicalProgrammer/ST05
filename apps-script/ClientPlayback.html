@@ -319,8 +319,13 @@
       var chartHeading=document.createElement('strong');chartHeading.className='numeric-equipment-chart-title';
       chartHeading.textContent='Speed trend';chartAside.append(chartHeading);
       chartAside.append(card.querySelector('.live-speed-cell'),card.querySelector('.live-equipment-controls'),card.querySelector('.live-equipment-stats'));
-      layout.append(detailGrid,chartAside);
-      card.querySelector('.live-equipment-card__row').before(visualHeader,layout);
+      // Left third: identity, state, OEE, chart and manual controls.
+      // Right two thirds: Overview, States, and Efficiency / Geometry.
+      var overviewSide=document.createElement('aside');
+      overviewSide.className='numeric-equipment-overview-side';
+      overviewSide.append(visualHeader,chartAside);
+      layout.append(overviewSide,detailGrid);
+      card.querySelector('.live-equipment-card__row').before(layout);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');
       heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');title.before(heading);heading.append(symbol,title);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
@@ -424,7 +429,8 @@
         }
         if(entry[2]==='time'){
           STTimeControls.setOutput(block.querySelector('.live-detail-time'),entry[1],{
-            unit:card.dataset.residenceTimeUnit||'s',scope:extraDetails,label:'Change residence time unit'});
+            unit:card.dataset.residenceTimeUnit||'s',scope:extraDetails,label:'Change residence time unit',
+            variant:'metric',valueClass:'numeric-time-value',unitClass:'numeric-time-unit',gap:2});
         }else block.querySelector('b').textContent=entry[1];
       });
       Array.prototype.forEach.call(extraDetails.children,function(el){if(!detailKeys[el.dataset.detailKey])el.remove();});
@@ -492,7 +498,10 @@
         el.classList.toggle('numeric-compact-key',Boolean(compactRows[type]?.has(index)));
         var slot=el.lastElementChild;
         if(type==='states'&&Number.isFinite(row[1])){
-          STTimeControls.setOutput(slot,row[1],{unit:card.dataset.stateTimeUnit||'s',scope:host,label:'Change equipment states unit'});
+          STTimeControls.setOutput(slot,row[1],{
+            unit:card.dataset.stateTimeUnit||'s',scope:host,label:'Change equipment states unit',
+            variant:'metric',valueClass:'numeric-time-value',unitClass:'numeric-time-unit',gap:2
+          });
         }else{
           var value=row[1]===null||row[1]===undefined?'—':String(row[1]);
           if(type==='states'&&value==='—'&&row[0].startsWith('Ramp'))value='N/A';

@@ -1302,7 +1302,7 @@ html[data-header-view=vgraph] #results-body > #line-performance {
    Un solo inset del workspace evita marcos y márgenes anidados. */
 .workspace-content {
   /* Igualar el margen superior a los laterales del workspace. */
-  padding-block-start:var(--page-padding);
+  padding-block-start:var(--workspace-gutter);
 }
 .workspace-content > section.card {
   background:transparent;
@@ -1350,7 +1350,7 @@ html[data-ui-mode=basic] #basic-run-options.fold-card {
 
 /* En pantallas estrechas, el inset superior coincide con el margen lateral. */
 @media(max-width:760px){
-  .workspace-content {padding-block-start:var(--space-3);}
+  .workspace-content {padding-block-start:var(--workspace-gutter);}
 }
 </style>
 

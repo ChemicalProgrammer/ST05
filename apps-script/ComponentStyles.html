@@ -15,7 +15,12 @@
   padding:var(--space-3);min-width:0;
 }
 .metric-card--featured > strong {display:block;font-size:var(--font-kpi);line-height:1.15;margin-top:var(--space-2);font-variant-numeric:tabular-nums;}
+/* Escenarios conservan franjas propias según la categoría CAPEX. */
 .metric-card--scenario {border-inline-start:var(--state-border-width) solid var(--accent);}
+.scenario-tier-grid > .metric-card--scenario {border-inline-start-color:var(--muted);}
+.scenario-tier-grid > .metric-card--scenario:has(.analysis-capex[data-tier=ZERO]) {border-inline-start-color:var(--capex-zero);}
+.scenario-tier-grid > .metric-card--scenario:has(.analysis-capex[data-tier=MEDIUM]) {border-inline-start-color:var(--capex-medium);}
+.scenario-tier-grid > .metric-card--scenario:has(.analysis-capex[data-tier=HIGH]) {border-inline-start-color:var(--capex-high);}
 .metric-card--status {background:var(--surface-soft);}
 #simulation-playback-metrics > article > span {display:block;font-size:var(--font-secondary);color:var(--muted);}
 #simulation-playback-metrics > article > strong {

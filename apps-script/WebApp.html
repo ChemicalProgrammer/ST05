@@ -244,8 +244,10 @@
 <label data-duration-method="DATES" class="hidden">Start<input id="run-start-at" type="datetime-local" step="1"></label><label data-duration-method="DATES" class="hidden">End<input id="run-end-at" type="datetime-local" step="1"></label><label data-duration-method="DATES" class="hidden">Time zone<input id="run-time-zone" value="America/Mexico_City"></label>
 <label data-duration-method="SHIFTS">Number of shifts<input id="settings-shift-count" type="number" min="1" max="10000" step="1" value="1"></label>
 <label>Hours per shift<input id="run-shift-hours" type="number" min="0.25" max="24" step="0.25" value="8"></label>
-<label><?= __ST_TEXT__('batch.rounds') ?><input id="run-rounds" type="number" min="1" max="100" step="1" value="1"></label></div><label class="checkbox-label" for="run-reliability-enabled" title="Aplica solo a esta simulación. Al desmarcar, se desactivan las fallas y reparaciones por MTBF/MTTR; los microparos y perfiles de arranque configurados permanecen activos."><input id="run-reliability-enabled" type="checkbox" checked><span>Enable failures and repairs (MTBF / MTTR)</span></label>
-<div class="simulation-run-inclusions">
+<label><?= __ST_TEXT__('batch.rounds') ?><input id="run-rounds" type="number" min="1" max="100" step="1" value="1"></label></div><div class="simulation-run-inclusions">
+  <label class="checkbox-label" for="run-reliability-enabled" title="Deactivate stochastic failures and repairs without deleting MTBF / MTTR values.">
+    <input id="run-reliability-enabled" type="checkbox" checked><span>Enable failures and repairs (MTBF / MTTR)</span>
+  </label>
   <label class="checkbox-label" for="run-events-enabled" title="Include scheduled equipment control events for this simulation. Existing events are preserved when unchecked.">
     <input id="run-events-enabled" type="checkbox"><span>Include control events</span>
   </label>

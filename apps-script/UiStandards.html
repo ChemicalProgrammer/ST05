@@ -1347,6 +1347,11 @@ html[data-ui-mode=basic] #basic-run-options.fold-card {
   margin-block-start:var(--subsection-gap);
 }
 
+
+/* En pantallas estrechas, el inset superior coincide con el margen lateral. */
+@media(max-width:760px){
+  .workspace-content {padding-block-start:var(--space-3);}
+}
 </style>
 
 

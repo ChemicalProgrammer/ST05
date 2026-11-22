@@ -150,12 +150,12 @@ test('El encabezado es compacto, el estado no revela frames y las eficiencias mu
   assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?align-items:stretch;flex-direction:column;flex-wrap:nowrap/);
   assert.match(ui,/-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2/);
   assert.match(ui,/\.fold-native > summary \.subsection-heading-copy \{[\s\S]*?flex-direction:column;flex-wrap:nowrap/);
-  assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status \{[\s\S]*?margin:var\(--space-1\) 0 0/);
+  assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status \{[\s\S]*?margin:0;[\s\S]*?white-space:nowrap/);
   assert.match(ui,/\.fold-heading > div:has\(> h3 > \.fold-toggle\)/);
   assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status/);
   assert.match(ui,/#simulation-playback #playback-performance \{display:none!important;\}/);
   assert.match(web,/id="playback-performance"[^>]*aria-hidden="true" hidden/);
-  assert.match(playback,/setPlaybackStatus\(state\.run\.playing\?'Playing':\(time>0\?'Paused':'Ready'\)\)/);
+  assert.match(playback,/setPlaybackStatus\(state\.run\.playing\?'Playing':\(sample\.virtualSecond>0\?'Paused':'Ready'\)\)/);
   assert.doesNotMatch(playback,/setPlaybackStatus\([^\n]*client\.s_frame/);
   assert.match(style,/#simulation-playback-efficiencies #basic-efficiencies > \.metric-card--featured/);
   assert.match(style,/border-top:4px solid var\(--accent\)!important/);

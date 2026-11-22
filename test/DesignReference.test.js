@@ -120,3 +120,22 @@ test('Las unidades tienen un slot fijo y las subsecciones muestran descripciones
   const descriptions=(web.match(/class="subsection-description"/g)||[]).length;
   assert.ok(descriptions>=13,'Las subsecciones principales tienen descripción');
 });
+
+test('El encabezado es compacto, el estado no revela frames y las eficiencias muestran KPI destacado',()=>{
+  const web=fs.readFileSync('apps-script/WebApp.html','utf8');
+  const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
+  const style=fs.readFileSync('apps-script/ComponentStyles.html','utf8');
+  const playback=fs.readFileSync('apps-script/ClientPlayback.html','utf8');
+  assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?flex-direction:row;flex-wrap:wrap/);
+  assert.match(ui,/\.fold-heading > div:has\(> h3 > \.fold-toggle\)/);
+  assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status/);
+  assert.match(ui,/#simulation-playback #playback-performance \{display:none!important;\}/);
+  assert.match(web,/id="playback-performance"[^>]*aria-hidden="true" hidden/);
+  assert.match(playback,/setPlaybackStatus\(state\.run\.playing\?'Playing':\(time>0\?'Paused':'Ready'\)\)/);
+  assert.doesNotMatch(playback,/setPlaybackStatus\([^\n]*client\.s_frame/);
+  assert.match(style,/#simulation-playback-efficiencies #basic-efficiencies > \.metric-card--featured/);
+  assert.match(style,/border-top:4px solid var\(--accent\)!important/);
+  assert.match(style,/#simulation-playback-efficiencies #basic-efficiencies > \.metric-card--featured > strong/);
+  const cards=web.split('id="simulation-playback-metrics"')[1].split('</div>')[0];
+  assert.equal((cards.match(/metric-card--result/g)||[]).length,10);
+});

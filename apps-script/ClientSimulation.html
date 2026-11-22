@@ -340,7 +340,7 @@
     function syncRunControls(){
       var locked=runControlsLocked();
       STReports.bindChartExports(state.run.result,state.activeCase,activePersistentSimulation(),state.run.roundIndex+1);
-      ['run-initial-format','duration-mode','run-duration','run-sample-interval','run-seed','run-rounds','run-shift-hours','run-shift-count','add-control-event','open-event-generator'].forEach(function(id){document.getElementById(id).disabled=locked||(id==='run-duration'&&document.getElementById('duration-mode').value==='SHIFTS');});
+      ['run-initial-format','duration-mode','run-duration','run-sample-interval','run-sample-interval-unit','run-seed','run-rounds','run-shift-hours','run-shift-count','add-control-event','open-event-generator'].forEach(function(id){document.getElementById(id).disabled=locked||(id==='run-duration'&&document.getElementById('duration-mode').value==='SHIFTS');});
       document.querySelectorAll('#event-time-tools input,#event-time-tools select,#event-time-tools button,#control-events input,#control-events select,#control-events button').forEach(function(control){control.disabled=locked;});
       document.querySelectorAll('[data-control]').forEach(function(button){button.disabled=document.getElementById(button.dataset.control).disabled;});
       var playButton=document.getElementById('play-simulation');
@@ -361,7 +361,13 @@
       document.getElementById('run-rounds').value=run.rounds||1;
       syncDurationControls();
       document.getElementById('run-duration').value = run.durationSeconds ?? document.getElementById('run-duration').defaultValue;
-      document.getElementById('run-sample-interval').value = run.sampleEverySeconds ?? document.getElementById('run-sample-interval').defaultValue;
+      var sampleUnit=run.sampleDisplayUnit||'SECONDS';
+      var sampleSelector=document.getElementById('run-sample-interval-unit');
+      sampleSelector.value=STTimeControls.inputFactors[sampleUnit]?sampleUnit:'SECONDS';
+      var savedSample=Number(run.sampleEverySeconds);
+      document.getElementById('run-sample-interval').value=Number.isFinite(savedSample)&&savedSample>0
+        ?String(Number(STTimeControls.inputValue(savedSample,sampleSelector.value).toPrecision(12)))
+        :document.getElementById('run-sample-interval').defaultValue;
       document.getElementById('run-seed').value = run.seed ?? document.getElementById('run-seed').defaultValue;
       STRunOptions.apply(run);
     }
@@ -756,7 +762,9 @@
     function readRunConfiguration() {
       var extras;try{extras=STRunOptions.read();}catch(error){showError(error);return null;}
       var durationSeconds = extras.durationSeconds;
-      var sampleEverySeconds = Number(document.getElementById('run-sample-interval').value);
+      var sampleDisplayUnit=document.getElementById('run-sample-interval-unit').value;
+      var sampleEverySeconds=STTimeControls.inputSeconds(
+        document.getElementById('run-sample-interval').value,sampleDisplayUnit);
       var seed = Number(document.getElementById('run-seed').value);
       var durationMode=document.getElementById('duration-mode').value;
       var shiftHours=Number(document.getElementById('run-shift-hours').value),shiftCount=Number(document.getElementById('run-shift-count').value),rounds=Number(document.getElementById('run-rounds').value);
@@ -782,6 +790,7 @@
         durationSeconds: durationSeconds,
         tickSeconds: 0.25,
         sampleEverySeconds: sampleEverySeconds,
+        sampleDisplayUnit: sampleDisplayUnit,
         seed: seed,
         eventTimeUnit:activePersistentSimulation()?.dynamicConfig?.eventTimeUnit,eventTimeOrigin:activePersistentSimulation()?.dynamicConfig?.eventTimeOrigin,
         commands: state.run.commands.map(function(command) {

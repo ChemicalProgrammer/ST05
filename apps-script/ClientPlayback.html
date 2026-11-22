@@ -318,7 +318,14 @@
       var chartAside=document.createElement('aside');chartAside.className='numeric-equipment-chart-side';
       var chartHeading=document.createElement('strong');chartHeading.className='numeric-equipment-chart-title';
       chartHeading.textContent='Speed trend';chartAside.append(chartHeading);
-      chartAside.append(card.querySelector('.live-speed-cell'),card.querySelector('.live-equipment-controls'),card.querySelector('.live-equipment-stats'));
+      chartAside.append(card.querySelector('.live-speed-cell'));
+      // Controls are an independent vertical dock inside the equipment identity panel.
+      // The old duplicate counter elements stay in the hidden legacy row because
+      // the playback updater still targets them; States is their visible source.
+      var controlDock=card.querySelector('.live-equipment-controls');
+      controlDock.classList.add('numeric-equipment-control-dock');
+      visualHeader.append(controlDock);
+      card.querySelector('.live-equipment-card__row').append(card.querySelector('.live-equipment-stats'));
       // Left third: identity, state, OEE, chart and manual controls.
       // Right two thirds: Overview, States, and Efficiency / Geometry.
       var overviewSide=document.createElement('aside');
@@ -345,6 +352,9 @@
       heading.append(cardToggle);
       card.dataset.cardCollapsed='false';
       cardToggle.addEventListener('click',function(){
+        // Freeze the current height before changing the layout so the card
+        // does not jump when the detail sections are hidden or restored.
+        if(card._cardAnimation){card._cardAnimation.cancel();card._cardAnimation=null;}
         var before=card.getBoundingClientRect().height;
         var compact=card.dataset.cardCollapsed!=='true';
         card.dataset.cardCollapsed=String(compact);
@@ -352,25 +362,27 @@
         cardToggle.setAttribute('aria-label',compact?'Expand equipment details':'Collapse equipment details');
         cardToggle.title=compact?'Expand equipment details':'Collapse equipment details';
         var after=card.getBoundingClientRect().height;
-        if(card._cardAnimation)card._cardAnimation.cancel();
-        if(Math.abs(after-before)>1&&typeof card.animate==='function'
-          &&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-          card._cardAnimation=card.animate([{height:before+'px'},{height:after+'px'}],
-            {duration:260,easing:'cubic-bezier(.2,.75,.25,1)'});
-          card._cardAnimation.onfinish=function(){card._cardAnimation=null;};
-          card._cardAnimation.oncancel=function(){card._cardAnimation=null;};
-        }
-        window.requestAnimationFrame(function(){
-          if(state.run.result?.samples?.[state.run.sampleIndex]){
-            var model=state.activeCase?.equipment?.find(function(item){return item.id===equipmentId;});
-            var index=state.activeCase?.equipment?.findIndex(function(item){return item.id===equipmentId;});
-            if(model&&index>=0)drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,model);
+        function redraw(){
+          var index=state.activeCase?.equipment?.findIndex(function(item){return item.id===equipmentId;});
+          if(Number.isInteger(index)&&index>=0&&state.run.result?.samples?.[state.run.sampleIndex]){
+            var model=state.activeCase.equipment[index];
+            drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,model);
           }
-        });
+        }
+        var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if(Math.abs(after-before)>1&&typeof card.animate==='function'&&!reduced){
+          var animation=card.animate(
+            [{height:before+'px',clipPath:'inset(0 0 0 0)'},
+             {height:after+'px',clipPath:'inset(0 0 0 0)'}],
+            {duration:300,easing:'cubic-bezier(.22,.7,.22,1)'});
+          card._cardAnimation=animation;
+          animation.onfinish=function(){if(card._cardAnimation===animation)card._cardAnimation=null;redraw();};
+          animation.oncancel=function(){if(card._cardAnimation===animation)card._cardAnimation=null;redraw();};
+        }else window.requestAnimationFrame(redraw);
       });
       var residence=document.createElement('span');residence.className='live-residence';residence.hidden=true;
       card.querySelector('.live-processed').after(residence);
-      var losses=document.createElement('button');losses.className='ghost loss-toggle';losses.type='button';losses.innerHTML=STIcons.svg('chart');losses.title=__ST_TEXT__('client.time_losses');losses.setAttribute('aria-label',__ST_TEXT__('client.time_losses'));losses.setAttribute('aria-expanded','false');losses.onclick=function(){var open=card.dataset.losses!=='open';card.dataset.losses=open?'open':'closed';card.classList.toggle('show-losses',open);losses.setAttribute('aria-expanded',String(open));if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}};card.querySelector('.live-equipment-controls').appendChild(losses);
+      var losses=document.createElement('button');losses.className='ghost loss-toggle';losses.hidden=true;losses.type='button';losses.innerHTML=STIcons.svg('chart');losses.title=__ST_TEXT__('client.time_losses');losses.setAttribute('aria-label',__ST_TEXT__('client.time_losses'));losses.setAttribute('aria-expanded','false');losses.onclick=function(){var open=card.dataset.losses!=='open';card.dataset.losses=open?'open':'closed';card.classList.toggle('show-losses',open);losses.setAttribute('aria-expanded',String(open));if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}};card.querySelector('.live-equipment-controls').appendChild(losses);
       [['run','play',__ST_TEXT__('client.run_resume')],['pause','pause',__ST_TEXT__('client.pause')],['stop','stop',__ST_TEXT__('client.planned_stop')],['emergency','warning',__ST_TEXT__('client.emergency_stop')],['reset','refresh',__ST_TEXT__('client.reset_run')]].forEach(function(pair){var button=card.querySelector('.live-control-'+pair[0]);button.innerHTML=STIcons.svg(pair[1]);button.setAttribute('aria-label',pair[2]);button.dataset.actionLabel=pair[2];button.title=pair[2];});
       bindLiveEquipmentControl(card.querySelector('.live-control-run'), equipmentId, 'RUN');
       bindLiveEquipmentControl(card.querySelector('.live-control-pause'), equipmentId, 'PAUSE');

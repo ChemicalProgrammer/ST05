@@ -8,16 +8,11 @@ window.STCharts=function(state,formatNumber){
     function drawSimulationChart() {
       var canvas = document.getElementById('simulation-chart');
       if (!canvas || !state.run.result || state.uiView !== 'results') return;
-      var bounds = canvas.getBoundingClientRect();
-      if (!bounds.width) return;
-      var width = Math.max(1, Math.floor(bounds.width));
-      var height = parseFloat(token('--chart-height'));
-      var ratio = window.devicePixelRatio || 1;
-      canvas.width = width * ratio;
-      canvas.height = height * ratio;
-      var context = canvas.getContext('2d');
-      context.scale(ratio, ratio);
-      context.clearRect(0, 0, width, height);
+      var height=parseFloat(token('--chart-height'));
+      var drawing=prepareLineCanvas(canvas,height);
+      if(!drawing)return;
+      var width=drawing.width;
+      var context=drawing.context;
 
       var padding = chartPadding();
       var plotWidth = width - padding.left - padding.right;

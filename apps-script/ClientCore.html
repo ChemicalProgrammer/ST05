@@ -220,8 +220,10 @@
       document.getElementById('delete-all-control-events').onclick=function(){deleteControlEventSelection(true);};
       document.getElementById('select-all-control-events').onchange=function(){if(runControlsLocked())return;var checked=this.checked;syncEventSelection();selectedControlEvents.clear();if(checked)allEditableControlEvents().forEach(e=>selectedControlEvents.add(e));controlEventAnchor=null;syncEventSelection();};
       document.getElementById('add-product-changeover').addEventListener('click',function(){if(runControlsLocked())return;var events=state.run.plannedStops||(state.run.plannedStops=[]),start=events.reduce(function(t,e){return Math.max(t,e.endSeconds);},0);events.push({category:'changeoverMinutes',startSeconds:start,endSeconds:start+60,restartPolicy:'RESTART'});document.getElementById('run-events-enabled').checked=true;setControlEventsExpanded(true);renderControlEvents();markCaseDirty();syncRunControls();});
-      document.getElementById('run-simulation').addEventListener('click', runSimulation);
-      document.getElementById('play-simulation').addEventListener('click', startPlayback);
+      document.getElementById('play-simulation').addEventListener('click',function(){
+        if(!state.run.result){runSimulation();return;}
+        startPlayback();
+      });
       document.getElementById('pause-simulation').addEventListener('click', pausePlayback);
       document.getElementById('stop-simulation').addEventListener('click', stopSimulationPlayback);
       document.getElementById('reset-playback').addEventListener('click', resetPlayback);

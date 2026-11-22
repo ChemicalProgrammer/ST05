@@ -1,7 +1,23 @@
 <style>
-#realdata-panel .real-data-toolbar { display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;min-width:0;margin-inline-start:auto; }
-#realdata-panel .real-data-toolbar > select { width:auto;min-width:min(100%,180px);max-width:100%; }
-#realdata-panel .real-data-block { margin-block:var(--space-4);min-width:0; }
+/* Registro: selector + toolbar son un único grupo horizontal.
+   La barra solo se divide cuando el contenedor realmente es estrecho. */
+#realdata-panel .real-data-block-heading {display:flex;align-items:center;flex-wrap:wrap;row-gap:var(--space-2);}
+#realdata-panel .real-data-toolbar {
+  display:flex;align-items:center;justify-content:flex-end;
+  gap:var(--space-2);flex-wrap:nowrap;min-width:0;max-width:100%;
+  margin-inline-start:auto;
+}
+#realdata-panel .real-data-toolbar .button-row {
+  display:flex;align-items:center;flex-wrap:nowrap;gap:var(--space-1);flex:0 0 auto;
+}
+#realdata-panel .real-data-toolbar .button-row > :is(button,details) {flex:0 0 auto;}
+@media(max-width:760px){
+  #realdata-panel .real-data-toolbar {flex-wrap:wrap;justify-content:flex-start;row-gap:var(--space-2);}
+  #realdata-panel .real-data-toolbar > select {flex:1 1 150px;}
+}
+#realdata-panel .real-data-toolbar > select { flex:0 1 185px;width:185px;min-width:125px;max-width:100%; }
+#realdata-panel .real-data-block { margin-block:0;min-width:0; }
+#realdata-panel .real-data-block + .real-data-block {margin-block-start:var(--subsection-gap);}
 #realdata-panel .real-data-block h3:not(:has(> .fold-toggle)) { margin:0 0 var(--space-3); }
 #realdata-panel .real-data-section-title::before,
 #realdata-panel .real-data-section-title::after { content:none; }

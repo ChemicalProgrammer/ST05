@@ -350,7 +350,9 @@
       var enabledReliability=state.run.configuration?.reliabilityEnabled!==false
         &&document.getElementById('run-reliability-enabled')?.checked!==false
         &&state.run.result?.run?.reliabilityEnabled!==false;
-      var reliabilityVisible=enabledReliability&&Number.isFinite(reliability?.mtbfMinutes)
+      var reliabilityVisible=enabledReliability
+        &&state.run.configuration?.reliabilityCategories?.general!==false
+        &&Number.isFinite(reliability?.mtbfMinutes)
         &&reliability.mtbfMinutes>0&&Number.isFinite(reliability?.mttrMinutes)&&reliability.mttrMinutes>0;
       card.querySelector('.reliability-label').textContent=reliabilityVisible
         ?__ST_TEXT__('client.mtbf')+formatNumber(reliability.mtbfMinutes)+__ST_TEXT__('client.min_mttr')+formatNumber(reliability.mttrMinutes)+__ST_TEXT__('client.min'):'';

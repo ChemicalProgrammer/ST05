@@ -8,7 +8,7 @@ test('1000x skips samples and 1x resumes from the paused virtual time without ch
  const samples=Array.from({length:101},(_,i)=>({virtualSecond:i}));
  const state={run:{result:{samples,summary:{outputCount:77}},sampleIndex:0,playing:true}};
  const before=JSON.stringify(state.run.result);let callback,now=0,delay,finished=0,captured=0,saveChanges=0;
- const context={state,playbackClock:null,roundSession:null,captureSimulationView(){captured++;},autosave:{change(){saveChanges++;}},performance:{now:()=>now},document:{getElementById:()=>({value:'1000'})},window:{setTimeout:(fn,ms)=>{callback=fn;delay=ms;return 1;},clearTimeout(){}},renderPlaybackFrame(){},syncRunControls(){},setPlaybackStatus(){},finishRoundSession(){finished++;}};
+ const context={state,playbackClock:null,playbackMetricTimer:null,roundSession:null,captureSimulationView(){captured++;},autosave:{change(){saveChanges++;}},performance:{now:()=>now},document:{getElementById:()=>({value:'1000'})},window:{setTimeout:(fn,ms)=>{callback=fn;delay=ms;return 1;},clearTimeout(){}},renderPlaybackFrame(){},syncRunControls(){},setPlaybackStatus(){},finishRoundSession(){finished++;}};
  vm.createContext(context);
  for(const name of ['findSampleIndexAtOrBefore','schedulePlaybackStep','playbackElapsed','stopPlaybackTimer']){
   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);

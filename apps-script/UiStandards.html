@@ -1294,6 +1294,58 @@ html[data-header-view=vgraph] #results-body > #line-performance {
   #simulation2d-panel { padding-block-start:var(--space-3); }
 }
 
+
+/* ─── Subsección: superficie principal sin lienzo exterior ───
+   Los paneles de navegación no dibujan una tarjeta blanca propia; solo
+   posicionan sus Subsecciones. El color original del lienzo (--surface)
+   se reutiliza en cada .fold-card. Los controles internos se conservan.
+   Un solo inset del workspace evita marcos y márgenes anidados. */
+.workspace-content {
+  padding-block-start:var(--panel-padding);
+}
+.workspace-content > section.card {
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  padding:0;
+  margin:0;
+}
+.workspace-content > #simulation2d-panel {
+  padding:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+}
+.workspace-content .fold-card,
+.workspace-content .fold-card.fold-native {
+  background:var(--surface);
+  border:var(--border-width) solid var(--line);
+  border-radius:var(--radius-md);
+  box-shadow:none;
+}
+/* La Subsección Basic de Equipment/Formats es también una tarjeta estándar. */
+html[data-ui-mode=basic] #basic-run-options.fold-card {
+  margin:0;
+  padding:var(--subsection-padding);
+  background:var(--surface);
+  border:var(--border-width) solid var(--line);
+  border-radius:var(--radius-md);
+}
+/* Ningún primer bloque debe desplazar el contenido otra vez hacia abajo. */
+#simulation2d-panel > :is(.fold-card,.fold-native):first-child,
+#editor-panel > :is(.fold-card,.fold-native):first-child,
+#run-panel > :is(.fold-card,.fold-native):first-child,
+#results-panel > :is(.fold-card,.fold-native):first-child {
+  margin-block-start:0;
+}
+/* Los bloques independientes se separan por un solo espacio de Subsección. */
+#run-panel > :is(.fold-card,.fold-native) + :is(.fold-card,.fold-native),
+#editor-panel > :is(.fold-card,.fold-native) + :is(.fold-card,.fold-native),
+#results-body > :is(.fold-card,.fold-native) + :is(.fold-card,.fold-native) {
+  margin-block-start:var(--subsection-gap);
+}
+
 </style>
 
 

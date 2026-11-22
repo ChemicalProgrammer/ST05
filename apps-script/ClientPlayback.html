@@ -438,7 +438,7 @@
       var conveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
       var factor=unit.internalInputBottleFactor||1,capacity=unit.internalCapacityBottles??model.processData?.equipment?.internalCapacityBottles;
       var flowUnit=unit.unitOfFlow==='CASES'?'cpm':'bpm';
-      var speed=conveyor?belt?.speedMmPerSecond*0.06:(unit.designSpeedPerSecond??model.nominalRatePerSecond)*60;
+      var speed=conveyor?(Number.isFinite(zone?.geometry?.conveyorSpeedMmPerSecond)?zone.geometry.conveyorSpeedMmPerSecond*0.06:null):(unit.designSpeedPerSecond??model.nominalRatePerSecond)*60;
       var rows=[['State',availabilityState.replace(/_/g,' ')],
         ['Design speed',Number.isFinite(speed)?formatNumber(speed):'—',conveyor?'m/min':flowUnit],
         ['Flow',formatNumber((unit.actualRatePerSecond||0)*60),flowUnit],
@@ -466,7 +466,7 @@
       var lbu=first(cal.overflowLengthMm),lba=first(cal.usefulAccumulationLengthMm);
       var rows=[['Discharge',mm(first(geo.dischargeLengthMm,input.dischargeLengthMm)),'mm'],
         ['Coding',mm(first(geo.codingLengthMm,input.codingLengthMm)),'mm'],
-        ['Overflow',mm(lbu),'mm'],['Lrec',mm(first(cal.recoveryLengthMm)),'mm'],
+        ['Overflow',mm(first(cal.requiredOverflowLengthMm,geo.overflowLengthMm)),'mm'],['Lrec',mm(first(cal.recoveryLengthMm)),'mm'],
         ['Lp',mm(first(geo.primeLengthMm,input.primeLengthMm)),'mm'],
         ['Lbu',mm(lbu),'mm'],['Accumulation Zone (Lba)',mm(lba),'mm'],
         ['Lact',mm(first(geo.usableLengthMm,zone?.usableLengthMm)),'mm'],

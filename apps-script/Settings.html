@@ -1,6 +1,6 @@
 <script>
 window.STSettings = (function() {
-  var save, flushCase, removeKey, resetApp, resetting=false, applyMode, caseProvider, caseChanged, promptDefinitions=[], modeCount=0, modeStarted=0, timer, version=0, savedVersion=0, sending=false, removing=false, hasKey=false, modeChanging=false, lastFocus, failure=null, waiters=[];
+  var settingsCaseNameOnOpen='', save, flushCase, removeKey, resetApp, resetting=false, applyMode, caseProvider, caseChanged, promptDefinitions=[], modeCount=0, modeStarted=0, timer, version=0, savedVersion=0, sending=false, removing=false, hasKey=false, modeChanging=false, lastFocus, failure=null, waiters=[];
   var readModels,modelList=[],modelsLoaded=false,modelsLoading=false,modelsTicket=0;
   function el(id){return document.getElementById(id);}
 
@@ -60,7 +60,11 @@ window.STSettings = (function() {
   function colorColumns(container,label){return [0,1].map(function(){var table=document.createElement('table');table.className='settings-color-table';var head=document.createElement('thead'),row=document.createElement('tr');[label,'Color / HEX'].forEach(function(text){var th=document.createElement('th');th.scope='col';th.textContent=text;row.append(th);});head.append(row);var body=document.createElement('tbody');table.append(head,body);container.append(table);return body;});}
   function renderCaseCharts(){var record=activeCase();applyCaseCharts();el('settings-case-note').classList.toggle('hidden',!!record);el('settings-case-options-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-chart-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-vgraph-section').classList.toggle('hidden',!record);el('settings-chart-colors').replaceChildren();el('settings-vgraph-colors').replaceChildren();STPreferences.applyJsonFields(document.documentElement.dataset.uiMode);if(!record)return;var equipmentList=record.equipment||[],columns=colorColumns(el('settings-chart-colors'),'Equipment'),split=Math.ceil(equipmentList.length/2),graphColumns=colorColumns(el('settings-vgraph-colors'),'Series');equipmentList.forEach(function(equipment,index){colorButton(columns[index<split?0:1],(index+1)+'. '+equipment.name,'--series-'+(index%13),index%13,'chartColors');});colorButton(graphColumns[0],__ST_TEXT__('performance.normal'),'--vgraph-current','current','vgraphColors');colorButton(graphColumns[1],__ST_TEXT__('performance.recommended'),'--vgraph-recommended','recommended','vgraphColors');}
   function refresh(){modelControls();el('settings-unsaved').dataset.state=failure?'error':sending?'saving':version>savedVersion?'pending':'saved';el('settings-factory-reset').disabled=!!activeCase()||sending||resetting;el('settings-unsaved').textContent=failure?__ST_TEXT__('autosave.error'):sending?__ST_TEXT__('autosave.saving'):version>savedVersion?__ST_TEXT__('autosave.pending'):__ST_TEXT__('autosave.saved');el('settings-retry').classList.toggle('hidden',!failure);}
-  function open(){var dialog=el('settings-dialog');if(dialog.open)return;lastFocus=document.activeElement;resetModeSelector();renderEngine();renderCaseCharts();var tab=document.querySelector('[data-settings-tab][aria-selected="true"]');selectTab(tab?.dataset.settingsTab||'appearance');refresh();dialog.showModal();}
+  function open(){var dialog=el('settings-dialog');if(dialog.open)return;lastFocus=document.activeElement;
+    // Sync the existing case name whenever settings opens, even if the editor failed to render.
+    var record=activeCase();settingsCaseNameOnOpen=record?.name||'';
+    el('case-name').value=settingsCaseNameOnOpen;
+    resetModeSelector();renderEngine();renderCaseCharts();var tab=document.querySelector('[data-settings-tab][aria-selected="true"]');selectTab(tab?.dataset.settingsTab||'appearance');refresh();dialog.showModal();}
   function renderRateLossSettings(){
     var target=el('settings-rate-loss-categories');if(!target)return;
     target.replaceChildren();
@@ -126,7 +130,15 @@ window.STSettings = (function() {
   }
   function flush(){return new Promise(function(resolve){waiters.push(resolve);write();});}
   async function close(){
-    if(modeChanging||removing||resetting||!await flush())return;
+    if(modeChanging||removing||resetting)return;
+    // An empty draft must not trap the user in Settings or erase a saved name.
+    var record=activeCase(),nameInput=el('case-name');
+    if(record&&!nameInput.value.trim()){
+      nameInput.value=record.name?.trim()?record.name:settingsCaseNameOnOpen;
+      if(!record.name?.trim()&&settingsCaseNameOnOpen.trim())record.name=settingsCaseNameOnOpen;
+    }
+    var settingsFlushed=await flush();
+    if(!settingsFlushed)el('settings-error').textContent=el('settings-error').textContent||'Settings could not be saved. Changes remain pending.';
     if(activeCase()) {
       var options=STPreferences.caseOptions(),seconds=Number(el('settings-autosave-seconds').value);
       if(!el('settings-save-section').classList.contains('hidden')) {
@@ -136,9 +148,10 @@ window.STSettings = (function() {
       options.seedPolicy=el('settings-seed-policy').value;
       STPreferences.setCaseOptions(options);
     }
-    if(flushCase && !el('settings-case-section').classList.contains('hidden')){
-      if(!el('case-editor-form').checkValidity()){selectTab('case');el('case-editor-form').reportValidity();return;}
-      try{await flushCase();}catch(error){el('settings-error').textContent=error.message;STErrors.capture('settings-error',error);return;}
+    if(settingsFlushed&&flushCase && !el('settings-case-section').classList.contains('hidden')){
+      if(el('case-editor-form').checkValidity()){
+        try{await flushCase();}catch(error){el('settings-error').textContent=error.message;STErrors.capture('settings-error',error);}
+      }else el('settings-error').textContent='The case name is required before saving changes.';
     }
     var changed=!el('settings-interface-section').classList.contains('hidden')&&el('settings-interface-mode').value!==(document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC');
     var mode=el('settings-interface-mode').value;

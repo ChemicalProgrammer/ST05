@@ -29,7 +29,12 @@
 }
 #conveyor-analysis-body tbody td {white-space:nowrap;font-variant-numeric:tabular-nums;}
 #conveyor-analysis-body thead th:not(:first-child) {
-  min-width:4rem;max-width:12rem;white-space:normal;text-align:right;
+  min-width:4rem;max-width:12rem;white-space:normal;text-align:center;
+}
+#conveyor-analysis-body .conveyor-analysis-format-note {
+  margin:0 0 var(--space-2);
+  font-size:var(--font-secondary);
+  overflow-wrap:anywhere;
 }
 #conveyor-analysis-body :is(td,th)[colspan] {
   width:auto;text-align:left;white-space:normal;
@@ -303,7 +308,9 @@ window.STConveyorAnalysis=(function(){
       parent.append(element);
       return element;
     }
-    function table(title,headers,verdict){
+    // Encabezados breves: la descripción completa de cada formato se muestra
+    // fuera de la tabla, para no forzar anchuras de columnas innecesarias.
+    function table(title,headers,verdict,profiles){
       const section=make(body,'section');
       const heading=make(section,'h3',title);
       heading.id='conveyor-analysis-section-'+body.children.length;
@@ -312,6 +319,12 @@ window.STConveyorAnalysis=(function(){
         badge.className='conveyor-analysis-verdict';
         badge.style.backgroundColor=verdictColors[verdict.status];
         badge.title=verdict.statusReason;
+      }
+      if(profiles?.length){
+        const note=make(section,'p',profiles.length===1
+          ?'Format: '+profiles[0].name
+          :profiles.map((profile,index)=>'Value '+(index+1)+': '+profile.name).join(' · '));
+        note.className='conveyor-analysis-format-note chart-note';
       }
       const wrapper=make(section,'div');
       wrapper.className='table-scroll';
@@ -343,7 +356,8 @@ window.STConveyorAnalysis=(function(){
     });
     if(!worksheet.profiles.length)make(body,'p','No applicable formats.');
     for(const [title,entries] of worksheet.profiles.length?rows:[]){
-      const formats=table(title,['Parameter',...worksheet.profiles.map(p=>p.name),'Unit']);
+      const formats=table(title,['Parameter',...worksheet.profiles.map((profile,index)=>
+        worksheet.profiles.length===1?'Value':'Value '+(index+1)),'Unit'],null,worksheet.profiles);
       for(const entry of entries){
         if(typeof entry==='string'){
           const heading=make(make(formats,'tr'),'th',entry);

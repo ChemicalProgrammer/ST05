@@ -126,7 +126,10 @@ test('El encabezado es compacto, el estado no revela frames y las eficiencias mu
   const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
   const style=fs.readFileSync('apps-script/ComponentStyles.html','utf8');
   const playback=fs.readFileSync('apps-script/ClientPlayback.html','utf8');
-  assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?flex-direction:row;flex-wrap:wrap/);
+  assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?align-items:stretch;flex-direction:column;flex-wrap:nowrap/);
+  assert.match(ui,/-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2/);
+  assert.match(ui,/\.fold-native > summary \.subsection-heading-copy \{[\s\S]*?flex-direction:column;flex-wrap:nowrap/);
+  assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status \{[\s\S]*?margin:var\(--space-1\) 0 0/);
   assert.match(ui,/\.fold-heading > div:has\(> h3 > \.fold-toggle\)/);
   assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status/);
   assert.match(ui,/#simulation-playback #playback-performance \{display:none!important;\}/);

@@ -541,7 +541,9 @@ window.STSimulation2D=(function(){
           kind:'machine',unit,length:1100,rate,bottlesPerUnit,designSpeedPerSecond,
           rampSeconds:item.restartRampUpSeconds??data.downstream?.rampUpTimeSeconds??0,
           primeRampSeconds:zones[index-1]?.primeSensorPositionMm!=null?zones[index-1].downstreamRampUpSeconds:undefined,
-          rampAfterRepair:data.downstream?.rampAfterRepair===true,failures:failuresFor(item,config),
+          rampAfterRepair:data.downstream?.rampAfterRepair===true,
+          configuredReliability:data.equipment?.stopInputs||item.noiseProfile?.reliability||null,
+          failures:failuresFor(item,config),
           startDelay:item.startupDelaySeconds??data.upstream?.startupTimeSeconds??0,batch};
       }
       const zone=zones[index]||{};
@@ -1011,6 +1013,21 @@ window.STSimulation2D=(function(){
     }else summary.push(['Inside',num(item.resident?.length??0)+' / '+num(item.capacityBottles/item.inputBottleFactor),item.inputUnit==='CASES'?'cases':'bottles'],
       ['Residence time',num(item.residenceSeconds),'s'],
       ['Repair ramp',item.rampAfterRepair?num(item.rampSeconds):'Off',item.rampAfterRepair?'s':'']);
+    // Reliability parameters describe enabled failure sources, not the
+    // observed MTBF/MTTR. Do not display them as active when failures are off.
+    if(!belt&&scheduleOptions.failures.checked){
+      const profiles=item.configuredReliability;
+      const active=profiles&&(Number.isFinite(profiles.mtbfMinutes)
+        ?[profiles]:Object.entries(profiles).filter(([category])=>schedule?.reliabilityCategories?.[category]!==false).map(([,value])=>value))
+        ||[];
+      const eligible=active.filter(p=>p&&p.mtbfMinutes>0&&p.mttrMinutes>0);
+      if(eligible.length===1){
+        summary.push(['MTBF',num(eligible[0].mtbfMinutes),'min'],['MTTR',num(eligible[0].mttrMinutes),'min']);
+      }else if(eligible.length>1){
+        eligible.forEach((profile,index)=>summary.push(['MTBF '+(index+1),num(profile.mtbfMinutes),'min'],
+          ['MTTR '+(index+1),num(profile.mttrMinutes),'min']));
+      }
+    }
     summary.push(['Own failures',belt?'N/A':num(item.failureCount??0),'']);
     const states=belt
       ? [duration('Empty','empty'),duration('Flowing','flowing'),duration('Accumulating','accumulating'),
@@ -1030,10 +1047,24 @@ window.STSimulation2D=(function(){
     const metrics=efficiency.calculate({
       runningSeconds,internalDowntimeSeconds:item.durations?.failure??0,goodProducts:produced,designSpeed
     });
-    const performance=efficiency.fields.map(([key,label])=>{
+    const durations=Object.values(item.durations||{}).reduce((total,value)=>total+(Number(value)||0),0);
+    const stoppedSeconds=(item.durations?.failure||0)+(item.durations?.stopped||0)
+      +(item.durations?.emergencyStop||0);
+    const activeSeconds=Math.max(0,durations);
+    const intrinsicAvailability=activeSeconds>0
+      ?Math.max(0,Math.min(1,1-stoppedSeconds/activeSeconds)):null;
+    const idealRunningOutput=designSpeed>0&&runningSeconds>0?designSpeed*runningSeconds:0;
+    const intrinsicPerformance=idealRunningOutput>0
+      ?Math.max(0,Math.min(1,produced/idealRunningOutput)):null;
+    // 2D has no reject stream: quality is currently 100%, matching the
+    // numerical engine's explicit quality assumption.
+    const intrinsicOee=intrinsicAvailability!==null&&intrinsicPerformance!==null
+      ?intrinsicAvailability*intrinsicPerformance:null;
+    const performance=[['OEE',num(intrinsicOee===null?NaN:intrinsicOee*100),'%']];
+    performance.push(...efficiency.fields.map(([key,label])=>{
       const throughput=key==='throughput',value=metrics[key];
       return [label,num(value===null?NaN:value*(throughput?60:100)),throughput?unit:'%'];
-    });
+    }));
     return [
       {column:0,title:item.name,rows:summary,showSignal:true},
       {column:1,title:'States',rows:states},

@@ -760,6 +760,44 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
   .live-equipment-card .live-equipment-performance-group .live-equipment-efficiency {grid-template-columns:minmax(0,1fr);}
 }
 
+
+/* Adaptive dense field layouts: 3+ columns whenever the actual group width permits. */
+.live-equipment-card .live-equipment-detail-grid :is(.live-equipment-2d-rows,.live-equipment-state-grid),
+.live-equipment-card .live-equipment-geometry-group .live-equipment-2d-rows,
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency {
+  display:grid!important;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,135px),1fr))!important;
+  gap:3px!important;
+}
+.live-equipment-card .live-equipment-detail-grid .live-equipment-2d-row,
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency > div {
+  min-height:22px; padding:2px 5px; gap:3px;
+}
+.live-equipment-card .live-equipment-detail-grid .live-equipment-2d-label,
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency span {
+  font-size:var(--font-caption); line-height:1.15;
+}
+.live-equipment-card .live-equipment-detail-grid > section {
+  overflow:hidden; will-change:height; contain:layout;
+}
+.live-equipment-card .live-equipment-detail-grid > section > button::after {content:none!important;}
+.live-equipment-card .live-equipment-detail-grid > section > button .numeric-section-title {
+  display:flex; align-items:center; gap:var(--space-1); min-width:0; flex:1 1 auto;
+}
+.live-equipment-card .numeric-collapse-chevron {
+  width:18px; height:18px; flex:0 0 18px; color:var(--accent);
+  transform:rotate(0deg); transition:transform 220ms cubic-bezier(.2,.75,.25,1),color 160ms ease;
+}
+.live-equipment-card .live-equipment-detail-grid > section:not([data-collapsed=true]) .numeric-collapse-chevron {
+  transform:rotate(180deg);
+}
+.live-equipment-card .live-equipment-detail-grid > section > button:hover .numeric-collapse-chevron {
+  color:var(--ink);
+}
+@media(prefers-reduced-motion:reduce) {
+  .live-equipment-card .numeric-collapse-chevron {transition:none!important;}
+}
+
 </style>
 
 

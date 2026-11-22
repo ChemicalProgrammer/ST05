@@ -4,9 +4,12 @@
       var activeSimulation = activePersistentSimulation();
       document.getElementById('editor-title').textContent = state.activeCase.name + (activeSimulation ? ' · ' + activeSimulation.name : '');
       document.getElementById('case-name').value = state.activeCase.name;
+      // Populate equipment before shell.sync (inside renderEditorMeta).
+      // The shell may switch Equipment/Conveyors presentation and must not
+      // see an empty equipment list while restoring the saved case.
+      renderEquipment();
       renderEditorMeta();
       renderCaseDataNote();
-      renderEquipment();
       renderRawJson();
       renderRunWorkspace();
     }

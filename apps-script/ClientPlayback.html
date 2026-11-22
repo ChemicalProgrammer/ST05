@@ -331,18 +331,26 @@
       if(model.type!=='CONVEYOR'&&Number.isFinite(unit.estimatedResidenceSeconds)){
         detailItems.push(['Residence time',unit.estimatedResidenceSeconds,'time']);
       }
-      extraDetails.replaceChildren();
+      var detailKeys={};
       detailItems.forEach(function(entry){
-        var block=document.createElement('div'),name=document.createElement('span'),value=document.createElement('b');
-        name.textContent=entry[0];
+        var key=entry[0];detailKeys[key]=true;
+        var block=Array.prototype.find.call(extraDetails.children,function(el){return el.dataset.detailKey===key;});
+        if(!block){
+          block=document.createElement('div');block.dataset.detailKey=key;
+          var name=document.createElement('span');name.textContent=key;block.append(name);
+          if(entry[2]==='time'){
+            var slot=document.createElement('span');slot.className='live-detail-time';
+            slot.addEventListener('change',function(event){if(event.target.matches('.st-time-unit'))card.dataset.residenceTimeUnit=event.target.value;});
+            block.append(slot);
+          }else block.append(document.createElement('b'));
+          extraDetails.append(block);
+        }
         if(entry[2]==='time'){
-          var timeOutput=STTimeControls.output(entry[1],{unit:card.dataset.residenceTimeUnit||'s',
-            scope:extraDetails,label:'Change residence time unit'});
-          timeOutput.querySelector('select').addEventListener('change',function(event){card.dataset.residenceTimeUnit=event.target.value;});
-          block.append(name,timeOutput);
-        }else{value.textContent=entry[1];block.append(name,value);}
-        extraDetails.append(block);
+          STTimeControls.setOutput(block.querySelector('.live-detail-time'),entry[1],{
+            unit:card.dataset.residenceTimeUnit||'s',scope:extraDetails,label:'Change residence time unit'});
+        }else block.querySelector('b').textContent=entry[1];
       });
+      Array.prototype.forEach.call(extraDetails.children,function(el){if(!detailKeys[el.dataset.detailKey])el.remove();});
       var stateDetails=card.querySelector('.live-equipment-state-grid');
       var stateDurations=unit.stateSeconds||{};
       var stateLabels={
@@ -358,16 +366,22 @@
         'BACKUP_STOPPING','WAITING_FOR_PRIME','READY','MICRO_STOP','DISABLED'];
       var states=Object.keys(stateDurations);
       stateOrder.forEach(function(key){if(states.indexOf(key)<0)states.push(key);});
-      stateDetails.replaceChildren();
+      var visibleStates={};
       states.forEach(function(key){
         var seconds=Number(stateDurations[key]||0);
         if(!seconds && !['RUNNING','STARVED','BLOCKED','FAILURE','STOPPED'].includes(key))return;
-        var cell=document.createElement('div'),label=document.createElement('span');
-        label.textContent=stateLabels[key]||key.replace(/_/g,' ').toLowerCase();
-        var valueUnit=STTimeControls.output(seconds,{unit:card.dataset.stateTimeUnit||'min',
-          scope:stateDetails,label:'Change equipment state time unit'});
-        cell.append(label,valueUnit);stateDetails.append(cell);
+        visibleStates[key]=true;
+        var cell=Array.prototype.find.call(stateDetails.children,function(el){return el.dataset.stateKey===key;});
+        if(!cell){
+          cell=document.createElement('div');cell.dataset.stateKey=key;
+          var label=document.createElement('span');label.textContent=stateLabels[key]||key.replace(/_/g,' ').toLowerCase();
+          var slot=document.createElement('span');slot.className='live-state-time';
+          cell.append(label,slot);stateDetails.append(cell);
+        }
+        STTimeControls.setOutput(cell.querySelector('.live-state-time'),seconds,{
+          unit:card.dataset.stateTimeUnit||'min',scope:stateDetails,label:'Change equipment state time unit'});
       });
+      Array.prototype.forEach.call(stateDetails.children,function(cell){if(!visibleStates[cell.dataset.stateKey])cell.remove();});
       STTimeControls.setOutput(card.querySelector('.live-starved'),unit.starvedSeconds,{unit:'min',
         scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
       STTimeControls.setOutput(card.querySelector('.live-blocked'),unit.blockedSeconds,{unit:'min',

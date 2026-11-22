@@ -514,21 +514,27 @@
     }
     function prepareCalendarRun(run){
       run={...run,machineResidenceEnabled:true};
-      var calendar=run.plantCalendar;
-      var manualStops=run.plannedStops?.filter(function(event){return event?.source!=='PLANT_CALENDAR';});
-      if(!calendar?.enabled)return {...run,plannedStops:manualStops};
+      // Inclusion is a run-specific choice. Preserve the configured calendar
+      // and manual events in the saved scenario even when they are excluded.
+      var calendar=run.includePlantCalendar===false
+        ?{...run.plantCalendar,enabled:false}:run.plantCalendar;
+      var manualEnabled=run.eventsEnabled!==false;
+      var manualStops=manualEnabled
+        ?run.plannedStops?.filter(function(event){return event?.source!=='PLANT_CALENDAR';})||[]
+        :[];
+      var commands=manualEnabled?run.commands||[]:[];
+      if(!calendar?.enabled)return {...run,plantCalendar:calendar,commands:commands,plannedStops:manualStops};
       var totals=STPlantCalendar.calculate(calendar);
       if(totals.errors.length)throw Error(totals.errors.join(' '));
-      if(calendar.mode!=='SCHEDULED')return {...run,plannedStops:manualStops};
+      if(calendar.mode!=='SCHEDULED')return {...run,plantCalendar:calendar,commands:commands,plannedStops:manualStops};
 
       var schedule=SimulatorEngine.plantCalendarSchedule(calendar,run.tickSeconds);
       var calendarStops=schedule.events.map(function(event){
         return {...event,restartPolicy:schedule.restartPolicy,source:'PLANT_CALENDAR'};
       });
-      var manualEnabled=run.eventsEnabled!==false;
-      var plannedStops=(manualEnabled?(manualStops||[]):[]).concat(calendarStops);
+      var plannedStops=manualStops.concat(calendarStops);
       var execution={
-        ...run,eventsEnabled:true,commands:manualEnabled?run.commands:[],plannedStops:plannedStops,
+        ...run,eventsEnabled:true,commands:commands,plannedStops:plannedStops,
         plantCalendar:{...calendar,application:'EVENTS',appliedHorizonSeconds:run.durationSeconds}
       };
       var verified=SimulatorEngine.resolvePlannedStops(execution);

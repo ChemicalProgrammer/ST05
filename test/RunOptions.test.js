@@ -65,3 +65,32 @@ test('Simulation setup owns event and calendar switches without changing saved c
   assert.equal(calendar.disabled,true);
  }finally{dom.window.close();}
 });
+
+
+test('disabling control events or calendar excludes them only from execution',()=>{
+ const client=fs.readFileSync('apps-script/ClientSimulation.html','utf8');
+ const start=client.indexOf('    function prepareCalendarRun(run){');
+ const end=client.indexOf('\n    function createControlEventRow(',start);
+ assert.ok(start>=0&&end>start);
+ const calendar={calculate:()=>({errors:[]})};
+ const engine={
+  plantCalendarSchedule:()=>({events:[{startSeconds:600,endSeconds:660}],restartPolicy:'RESTART'}),
+  resolvePlannedStops:run=>({plannedStopSeconds:run.plannedStops.reduce((sum,e)=>sum+(e.endSeconds-e.startSeconds),0)})
+ };
+ const prepare=new Function('STPlantCalendar','SimulatorEngine',client.slice(start,end)+';return prepareCalendarRun;')(calendar,engine);
+ const original={plantCalendar:{enabled:true,mode:'SCHEDULED'},eventsEnabled:false,includePlantCalendar:true,
+  plannedStops:[{source:'MANUAL',startSeconds:100,endSeconds:140}],commands:[{action:'PAUSE'}],
+  durationSeconds:3600,tickSeconds:0.25};
+ const scheduled=prepare(original);
+ assert.equal(scheduled.plannedStops.length,1);
+ assert.equal(scheduled.plannedStops[0].source,'PLANT_CALENDAR');
+ assert.equal(scheduled.commands.length,0);
+ const neither=prepare({...original,includePlantCalendar:false});
+ assert.equal(neither.plantCalendar.enabled,false);
+ assert.equal(neither.plannedStops.length,0);
+ assert.equal(neither.commands.length,0);
+ const eventsOnly=prepare({...original,includePlantCalendar:false,eventsEnabled:true});
+ assert.equal(eventsOnly.commands.length,1);
+ assert.equal(eventsOnly.plannedStops.length,1);
+ assert.equal(original.plantCalendar.enabled,true);
+});

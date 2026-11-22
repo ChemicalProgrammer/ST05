@@ -5,7 +5,7 @@
       var ready = isRunReady();
       document.getElementById('run-case-meta').textContent = state.activeCase.name + (state.isDirty ? __ST_TEXT__('client.scenario_edits_not_yet_saved_to_drive') : '');
       toggle('run-not-ready', !ready);
-      document.getElementById('run-simulation').disabled = !ready;
+      document.getElementById('play-simulation').disabled = !ready && !state.run.result;
       syncRunControls();
       renderControlEvents();
       STProducts.render();
@@ -343,8 +343,13 @@
       ['run-initial-format','duration-mode','run-duration','run-sample-interval','run-seed','run-rounds','run-shift-hours','run-shift-count','add-control-event','open-event-generator'].forEach(function(id){document.getElementById(id).disabled=locked||(id==='run-duration'&&document.getElementById('duration-mode').value==='SHIFTS');});
       document.querySelectorAll('#event-time-tools input,#event-time-tools select,#event-time-tools button,#control-events input,#control-events select,#control-events button').forEach(function(control){control.disabled=locked;});
       document.querySelectorAll('[data-control]').forEach(function(button){button.disabled=document.getElementById(button.dataset.control).disabled;});
-      document.getElementById('run-simulation').disabled=locked||!isRunReady();
-      if(state.run.result?.detailCoverage?.recordingMode==='SUMMARY'){document.getElementById('play-simulation').disabled=true;}else document.getElementById('play-simulation').disabled=!state.run.result;
+      var playButton=document.getElementById('play-simulation');
+      var hasResult=Boolean(state.run.result);
+      playButton.disabled=hasResult
+        ? state.run.result?.detailCoverage?.recordingMode==='SUMMARY'
+        : locked||!isRunReady();
+      playButton.setAttribute('aria-label',hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation'));
+      playButton.title=hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation');
       document.querySelectorAll('#products-workspace input,#products-workspace select,#products-workspace button,#planned-line-events input,#planned-line-events select,#planned-line-events button,#add-product-changeover').forEach(function(control){control.disabled=locked||control.dataset.formatDisabled==='true';});
       STRunOptions.sync(locked);syncEventSelection();
     }

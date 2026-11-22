@@ -1081,6 +1081,57 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
   }
 }
 
+
+/* Compact equipment identity: collapse by clicking its name, not an extra icon. */
+.live-equipment-card .numeric-card-name-toggle {
+  display:inline-flex;align-items:center;min-width:0;min-height:0;
+  background:transparent!important;border:0!important;box-shadow:none!important;
+  margin:0;padding:0;color:inherit;text-align:left;cursor:pointer;
+}
+.live-equipment-card .numeric-card-name-toggle strong {
+  color:var(--ink)!important;font:inherit;font-weight:var(--weight-semibold);
+  text-decoration:none;
+}
+.live-equipment-card .numeric-card-name-toggle:hover strong {
+  color:var(--accent)!important;
+}
+.live-equipment-card .numeric-card-name-toggle:focus-visible {
+  outline:2px solid var(--accent);outline-offset:3px;border-radius:var(--radius-sm);
+}
+.live-equipment-card .numeric-equipment-header .live-equipment-identity {
+  display:flex;flex-direction:column;align-items:flex-start;
+  justify-content:flex-start;gap:var(--space-1);min-width:0;
+}
+.live-equipment-card .numeric-equipment-header .live-equipment-heading {
+  display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;
+  gap:var(--space-2);min-height:22px;margin:0;
+}
+.live-equipment-card .numeric-equipment-header .live-command,
+.live-equipment-card .numeric-equipment-header .reliability-label {
+  display:block;line-height:1.25;margin:0;padding:0;
+}
+.live-equipment-card .numeric-equipment-header .reliability-label[hidden] {display:none!important;}
+.live-equipment-card .numeric-equipment-header .numeric-conveyor-verdict {
+  display:inline-flex;align-items:center;justify-content:center;
+  position:static!important;inset:auto!important;right:auto!important;top:auto!important;
+  min-width:0;max-width:none;margin:0;padding:2px 9px;
+  flex:0 0 auto;line-height:1.2;
+}
+.live-equipment-card .numeric-equipment-header .numeric-conveyor-verdict[hidden] {display:none!important;}
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
+  row-gap:var(--space-2);padding:var(--space-2);
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-header-kpis {
+  margin:0;padding-top:var(--space-1);
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-header-oee {
+  margin:0;line-height:1.2;gap:var(--space-2);
+}
+/* Do not reserve room for a status badge in the Geometry disclosure header. */
+.live-equipment-card .live-equipment-geometry-group > .live-equipment-2d-section-heading {
+  padding-right:0!important;
+}
+
 </style>
 
 

@@ -269,6 +269,8 @@ async function openCase(caseId, initialView) {
         if(rememberedView==='comparison'&&(response.data.simulations||[]).length<2)rememberedView='editor';
         state.restoringCaseView=true;
         state.activeCase = response.data;
+        // Settings may open before the full editor mount finishes.
+        document.getElementById('case-name').value=state.activeCase.name||'';
         state.basicView=initialView?'equipment':['equipment','conveyors','products','results','vgraph','simulation','realdata','whatif','comparison'].includes(preference?.basicView)?preference.basicView:null;
         autosave.reset();
         STPreferences.initializeCaseOptions();configureSaving();
@@ -282,6 +284,8 @@ async function openCase(caseId, initialView) {
         state.run.result = null;
         state.run.configuration = null;
         initializePersistentSimulations();
+        // Avoid a blank editor for a saved case with an existing line.
+        if(state.activeCase.equipment?.length&&!document.querySelector('#equipment-list .equipment-card'))renderEquipment();
         state.restoringCaseView=false;
         navigateView(rememberedView);
         setStatus(response.data.storageMigrationPending?__ST_TEXT__('client.case_loaded_migration_pending'):__ST_TEXT__('client.case_loaded'));
@@ -326,7 +330,9 @@ async function openCase(caseId, initialView) {
       if (!state.activeCase) return;
       if(runControlsLocked()&&['duration-mode','run-duration','run-sample-interval','run-seed','run-rounds','run-shift-hours','run-shift-count'].includes(event?.target?.id)){applyScenarioRunInputs(state.run.configuration);return;}
       if(event?.target?.id==='case-name'){
-        state.activeCase.name=event.target.value;
+        // Ignore a temporarily empty required field; it is not an intentional rename.
+        if(!event.target.value.trim())return;
+        state.activeCase.name=event.target.value.trim();
         var simulation=activePersistentSimulation();
         document.getElementById('editor-title').textContent=state.activeCase.name+(simulation?' · '+simulation.name:'');
       }

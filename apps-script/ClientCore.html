@@ -30,6 +30,8 @@
 
     var roundSession=null;
     var runGeneration=0;
+    // Shared read-only execution lock for numerical and 2D engines.
+    window.STNumericalSimulationBusy=function(){return runControlsLocked();};
     var charts = STCharts(state,formatNumber);
     var drawSimulationChart = charts.drawSimulationChart, drawEquipmentSpeedChart = charts.drawEquipmentSpeedChart, drawEquipmentSpeedSparkline = charts.drawEquipmentSpeedSparkline;
     var renderCaseComparison = STComparison(state,isFiniteNumber).render;
@@ -220,6 +222,9 @@
       document.getElementById('delete-all-control-events').onclick=function(){deleteControlEventSelection(true);};
       document.getElementById('select-all-control-events').onchange=function(){if(runControlsLocked())return;var checked=this.checked;syncEventSelection();selectedControlEvents.clear();if(checked)allEditableControlEvents().forEach(e=>selectedControlEvents.add(e));controlEventAnchor=null;syncEventSelection();};
       document.getElementById('add-product-changeover').addEventListener('click',function(){if(runControlsLocked())return;var events=state.run.plannedStops||(state.run.plannedStops=[]),start=events.reduce(function(t,e){return Math.max(t,e.endSeconds);},0);events.push({category:'changeoverMinutes',startSeconds:start,endSeconds:start+60,restartPolicy:'RESTART'});document.getElementById('run-events-enabled').checked=true;setControlEventsExpanded(true);renderControlEvents();markCaseDirty();syncRunControls();});
+      window.addEventListener('st-simulation2d-running-change',function(){
+        syncRunControls();
+      });
       document.getElementById('play-simulation').addEventListener('click',function(){
         if(!state.run.result){runSimulation();return;}
         startPlayback();

@@ -1,0 +1,68 @@
+<style>
+/* Componentes reutilizables. Editar variables en DesignTokens.html y
+   documentar nuevos tipos en docs/34_UI_VISUAL_STANDARDS.md. */
+/* ─── Tipos de tarjetas reutilizables de SimuLine ───
+   No se cambia el valor ni la frecuencia de los resultados: CSS-only.
+   El relieve aparece únicamente al pasar el puntero, sin will-change. */
+.metric-card {min-width:0;border:var(--border-width) solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);background:var(--surface);}
+.metric-card--result,#simulation-playback-metrics > article,#results-kpis .result-kpi,.result-loss-kpis .result-kpi {
+  background:var(--surface-soft);border:var(--border-width) solid var(--line-strong);
+  border-radius:var(--radius-md);padding:var(--space-3);min-width:0;
+}
+.metric-card--featured,html[data-ui-mode=basic] #basic-efficiencies > div {
+  background:var(--surface-soft);border:var(--border-width) solid var(--line);
+  border-top:4px solid var(--accent);border-radius:var(--radius-md);
+  padding:var(--space-3);min-width:0;
+}
+.metric-card--featured > strong {display:block;font-size:var(--font-kpi);line-height:1.15;margin-top:var(--space-2);font-variant-numeric:tabular-nums;}
+.metric-card--scenario {border-inline-start:var(--state-border-width) solid var(--accent);}
+.metric-card--status {background:var(--surface-soft);}
+#simulation-playback-metrics > article > span {display:block;font-size:var(--font-secondary);color:var(--muted);}
+#simulation-playback-metrics > article > strong {
+  display:block;font-size:var(--font-section);line-height:1.25;
+  font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;
+  margin-block-start:var(--space-2);
+}
+#simulation-playback-metrics > article > strong .st-time-output {display:inline-flex!important;align-items:baseline;gap:2px!important;font-size:inherit!important;line-height:inherit;}
+#simulation-playback-metrics > article > strong .st-time-output b {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--ink);}
+#simulation-playback-metrics > article > strong .st-time-output select {font-size:var(--font-secondary)!important;min-height:0!important;height:auto!important;width:auto!important;min-width:0!important;padding:0!important;margin:0!important;line-height:inherit!important;vertical-align:baseline;color:var(--muted);}
+@media(hover:hover) and (pointer:fine) {
+  :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
+       #simulation-playback-metrics > article,#results-kpis .result-kpi,
+       .result-loss-kpis .result-kpi,.scenario-tier-grid > .analysis-recommendation) {
+    transition:box-shadow 140ms ease,transform 140ms ease;
+  }
+  :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
+       #simulation-playback-metrics > article,#results-kpis .result-kpi,
+       .result-loss-kpis .result-kpi,.scenario-tier-grid > .analysis-recommendation):hover {
+    box-shadow:0 5px 14px color-mix(in srgb,var(--ink) 11%,transparent);
+    transform:translateY(-1px);
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
+       #simulation-playback-metrics > article,#results-kpis .result-kpi,
+       .result-loss-kpis .result-kpi,.scenario-tier-grid > .analysis-recommendation) {
+    transition:none!important;transform:none!important;
+  }
+}
+/* Barra de iconos: botones homogéneos en Header y menú Basic. */
+:is(.topbar,#basic-case-actions) button.icon-button {
+  width:var(--control-height);height:var(--control-height);
+  min-width:var(--control-height);min-height:var(--control-height);
+  flex-shrink:0;padding:0;border:var(--border-width) solid var(--line-strong);
+  border-radius:var(--radius-md);background:var(--surface);box-shadow:none;
+  color:var(--muted);
+}
+:is(.topbar,#basic-case-actions) button.icon-button:not(:disabled):hover {
+  color:var(--accent);border-color:var(--accent);background:var(--surface-hover);
+}
+:is(.topbar,#basic-case-actions) button.icon-button:focus-visible {
+  outline:var(--focus-width) solid var(--accent);outline-offset:2px;
+}
+.topbar #pin-header[aria-pressed=true],
+.topbar #save-case.has-changes {background:var(--selected);color:var(--accent);}
+#whatif-subsection .simulation-analysis {margin:0;padding:0;border:0;background:transparent;}
+#whatif-subsection .whatif-context {margin:0 0 var(--space-3);max-width:100%;}
+#whatif-subsection .fold-heading .fold-tools {margin-inline-start:auto;}
+</style>

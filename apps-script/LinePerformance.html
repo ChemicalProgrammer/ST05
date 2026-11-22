@@ -70,12 +70,13 @@ window.STLinePerformance = (function() {
       if(spacing>=45)chart.appendChild(svg('text',{x:x(i),y:y(p.normalBpm)+25,class:'vgraph-value vgraph-normal-value','text-anchor':'middle'},value(p.normalBpm)));
       if(Number.isFinite(p.recommendedBpm)&&spacing>=45)chart.appendChild(svg('text',{x:x(i),y:y(p.recommendedBpm)-15,class:'vgraph-value vgraph-recommended-value','text-anchor':'middle'},value(p.recommendedBpm)));
       var labelSize=Math.max(10,Math.min(15,spacing/11));
-      var labelMaxWidth=Math.max(38,Math.min(spacing*.92,240));
+      var labelMaxWidth=Math.max(38,Math.min(spacing*.78,190));
+      var labelX=Math.max(labelMaxWidth/2+4,Math.min(width-labelMaxWidth/2-4,x(i)));
       var nameLines=wrapEquipmentName(p.name,labelMaxWidth,labelSize);
-      var label=svg('text',{x:x(i),y:bottom+28,class:'vgraph-label','text-anchor':'middle'});
+      var label=svg('text',{x:labelX,y:bottom+28,class:'vgraph-label','text-anchor':'middle'});
       label.style.fontSize=labelSize+'px';
       nameLines.forEach(function(line,index){
-        label.appendChild(svg('tspan',{x:x(i),dy:index===0?0:labelSize*1.13},line));
+        label.appendChild(svg('tspan',{x:labelX,dy:index===0?0:labelSize*1.13},line));
       });
       label.appendChild(svg('title',{},p.name));chart.appendChild(label);
       if (p.isPacemaker) chart.appendChild(svg('text', {x:x(i), y:height-24, class:'vgraph-reference', 'text-anchor':'middle'}, spacing<45?'★':__ST_TEXT__('performance.reference_short')));

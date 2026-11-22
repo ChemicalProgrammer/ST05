@@ -26,6 +26,33 @@ window.STLinePerformance = (function() {
     var left=Math.min(100,width*.24),right=width-24,bottom=height-110,top=36;
     var spacing=(right-left)/Math.max(1,valid.length-1),compact=spacing<100;
     chart.style.fontSize=Math.max(11,Math.min(18,spacing/5))+'px';
+    // SVG has no automatic text wrapping. Measure whole words and create
+    // multiple lines rather than truncating equipment names with ellipses.
+    var labelCanvas=document.createElement('canvas'),labelContext=labelCanvas.getContext?.('2d');
+    function labelWidth(text,size){
+      if(labelContext){labelContext.font=size+'px sans-serif';return labelContext.measureText(text).width;}
+      return text.length*size*.58;
+    }
+    function wrapEquipmentName(name,available,size){
+      var words=String(name||'').trim().split(/\\s+/).filter(Boolean),lines=[''];
+      words.forEach(function(word){
+        var index=lines.length-1,combined=lines[index]?lines[index]+' '+word:word;
+        if(labelWidth(combined,size)<=available||!lines[index])lines[index]=combined;
+        else lines.push(word);
+      });
+      // Split uncommon single long words without dropping any characters.
+      var split=[];
+      lines.forEach(function(line){
+        if(labelWidth(line,size)<=available){split.push(line);return;}
+        var part='';
+        Array.from(line).forEach(function(ch){
+          if(part&&labelWidth(part+ch,size)>available){split.push(part);part='';}
+          part+=ch;
+        });
+        if(part)split.push(part);
+      });
+      return split;
+    }
     var x = function(i) { return left + (valid.length === 1 ? (right - left) / 2 : i * (right - left) / (valid.length - 1)); };
     var y = function(pct) { return bottom - (pct - minimum) / (maximum - minimum) * (bottom - top); };
     [minimum, (minimum + maximum) / 2, maximum].forEach(function(pct) {
@@ -42,7 +69,15 @@ window.STLinePerformance = (function() {
       if (Number.isFinite(p.recommendedBpm)) {var recommended=svg('circle', {cx:x(i), cy:y(p.recommendedBpm), r:3, class:'vgraph-recommended-dot'});recommended.appendChild(svg('title',{},p.name+' · '+__ST_TEXT__('performance.recommended')+': '+value(p.recommendedBpm)+' /min'));chart.appendChild(recommended);}
       if(spacing>=45)chart.appendChild(svg('text',{x:x(i),y:y(p.normalBpm)+25,class:'vgraph-value vgraph-normal-value','text-anchor':'middle'},value(p.normalBpm)));
       if(Number.isFinite(p.recommendedBpm)&&spacing>=45)chart.appendChild(svg('text',{x:x(i),y:y(p.recommendedBpm)-15,class:'vgraph-value vgraph-recommended-value','text-anchor':'middle'},value(p.recommendedBpm)));
-      var label=svg('text', {x:x(i),y:bottom+28,class:'vgraph-label','text-anchor':compact?'end':'middle'},p.name.length>(compact?10:16)?p.name.slice(0,compact?9:15)+'…':p.name);if(compact)label.setAttribute('transform','rotate(-65 '+x(i)+' '+(bottom+28)+')');label.style.fontSize=compact?'12px':'18px';label.appendChild(svg('title',{},p.name));chart.appendChild(label);
+      var labelSize=Math.max(10,Math.min(15,spacing/11));
+      var labelMaxWidth=Math.max(38,Math.min(spacing*.92,240));
+      var nameLines=wrapEquipmentName(p.name,labelMaxWidth,labelSize);
+      var label=svg('text',{x:x(i),y:bottom+28,class:'vgraph-label','text-anchor':'middle'});
+      label.style.fontSize=labelSize+'px';
+      nameLines.forEach(function(line,index){
+        label.appendChild(svg('tspan',{x:x(i),dy:index===0?0:labelSize*1.13},line));
+      });
+      label.appendChild(svg('title',{},p.name));chart.appendChild(label);
       if (p.isPacemaker) chart.appendChild(svg('text', {x:x(i), y:height-24, class:'vgraph-reference', 'text-anchor':'middle'}, spacing<45?'★':__ST_TEXT__('performance.reference_short')));
     });
     target.appendChild(chart);

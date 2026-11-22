@@ -9,6 +9,7 @@
   </header>
   <div class="design-reference-tabs" role="tablist" aria-label="Catálogo de interfaz">
     <button role="tab" type="button" id="design-ref-tab-controls" aria-controls="design-ref-controls" aria-selected="true" tabindex="0">Controles</button>
+    <button role="tab" type="button" id="design-ref-tab-navigation" aria-controls="design-ref-navigation" aria-selected="false" tabindex="-1">Navegación</button>
     <button role="tab" type="button" id="design-ref-tab-typography" aria-controls="design-ref-typography" aria-selected="false" tabindex="-1">Tipografía</button>
     <button role="tab" type="button" id="design-ref-tab-spacing" aria-controls="design-ref-spacing" aria-selected="false" tabindex="-1">Márgenes</button>
     <button role="tab" type="button" id="design-ref-tab-cards" aria-controls="design-ref-cards" aria-selected="false" tabindex="-1">Tarjetas</button>
@@ -76,6 +77,12 @@
         </div>
       </div>
     </section>
+    <section id="design-ref-navigation" role="tabpanel" aria-labelledby="design-ref-tab-navigation" tabindex="0" hidden><p class="design-reference-section-intro">Muestras independientes del caso: puedes cambiar su selección sin modificar la navegación real.</p><div class="design-reference-catalog" role="table" aria-label="Catálogo de navegación reutilizable"><div class="design-reference-column-heads" role="row"><span role="columnheader">Control o diseño</span><span role="columnheader">Explicación</span><span role="columnheader">Nombre del control</span></div><div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><nav class="design-reference-main-navigation" aria-label="Ejemplo de navegación principal" data-design-preview-group="current"><button type="button" class="ghost app-section-tab" aria-current="page" data-design-preview-option>▣ Equipment</button><button type="button" class="ghost app-section-tab" aria-current="false" data-design-preview-option>▷ Simulation</button><button type="button" class="ghost app-section-tab" aria-current="false" data-design-preview-option>Results</button></nav></div><div class="design-reference-cell design-reference-explanation" role="cell">Botones para cambiar entre Equipment, Formats, V-Graph, Simulation y demás vistas. La selección de la muestra es local.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Pestaña de navegación principal</strong><code>.app-section-tab · #basic-navigation</code></div></div>
+<div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><div class="settings-tabs design-reference-dialog-tabs-preview" role="tablist" aria-label="Pestañas de diálogo de ejemplo" data-design-preview-group="selected"><button type="button" role="tab" aria-selected="true" data-design-preview-option>Case</button><button type="button" role="tab" aria-selected="false" data-design-preview-option>Appearance</button><button type="button" role="tab" aria-selected="false" data-design-preview-option>Simulation</button></div></div><div class="design-reference-cell design-reference-explanation" role="cell">Pestañas de Settings y selectores de colores; se distingue la sección seleccionada por <code>aria-selected</code>.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Pestañas de cuadro de diálogo</strong><code>.settings-tabs · [role=tab]</code></div></div>
+<div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><nav class="simulation-navigation design-reference-simulation-tabs-preview" aria-label="Simulaciones de ejemplo" data-design-preview-group="current"><button type="button" class="workspace-tab nav-item" aria-current="page" data-design-preview-option>Baseline</button><button type="button" class="workspace-tab nav-item" aria-current="false" data-design-preview-option>Scenario 1</button></nav></div><div class="design-reference-cell design-reference-explanation" role="cell">Pestañas de simulaciones guardadas y comparación con indicador de vista actual.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Pestaña de simulación</strong><code>.simulation-navigation · .workspace-tab</code></div></div>
+<div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><label class="simulation-picker design-reference-picker-preview"><span>Simulation</span><select aria-label="Simulación demostrativa"><option>Baseline</option><option>Zero CAPEX</option></select></label></div><div class="design-reference-cell design-reference-explanation" role="cell">Selector compacto para cambiar la simulación activa desde el encabezado.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Selector de simulación</strong><code>.simulation-picker · #simulation-selector</code></div></div>
+<div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><div class="breadcrumb design-reference-breadcrumb-preview" aria-label="Ruta del caso de ejemplo"><span>Demo bottling line</span><span aria-hidden="true">/</span><strong>Equipment</strong></div></div><div class="design-reference-cell design-reference-explanation" role="cell">Ruta que identifica el caso y la sección actual dentro de la aplicación.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Ruta del caso (breadcrumb)</strong><code>.breadcrumb</code></div></div>
+<div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><nav class="design-reference-tabs design-reference-tabs-preview" role="tablist" aria-label="Pestañas de catálogo de ejemplo" data-design-preview-group="selected"><button type="button" role="tab" aria-selected="true" data-design-preview-option>Controles</button><button type="button" role="tab" aria-selected="false" data-design-preview-option>Tarjetas</button></nav></div><div class="design-reference-cell design-reference-explanation" role="cell">Variante de pestañas del catálogo con subrayado en el color primario.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Pestañas del catálogo</strong><code>.design-reference-tabs [role=tab]</code></div></div></div></section>
     <section id="design-ref-typography" role="tabpanel" aria-labelledby="design-ref-tab-typography" tabindex="0" hidden>
       
       <div class="design-reference-catalog" role="table" aria-label="Catálogo de tipografía y estilos">
@@ -251,6 +258,18 @@
 .design-reference-preview > .subsection-description {margin:0;color:var(--muted);font-size:var(--font-secondary);}
 .design-reference-divider-example {width:100%;margin:0;}
 .design-reference-divider-example .checkbox-label {display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-secondary);}
+
+.design-reference-section-intro {margin:0 0 var(--space-3);font-size:var(--font-secondary);color:var(--muted);}
+.design-reference-main-navigation,.design-reference-simulation-tabs-preview {display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-1);width:100%;}
+.design-reference-main-navigation .app-section-tab {min-height:var(--control-height);padding:var(--space-2);white-space:nowrap;}
+.design-reference-dialog-tabs-preview {display:flex;flex-wrap:wrap;width:100%;border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-1);}
+.design-reference-dialog-tabs-preview > button {padding-inline:var(--space-2);}
+.design-reference-simulation-tabs-preview .workspace-tab {flex:0 1 auto;width:auto;min-width:0;font-size:var(--font-secondary);padding-inline:var(--space-2);}
+.design-reference-breadcrumb-preview {display:flex;align-items:center;gap:var(--space-2);min-width:0;flex-wrap:wrap;}
+.design-reference-breadcrumb-preview > span:first-child {max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.design-reference-picker-preview {display:flex;align-items:center;gap:var(--space-2);max-width:100%;}
+.design-reference-picker-preview select {width:min(180px,100%);}
+.design-reference-tabs-preview {display:flex;border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-1);max-width:100%;}
 .design-reference-control-row {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);}
 .design-reference-control-row > label {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);font-size:var(--font-secondary);}
 .design-reference-control-row > label.checkbox-label {flex-direction:row;align-items:center;}
@@ -279,7 +298,7 @@
   'use strict';
   var dialog=document.getElementById('design-reference-dialog');
   if(!dialog)return;
-  var tabs=Array.from(dialog.querySelectorAll('[role=tab]'));
+  var tabs=Array.from(dialog.querySelector('.design-reference-tabs').querySelectorAll(':scope > [role=tab]'));
   function activate(tab,focus){
     tabs.forEach(function(item){
       var selected=item===tab;

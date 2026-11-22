@@ -1388,29 +1388,36 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
   .fold-heading {row-gap:var(--space-2);}
   .fold-heading > :is(.fold-tools,.button-row) {flex-wrap:wrap;max-width:100%;}
 }
-/* Encabezado compacto reutilizable: título, descripción y estado en la misma fila
-   siempre que el espacio lo permita; los controles sólo bajan por falta de ancho. */
+/* Título y descripción son renglones independientes en todas las Subsecciones.
+   Las herramientas permanecen a la derecha y sólo saltan cuando falta ancho. */
 .fold-heading > .subsection-heading-copy,
 .fold-heading > div:has(> h3 > .fold-toggle) {
-  display:flex;flex:1 1 auto;min-width:0;align-items:center;
-  flex-direction:row;flex-wrap:wrap;column-gap:var(--space-3);row-gap:var(--space-1);
+  display:flex;flex:1 1 auto;min-width:0;
+  align-items:stretch;flex-direction:column;flex-wrap:nowrap;
+  gap:var(--space-1);
 }
 .fold-heading > .subsection-heading-copy > :is(h3,.subsection-heading-title),
 .fold-heading > div:has(> h3 > .fold-toggle) > h3 {
-  flex:0 0 auto;margin:0;white-space:nowrap;
+  display:block;flex:none;min-width:0;margin:0;
+  white-space:normal;
 }
 .fold-heading > .subsection-heading-copy > .subsection-description,
-.fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description {
-  flex:0 1 auto;min-width:0;max-width:none;margin:0;
+.fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description,
+.fold-native > summary .subsection-description {
+  display:-webkit-box;min-width:0;max-width:100%;margin:0;
+  overflow:hidden;overflow-wrap:anywhere;text-overflow:ellipsis;
+  -webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
 }
 .fold-native > summary .subsection-heading-copy {
-  flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:var(--space-3);
-  row-gap:var(--space-1);
+  display:flex;flex:1 1 auto;min-width:0;align-items:stretch;
+  flex-direction:column;flex-wrap:nowrap;gap:var(--space-1);
 }
-.fold-native > summary .subsection-description {margin:0;}
+.fold-native > summary .subsection-native-title {display:block;}
+/* Playback status is a separate line, never appended to the description. */
 #simulation-playback .fold-heading #simulation-playback-status {
-  display:inline-flex;align-items:baseline;flex-wrap:wrap;gap:var(--space-2);
-  min-width:0;margin:0;font-size:var(--font-secondary);color:var(--muted);
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--space-2);
+  min-width:0;max-width:100%;margin:var(--space-1) 0 0;
+  font-size:var(--font-secondary);color:var(--muted);
 }
 #simulation-playback #playback-performance {display:none!important;}
 

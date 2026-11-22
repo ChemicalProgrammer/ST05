@@ -251,6 +251,9 @@
       stateGrid.className='live-equipment-state-grid';
       statePanel.append(stateHeading,stateGrid);
       card.querySelector('.live-equipment-zone').before(statePanel);
+      var extraDetails=document.createElement('div');
+      extraDetails.className='live-equipment-summary-details';
+      card.querySelector('.live-equipment-zone').before(extraDetails);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');
       heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');title.before(heading);heading.append(symbol,title);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
@@ -310,6 +313,20 @@
       rate.textContent=belt?formatNumber(belt.speedMmPerSecond*0.06)+' m/min de banda · '+formatNumber((unit.actualRatePerSecond??0)*60)+' unid/min de flujo':formatRatePerMinute(machineRate);
       rate.title=belt?'Velocidad de banda y flujo de producto procesado. La banda puede moverse aunque reciba menos producto o esté vacía.':'';
 
+      var extraDetails=card.querySelector('.live-equipment-summary-details');
+      var detailItems=[
+        ['Own failures',model.type==='CONVEYOR'?'N/A':formatNumber(unit.failureCount||0)],
+        ['Start ramps',formatNumber(unit.startRampCount||0)],
+        ['Stop transitions',formatNumber(unit.stopTransitionCount||0)]
+      ];
+      if(model.type!=='CONVEYOR'&&Number.isFinite(unit.estimatedResidenceSeconds)){
+        detailItems.push(['Residence time',formatNumber(unit.estimatedResidenceSeconds)+' s']);
+      }
+      extraDetails.replaceChildren();
+      detailItems.forEach(function(entry){
+        var block=document.createElement('div'),name=document.createElement('span'),value=document.createElement('b');
+        name.textContent=entry[0];value.textContent=entry[1];block.append(name,value);extraDetails.append(block);
+      });
       var stateDetails=card.querySelector('.live-equipment-state-grid');
       var stateDurations=unit.stateSeconds||{};
       var stateLabels={
@@ -331,8 +348,26 @@
         if(!seconds && !['RUNNING','STARVED','BLOCKED','FAILURE','STOPPED'].includes(key))return;
         var cell=document.createElement('div'),label=document.createElement('span'),value=document.createElement('b');
         label.textContent=stateLabels[key]||key.replace(/_/g,' ').toLowerCase();
-        value.textContent=formatMinutes(seconds);
-        cell.append(label,value);stateDetails.append(cell);
+        var units={s:1,min:60,h:3600,d:86400,wk:604800};
+        var selectedUnit=card.dataset.stateTimeUnit||'min';
+        var valueUnit=document.createElement('span');
+        valueUnit.className='time-output-value';
+        var unitMenu=document.createElement('select');
+        unitMenu.setAttribute('aria-label','Time unit for equipment states');
+        Object.keys(units).forEach(function(u){var option=document.createElement('option');option.value=u;option.textContent=u;unitMenu.append(option);});
+        unitMenu.value=selectedUnit;
+        value.textContent=formatNumber(seconds/units[selectedUnit]);
+        unitMenu.addEventListener('change',function(){
+          card.dataset.stateTimeUnit=unitMenu.value;
+          card.querySelectorAll('.live-equipment-state-grid .time-output-value').forEach(function(group){
+            var sec=Number(group.dataset.seconds);
+            group.querySelector('b').textContent=formatNumber(sec/units[unitMenu.value]);
+            group.querySelector('select').value=unitMenu.value;
+          });
+        });
+        valueUnit.dataset.seconds=String(seconds);
+        valueUnit.append(value,unitMenu);
+        cell.append(label,valueUnit);stateDetails.append(cell);
       });
       card.querySelector('.live-starved').textContent = formatMinutes(unit.starvedSeconds);
       card.querySelector('.live-blocked').textContent = formatMinutes(unit.blockedSeconds);

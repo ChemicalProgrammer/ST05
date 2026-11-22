@@ -72,7 +72,17 @@ window.STProducts=(function(){
       content.className='fold-content';content.id=id('formats-subsection');content.hidden=collapsedSections.has(sectionKey);
       toggle.type='button';toggle.className='fold-toggle';toggle.textContent=text;toggle.dataset.subsectionToggle='';toggle.setAttribute('aria-expanded',String(!content.hidden));toggle.setAttribute('aria-controls',content.id);
       toggle.addEventListener('click',function(){if(content.hidden)collapsedSections.delete(sectionKey);else collapsedSections.add(sectionKey);});
-      title.append(toggle);heading.append(title,tools);group.append(heading,content);body.append(group);
+      title.classList.add('subsection-heading-title');
+      var titleWrap=document.createElement('div');titleWrap.className='subsection-heading-copy';
+      var description=document.createElement('p');description.className='subsection-description';
+      var guidance={
+        Products:'Define the product and its bottle dimensions for simulation.',
+        Formats:'Associate a product with packaging dimensions and production units.',
+        Machines:'Override machine operating rates and start-up behavior for the selected product or format.',
+        Conveyors:'Override conveyor speeds, transported units, and bottle or case spacing.'
+      };
+      description.textContent=guidance[text]||'Review the settings for '+text.toLowerCase()+'.';
+      title.append(toggle);titleWrap.append(title,description);heading.append(titleWrap,tools);group.append(heading,content);body.append(group);
       return {content:content,tools:tools};
     }
     function note(parent,text){var n=document.createElement('p');n.className='chart-note format-guidance';n.textContent=text;parent.append(n);return n;}

@@ -339,10 +339,11 @@
     function runControlsLocked(){return Boolean(state.run.active||state.run.playing||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty);}
     var last2DLockState=null;
     function syncRunControls(){
-      var locked=runControlsLocked();
+      var numericalLocked=runControlsLocked();
       var twoDRunning=Boolean(window.STSimulation2D?.isRunning?.());
-      if(last2DLockState!==locked){
-        last2DLockState=locked;
+      var locked=numericalLocked||twoDRunning;
+      if(last2DLockState!==numericalLocked){
+        last2DLockState=numericalLocked;
         window.STSimulation2D?.refreshRunLocks?.();
       }
       STReports.bindChartExports(state.run.result,state.activeCase,activePersistentSimulation(),state.run.roundIndex+1);

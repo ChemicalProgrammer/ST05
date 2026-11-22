@@ -1352,6 +1352,21 @@ html[data-ui-mode=basic] #basic-run-options.fold-card {
 @media(max-width:760px){
   .workspace-content {padding-block-start:var(--workspace-gutter);}
 }
+
+/* Subsección: las herramientas comparten una sola fila por defecto.
+   La propia cabecera puede pasar el grupo completo a la segunda línea
+   solo si el ancho real no permite mantenerlo al lado del título. */
+.fold-heading > :is(.fold-tools,.button-row),
+.fold-heading .fold-tools > .button-row {
+  display:flex;align-items:center;flex-wrap:nowrap;
+  gap:var(--space-2);min-width:0;max-width:100%;
+}
+.fold-heading > :is(.fold-tools,.button-row) > :is(button,details,select),
+.fold-heading .fold-tools > .button-row > :is(button,details) {flex-shrink:0;}
+@media(max-width:620px){
+  .fold-heading {row-gap:var(--space-2);}
+  .fold-heading > :is(.fold-tools,.button-row) {flex-wrap:wrap;max-width:100%;}
+}
 </style>
 
 

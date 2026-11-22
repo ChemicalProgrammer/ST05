@@ -230,7 +230,24 @@
         if(selectPlaybackRound(Number(this.value),false)&&activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
       });
       document.getElementById('run-chart-window').addEventListener('change',function(){var simulation=activePersistentSimulation();if(simulation){simulation.dynamicConfig.chartWindow=this.value;autosave.change();}if(state.run.result)renderPlaybackFrame();});
-      ['run-duration-unit','run-start-at','run-end-at','run-time-zone','run-track-shifts','run-calculation-mode','run-events-enabled'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){if(runControlsLocked())return;syncRunControls();if(['run-start-at','run-end-at','run-time-zone'].includes(id))renderControlEvents();markCaseDirty();});});
+      // Convert the displayed number when switching units; keep the physical duration invariant.
+      var durationUnit=document.getElementById('run-duration-unit');
+      var previousDurationUnit=durationUnit.value;
+      var durationFactors={SECONDS:1,MINUTES:60,HOURS:3600,DAYS:86400,WEEKS:604800};
+      durationUnit.addEventListener('pointerdown',function(){previousDurationUnit=durationUnit.value;});
+      durationUnit.addEventListener('focus',function(){previousDurationUnit=durationUnit.value;});
+      durationUnit.addEventListener('change',function(){
+        if(runControlsLocked()){applyScenarioRunInputs(state.run.configuration);previousDurationUnit=durationUnit.value;return;}
+        var input=document.getElementById('run-duration'),number=Number(input.value);
+        if(input.value.trim()!==''&&Number.isFinite(number)){
+          var seconds=number*durationFactors[previousDurationUnit];
+          var converted=seconds/durationFactors[durationUnit.value];
+          input.value=String(Number(converted.toPrecision(12)));
+        }
+        previousDurationUnit=durationUnit.value;
+        syncRunControls();markCaseDirty();
+      });
+      ['run-start-at','run-end-at','run-time-zone','run-track-shifts','run-calculation-mode','run-events-enabled'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){if(runControlsLocked())return;syncRunControls();if(['run-start-at','run-end-at','run-time-zone'].includes(id))renderControlEvents();markCaseDirty();});});
       document.getElementById('settings-shift-count').addEventListener('input',function(){document.getElementById('run-shift-count').value=this.value;syncRunControls();markCaseDirty();});
       document.getElementById('run-playback-rate').addEventListener('change',function(){var simulation=activePersistentSimulation();if(simulation){simulation.playbackRate=Number(this.value);autosave.change();}if(state.run.playing){stopPlaybackTimer(true);startPlayback();}});
       ['run-duration','run-effective-target','run-sample-interval','run-seed','run-rounds','run-shift-hours','run-shift-count'].forEach(function(id){document.getElementById(id).addEventListener('input',markCaseDirty);});

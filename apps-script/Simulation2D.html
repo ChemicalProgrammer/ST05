@@ -1640,16 +1640,27 @@ window.STSimulation2D=(function(){
     if(frame!==undefined)window.cancelAnimationFrame(frame);
     frame=undefined;previous=0;
   }
+  let lastRunningNotification=null;
   function syncControls(){
-    el('play').disabled=!!validation||runState==='Running';
+    const running=runState==='Running';
+    const numericalBusy=Boolean(window.STNumericalSimulationBusy?.());
+    el('play').disabled=!!validation||running||numericalBusy;
     el('pause').disabled=runState!=='Running';
     el('stop').disabled=runState!=='Running'&&runState!=='Paused';
     el('reset').disabled=!!validation;
     el('play').title=validation||'Start';
     el('reset').title=validation||'Reset';
-    el('limit').disabled=runState==='Running';
+    // Only playback speed, dimensions, viewports and appearance/view options
+    // remain editable while the 2D simulation is running.
+    el('limit').disabled=running;
+    el('source').disabled=running||numericalBusy;
     el('source').options[1].disabled=!representative;
+    for(const input of Object.values(scheduleOptions))input.disabled=running||numericalBusy;
     status();
+    if(lastRunningNotification!==running){
+      lastRunningNotification=running;
+      window.dispatchEvent(new CustomEvent('st-simulation2d-running-change',{detail:{running}}));
+    }
   }
   function presentationRecord(){
     const withoutModel=value=>value?.model===model?Object.fromEntries(Object.entries(value).filter(([name])=>name!=='model')):null;
@@ -1748,10 +1759,11 @@ window.STSimulation2D=(function(){
     syncEvents(true);checkpoint();
   });
   Object.values(scheduleOptions).forEach(input=>input.onchange=()=>{
+    if(runState==='Running'||window.STNumericalSimulationBusy?.())return;
     configureModel();status();draw();checkpoint();
   });
   el('play').onclick=function(){
-    if(!model||frame!==undefined)return;
+    if(!model||frame!==undefined||window.STNumericalSimulationBusy?.())return;
     if(runState==='Stopped'||runState==='Completed'||model.time>=limitSeconds)reset();
     markPlaybackAction('play');
     lastSave=performance.now();runState='Running';syncControls();
@@ -1868,7 +1880,8 @@ window.STSimulation2D=(function(){
   if(window.ResizeObserver){const observer=new ResizeObserver(()=>{if(!panel.classList.contains('hidden')&&canvas.clientWidth){if(camera.fit&&viewportCount===1)fit();else draw();}});viewports.forEach(view=>observer.observe(view.canvas));}
   setViewportCount(Number(window.STPreferences?.read('simulation2dViewports'))||1);
   window.addEventListener('st:theme',()=>draw());
-  return {pause,capture,hasState:()=>Boolean(viewKey&&model),syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
+  return {pause,capture,isRunning:()=>runState==='Running',refreshRunLocks:syncControls,
+    hasState:()=>Boolean(viewKey&&model),syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
     const configuredHours=config.shiftHours??config.durationOptions?.shiftHours??config.shiftSeconds/3600;
     const hours=Number.isFinite(configuredHours)&&configuredHours>0?configuredHours:8;
     const next=JSON.stringify([identity,config.seed,hours]);

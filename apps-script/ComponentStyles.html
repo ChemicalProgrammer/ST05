@@ -66,6 +66,15 @@
     transition:none!important;transform:none!important;
   }
 }
+/* Pestaña de navegación principal: nombre reutilizable sin alterar acciones. */
+.app-section-tab {
+  color:var(--muted);background:transparent;border-color:transparent;
+}
+.app-section-tab[aria-current=page] {
+  color:var(--selected-text);background:var(--selected);
+  border-bottom-color:var(--accent);
+}
+.app-section-tab:focus-visible {outline:var(--focus-width) solid var(--accent);outline-offset:2px;}
 /* Barra de iconos: botones homogéneos en Header y menú Basic. */
 :is(.topbar,#basic-case-actions) button.icon-button {
   width:var(--control-height);height:var(--control-height);

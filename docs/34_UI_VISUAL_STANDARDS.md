@@ -33,6 +33,30 @@ Usa `--font-ui` en la interfaz y `--font-mono` para código o JSON. Distingue je
 
 Prefiere `gap` en grillas y contenedores flexibles. Usa márgenes lógicos para bloques independientes y padding para interiores. Quita márgenes duplicados del primer y último hijo cuando el contenedor ya aporta espacio. Un bloque oculto o vacío debe ceder su espacio. Reutiliza la altura de controles, los radios y los bordes del sistema.
 
+## Componente reutilizable: Subsección (Subsection)
+
+**Nombre oficial: «Subsección».** En solicitudes y revisiones de interfaz, «Subsección» se refiere al bloque reutilizable, habitualmente plegable, compuesto por el recuadro, encabezado, control de expandir/colapsar, barra de herramientas y contenido. **No** significa una pestaña ni una sección principal de navegación.
+
+| Parte | Selector / componente | Función |
+| --- | --- | --- |
+| Recuadro | `.fold-card` | Superficie, borde, padding interior y ritmo exterior |
+| Variante nativa | `.fold-card.fold-native` | Misma Subsección utilizando `<details>` y `<summary>` |
+| Encabezado | `.fold-heading` o `.fold-native > summary` | Título, estado, descripción y herramientas |
+| Colapso | `.fold-toggle` y `data-subsection-toggle` | Activación accesible de la Subsección |
+| Herramientas | `.fold-tools` | Botones/iconos alineados a la derecha |
+| Contenido | `.fold-content` | Contenedor con separación uniforme respecto al encabezado |
+
+### Regla única de espaciado de Subsecciones
+
+- **Primera Subsección de una pantalla:** no suma margen superior propio. El contenedor principal da la misma separación superior y lateral mediante `--panel-padding` (habitualmente `--space-5`, 20 px; en pantallas pequeñas 12 px).
+- **Entre Subsecciones consecutivas:** exclusivamente `--subsection-gap = --space-4` (16 px), **no** la suma de dos márgenes.
+- **Interior de la Subsección:** `--subsection-padding = --space-4` (16 px) en los cuatro lados.
+- **Encabezado al contenido:** `--space-3` (12 px). Subsecciones colapsadas u ocultas no deben reservar espacio.
+- **Pantallas sin tarjeta externa**, como Simulation 2D: el contenedor debe aportar el inset superior equivalente; no debe compensarse duplicando `margin-top` en cada Subsección.
+- **Temas Classic y Elegant, Basic y Advance:** se aplica el mismo contrato. Los estilos específicos pueden cambiar el color y la tipografía, pero no duplicar márgenes.
+
+Implementación central: [UiStandards.html](../apps-script/UiStandards.html), sección **«Subsección / Subsection · ritmo compartido de pantallas»**. La adaptación de `workspace-content` del tema Elegant vive en [ElegantStyles.html](../apps-script/ElegantStyles.html). Al agregar una nueva Subsección, reutiliza estas clases y **evita** márgenes superiores particulares salvo una excepción justificada y documentada.
+
 ## Color y estados
 
 - Usa `--page`, `--surface` y `--surface-soft` para superficies, `--ink` y `--muted` para texto y `--line` para bordes.

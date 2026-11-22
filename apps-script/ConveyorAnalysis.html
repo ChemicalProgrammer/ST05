@@ -6,7 +6,15 @@
   <div id="conveyor-analysis-body" class="dialog-body"></div>
 </dialog>
 <style>
-#conveyor-analysis-dialog { --dialog-width:54rem; }
+#conveyor-analysis-dialog { --dialog-width:min(72rem,calc(100vw - 24px)); width:min(72rem,calc(100vw - 24px)); max-height:calc(100dvh - 24px); box-sizing:border-box; }
+#conveyor-analysis-dialog[open] { overflow:hidden; }
+#conveyor-analysis-body { min-width:0; max-width:100%; overflow-y:auto; overflow-x:hidden; }
+#conveyor-analysis-body > section { min-width:0; max-width:100%; }
+#conveyor-analysis-body .table-scroll { min-width:0;max-width:100%;width:100%;overflow-x:auto;overflow-y:visible; }
+#conveyor-analysis-body table { width:100%;min-width:0;table-layout:fixed; }
+#conveyor-analysis-body :is(td,th) { min-width:0;overflow-wrap:anywhere;white-space:normal; }
+#conveyor-analysis-body :is(td,th):first-child { width:65%; }
+@media(max-width:600px){#conveyor-analysis-body :is(td,th):first-child{width:55%;}}
 #conveyor-analysis-body { display:grid; gap:var(--space-4); }
 #conveyor-analysis-body h3 { margin:0 0 var(--space-2); }
 #conveyor-analysis-body .chart-note { margin:0; }

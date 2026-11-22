@@ -4,9 +4,10 @@ window.STTimeControls=(function(){
   'use strict';
   var secondsByUnit={s:1,min:60,h:3600,d:86400,wk:604800};
   var labels={s:'Seconds',min:'Minutes',h:'Hours',d:'Days',wk:'Weeks'};
+  var formatter=new Intl.NumberFormat(undefined,{maximumFractionDigits:3});
   function number(value){
     if(!Number.isFinite(value))return '—';
-    return new Intl.NumberFormat(undefined,{maximumFractionDigits:3}).format(Number(value.toPrecision(9)));
+    return formatter.format(Number(value.toPrecision(9)));
   }
   function unitSelect(unit,description){
     var select=document.createElement('select');
@@ -40,6 +41,8 @@ window.STTimeControls=(function(){
     wrapper.dataset.seconds=String(seconds);
     wrapper.append(value,unit);
     applyAppearance(wrapper,opts);
+    wrapper._stAppearance=[opts?.variant||'',opts?.className||'',opts?.valueClass||'',opts?.unitClass||'',
+      opts?.gap??'',opts?.valueFontSize||'',opts?.unitFontSize||'',opts?.valueWeight||'',opts?.unitColor||''].join('|');
     function refresh(){
       var seconds=Number(wrapper.dataset.seconds);
       value.textContent=Number.isFinite(seconds)?number(seconds/secondsByUnit[unit.value]):'—';
@@ -60,10 +63,23 @@ window.STTimeControls=(function(){
     if(!container)return;
     var current=container.querySelector('.st-time-output');
     if(!current){container.replaceChildren(output(seconds,opts));return;}
-    current.dataset.seconds=String(seconds);
-    applyAppearance(current,opts);
+    var raw=String(seconds);
+    var unchanged=current.dataset.seconds===raw;
+    // Appearance options are normally constant for a mounted control.
+    // Apply them only when the caller changes the requested style.
+    var appearance=[opts?.variant||'',opts?.className||'',opts?.valueClass||'',opts?.unitClass||'',
+      opts?.gap??'',opts?.valueFontSize||'',opts?.unitFontSize||'',opts?.valueWeight||'',opts?.unitColor||''].join('|');
+    if(current._stAppearance!==appearance){
+      applyAppearance(current,opts);
+      current._stAppearance=appearance;
+    }
+    if(unchanged)return;
+    current.dataset.seconds=raw;
     var unit=current.querySelector('.st-time-unit'),value=current.querySelector('b');
-    if(unit&&value)value.textContent=Number.isFinite(Number(seconds))?number(Number(seconds)/secondsByUnit[unit.value]):'—';
+    if(unit&&value){
+      var displayed=Number.isFinite(Number(seconds))?number(Number(seconds)/secondsByUnit[unit.value]):'—';
+      if(value.textContent!==displayed)value.textContent=displayed;
+    }
   }
   return {factors:secondsByUnit,output:output,setOutput:setOutput,unitSelect:unitSelect,format:number};
 }());

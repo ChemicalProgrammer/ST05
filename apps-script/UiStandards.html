@@ -1301,7 +1301,8 @@ html[data-header-view=vgraph] #results-body > #line-performance {
    se reutiliza en cada .fold-card. Los controles internos se conservan.
    Un solo inset del workspace evita marcos y márgenes anidados. */
 .workspace-content {
-  padding-block-start:var(--panel-padding);
+  /* Igualar el margen superior a los laterales del workspace. */
+  padding-block-start:var(--page-padding);
 }
 .workspace-content > section.card {
   background:transparent;

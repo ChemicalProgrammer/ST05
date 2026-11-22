@@ -19,6 +19,19 @@ window.STTimeControls=(function(){
     select.value=secondsByUnit[unit]?unit:'min';
     return select;
   }
+  function applyAppearance(wrapper,opts){
+    opts=opts||{};
+    var value=wrapper.querySelector('b'),unit=wrapper.querySelector('.st-time-unit');
+    if(opts.variant)wrapper.dataset.variant=opts.variant;
+    if(opts.className)opts.className.split(/\s+/).filter(Boolean).forEach(function(cls){wrapper.classList.add(cls);});
+    if(value&&opts.valueClass)value.classList.add(opts.valueClass);
+    if(unit&&opts.unitClass)unit.classList.add(opts.unitClass);
+    if(opts.gap!==undefined)wrapper.style.gap=typeof opts.gap==='number'?opts.gap+'px':String(opts.gap);
+    if(value&&opts.valueFontSize)value.style.fontSize=String(opts.valueFontSize);
+    if(unit&&opts.unitFontSize)unit.style.fontSize=String(opts.unitFontSize);
+    if(value&&opts.valueWeight)value.style.fontWeight=String(opts.valueWeight);
+    if(unit&&opts.unitColor)unit.style.color=String(opts.unitColor);
+  }
   function output(seconds,opts){
     opts=opts||{};
     var wrapper=document.createElement('span');
@@ -26,6 +39,7 @@ window.STTimeControls=(function(){
     var value=document.createElement('b'),unit=unitSelect(opts.unit||'min',opts.label||'Change displayed time unit');
     wrapper.dataset.seconds=String(seconds);
     wrapper.append(value,unit);
+    applyAppearance(wrapper,opts);
     function refresh(){
       var seconds=Number(wrapper.dataset.seconds);
       value.textContent=Number.isFinite(seconds)?number(seconds/secondsByUnit[unit.value]):'—';
@@ -47,6 +61,7 @@ window.STTimeControls=(function(){
     var current=container.querySelector('.st-time-output');
     if(!current){container.replaceChildren(output(seconds,opts));return;}
     current.dataset.seconds=String(seconds);
+    applyAppearance(current,opts);
     var unit=current.querySelector('.st-time-unit'),value=current.querySelector('b');
     if(unit&&value)value.textContent=Number.isFinite(Number(seconds))?number(Number(seconds)/secondsByUnit[unit.value]):'—';
   }

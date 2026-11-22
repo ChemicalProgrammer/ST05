@@ -678,16 +678,15 @@
     }
     function updateNumericalConveyorGeometry(card,model,zone){
       var analysisFormatId=window.STProducts?.currentFormat?.()?.id||'base';
-      // Geometry and the worksheet verdict are invariant across frames of the
-      // same run/format. Avoid resolving formats and reconstructing 13 rows
-      // on every playback tick.
-      if(card._geometryRenderedResult===state.run.result
-        &&card._geometryRenderedFormatId===analysisFormatId
-        &&card._geometryRenderedZoneId===zone?.id)return;
-      card._geometryRenderedResult=state.run.result;
-      card._geometryRenderedFormatId=analysisFormatId;
-      card._geometryRenderedZoneId=zone?.id;
       var eng=state.run.result?.accumulationZoneMetrics?.[zone?.id]?.engineering;
+      // A provisional run may replace its result object on every progress
+      // notification. Cache by engineering inputs, rather than result identity.
+      // A changed geometry or audit remains visible immediately.
+      var geometrySignature=JSON.stringify([analysisFormatId,zone?.id,
+        zone?.geometry,zone?.prime,zone?.backup,model.processData?.accumulation,
+        model.processData?.geometry,eng?.calculated,eng?.audit?.status]);
+      if(card._geometryRenderedSignature===geometrySignature)return;
+      card._geometryRenderedSignature=geometrySignature;
       var cal=eng?.calculated||{},geo=zone?.geometry||{},input=model.processData?.accumulation||{};
       var first=function(){for(var i=0;i<arguments.length;i++)if(Number.isFinite(arguments[i]))return arguments[i];return null;};
       var mm=function(v){return Number.isFinite(v)?formatNumber(v):'—';};
@@ -706,10 +705,8 @@
       var status=eng?.audit?.status||'NOT EVALUATED';
       // Prefer the same conveyor engineering worksheet that powers the 2D dialog.
       // Cache only within this result/card so repeated playback frames stay inexpensive.
-      if(card._numericalConveyorAnalysisResult!==state.run.result
-        ||card._numericalConveyorAnalysisFormatId!==analysisFormatId){
-        card._numericalConveyorAnalysisResult=state.run.result;
-        card._numericalConveyorAnalysisFormatId=analysisFormatId;
+      if(card._numericalConveyorAnalysisSignature!==geometrySignature){
+        card._numericalConveyorAnalysisSignature=geometrySignature;
         card._numericalConveyorAnalysis=null;
         var worksheet=numericalConveyorWorksheet(model.id);
         if(worksheet){

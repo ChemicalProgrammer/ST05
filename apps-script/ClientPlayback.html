@@ -261,12 +261,21 @@
       var extraDetails=document.createElement('div');
       extraDetails.className='live-equipment-summary-details';
       performanceGroup.append(performanceHeading,efficiency,extraDetails);
-      detailGrid.append(statePanel,performanceGroup);
+      var summaryPanel=document.createElement('section');summaryPanel.className='live-equipment-2d-summary';
+      var summaryHeading=document.createElement('div');summaryHeading.className='live-equipment-2d-title';
+      var summaryRows=document.createElement('div');summaryRows.className='live-equipment-2d-rows';
+      summaryPanel.append(summaryHeading,summaryRows);
+      var geometryGroup=document.createElement('section');geometryGroup.className='live-equipment-geometry-group';
+      var geometryHeader=document.createElement('div');geometryHeader.className='live-equipment-2d-section-heading';
+      geometryHeader.innerHTML='<strong>Conveyor Geometry</strong><span class="live-equipment-geometry-verdict"></span>';
+      var geometryRows=document.createElement('div');geometryRows.className='live-equipment-2d-rows';
+      geometryGroup.append(geometryHeader,geometryRows);
+      detailGrid.append(summaryPanel,statePanel,performanceGroup,geometryGroup);
       card.querySelector('.live-equipment-zone').before(detailGrid);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');
       heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');title.before(heading);heading.append(symbol,title);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
-      var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);
+      var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);summaryHeading.append(card.querySelector('.live-equipment-identity'));
       var residence=document.createElement('span');residence.className='live-residence';residence.hidden=true;
       card.querySelector('.live-processed').after(residence);
       var losses=document.createElement('button');losses.className='ghost loss-toggle';losses.type='button';losses.innerHTML=STIcons.svg('chart');losses.title=__ST_TEXT__('client.time_losses');losses.setAttribute('aria-label',__ST_TEXT__('client.time_losses'));losses.setAttribute('aria-expanded','false');losses.onclick=function(){var open=card.dataset.losses!=='open';card.dataset.losses=open?'open':'closed';card.classList.toggle('show-losses',open);losses.setAttribute('aria-expanded',String(open));if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}};card.querySelector('.live-equipment-controls').appendChild(losses);
@@ -303,6 +312,11 @@
       }) : null;
       if(zone)zone=Object.assign({},state.run.result?.zoneDefinitions?.[zone.id],zone);
       var belt=conveyorCardRates(zone,model,availabilityState);
+      var isConveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
+      card.querySelector('.live-equipment-performance-group').hidden=isConveyor;
+      card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor;
+      updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
+      if(isConveyor)updateNumericalConveyorGeometry(card,model,zone);
       var efficiencyCard=card.querySelector('.live-equipment-efficiency');
       efficiencyCard.hidden=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
       if(!efficiencyCard.hidden){
@@ -352,36 +366,26 @@
       });
       Array.prototype.forEach.call(extraDetails.children,function(el){if(!detailKeys[el.dataset.detailKey])el.remove();});
       var stateDetails=card.querySelector('.live-equipment-state-grid');
-      var stateDurations=unit.stateSeconds||{};
-      var stateLabels={
-        RUNNING:'Running',READY:'Ready',STARVED:'Starved',BLOCKED:'Blocked',
-        FAILURE:'Faulted',FAULTED:'Faulted',STOPPED:'Stopped',PAUSED:'Paused',
-        STARTING:'Starting',RAMPING_UP:'Ramp up',RAMPING_DOWN:'Ramp down',
-        WAITING_FOR_PRIME:'Waiting for Prime',BACKUP_STOP:'Back-up stop',
-        BACKUP_STOPPING:'Back-up stopping',EMERGENCY_STOP:'Emergency stop',
-        PLANNED_STOP:'Planned stop',MICRO_STOP:'Micro stop',DISABLED:'Disabled'
-      };
-      var stateOrder=['RUNNING','STARVED','BLOCKED','FAILURE','FAULTED','STOPPED','STARTING',
-        'RAMPING_UP','RAMPING_DOWN','PAUSED','EMERGENCY_STOP','PLANNED_STOP','BACKUP_STOP',
-        'BACKUP_STOPPING','WAITING_FOR_PRIME','READY','MICRO_STOP','DISABLED'];
-      var states=Object.keys(stateDurations);
-      stateOrder.forEach(function(key){if(states.indexOf(key)<0)states.push(key);});
-      var visibleStates={};
-      states.forEach(function(key){
-        var seconds=Number(stateDurations[key]||0);
-        if(!seconds && !['RUNNING','STARVED','BLOCKED','FAILURE','STOPPED'].includes(key))return;
-        visibleStates[key]=true;
-        var cell=Array.prototype.find.call(stateDetails.children,function(el){return el.dataset.stateKey===key;});
-        if(!cell){
-          cell=document.createElement('div');cell.dataset.stateKey=key;
-          var label=document.createElement('span');label.textContent=stateLabels[key]||key.replace(/_/g,' ').toLowerCase();
-          var slot=document.createElement('span');slot.className='live-state-time';
-          cell.append(label,slot);stateDetails.append(cell);
-        }
-        STTimeControls.setOutput(cell.querySelector('.live-state-time'),seconds,{
-          unit:card.dataset.stateTimeUnit||'min',scope:stateDetails,label:'Change equipment state time unit'});
-      });
-      Array.prototype.forEach.call(stateDetails.children,function(cell){if(!visibleStates[cell.dataset.stateKey])cell.remove();});
+      var durations=unit.stateSeconds||{},lookup={};
+      Object.keys(durations).forEach(function(key){lookup[key.toUpperCase()]=Number(durations[key])||0;});
+      function seconds(keys,fall){for(var i=0;i<keys.length;i++)if(Object.prototype.hasOwnProperty.call(lookup,keys[i]))return lookup[keys[i]];return Number.isFinite(fall)?fall:null;}
+      var rows=isConveyor?[
+        ['Empty',seconds(['EMPTY'])],['Flowing',seconds(['FLOWING'])],['Accumulating',seconds(['ACCUMULATING'])],
+        ['Ramp up',null],['Ramp down',null]
+      ]:[
+        ['Running',seconds(['RUNNING'],unit.runningSeconds)],
+        ['Starved',seconds(['STARVED','STARVING'],unit.starvedSeconds)],
+        ['Blocked',seconds(['BLOCKED'],unit.blockedSeconds)],
+        ['Faulted',seconds(['FAULTED','FAILURE','FAILED'],unit.failureSeconds)],
+        ['Stopped',seconds(['STOPPED'],unit.stoppedSeconds)],
+        ['Starting',seconds(['STARTING'])],
+        ['Ramp up',seconds(['RAMPING_UP'])],['Ramp down',seconds(['RAMPING_DOWN'])],
+        ['Paused',seconds(['PAUSED'],unit.pausedSeconds)],
+        ['Emergency stop',seconds(['EMERGENCY_STOP'],unit.emergencyStopSeconds)],
+        ['Planned stop',seconds(['PLANNED_STOP'],unit.plannedStopSeconds)],
+        ['Back-up stop',seconds(['BACKUP_STOP'],unit.backupStopSeconds)]
+      ];
+      updateNumerical2DRows(stateDetails,rows,'states',card);
       STTimeControls.setOutput(card.querySelector('.live-starved'),unit.starvedSeconds,{unit:'min',
         scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
       STTimeControls.setOutput(card.querySelector('.live-blocked'),unit.blockedSeconds,{unit:'min',
@@ -401,6 +405,81 @@
 
       updateAccumulationZoneDetails(card.querySelector('.live-equipment-zone'), zone);
       return belt?{...model,nominalRatePerSecond:belt.capacityPerSecond}:model;
+    }
+
+    function updateNumerical2DRows(host,rows,type,card){
+      var valid=new Set();
+      rows.forEach(function(row,index){
+        var key=type+index;valid.add(key);
+        var el=Array.prototype.find.call(host.children,function(node){return node.dataset.rowKey===key;});
+        if(!el){
+          el=document.createElement('div');el.dataset.rowKey=key;el.className='live-equipment-2d-row';
+          var label=document.createElement('span'),slot=document.createElement('span');
+          label.className='live-equipment-2d-label';slot.className='live-equipment-2d-value';
+          el.append(label,slot);host.append(el);
+        }
+        el.firstElementChild.textContent=row[0];
+        var slot=el.lastElementChild;
+        if(type==='states'&&Number.isFinite(row[1])){
+          STTimeControls.setOutput(slot,row[1],{unit:card.dataset.stateTimeUnit||'s',scope:host,label:'Change equipment states unit'});
+        }else{
+          var value=row[1]===null||row[1]===undefined?'—':String(row[1]);
+          if(type==='states'&&value==='—'&&row[0].startsWith('Ramp'))value='N/A';
+          if(slot.dataset.display!==value+'|'+(row[2]||'')){
+            var b=document.createElement('b');b.textContent=value;slot.replaceChildren(b);
+            if(row[2]){var unit=document.createElement('span');unit.className='live-equipment-2d-unit';unit.textContent=row[2];slot.append(unit);}
+            slot.dataset.display=value+'|'+(row[2]||'');
+          }
+        }
+      });
+      Array.prototype.forEach.call(host.children,function(node){if(!valid.has(node.dataset.rowKey))node.remove();});
+    }
+    function updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState){
+      var conveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
+      var factor=unit.internalInputBottleFactor||1,capacity=unit.internalCapacityBottles??model.processData?.equipment?.internalCapacityBottles;
+      var flowUnit=unit.unitOfFlow==='CASES'?'cpm':'bpm';
+      var speed=conveyor?belt?.speedMmPerSecond*0.06:(unit.designSpeedPerSecond??model.nominalRatePerSecond)*60;
+      var rows=[['State',availabilityState.replace(/_/g,' ')],
+        ['Design speed',Number.isFinite(speed)?formatNumber(speed):'—',conveyor?'m/min':flowUnit],
+        ['Flow',formatNumber((unit.actualRatePerSecond||0)*60),flowUnit],
+        ['Processed',formatNumber(unit.processedUnits??unit.outputCount),unit.unitOfFlow==='CASES'?'cases':'bottles']];
+      if(conveyor){
+        rows.push(['On belt',Number.isFinite(zone?.inventoryUnits)?formatNumber(zone.inventoryUnits):'—','units'],
+          ['Back-up',zone?.backup?.controlActive?'Active':zone?.backup?.configured?'Clear':'—'],
+          ['Own failures','N/A']);
+      }else{
+        var inside=Number.isFinite(unit.internalInventoryBottles)?formatNumber(unit.internalInventoryBottles/factor):'—';
+        var cap=Number.isFinite(capacity)?formatNumber(capacity/factor):'—';
+        rows.push(['Inside',inside+' / '+cap,unit.internalInputUnit==='CASES'?'cases':'bottles'],
+          ['Residence time',Number.isFinite(unit.estimatedResidenceSeconds)?formatNumber(unit.estimatedResidenceSeconds):'—','s'],
+          ['Repair ramp',model.processData?.downstream?.rampAfterRepair?formatNumber(model.processData?.downstream?.rampUpTimeSeconds||0):'Off',
+            model.processData?.downstream?.rampAfterRepair?'s':''],
+          ['Own failures',formatNumber(unit.failureCount||0)]);
+      }
+      updateNumerical2DRows(card.querySelector('.live-equipment-2d-summary .live-equipment-2d-rows'),rows,'summary',card);
+    }
+    function updateNumericalConveyorGeometry(card,model,zone){
+      var eng=state.run.result?.accumulationZoneMetrics?.[zone?.id]?.engineering;
+      var cal=eng?.calculated||{},geo=zone?.geometry||{},input=model.processData?.accumulation||{};
+      var first=function(){for(var i=0;i<arguments.length;i++)if(Number.isFinite(arguments[i]))return arguments[i];return null;};
+      var mm=function(v){return Number.isFinite(v)?formatNumber(v):'—';};
+      var lbu=first(cal.overflowLengthMm),lba=first(cal.usefulAccumulationLengthMm);
+      var rows=[['Discharge',mm(first(geo.dischargeLengthMm,input.dischargeLengthMm)),'mm'],
+        ['Coding',mm(first(geo.codingLengthMm,input.codingLengthMm)),'mm'],
+        ['Overflow',mm(lbu),'mm'],['Lrec',mm(first(cal.recoveryLengthMm)),'mm'],
+        ['Lp',mm(first(geo.primeLengthMm,input.primeLengthMm)),'mm'],
+        ['Lbu',mm(lbu),'mm'],['Accumulation Zone (Lba)',mm(lba),'mm'],
+        ['Lact',mm(first(geo.usableLengthMm,zone?.usableLengthMm)),'mm'],
+        ['L min',mm(first(cal.minimumLengthMm)),'mm'],
+        ['Back-up position',mm(first(geo.backupSensorPositionMm,zone?.backupSensorPositionMm)),'mm'],
+        ['Prime position',mm(first(geo.primeSensorPositionMm,zone?.primeSensorPositionMm)),'mm'],
+        ['Max Run-out point',mm(first(cal.runoutLengthMm,geo.runoutLengthMm)),'mm'],
+        ['Recovery Point',mm(first(cal.recoveryPointMm)),'mm']];
+      var status=eng?.audit?.status||'NOT EVALUATED';
+      var badge=card.querySelector('.live-equipment-geometry-verdict');
+      badge.textContent=status.replace(/_/g,' ');
+      badge.className='live-equipment-geometry-verdict '+(status==='FAIL'?'is-fail':status==='PASS'?'is-pass':'');
+      updateNumerical2DRows(card.querySelector('.live-equipment-geometry-group .live-equipment-2d-rows'),rows,'geometry',card);
     }
 
     function conveyorCardRates(zone,model,availabilityState){

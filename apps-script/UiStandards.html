@@ -1021,6 +1021,66 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
   }
 }
 
+
+/* The five numerical machine actions are a compact 2-column matrix. */
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
+  grid-template-columns:minmax(0,1fr) calc(2*var(--control-height) + var(--space-1))!important;
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock,
+html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock {
+  grid-column:2!important;grid-row:1 / span 2!important;
+  display:grid!important;
+  grid-template-columns:repeat(2,var(--control-height))!important;
+  grid-auto-flow:row;grid-auto-rows:var(--control-height);
+  align-items:start;justify-content:end!important;
+  width:calc(2*var(--control-height) + var(--space-1))!important;
+  gap:var(--space-1)!important;
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock .live-control-run {
+  grid-column:auto!important;
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock > button[aria-pressed=true],
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock > button[aria-pressed=true]:disabled {
+  background:var(--accent)!important;border-color:var(--accent)!important;
+  color:#fff!important;opacity:1!important;
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock > .live-control-emergency[aria-pressed=true],
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock > .live-control-emergency[aria-pressed=true]:disabled {
+  background:var(--danger)!important;border-color:var(--danger)!important;color:#fff!important;
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock > button[aria-pressed=true] svg,
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock > button[aria-pressed=true]:disabled svg {
+  color:#fff!important;stroke:#fff!important;opacity:1!important;
+}
+html[data-events-enabled=false] .live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock,
+html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock {
+  display:none!important;
+}
+.live-equipment-card .live-equipment-geometry-group {position:relative;}
+.live-equipment-card .live-equipment-geometry-group > .live-equipment-2d-section-heading {
+  padding-right:120px!important;
+}
+.live-equipment-card .live-equipment-geometry-verdict {
+  display:inline-flex;align-items:center;justify-content:center;
+  position:absolute;right:var(--space-2);top:var(--space-1);
+  min-height:22px;max-width:115px;padding:2px 8px;
+  border:0!important;border-radius:999px;
+  font-size:var(--font-caption);font-weight:var(--weight-semibold);
+  color:#fff!important;background:#4b5563;
+  white-space:nowrap;cursor:pointer;z-index:2;
+}
+.live-equipment-card .live-equipment-geometry-verdict.is-pass {background:#216343;color:#fff!important;}
+.live-equipment-card .live-equipment-geometry-verdict.is-fail {background:#a12b36;color:#fff!important;}
+.live-equipment-card .live-equipment-geometry-verdict.is-limit {background:#805200;color:#fff!important;}
+.live-equipment-card .live-equipment-geometry-verdict:hover {filter:brightness(1.1);}
+.live-equipment-card .live-equipment-geometry-verdict:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.live-equipment-card .live-equipment-zone {display:none!important;}
+@container(max-width:650px){
+  .live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
+    grid-template-columns:minmax(0,1fr) calc(2*var(--control-height) + var(--space-1))!important;
+  }
+}
+
 </style>
 
 

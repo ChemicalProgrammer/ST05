@@ -144,7 +144,8 @@ window.STBasicMode=(function(){
   }
   function number(value,digits){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:digits??2}):'—';}
   function node(tag,text,cls){var n=document.createElement(tag);n.textContent=text||'';if(cls)n.className=cls;return n;}
-  function metric(host,label,value){var row=node('div','','basic-metric');row.append(node('span',label),node('strong',value));host.appendChild(row);}
+  // Tarjeta KPI destacada para eficiencia; las métricas ordinarias siguen con basic-metric.
+  function metric(host,label,value){var row=node('div','','basic-metric');if(host===efficiencies)row.classList.add('metric-card','metric-card--featured');row.append(node('span',label),node('strong',value));host.appendChild(row);}
   function refreshData(){
     if(!state.activeCase||!basicMounted&&!splitMounted)return;
     var equipment=actions.preview?.()||state.activeCase.equipment||[],simulation=(state.activeCase.simulations||[]).find(function(s){return s.id===state.activeSimulationId;});

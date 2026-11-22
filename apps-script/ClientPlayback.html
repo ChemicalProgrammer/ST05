@@ -658,7 +658,12 @@
       var status=eng?.audit?.status||'NOT EVALUATED';
       // Prefer the same conveyor engineering worksheet that powers the 2D dialog.
       // Cache only within this result/card so repeated playback frames stay inexpensive.
-      if(!card._numericalConveyorAnalysis){
+      var analysisFormatId=window.STProducts?.currentFormat?.()?.id||'base';
+      if(card._numericalConveyorAnalysisResult!==state.run.result
+        ||card._numericalConveyorAnalysisFormatId!==analysisFormatId){
+        card._numericalConveyorAnalysisResult=state.run.result;
+        card._numericalConveyorAnalysisFormatId=analysisFormatId;
+        card._numericalConveyorAnalysis=null;
         var worksheet=numericalConveyorWorksheet(model.id);
         if(worksheet){
           try{card._numericalConveyorAnalysis=window.STConveyorAnalysis.calculate(worksheet).geometry;}

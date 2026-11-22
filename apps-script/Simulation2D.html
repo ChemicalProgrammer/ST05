@@ -1647,7 +1647,7 @@ window.STSimulation2D=(function(){
     el('play').disabled=!!validation||running||numericalBusy;
     el('pause').disabled=runState!=='Running';
     el('stop').disabled=runState!=='Running'&&runState!=='Paused';
-    el('reset').disabled=!!validation;
+    el('reset').disabled=!!validation||running||numericalBusy;
     el('play').title=validation||'Start';
     el('reset').title=validation||'Reset';
     // Only playback speed, dimensions, viewports and appearance/view options

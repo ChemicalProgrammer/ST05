@@ -293,7 +293,7 @@
         <section id="simulation-playback" class="fold-card">
           <div class="fold-heading">
             <div><h3 class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-playback-content">Simulation playback</button></h3><p class="subsection-description">Play a simulation round and monitor efficiencies, output, and runtime metrics.</p>
-            <p id="simulation-playback-status"><span id="playback-status"><?= __ST_TEXT__('casegallery.ready') ?></span><output id="playback-progress" aria-label="Simulation progress">0%</output><output id="playback-performance" class="playback-performance" aria-label="Simulation rendering performance" title="Average interface rendering time, observed refresh frequency and calculation time"></output></p></div>
+            <p id="simulation-playback-status"><span id="playback-status"><?= __ST_TEXT__('casegallery.ready') ?></span><output id="playback-progress" aria-label="Simulation progress">0%</output><output id="playback-performance" class="playback-performance" aria-hidden="true" hidden></output></p></div>
             <div class="playback-toolbar fold-tools button-row">
             <div id="playback-round-control" class="hidden"><select id="playback-round" aria-label="Playback round"></select></div>
             <button id="play-simulation" class="secondary icon-button" type="button" data-icon="play" aria-label="<?= __ST_TEXT__('view.play') ?>" title="<?= __ST_TEXT__('view.play') ?>"></button>

@@ -36,3 +36,32 @@ test('automatic long batches stream round one while explicit calculation modes a
   assert.equal(w.STRunOptions.read().calculationMode,'SUMMARY');
  }finally{w.close();}
 });
+
+
+test('Simulation setup owns event and calendar switches without changing saved calendar data',()=>{
+ const dom=new JSDOM(fs.readFileSync('apps-script/WebApp.html','utf8'),{runScripts:'outside-only'}),w=dom.window;
+ try{
+  w.eval(fs.readFileSync('apps-script/RunOptions.html','utf8').replace(/<\\/?script>/g,''));
+  const event=w.document.getElementById('run-events-enabled');
+  const calendar=w.document.getElementById('run-calendar-enabled');
+  assert.ok(event.closest('#simulation-duration-content'));
+  assert.ok(calendar.closest('#simulation-duration-content'));
+  assert.equal(w.document.querySelectorAll('#run-events-enabled').length,1);
+  const saved={durationMode:'FIXED',durationSeconds:3600,
+   durationOptions:{method:'FIXED',amount:1,unit:'HOURS'},
+   plantCalendar:{enabled:true,mode:'SCHEDULED',cleaningMinutes:25},
+   eventsEnabled:false,includePlantCalendar:false};
+  const before=JSON.stringify(saved.plantCalendar);
+  w.STRunOptions.apply(saved);
+  assert.equal(event.checked,false);
+  assert.equal(calendar.checked,false);
+  assert.equal(w.STRunOptions.read().includePlantCalendar,false);
+  event.checked=true;calendar.checked=true;
+  assert.equal(w.STRunOptions.read().eventsEnabled,true);
+  assert.equal(w.STRunOptions.read().includePlantCalendar,true);
+  assert.equal(JSON.stringify(saved.plantCalendar),before);
+  w.STRunOptions.sync(true);
+  assert.equal(event.disabled,true);
+  assert.equal(calendar.disabled,true);
+ }finally{dom.window.close();}
+});

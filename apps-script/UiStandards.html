@@ -438,6 +438,10 @@ html[data-visual-style=elegant] .subsection-title { color:var(--secondary-text);
 .fold-content { margin-block-start:var(--space-3); min-width:0; }
 .fold-content[hidden] { display:none !important; }
 html[data-visual-style=elegant] :is(#equipment-control-events-title,#vgraph-title,#basic-run-options-title):has(> .fold-toggle) { color:var(--accent); }
+/* Numeric fields use keyboard entry; no native increment/decrement steppers. */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+input[type=number] { -moz-appearance:textfield; appearance:textfield; }
 </style>
 
 

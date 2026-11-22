@@ -1254,7 +1254,8 @@ dialog[open] .table-scroll {max-inline-size:100%;min-inline-size:0;scrollbar-gut
    lateral al primer bloque. Solo entre bloques se aplica --subsection-gap.
    No modificar estos márgenes por pantalla salvo un caso documentado.
    Ver docs/34_UI_VISUAL_STANDARDS.md. */
-:root { --subsection-gap:var(--space-4); --subsection-padding:var(--space-4); }
+/* --subsection-gap y --subsection-padding se definen en DesignTokens.html;
+   no redefinirlos en estilos de pantalla. */
 .workspace-content :is(.fold-card,.fold-native) {
   margin-block:0;
   min-width:0;

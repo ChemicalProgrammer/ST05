@@ -75,7 +75,9 @@
       playbackClock={frame,offset,rate,started:performance.now()};
       var now=performance.now();
       var ending=!next&&!roundSession?.streaming;
-      if(ending||now-playbackRenderStats.lastPaintAt>=playbackRefreshIntervalMs()
+      // Keep isolated scheduler tests and older embedded clients compatible.
+      if(ending||typeof playbackRenderStats==='undefined'
+        ||now-playbackRenderStats.lastPaintAt>=playbackRefreshIntervalMs()
         ||playbackRenderStats.lastPaintAt===-Infinity){
         renderPlaybackFrame();
       }

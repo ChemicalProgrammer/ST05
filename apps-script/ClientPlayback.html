@@ -503,7 +503,9 @@
 
     function updateLiveEquipmentCard(card, unit, model, index, sample) {
       var availabilityState = unit.availabilityState || unit.mode || 'UNKNOWN';
-      card.className = 'live-equipment-card state-' + availabilityState.toLowerCase().replace(/_/g, '-') + (card.dataset.losses === 'open' ? __ST_TEXT__('client.show_losses') : '');
+      var nextClass='live-equipment-card state-' + availabilityState.toLowerCase().replace(/_/g, '-')
+        + (card.dataset.losses === 'open' ? __ST_TEXT__('client.show_losses') : '');
+      if(card.className!==nextClass)card.className=nextClass;
       var symbol=card.querySelector('.live-equipment-symbol');
       if(symbol.dataset.type!==model.type){symbol.innerHTML=STIcons.equipment(model.type);symbol.dataset.type=model.type;}
       card.querySelector('.live-equipment-identity strong').textContent = model.name || unit.id;
@@ -567,36 +569,9 @@
       rate.textContent=belt?formatNumber(belt.speedMmPerSecond*0.06)+' m/min de banda · '+formatNumber((unit.actualRatePerSecond??0)*60)+' unid/min de flujo':formatRatePerMinute(machineRate);
       rate.title=belt?'Velocidad de banda y flujo de producto procesado. La banda puede moverse aunque reciba menos producto o esté vacía.':'';
 
-      var extraDetails=card.querySelector('.live-equipment-summary-details');
-      var detailItems=[
-        ['Own failures',model.type==='CONVEYOR'?'N/A':formatNumber(unit.failureCount||0)],
-        ['Start ramps',formatNumber(unit.startRampCount||0)],
-        ['Stop transitions',formatNumber(unit.stopTransitionCount||0)]
-      ];
-      if(model.type!=='CONVEYOR'&&Number.isFinite(unit.estimatedResidenceSeconds)){
-        detailItems.push(['Residence time',unit.estimatedResidenceSeconds,'time']);
-      }
-      var detailKeys={};
-      detailItems.forEach(function(entry){
-        var key=entry[0];detailKeys[key]=true;
-        var block=Array.prototype.find.call(extraDetails.children,function(el){return el.dataset.detailKey===key;});
-        if(!block){
-          block=document.createElement('div');block.dataset.detailKey=key;
-          var name=document.createElement('span');name.textContent=key;block.append(name);
-          if(entry[2]==='time'){
-            var slot=document.createElement('span');slot.className='live-detail-time';
-            slot.addEventListener('change',function(event){if(event.target.matches('.st-time-unit'))card.dataset.residenceTimeUnit=event.target.value;});
-            block.append(slot);
-          }else block.append(document.createElement('b'));
-          extraDetails.append(block);
-        }
-        if(entry[2]==='time'){
-          STTimeControls.setOutput(block.querySelector('.live-detail-time'),entry[1],{
-            unit:card.dataset.residenceTimeUnit||'s',scope:extraDetails,label:'Change residence time unit',
-            variant:'metric',valueClass:'numeric-time-value',unitClass:'numeric-time-unit',gap:2});
-        }else block.querySelector('b').textContent=entry[1];
-      });
-      Array.prototype.forEach.call(extraDetails.children,function(el){if(!detailKeys[el.dataset.detailKey])el.remove();});
+      // The legacy extra-details group is intentionally hidden; all currently
+      // presented state durations and production metrics live in the three
+      // visible sections. Avoid updating an invisible DOM subtree per frame.
       var stateDetails=card.querySelector('.live-equipment-state-grid');
       var durations=unit.stateSeconds||{},lookup={};
       Object.keys(durations).forEach(function(key){lookup[key.toUpperCase()]=Number(durations[key])||0;});
@@ -618,18 +593,8 @@
         ['Back-up stop',seconds(['BACKUP_STOP'],unit.backupStopSeconds)]
       ];
       updateNumerical2DRows(stateDetails,rows,'states',card);
-      STTimeControls.setOutput(card.querySelector('.live-starved'),unit.starvedSeconds,{unit:'min',
-        scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
-      STTimeControls.setOutput(card.querySelector('.live-blocked'),unit.blockedSeconds,{unit:'min',
-        scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
-      STTimeControls.setOutput(card.querySelector('.live-waiting-prime'),unit.waitingForPrimeSeconds,{unit:'min',
-        scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
-      STTimeControls.setOutput(card.querySelector('.live-backup-stop'),unit.backupStopSeconds,{unit:'min',
-        scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
-      STTimeControls.setOutput(card.querySelector('.live-failure'),unit.failureSeconds,{unit:'min',
-        scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
-      STTimeControls.setOutput(card.querySelector('.live-emergency'),unit.emergencyStopSeconds,{unit:'min',
-        scope:card.querySelector('.live-equipment-stats'),label:'Change equipment losses time unit'});
+      // The duplicate legacy loss counters are hidden permanently.
+      // Their durations remain available in the States group and raw samples.
       card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatNumber(belt.capacityPerSecond*60)+' unid/min a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatNumber(model.processData.equipment.maximumSpeedBpm) + __ST_TEXT__('client.min_2') : '');
       card.querySelector('.live-sparkline-nominal-rate').textContent = formatRatePerMinute(belt?belt.capacityPerSecond:model.nominalRatePerSecond);
       card.querySelector('.equipment-speed-sparkline-heading span').textContent=state.run.result?.detailCoverage?.recordingMode==='SUMMARY'?'Summary · endpoint snapshots':STRunOptions.windowLabel()+(state.run.result?.detailCoverage?.aggregated?' · aggregated':'');
@@ -652,14 +617,15 @@
       var valid=new Set();
       rows.forEach(function(row,index){
         var key=type+index;valid.add(key);
-        var el=Array.prototype.find.call(host.children,function(node){return node.dataset.rowKey===key;});
-        if(!el){
+        var nodes=host._numericRows||(host._numericRows=new Map());
+        var el=nodes.get(key);
+        if(!el||el.parentNode!==host){
           el=document.createElement('div');el.dataset.rowKey=key;el.className='live-equipment-2d-row';
           var label=document.createElement('span'),slot=document.createElement('span');
           label.className='live-equipment-2d-label';slot.className='live-equipment-2d-value';
-          el.append(label,slot);host.append(el);
+          el.append(label,slot);host.append(el);nodes.set(key,el);
         }
-        el.firstElementChild.textContent=row[0];
+        if(el.firstElementChild.textContent!==row[0])el.firstElementChild.textContent=row[0];
         // Cheap, fixed index rules instead of building Set objects and
         // querying the Geometry section separately for every field.
         var important=type==='summary'?(index>=1&&index<=4)
@@ -685,7 +651,14 @@
           }
         }
       });
-      Array.prototype.forEach.call(host.children,function(node){if(!valid.has(node.dataset.rowKey))node.remove();});
+      if(host.children.length!==valid.size){
+        Array.prototype.forEach.call(host.children,function(node){
+          if(!valid.has(node.dataset.rowKey)){
+            host._numericRows?.delete(node.dataset.rowKey);
+            node.remove();
+          }
+        });
+      }
     }
     function updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState){
       var conveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';

@@ -778,7 +778,7 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
   font-size:var(--font-caption); line-height:1.15;
 }
 .live-equipment-card .live-equipment-detail-grid > section {
-  overflow:hidden; will-change:height; contain:layout;
+  overflow:hidden; contain:layout style;
 }
 .live-equipment-card .live-equipment-detail-grid > section > button::after {content:none!important;}
 .live-equipment-card .live-equipment-detail-grid > section > button .numeric-section-title {
@@ -1131,6 +1131,27 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
 .live-equipment-card .live-equipment-geometry-group > .live-equipment-2d-section-heading {
   padding-right:0!important;
 }
+
+
+/* Stabilize dense responsive metrics without permanently promoting the
+   collapsible cards to independent animation layers. */
+.live-equipment-card .live-equipment-detail-grid :is(.live-equipment-2d-rows,.live-equipment-state-grid),
+.live-equipment-card .live-equipment-geometry-group .live-equipment-2d-rows,
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency {
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))!important;
+  grid-auto-rows:minmax(22px,auto);
+  align-content:start;
+}
+.live-equipment-card .live-equipment-detail-grid .live-equipment-2d-value,
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency b {
+  font-variant-numeric:tabular-nums;
+}
+.playback-performance {
+  display:inline-flex;align-items:center;
+  color:var(--muted);font-size:var(--font-caption);
+  white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.playback-performance:empty {display:none;}
 
 </style>
 

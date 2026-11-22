@@ -323,7 +323,8 @@ html[data-ui-mode] .scenario-config-dialog .scenario-preview-context { display:b
 .scenario-config-dialog .scenario-suggestion-percent { align-self:center; }
 .simulation-options { display:flex; align-items:center; gap:var(--space-5); flex-wrap:wrap; margin-bottom:var(--space-3); }
 .simulation-options > label { margin:0; }
-html[data-events-enabled=false] .live-equipment-controls > button:not(.loss-toggle) { display:none!important; }
+/* Keep scenario buttons visible for discoverability; runtime eligibility controls disabled state. */
+html[data-events-enabled=false] .live-equipment-controls > button:not(.loss-toggle) { opacity:.55; }
 #planned-line-events input { width:100%; min-width:5em; }
 #planned-line-events td { min-width:0; }
 #planned-line-events table { width:100%; }

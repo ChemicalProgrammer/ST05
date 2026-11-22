@@ -94,9 +94,6 @@ window.STBasicMode=(function(){
     }
     if(enabled||basicMounted){
       var inSimulation=enabled&&active&&section==='simulation';
-      var runButton=document.getElementById('run-simulation');
-      var buttonHost=document.querySelector('#run-panel > .section-heading > .button-row');
-      if(runButton.parentNode!==buttonHost)buttonHost.appendChild(runButton);
       placeEfficiencies(inSimulation);
     }
     basicMounted=enabled;

@@ -21,7 +21,7 @@ Usa `--font-ui` en la interfaz y `--font-mono` para código o JSON. Distingue je
 | Relación | Espacio base | Aplicación |
 | --- | --- | --- |
 | Entre secciones principales | 24 px · `--space-6` | Un único `gap` o margen lógico del contenedor |
-| Entre subsecciones | 16 px · `--space-4` | Aplica también entre una tabla y el siguiente bloque |
+| Entre Subsecciones | `--workspace-gutter` (24 px; 12 px en pantallas estrechas) | Mismo token que los márgenes superior y laterales |
 | Encabezado a contenido | 12 px · `--space-3` | Dentro de una misma sección |
 | Entre controles del mismo grupo | 12 px · `--space-3` | Filas y grillas |
 | Etiqueta a campo o checkbox | 8 px · `--space-2` | Controles verticales o en línea |
@@ -50,7 +50,7 @@ Prefiere `gap` en grillas y contenedores flexibles. Usa márgenes lógicos para 
 
 - **Lienzo exterior eliminado:** las secciones principales del workspace (`.workspace-content > section.card`) funcionan como contenedores de distribución transparentes, sin tarjeta, borde ni sombra propios. El fondo original `--surface` se traslada a la superficie de cada Subsección (`.fold-card` y `.fold-native`). **No cambies todavía** los colores de las tarjetas de datos, inputs o controles internos.
 - **Primera Subsección de una pantalla:** no suma margen superior propio. El workspace aporta el **mismo margen arriba, a la izquierda y a la derecha**, controlado **exclusivamente por `--workspace-gutter` en `apps-script/DesignTokens.html`** (24 px escritorio; 12 px en pantallas estrechas). `--page-padding` es un alias de compatibilidad, no una segunda fuente de configuración. El fondo alrededor de cada Subsección es `--page`.
-- **Entre Subsecciones consecutivas:** exclusivamente `--subsection-gap = --space-4` (16 px), **no** la suma de dos márgenes.
+- **Entre Subsecciones consecutivas:** `--subsection-gap = var(--workspace-gutter)` (24 px escritorio, 12 px pantallas estrechas); el mismo valor que los márgenes exterior superior y laterales, sin sumar márgenes de cada bloque.
 - **Interior de la Subsección:** `--subsection-padding = --space-4` (16 px) en los cuatro lados.
 - **Encabezado al contenido:** `--space-3` (12 px). Subsecciones colapsadas u ocultas no deben reservar espacio.
 - **Herramientas del encabezado:** por defecto todos los controles de `.fold-tools` y `.button-row` se mantienen **en una sola fila**, incluidos selector y botones de Registro. Solo cuando el espacio es insuficiente se permite dividir el grupo en otra fila; nunca deben aparecer columnas de herramientas por defecto.

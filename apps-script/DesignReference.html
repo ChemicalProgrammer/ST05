@@ -24,9 +24,25 @@
           <span role="columnheader">Nombre del control</span>
         </div>
         <div class="design-reference-row" role="row">
-          <div class="design-reference-cell design-reference-preview" role="cell"><section class="fold-card design-reference-subsection"><div class="fold-heading"><h3><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="design-ref-subsection-content">Ejemplo de Subsección</button></h3><div class="fold-tools button-row"><button type="button" class="secondary icon-button design-reference-counter-button" aria-label="Añadir al ejemplo" title="Añadir al ejemplo">+</button></div></div><div id="design-ref-subsection-content" class="fold-content"><span class="chart-note">Contenido plegable</span> <output id="design-ref-counter" aria-live="polite">0</output></div></section></div>
+          <div class="design-reference-cell design-reference-preview" role="cell"><section class="fold-card design-reference-subsection"><div class="fold-heading"><div class="subsection-heading-copy"><h3 class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="design-ref-subsection-content">Ejemplo de Subsección</button></h3><p class="subsection-description">Una breve descripción opcional aparece debajo del título.</p></div><div class="fold-tools button-row"><button type="button" class="secondary icon-button design-reference-counter-button" aria-label="Añadir al ejemplo" title="Añadir al ejemplo">+</button></div></div><div id="design-ref-subsection-content" class="fold-content"><span class="chart-note">Contenido plegable</span> <output id="design-ref-counter" aria-live="polite">0</output></div></section></div>
           <div class="design-reference-cell design-reference-explanation" role="cell">Contenedor plegable con título, barra de herramientas y contenido. Su encabezado permanece visible al contraerlo.</div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Subsección</strong><code>.fold-card · .fold-heading · .fold-content</code></div>
+        </div>
+
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><h3 class="subsection-heading-title design-reference-standalone-title">Título de subsección</h3></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Encabezado seminegrita en color primario, con la escala de título compartida por los controles plegables.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Título de subsección</strong><code>.subsection-heading-title</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><p class="subsection-description">Breve contexto de la sección, opcional y debajo del título.</p></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Texto opcional de ayuda, con jerarquía secundaria y sin desplazar la barra de herramientas.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Descripción de subsección</strong><code>.subsection-description</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><fieldset class="subsection-fieldset design-reference-divider-example"><legend class="subsection-divider">Options</legend><label class="checkbox-label"><input type="checkbox" checked> Show dimensions</label></fieldset></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Separador interior para agrupar opciones dentro de una Subsección. Texto seminegrita en color primario y línea tenue.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Separador interno de subsección</strong><code>.subsection-fieldset · .subsection-divider</code></div>
         </div>
         <div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><button type="button" class="secondary icon-button" title="Ejemplo de añadir" aria-label="Ejemplo de añadir">+</button><button type="button" class="secondary icon-button" title="Ejemplo de actualizar" aria-label="Ejemplo de actualizar">↻</button></div></div>
@@ -40,7 +56,7 @@
         </div>
         <div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><label>Input <span class="time-value-control"><input type="number" value="5" step="any" aria-label="Cantidad demostrativa"><select aria-label="Unidad de entrada demostrativa"><option>s</option><option selected>min</option><option>h</option></select></span></label><label>Output <span id="design-ref-time-output"></span></label></div></div>
-          <div class="design-reference-cell design-reference-explanation" role="cell">El input conserva la cifra escrita; el output convierte la cifra al cambiar de unidad.</div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">El input conserva la cifra; el output convierte la cifra. Ambos reservan el mismo ancho fijo de unidad y una separación de 2 px para evitar saltos de posición.</div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Valor–unidad</strong><code>.time-value-control · STTimeControls.output()</code></div>
         </div>
         <div class="design-reference-row" role="row">
@@ -174,13 +190,13 @@
           <span role="columnheader">Nombre del control</span>
         </div>
         <div class="design-reference-row" role="row">
-          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--featured design-reference-card-sample"><span>Eficiencia</span><strong>75.0%</strong></article></div>
-          <div class="design-reference-cell design-reference-explanation" role="cell">Indicador principal: fondo diferenciado, franja superior en el color primario y cifra grande. Ahora también se usa en Simulation Playback.</div>
+          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--featured design-reference-card-sample"><span>Theoretical equipment efficiency</span><strong>100%</strong></article></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Indicador principal con franja superior y valor grande; en Simulation Playback se reserva para las dos tarjetas de eficiencia.</div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>KPI destacado</strong><code>.metric-card--featured</code></div>
         </div>
         <div class="design-reference-row" role="row">
-          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--result design-reference-card-sample"><span>Tiempo de ejecución</span><strong>435.34 min</strong></article></div>
-          <div class="design-reference-cell design-reference-explanation" role="cell">Resultado secundario de lectura compacta. Mantiene una jerarquía menor que el KPI destacado.</div>
+          <div class="design-reference-cell design-reference-preview" role="cell"><article class="metric-card metric-card--result design-reference-card-sample"><span>Virtual time</span><strong>435.34 min</strong></article></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Tarjeta compacta para las diez métricas de Simulation Playback y otros resultados secundarios. Hereda el tamaño del valor del contenedor.</div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Tarjeta de resultado</strong><code>.metric-card--result</code></div>
         </div>
         <div class="design-reference-row" role="row">
@@ -231,6 +247,10 @@
 .design-reference-subsection .fold-heading {gap:var(--space-2);}
 .design-reference-subsection .fold-heading h3 {min-width:0;}
 .design-reference-subsection .fold-content {font-size:var(--font-secondary);}
+.design-reference-standalone-title {margin:0;color:var(--accent);font-size:var(--font-card);font-weight:var(--weight-semibold);}
+.design-reference-preview > .subsection-description {margin:0;color:var(--muted);font-size:var(--font-secondary);}
+.design-reference-divider-example {width:100%;margin:0;}
+.design-reference-divider-example .checkbox-label {display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-secondary);}
 .design-reference-control-row {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);}
 .design-reference-control-row > label {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);font-size:var(--font-secondary);}
 .design-reference-control-row > label.checkbox-label {flex-direction:row;align-items:center;}

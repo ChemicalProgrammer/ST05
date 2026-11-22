@@ -276,7 +276,22 @@
         group.dataset.collapsed='true';
         var toggle=group.firstElementChild;
         toggle.setAttribute('aria-expanded','false');
-        toggle.innerHTML='<span class="numeric-section-title">'+toggle.innerHTML+'</span><span class="numeric-collapse-chevron" aria-hidden="true"></span>';
+        var sectionLabel=document.createElement('span');
+        sectionLabel.className='numeric-section-title';
+        while(toggle.firstChild)sectionLabel.appendChild(toggle.firstChild);
+        var chevron=document.createElementNS('http://www.w3.org/2000/svg','svg');
+        chevron.setAttribute('class','numeric-collapse-chevron');
+        chevron.setAttribute('viewBox','0 0 24 24');
+        chevron.setAttribute('fill','none');
+        chevron.setAttribute('stroke','currentColor');
+        chevron.setAttribute('stroke-width','2');
+        chevron.setAttribute('stroke-linecap','round');
+        chevron.setAttribute('stroke-linejoin','round');
+        chevron.setAttribute('aria-hidden','true');
+        var arrow=document.createElementNS('http://www.w3.org/2000/svg','path');
+        arrow.setAttribute('d','m6 9 6 6 6-6');
+        chevron.appendChild(arrow);
+        toggle.append(sectionLabel,chevron);
         toggle.addEventListener('click',function(){
           var from=group.getBoundingClientRect().height;
           var collapsed=group.dataset.collapsed!=='true';
@@ -333,7 +348,8 @@
       card.querySelector('.critical-label').textContent = model.processData?.role === 'PACEMAKER' ? __ST_TEXT__('client.critical_pacemaker') : model.processData?.role === 'CRITICAL_MACHINE' ? __ST_TEXT__('client.critical_equipment') : '';
       var reliability=model.noiseProfile?.reliability;
       var enabledReliability=state.run.configuration?.reliabilityEnabled!==false
-        &&(document.getElementById('run-failures-enabled')?.checked!==false);
+        &&document.getElementById('run-reliability-enabled')?.checked!==false
+        &&state.run.result?.run?.reliabilityEnabled!==false;
       var reliabilityVisible=enabledReliability&&Number.isFinite(reliability?.mtbfMinutes)
         &&reliability.mtbfMinutes>0&&Number.isFinite(reliability?.mttrMinutes)&&reliability.mttrMinutes>0;
       card.querySelector('.reliability-label').textContent=reliabilityVisible

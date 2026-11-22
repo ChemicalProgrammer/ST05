@@ -318,7 +318,7 @@
         var equipment=state.activeCase?.equipment?.find(function(item){return item.id===equipmentId;});
         window.STConveyorAnalysis.open(equipment?.name||equipmentId,worksheet);
       });
-      geometryGroup.append(geometryHeader,geometryVerdict,geometryRows);
+      geometryGroup.append(geometryHeader,geometryRows);
       // Keep a compact row preview visible even when a group is collapsed.
       [summaryPanel,statePanel,performanceGroup,geometryGroup].forEach(function(group){
         group.dataset.collapsed='true';
@@ -382,22 +382,21 @@
       layout.append(overviewSide,detailGrid);
       card.querySelector('.live-equipment-card__row').before(layout);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');
-      heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');title.before(heading);heading.append(symbol,title);
-      var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
-      var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);headerDetails.append(card.querySelector('.live-equipment-identity'));heading.append(card.querySelector('.live-state'));
-      // Card-level disclosure is independent from the three data group disclosures.
+      heading.className='live-equipment-heading';symbol.className='live-equipment-symbol';symbol.setAttribute('aria-hidden','true');
+      title.before(heading);
       var cardToggle=document.createElement('button');
-      cardToggle.type='button';cardToggle.className='numeric-card-toggle';
+      cardToggle.type='button';cardToggle.className='numeric-card-name-toggle';
+      cardToggle.append(title);heading.append(symbol,cardToggle);
+      var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
+      var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);headerDetails.append(card.querySelector('.live-equipment-identity'));
+      heading.append(card.querySelector('.live-state'));
+      // A conveyor's PASS / FAIL action lives in the identity panel, not in Geometry.
+      geometryVerdict.classList.add('numeric-conveyor-verdict');
+      heading.after(geometryVerdict);
+      // The equipment name itself is the accessible card disclosure control.
       cardToggle.setAttribute('aria-label','Collapse equipment details');
       cardToggle.setAttribute('aria-expanded','true');
       cardToggle.title='Collapse equipment details';
-      var cardChevron=document.createElementNS('http://www.w3.org/2000/svg','svg');
-      cardChevron.setAttribute('viewBox','0 0 24 24');cardChevron.setAttribute('aria-hidden','true');
-      cardChevron.setAttribute('fill','none');cardChevron.setAttribute('stroke','currentColor');
-      cardChevron.setAttribute('stroke-width','2');cardChevron.setAttribute('stroke-linecap','round');
-      var cardPath=document.createElementNS('http://www.w3.org/2000/svg','path');
-      cardPath.setAttribute('d','m6 9 6 6 6-6');cardChevron.append(cardPath);cardToggle.append(cardChevron);
-      heading.append(cardToggle);
       card.dataset.cardCollapsed='false';
       cardToggle.addEventListener('click',function(){
         if(card._cardTransitioning)return;
@@ -494,6 +493,7 @@
       card._numericConveyor=isConveyor;
       card.querySelector('.live-equipment-performance-group').hidden=isConveyor;
       card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor;
+      card.querySelector('.numeric-conveyor-verdict').hidden=!isConveyor;
       updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
       if(isConveyor)updateNumericalConveyorGeometry(card,model,zone);
       var efficiencyCard=card.querySelector('.live-equipment-efficiency');

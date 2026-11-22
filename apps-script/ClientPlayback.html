@@ -187,6 +187,32 @@
       return formatPercent(Math.min(1, sample.outputCount / (pacemakerRate * sample.virtualSecond)));
     }
 
+    // A numerical case can contain dozens of equipment cards. Rendering the
+    // invisible ones every playback tick forces unnecessary DOM and canvas work.
+    var liveEquipmentObserver=null;
+    function ensureLiveEquipmentObserver(){
+      if(liveEquipmentObserver||typeof IntersectionObserver!=='function')return liveEquipmentObserver;
+      liveEquipmentObserver=new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          var card=entry.target;
+          card._liveVisible=entry.isIntersecting;
+          if(!entry.isIntersecting||state.uiView!=='simulation')return;
+          var result=state.run.result,sample=result?.samples?.[state.run.sampleIndex];
+          if(!sample||!state.activeCase)return;
+          var index=state.activeCase.equipment.findIndex(function(item){
+            return item.id===card.dataset.equipmentId;
+          });
+          if(index<0)return;
+          var unit=sample.equipment[index];
+          if(!unit)return;
+          var model=state.activeCase.equipment[index];
+          var chartModel=updateLiveEquipmentCard(card,unit,model,index,sample);
+          drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,chartModel);
+        });
+      },{rootMargin:'300px 0px',threshold:0});
+      return liveEquipmentObserver;
+    }
+
     function renderLiveEquipment(sample) {
       var target = document.getElementById('live-equipment');
       target.setAttribute('role', 'list');
@@ -202,15 +228,25 @@
         var equipmentId = unit.id || ('unit-' + index);
         var card = cardsByEquipmentId[equipmentId] || createLiveEquipmentCard(equipmentId);
         displayedEquipmentIds[equipmentId] = true;
-        var chartModel=updateLiveEquipmentCard(card, unit, model, index, sample);
-        if (card.parentNode !== target || card.previousElementSibling !== previousElement) {
+        var isNew=card.parentNode!==target;
+        if (isNew || card.previousElementSibling !== previousElement) {
           target.insertBefore(card, previousElement.nextElementSibling);
         }
         previousElement = card;
+        var observer=ensureLiveEquipmentObserver();
+        if(isNew&&observer){
+          card._liveVisible=true; // Initial content is populated once.
+          observer.observe(card);
+        }
+        if(observer&&!card._liveVisible) return;
+        var chartModel=updateLiveEquipmentCard(card, unit, model, index, sample);
         drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'), index, chartModel);
       });
       Array.prototype.forEach.call(target.querySelectorAll('.live-equipment-card'), function(card) {
-        if (!displayedEquipmentIds[card.getAttribute('data-equipment-id')]) card.remove();
+        if (!displayedEquipmentIds[card.getAttribute('data-equipment-id')]){
+          liveEquipmentObserver?.unobserve(card);
+          card.remove();
+        }
       });
     }
 

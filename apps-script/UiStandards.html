@@ -494,6 +494,76 @@ input[type=number] { -moz-appearance:textfield; appearance:textfield; }
   .live-equipment-detail-grid { grid-template-columns:1fr; }
 }
 
+
+/* Duration input uses the same normal border as other numeric inputs;
+   the unit is an unboxed, inline, reusable selector. */
+.time-value-control { border:0!important; border-radius:0!important; background:transparent!important;
+  overflow:visible!important; gap:var(--space-2); align-items:center; }
+.time-value-control > input[type=number] { min-width:0; flex:1; width:1%; background:var(--surface)!important;
+  border:var(--border-width) solid var(--line)!important; border-radius:var(--radius-md)!important;
+  padding-inline:var(--space-2); }
+.time-value-control > select { min-width:2.4em!important; max-width:none!important; width:auto!important;
+  background:transparent!important; border:0!important; border-radius:0!important;
+  color:var(--accent)!important; padding:0 var(--space-1)!important; }
+.time-value-control:focus-within { outline:none!important; }
+.time-value-control > input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+
+/* Numerical cards: 2D-style three-column groups + a full-width sparkline. */
+.live-equipment-card .live-equipment-detail-grid { display:grid; grid-template-columns:minmax(0,1.13fr) minmax(0,.9fr) minmax(0,1.07fr);
+  align-items:start; gap:var(--space-2); margin:0; }
+.live-equipment-card .live-equipment-2d-summary,
+.live-equipment-card .live-equipment-state-details,
+.live-equipment-card .live-equipment-performance-group,
+.live-equipment-card .live-equipment-geometry-group {
+  min-width:0; border:1px solid var(--line); border-radius:var(--radius-md);
+  padding:var(--space-2); background:var(--surface); margin:0; }
+.live-equipment-card .live-equipment-2d-title { border-radius:var(--radius-pill); background:var(--muted);
+  padding:var(--space-1) var(--space-2); text-align:center; color:var(--surface); }
+.live-equipment-card .live-equipment-2d-title .live-equipment-identity strong { color:inherit; font-size:var(--font-section); }
+.live-equipment-card .live-equipment-2d-title .live-equipment-identity .live-command,
+.live-equipment-card .live-equipment-2d-title .live-equipment-identity .critical-label,
+.live-equipment-card .live-equipment-2d-title .live-equipment-identity .reliability-label { display:none; }
+.live-equipment-card .live-equipment-2d-section-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-1); }
+.live-equipment-card .live-equipment-2d-section-heading strong,
+.live-equipment-card .live-equipment-state-details > strong,
+.live-equipment-card .live-equipment-performance-group > strong { font-size:var(--font-section); font-weight:var(--weight-semibold); margin:0 0 var(--space-2); }
+.live-equipment-card .live-equipment-2d-rows,
+.live-equipment-card .live-equipment-state-grid { display:flex; flex-direction:column; gap:0; }
+.live-equipment-card .live-equipment-2d-row,
+.live-equipment-card .live-equipment-state-grid > .live-equipment-2d-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--space-2);
+  align-items:center; min-height:24px; padding:var(--space-1) var(--space-2); }
+.live-equipment-card .live-equipment-2d-row:nth-child(even) { background:var(--surface-soft); }
+.live-equipment-card .live-equipment-2d-label { color:var(--muted); font-size:var(--font-secondary); }
+.live-equipment-card .live-equipment-2d-value { display:flex; align-items:center; justify-content:end; gap:var(--space-1);
+  text-align:right; font-variant-numeric:tabular-nums; }
+.live-equipment-card .live-equipment-2d-value b { font-weight:var(--weight-semibold); }
+.live-equipment-card .live-equipment-2d-unit { color:var(--muted); min-width:2em; text-align:left; font-size:var(--font-secondary); }
+.live-equipment-card .live-equipment-state-grid .st-time-output { justify-content:flex-end; }
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency { display:flex; flex-direction:column; gap:0; }
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency > div {
+ display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:var(--space-2);
+ min-height:24px; padding:var(--space-1) var(--space-2); }
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency > div:nth-child(even) { background:var(--surface-soft); }
+.live-equipment-card .live-equipment-performance-group .live-equipment-efficiency span { font-size:var(--font-secondary); }
+.live-equipment-card .live-equipment-performance-group .live-equipment-summary-details { display:none; }
+.live-equipment-card .live-equipment-geometry-verdict { color:var(--muted); font-size:var(--font-secondary); font-weight:var(--weight-semibold); }
+.live-equipment-card .live-equipment-geometry-verdict.is-fail { color:var(--danger); }
+.live-equipment-card .live-equipment-geometry-verdict.is-pass { color:var(--success); }
+.live-equipment-card .live-equipment-geometry-group[hidden],
+.live-equipment-card .live-equipment-performance-group[hidden] { display:none!important; }
+.live-equipment-card .live-equipment-card__row { display:flex!important; align-items:center; flex-wrap:wrap; gap:var(--space-2);
+  margin-top:var(--space-2); }
+.live-equipment-card .live-equipment-operation,
+.live-equipment-card .live-equipment-flow { display:none!important; }
+.live-equipment-card .live-speed-cell { display:block; flex:1 1 320px; grid-row:auto!important; grid-column:auto!important; min-width:220px; }
+.live-equipment-card .live-equipment-controls { flex:0 0 auto; grid-row:auto!important; grid-column:auto!important; }
+.live-equipment-card .live-equipment-stats { flex:1 1 100%; order:5; grid-row:auto!important; grid-column:auto!important; }
+.live-equipment-card:not(.show-losses) .live-equipment-stats { display:none; }
+.live-equipment-card.show-losses .live-equipment-stats { display:grid; }
+.live-equipment-card .live-equipment-zone { margin-top:var(--space-2); }
+@media(max-width:1050px) { .live-equipment-card .live-equipment-detail-grid {grid-template-columns:repeat(2,minmax(0,1fr));} }
+@media(max-width:650px) { .live-equipment-card .live-equipment-detail-grid {grid-template-columns:minmax(0,1fr);} }
+
 </style>
 
 

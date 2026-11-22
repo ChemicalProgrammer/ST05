@@ -1,0 +1,55 @@
+<script>
+/* Shared, accessible time-value control. Store durations in seconds; only the view unit changes. */
+window.STTimeControls=(function(){
+  'use strict';
+  var secondsByUnit={s:1,min:60,h:3600,d:86400,wk:604800};
+  var labels={s:'Seconds',min:'Minutes',h:'Hours',d:'Days',wk:'Weeks'};
+  function number(value){
+    if(!Number.isFinite(value))return '—';
+    return new Intl.NumberFormat(undefined,{maximumFractionDigits:3}).format(Number(value.toPrecision(9)));
+  }
+  function unitSelect(unit,description){
+    var select=document.createElement('select');
+    select.className='st-time-unit';
+    select.setAttribute('aria-label',description||'Select time unit');
+    select.title=description||'Select time unit';
+    Object.keys(secondsByUnit).forEach(function(key){
+      var option=document.createElement('option');option.value=key;option.textContent=key;option.title=labels[key];select.append(option);
+    });
+    select.value=secondsByUnit[unit]?unit:'min';
+    return select;
+  }
+  function output(seconds,opts){
+    opts=opts||{};
+    var wrapper=document.createElement('span');
+    wrapper.className='st-time-output time-output-value';
+    var value=document.createElement('b'),unit=unitSelect(opts.unit||'min',opts.label||'Change displayed time unit');
+    wrapper.dataset.seconds=String(seconds);
+    wrapper.append(value,unit);
+    function refresh(){
+      var seconds=Number(wrapper.dataset.seconds);
+      value.textContent=Number.isFinite(seconds)?number(seconds/secondsByUnit[unit.value]):'—';
+    }
+    unit.addEventListener('change',function(){
+      var scope=opts.scope||wrapper;
+      scope.querySelectorAll('.st-time-output').forEach(function(node){
+        var otherUnit=node.querySelector('.st-time-unit');
+        if(otherUnit){otherUnit.value=unit.value;var b=node.querySelector('b');
+          if(b){var seconds=Number(node.dataset.seconds);b.textContent=Number.isFinite(seconds)?number(seconds/secondsByUnit[unit.value]):'—';}
+        }
+      });
+    });
+    refresh();
+    return wrapper;
+  }
+  function setOutput(container,seconds,opts){
+    if(!container)return;
+    var current=container.querySelector('.st-time-output');
+    if(!current){container.replaceChildren(output(seconds,opts));return;}
+    current.dataset.seconds=String(seconds);
+    var unit=current.querySelector('.st-time-unit'),value=current.querySelector('b');
+    if(unit&&value)value.textContent=Number.isFinite(Number(seconds))?number(Number(seconds)/secondsByUnit[unit.value]):'—';
+  }
+  return {factors:secondsByUnit,output:output,setOutput:setOutput,unitSelect:unitSelect,format:number};
+}());
+</script>

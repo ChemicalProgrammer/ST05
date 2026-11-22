@@ -77,6 +77,7 @@
       if (!syncPersistentSimulation()) return false;
       var previousView=state.uiView;state.uiView = view;
       if(previousView==='products'&&view!=='products')renderEquipment();
+      if(view==='editor'&&(state.activeCase.equipment?.length||0)>0&&!document.querySelector('#equipment-list .equipment-card'))renderEquipment();
       if(view==='simulation')renderRunWorkspace();
       if(view==='whatif')renderSimulationAnalysis();
       if(view==='products')STProducts.render(true);

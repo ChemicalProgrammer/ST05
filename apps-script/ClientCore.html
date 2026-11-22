@@ -232,6 +232,17 @@
         if(selectPlaybackRound(Number(this.value),false)&&activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
       });
       document.getElementById('run-chart-window').addEventListener('change',function(){var simulation=activePersistentSimulation();if(simulation){simulation.dynamicConfig.chartWindow=this.value;autosave.change();}if(state.run.result)renderPlaybackFrame();});
+      document.getElementById('run-display-fps').addEventListener('change',function(){
+        var simulation=activePersistentSimulation();
+        if(simulation){
+          simulation.dynamicConfig=simulation.dynamicConfig||{};
+          simulation.dynamicConfig.displayRefreshFps=Number(this.value);
+          autosave.change();
+        }
+        // Presentation-only preference: do not invalidate a calculated result.
+        resetPlaybackPerformance();
+        if(state.run.result)renderPlaybackFrame();
+      });
       // Input time controls retain the typed number when the unit changes.
       // The dependent physical duration is resolved from value × selected unit.
       ['run-duration-unit','run-sample-interval-unit'].forEach(function(id){

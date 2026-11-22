@@ -3,7 +3,7 @@
   <section class="real-data-block fold-card" aria-labelledby="real-data-register-title">
     <!-- Encabezado de Registro, selector de observación y acciones de intercambio. -->
     <div class="real-data-block-heading fold-heading">
-      <h3 class="real-data-section-title" id="real-data-register-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-register-content">Registro</button></h3>
+      <div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-register-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-register-content">Registro</button></h3><p class="subsection-description">Captura los tiempos, paradas y valores observados para compararlos con el modelo.</p></div>
       <div class="real-data-toolbar fold-tools" role="group" aria-label="Registro tools">
         <select id="real-data-record" aria-label="Seleccionar registro"></select>
         <div class="button-row">
@@ -32,14 +32,14 @@
   <!-- Comparación de la observación seleccionada con los resultados de la ronda o del lote. -->
   <section class="real-data-block fold-card" aria-labelledby="real-data-compare-title">
     <div class="real-data-block-heading fold-heading">
-      <h3 class="real-data-section-title" id="real-data-compare-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-comparison">Comparación de parámetros</button></h3>
+      <div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-compare-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-comparison">Comparación de parámetros</button></h3><p class="subsection-description">Compara los parámetros reportados con los resultados de simulación seleccionados.</p></div>
       <select id="real-data-view" aria-label="Resultados guardados"><option value="average">Promedio de rondas</option></select>
     </div>
     <div id="real-data-comparison" class="fold-content"></div>
   </section>
   <!-- Ajuste de Rate Loss calculado a partir de los datos disponibles. -->
   <section class="real-data-block fold-card" aria-labelledby="real-data-calibration-title">
-    <div class="real-data-block-heading fold-heading"><h3 class="real-data-section-title" id="real-data-calibration-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-calibration">Ajuste calibrado de rate loss</button></h3></div>
+    <div class="real-data-block-heading fold-heading"><div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-calibration-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-calibration">Ajuste calibrado de rate loss</button></h3><p class="subsection-description">Consulta las diferencias de velocidad y el tiempo efectivo de ejecución calibrado.</p></div></div>
     <div id="real-data-calibration" class="fold-content"></div>
   </section>
 </section>

@@ -439,7 +439,7 @@
       geometryVerdict.classList.add('numeric-conveyor-verdict');
       // Keep a stable reference: the verdict button was moved out of the
       // Geometry section and must not be assumed to exist in older cards.
-      headerDetails.append(geometryVerdict);
+      heading.after(geometryVerdict);
       card._numericConveyorVerdict=geometryVerdict;
       // The equipment name itself is the accessible card disclosure control.
       cardToggle.setAttribute('aria-label','Collapse equipment details');
@@ -742,7 +742,10 @@
         ||card.querySelector('.live-equipment-geometry-verdict');
       if(!badge)return;
       badge.textContent=status.replace(/_/g,' ');
-      badge.className='live-equipment-geometry-verdict '+(status==='FAIL'?'is-fail':status==='PASS'?'is-pass':status==='AT LIMIT'?'is-limit':'');
+      // Preserve numeric-conveyor-verdict on every frame. Removing it used to
+      // reactivate the legacy absolute badge positioning and make it disappear.
+      badge.className='live-equipment-geometry-verdict numeric-conveyor-verdict '
+        +(status==='FAIL'?'is-fail':status==='PASS'?'is-pass':status==='AT LIMIT'?'is-limit':'');
       badge.setAttribute('aria-label','Open conveyor analysis · '+status.replace(/_/g,' '));
       badge.title='Open conveyor analysis · '+status.replace(/_/g,' ');
       updateNumerical2DRows(card.querySelector('.live-equipment-geometry-group .live-equipment-2d-rows'),rows,'geometry',card);

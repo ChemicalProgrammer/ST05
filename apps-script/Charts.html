@@ -230,11 +230,16 @@ window.STCharts=function(state,formatNumber){
       var width = Math.max(1, Math.floor(bounds.width));
       if (width <= 1) return null;
       var ratio = window.devicePixelRatio || 1;
-      canvas.width = width * ratio;
-      canvas.height = height * ratio;
+      // Reassigning canvas.width/height destroys its rendering state on every
+      // playback frame and forces fresh backing-store allocation. Resize only
+      // when CSS geometry or device pixel ratio actually changes.
+      var physicalWidth=Math.max(1,Math.round(width*ratio));
+      var physicalHeight=Math.max(1,Math.round(height*ratio));
+      if(canvas.width!==physicalWidth)canvas.width=physicalWidth;
+      if(canvas.height!==physicalHeight)canvas.height=physicalHeight;
       var context = canvas.getContext('2d');
-      context.scale(ratio, ratio);
-      context.clearRect(0, 0, width, height);
+      context.setTransform(ratio,0,0,ratio,0,0);
+      context.clearRect(0,0,width,height);
       return { context: context, width: width, height: height };
     }
 

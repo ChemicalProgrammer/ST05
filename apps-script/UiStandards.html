@@ -1260,10 +1260,12 @@ dialog[open] .table-scroll {max-inline-size:100%;min-inline-size:0;scrollbar-gut
   margin-block:0;
   min-width:0;
 }
-/* El combinador general permite bloques intermedios ocultos o vacíos sin
-   perder el ritmo entre Subsecciones realmente visibles. */
+/* Un único margen entre Subsecciones adyacentes.
+   El selector general (~) alcanzaba Subsecciones de contenedores flex
+   y sumaba ese margen al gap del padre (Formats). También consideraba
+   Subsecciones ocultas solo por CSS (Conveyors). */
 .workspace-content :is(.fold-card,.fold-native):not(.hidden):not([hidden])
-  ~ :is(.fold-card,.fold-native):not(.hidden):not([hidden]) {
+  + :is(.fold-card,.fold-native):not(.hidden):not([hidden]) {
   margin-block-start:var(--subsection-gap);
 }
 .workspace-content > .card > :is(.fold-card,.fold-native):first-of-type,
@@ -1334,6 +1336,14 @@ html[data-ui-mode=basic] #basic-run-options.fold-card {
   border:var(--border-width) solid var(--line);
   border-radius:var(--radius-md);
 }
+/* Basic Conveyors oculta #basic-run-options mediante CSS, sin atributo
+   hidden: Equipment es la primera Subsección visible, así que no hereda
+   el margen de aquella Subsección oculta. */
+html[data-ui-mode=basic][data-basic-view=conveyors]
+  #editor-panel > #equipment-section {
+  margin-block-start:0!important;
+}
+
 /* Ningún primer bloque debe desplazar el contenido otra vez hacia abajo. */
 #simulation2d-panel > :is(.fold-card,.fold-native):first-child,
 #editor-panel > :is(.fold-card,.fold-native):first-child,

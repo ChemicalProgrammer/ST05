@@ -81,6 +81,16 @@ window.STTimeControls=(function(){
       if(value.textContent!==displayed)value.textContent=displayed;
     }
   }
-  return {factors:secondsByUnit,output:output,setOutput:setOutput,unitSelect:unitSelect,format:number};
+  // Input widgets are different from outputs: selecting a unit never edits
+  // the user's number. Only the model's seconds value is recalculated.
+  var inputFactors={SECONDS:1,MINUTES:60,HOURS:3600,DAYS:86400,WEEKS:604800};
+  function inputSeconds(value,unit){
+    return Number(value)*(inputFactors[unit]||1);
+  }
+  function inputValue(seconds,unit){
+    return Number(seconds)/(inputFactors[unit]||1);
+  }
+  return {factors:secondsByUnit,inputFactors:inputFactors,inputSeconds:inputSeconds,
+    inputValue:inputValue,output:output,setOutput:setOutput,unitSelect:unitSelect,format:number};
 }());
 </script>

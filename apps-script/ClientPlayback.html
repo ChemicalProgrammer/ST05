@@ -14,6 +14,16 @@
       if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
     }
 
+    function stopSimulationPlayback() {
+      // Stop the visualization without cancelling or modifying simulation results.
+      if(roundSession?.firstUpdating)roundSession.resumeAfterEdit=false;
+      stopPlaybackTimer();
+      state.run.sampleIndex=0;
+      renderPlaybackFrame();
+      setPlaybackStatus('Stopped');
+      if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
+    }
+
     function resetPlayback() {
       stopPlaybackTimer();
       var session=roundSession;

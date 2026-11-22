@@ -22,6 +22,8 @@
 .scenario-tier-grid > .metric-card--scenario:has(.analysis-capex[data-tier=MEDIUM]) {border-inline-start-color:var(--capex-medium);}
 .scenario-tier-grid > .metric-card--scenario:has(.analysis-capex[data-tier=HIGH]) {border-inline-start-color:var(--capex-high);}
 .metric-card--status {background:var(--surface-soft);}
+/* Las cifras KPI necesitan más ancho que los contadores compactos. */
+#simulation-playback-metrics {grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--size-180)),1fr));}
 #simulation-playback-metrics > article > span {display:block;font-size:var(--font-secondary);color:var(--muted);}
 #simulation-playback-metrics > article > strong {
   display:block;font-size:var(--font-kpi);line-height:1.15;

@@ -61,6 +61,33 @@ Prefiere `gap` en grillas y contenedores flexibles. Usa márgenes lógicos para 
 
 Implementación central: [UiStandards.html](../apps-script/UiStandards.html), sección **«Subsección / Subsection · ritmo compartido de pantallas»**. La adaptación de `workspace-content` del tema Elegant vive en [ElegantStyles.html](../apps-script/ElegantStyles.html). Al agregar una nueva Subsección, reutiliza estas clases y **evita** márgenes superiores particulares salvo una excepción justificada y documentada.
 
+## Catálogo de componentes reutilizables
+
+Para consultar las muestras directamente en la aplicación, abre el diálogo **Sistema de diseño · SimuLine** con **Ctrl + Shift + S** (en Mac también Cmd + Shift + S), cuando el foco esté dentro de la aplicación de Apps Script. El módulo vive en [DesignReference.html](../apps-script/DesignReference.html), con pestañas **Controles**, **Tipografía**, **Márgenes** y **Tarjetas**. No modifica casos ni resultados. Los controles de ejemplo son independientes del motor.
+
+| Nombre oficial | Clase/módulo | Función y alcance |
+| --- | --- | --- |
+| **Subsección** | `.fold-card`, `.fold-heading`, `.fold-toggle`, `.fold-content`, `.fold-tools` | Contenedor plegable de información con una sola barra de herramientas |
+| **Botón/Icono** | `.icon-button` | Acción sin texto visible con `aria-label` y `title`. Igual estilo en Header, Subsecciones y herramientas |
+| **Valor–unidad** | `STTimeControls.output()`, `STTimeControls.setOutput()`, `.time-value-control` | Output: convierte la cifra cuando cambia la unidad. Input: conserva la cifra y ajusta su interpretación al calcular |
+| **Etiqueta de estado** | `.badge`, clases semánticas | RUNNING, PASS, FAIL y otros estados sin depender solamente del color |
+| **Tarjeta de resultado** | `.metric-card.metric-card--result` | Métricas secundarias, como Virtual time, Output, Effective Runtime, Runtime Losses. Valor con el **mismo tamaño y peso** en toda la familia |
+| **KPI destacado** | `.metric-card.metric-card--featured` | Eficiencia teórica/simulada u otro indicador principal. Valor de mayor jerarquía y **borde superior grueso en color primario** |
+| **Tarjeta de escenario** | `.metric-card.metric-card--scenario` | Alternativas de What-if/CAPEX, con un borde lateral semántico y acciones del escenario |
+| **Tarjeta de estado** | `.metric-card.metric-card--status` | Resultado de validación, estado o diagnóstico; compacta y con etiqueta semántica |
+| **Tarjeta de equipo** | `.live-equipment-card` | Encabezado, estado, OEE y gráfico, con subsecciones internas configurables; no debe adoptar el estilo de KPI destacado |
+
+### Reglas de comportamiento y aspecto
+
+- **Un componente, una responsabilidad.** No aplicar la jerarquía visual del KPI destacado a todas las tarjetas: los resultados secundarios, escenarios y estados requieren variantes diferentes.
+- **Color de fondo:** `--surface-soft` para Tarjeta de resultado y KPI destacado; `--surface` como superficie normal de Subsección. Evita mezclas de blancos sin contraste entre contenedores anidados.
+- **Valor–unidad:** tipografía del número coherente con los demás valores del grupo, unidades de menor énfasis y una separación natural (2 px). Las unidades son seleccionables, sin flecha visible.
+- **Relieve al pasar el mouse:** solamente en subtarjetas de resultados, escenarios y KPI. Se usa una sombra ligera sin `will-change`, exclusivamente si existe `hover`; nunca modificar producción ni ejecutar un recálculo.
+- **Herramientas de What-if:** `Scenario options` y la exportación están en la misma barra de la Subsección. Los controles se mantienen fuera del contenido plegable para permanecer accesibles.
+- **Iconos del Header:** usan dimensiones, fondo, borde y estados de foco compatibles con `.icon-button`. No suprimir atributos accesibles ni convertir acciones en elementos sin botón.
+- **Tipografías:** seguir la escala de cinco niveles de `DesignTokens.html`; un valor que representa la misma jerarquía no debe tener tamaño distinto por utilizar el selector `STTimeControls`.
+- **Márgenes:** `--workspace-gutter`, `--subsection-gap` y `--subsection-padding` se ajustan en `DesignTokens.html`; cualquier excepción necesita justificar por qué el componente no puede usar el token global.
+
 ## Color y estados
 
 - Usa `--page`, `--surface` y `--surface-soft` para superficies, `--ink` y `--muted` para texto y `--line` para bordes.

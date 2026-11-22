@@ -440,20 +440,17 @@
         <!-- Subsección reutilizable de What-if: se mantiene visible aun sin resultados. -->
         <section id="whatif-subsection" class="fold-card" aria-labelledby="whatif-subsection-title">
           <div class="fold-heading">
-            <h3 id="whatif-subsection-title"><button type="button" class="fold-toggle" data-subsection-toggle aria-expanded="true" aria-controls="whatif-subsection-content">What-if analysis</button></h3>
+            <h3 id="whatif-subsection-title"><button type="button" class="fold-toggle" data-subsection-toggle aria-expanded="true" aria-controls="whatif-subsection-content">Scenario options</button></h3>
+            <!-- Las herramientas de la Subsección permanecen en una sola barra. -->
+            <div class="fold-tools button-row">
+              <details class="export-menu"><summary class="secondary icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-whatif-json" class="ghost" disabled><?= __ST_TEXT__('exports.data_json') ?></button><button id="export-whatif-html" class="ghost" disabled><?= __ST_TEXT__('exports.html') ?></button><button id="export-whatif-pdf" class="ghost" disabled><?= __ST_TEXT__('exports.pdf') ?></button></div></details>
+            </div>
           </div>
           <div id="whatif-subsection-content" class="fold-content">
         <div id="whatif-empty" class="empty"><h3><?= __ST_TEXT__('view.start_with_a_baseline_run') ?></h3><p><?= __ST_TEXT__('view.run_the_active_simulation_to_generate_an_evidence_based_recommendation') ?></p><button data-view="simulation" data-icon="play"><?= __ST_TEXT__('view.go_to_simulation') ?></button></div>
           <section id="simulation-analysis" class="simulation-analysis hidden" aria-labelledby="simulation-analysis-title">
-            <div class="simulation-analysis-heading">
-              <div>
-                <p class="eyebrow"><?= __ST_TEXT__('view.simulation_analysis') ?></p>
-                <h3 id="simulation-analysis-title">Scenario options</h3>
-                <p><?= __ST_TEXT__('view.the_recommendation_combines_this_run_s_losses_with_the_physical_conveyor_au') ?></p>
-
-            </div>
-              <details class="export-menu"><summary class="icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-whatif-json" class="ghost" disabled><?= __ST_TEXT__('exports.data_json') ?></button><button id="export-whatif-html" class="ghost" disabled><?= __ST_TEXT__('exports.html') ?></button><button id="export-whatif-pdf" class="ghost" disabled><?= __ST_TEXT__('exports.pdf') ?></button></div></details>
-            </div>
+            <h3 id="simulation-analysis-title" class="sr-only">Scenario options</h3>
+            <p class="chart-note whatif-context"><?= __ST_TEXT__('view.the_recommendation_combines_this_run_s_losses_with_the_physical_conveyor_au') ?></p>
 
             <div id="simulation-analysis-content" class="simulation-analysis-content"></div>
           </section>

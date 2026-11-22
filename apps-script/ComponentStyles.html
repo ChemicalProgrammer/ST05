@@ -91,6 +91,30 @@
 }
 .topbar #pin-header[aria-pressed=true],
 .topbar #save-case.has-changes {background:var(--selected);color:var(--accent);}
+/* Header global de errores: señal roja de alta prioridad en ambos temas,
+   por encima de las reglas genéricas de botones del Header. */
+#header-errors:not(.hidden) {position:relative;display:inline-flex;align-items:center;margin-inline:var(--space-1);}
+#header-errors:not(.hidden) #header-error-button {
+  background:var(--danger)!important;color:var(--page)!important;
+  border:2px solid var(--danger)!important;
+  box-shadow:0 0 0 2px var(--danger-soft)!important;
+}
+#header-errors:not(.hidden) #header-error-button:is(:hover,:focus-visible) {
+  background:var(--danger)!important;color:var(--page)!important;
+  border-color:var(--danger)!important;
+  box-shadow:0 0 0 3px var(--danger-soft)!important;
+}
+#header-errors:not(.hidden) #header-error-button:focus-visible {
+  outline:var(--focus-width) solid var(--danger)!important;outline-offset:4px;
+}
+#header-errors:not(.hidden)::after {
+  content:attr(data-count);pointer-events:none;position:absolute;
+  inset-block-start:-6px;inset-inline-end:-7px;z-index:1;
+  display:grid;place-items:center;min-width:17px;height:17px;
+  padding-inline:2px;border-radius:var(--radius-pill);
+  color:var(--danger);background:var(--surface);border:1px solid var(--danger);
+  font-size:var(--font-caption);font-weight:var(--weight-bold);
+}
 #whatif-subsection .simulation-analysis {margin:0;padding:0;border:0;background:transparent;}
 #whatif-subsection .whatif-context {margin:0 0 var(--space-3);max-width:100%;}
 #whatif-subsection .fold-heading .fold-tools {margin-inline-start:auto;}

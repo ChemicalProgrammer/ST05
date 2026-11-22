@@ -244,9 +244,9 @@
       // efficiency (compact side-by-side), plus the existing speed chart.
       var detailGrid=document.createElement('div');
       detailGrid.className='live-equipment-detail-grid';
-      var statePanel=document.createElement('details');
+      var statePanel=document.createElement('section');
       statePanel.className='live-equipment-state-details';
-      var stateHeading=document.createElement('summary');
+      var stateHeading=document.createElement('button');stateHeading.type='button';
       stateHeading.textContent='States';
       stateHeading.setAttribute('aria-label','Expand or collapse equipment states');
       var stateGrid=document.createElement('div');
@@ -255,23 +255,33 @@
         if(event.target.matches('.st-time-unit'))card.dataset.stateTimeUnit=event.target.value;
       });
       statePanel.append(stateHeading,stateGrid);
-      var performanceGroup=document.createElement('details');
+      var performanceGroup=document.createElement('section');
       performanceGroup.className='live-equipment-performance-group';
-      var performanceHeading=document.createElement('summary');
+      var performanceHeading=document.createElement('button');performanceHeading.type='button';
       performanceHeading.textContent='Equipment efficiency';
       var extraDetails=document.createElement('div');
       extraDetails.className='live-equipment-summary-details';
       performanceGroup.append(performanceHeading,efficiency,extraDetails);
-      var summaryPanel=document.createElement('details');summaryPanel.className='live-equipment-2d-summary';
-      var summaryHeading=document.createElement('summary');summaryHeading.className='live-equipment-2d-title';summaryHeading.textContent='Overview';
+      var summaryPanel=document.createElement('section');summaryPanel.className='live-equipment-2d-summary';
+      var summaryHeading=document.createElement('button');summaryHeading.type='button';summaryHeading.className='live-equipment-2d-title';summaryHeading.textContent='Overview';
       var summaryRows=document.createElement('div');summaryRows.className='live-equipment-2d-rows';
       summaryPanel.append(summaryHeading,summaryRows);
-      var geometryGroup=document.createElement('details');geometryGroup.className='live-equipment-geometry-group';
-      var geometryHeader=document.createElement('summary');geometryHeader.className='live-equipment-2d-section-heading';
+      var geometryGroup=document.createElement('section');geometryGroup.className='live-equipment-geometry-group';
+      var geometryHeader=document.createElement('button');geometryHeader.type='button';geometryHeader.className='live-equipment-2d-section-heading';
       geometryHeader.innerHTML='<strong>Conveyor Geometry</strong><span class="live-equipment-geometry-verdict"></span>';
       var geometryRows=document.createElement('div');geometryRows.className='live-equipment-2d-rows';
       geometryGroup.append(geometryHeader,geometryRows);
-      // All three groups start compact; native details preserve their state between playback frames.
+      // Keep a compact row preview visible even when a group is collapsed.
+      [summaryPanel,statePanel,performanceGroup,geometryGroup].forEach(function(group){
+        group.dataset.collapsed='true';
+        var toggle=group.firstElementChild;
+        toggle.setAttribute('aria-expanded','false');
+        toggle.addEventListener('click',function(){
+          var collapsed=group.dataset.collapsed!=='true';
+          group.dataset.collapsed=String(collapsed);
+          toggle.setAttribute('aria-expanded',String(!collapsed));
+        });
+      });
       detailGrid.append(summaryPanel,statePanel,performanceGroup,geometryGroup);
       var visualHeader=document.createElement('header');visualHeader.className='numeric-equipment-header';
       var headerDetails=document.createElement('div');headerDetails.className='numeric-equipment-header-details';

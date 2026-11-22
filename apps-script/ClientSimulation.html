@@ -673,7 +673,12 @@
         partial.replicationStatus={state:'CALCULATING',rounds:session.run.rounds,baseSeed:session.run.seed};
         session.streaming=true;state.run.result=partial;state.run.representative=partial;state.run.roundIndex=0;
         if(!previous)state.run.sampleIndex=0;
-        syncPlaybackRounds();toggle('simulation-results',true);renderPlaybackFrame();
+        syncPlaybackRounds();toggle('simulation-results',true);
+        // Progress callbacks may arrive faster than the visual FPS limit.
+        // Keep calculation updates intact but coalesce expensive UI painting.
+        if(!previous||performance.now()-playbackRenderStats.lastPaintAt>=playbackRefreshIntervalMs()){
+          renderPlaybackFrame();
+        }
         if(session.resolveFirst){shell.sync();session.resolveFirst(true);session.resolveFirst=null;}
       },onFirstRound:firstResult?undefined:function(result){
         if(!roundSessionActive(session)||generation!==session.generation)return;

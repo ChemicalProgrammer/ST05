@@ -52,7 +52,7 @@ html[data-visual-style=elegant] #basic-navigation [aria-current=page] {
   box-shadow:inset 0 -2px 0 var(--accent);
 }
 html[data-visual-style=elegant] .brand-mark { border-radius:8px; }
-html[data-visual-style=elegant] .workspace-content { padding-top:var(--page-padding); }
+html[data-visual-style=elegant] .workspace-content { padding-top:var(--workspace-gutter); }
 /* El lienzo exterior ya no dibuja una segunda tarjeta. Cada Subsección
    hereda su superficie de UiStandards, también en Elegant. */
 html[data-visual-style=elegant] .workspace-content > section.card {
@@ -208,7 +208,7 @@ html[data-visual-style=elegant] .gemini-panel:has(#equipment-inspector:not(.hidd
 .appearance-footer { margin-top:var(--space-3); display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; }
 #appearance-status { color:var(--danger); font-size:var(--font-secondary); }
 @media(max-width:760px) {
-  html[data-visual-style=elegant] .workspace-content { padding-top:var(--page-padding); }
+  html[data-visual-style=elegant] .workspace-content { padding-top:var(--workspace-gutter); }
   html[data-visual-style=elegant] #basic-navigation { gap:var(--space-1); }
   html[data-visual-style=elegant] #basic-navigation button { padding-inline:var(--space-2); }
 }
@@ -401,6 +401,6 @@ html[data-visual-style=elegant] select:not([multiple]):not([size])::picker(selec
 
 /* El tema Elegant respeta el mismo inset superior/lateral en móvil. */
 @media(max-width:760px){
-  html[data-visual-style=elegant] .workspace-content {padding-top:var(--space-3);}
+  html[data-visual-style=elegant] .workspace-content {padding-top:var(--workspace-gutter);}
 }
 </style>

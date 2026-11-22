@@ -49,10 +49,12 @@ Prefiere `gap` en grillas y contenedores flexibles. Usa márgenes lógicos para 
 ### Regla única de espaciado y superficie de Subsecciones
 
 - **Lienzo exterior eliminado:** las secciones principales del workspace (`.workspace-content > section.card`) funcionan como contenedores de distribución transparentes, sin tarjeta, borde ni sombra propios. El fondo original `--surface` se traslada a la superficie de cada Subsección (`.fold-card` y `.fold-native`). **No cambies todavía** los colores de las tarjetas de datos, inputs o controles internos.
-- **Primera Subsección de una pantalla:** no suma margen superior propio. El workspace aporta el mismo espacio superior y lateral mediante `--page-padding` (24 px; proporcional a la disposición y el modo). El fondo alrededor de cada Subsección es `--page`.
+- **Primera Subsección de una pantalla:** no suma margen superior propio. El workspace aporta el **mismo margen arriba, a la izquierda y a la derecha**, controlado **exclusivamente por `--workspace-gutter` en `apps-script/DesignTokens.html`** (24 px escritorio; 12 px en pantallas estrechas). `--page-padding` es un alias de compatibilidad, no una segunda fuente de configuración. El fondo alrededor de cada Subsección es `--page`.
 - **Entre Subsecciones consecutivas:** exclusivamente `--subsection-gap = --space-4` (16 px), **no** la suma de dos márgenes.
 - **Interior de la Subsección:** `--subsection-padding = --space-4` (16 px) en los cuatro lados.
 - **Encabezado al contenido:** `--space-3` (12 px). Subsecciones colapsadas u ocultas no deben reservar espacio.
+- **Herramientas del encabezado:** por defecto todos los controles de `.fold-tools` y `.button-row` se mantienen **en una sola fila**, incluidos selector y botones de Registro. Solo cuando el espacio es insuficiente se permite dividir el grupo en otra fila; nunca deben aparecer columnas de herramientas por defecto.
+- **What-if:** dispone de una Subsección `#whatif-subsection` con encabezado plegable y contenido persistente, independientemente de si la simulación tiene resultados.
 - **Pantallas sin tarjeta externa**, como Simulation 2D: el contenedor debe aportar el inset superior equivalente; no debe compensarse duplicando `margin-top` en cada Subsección.
 - **Temas Classic y Elegant, Basic y Advance:** se aplica el mismo contrato. Ningún tema debe restaurar el lienzo exterior ni duplicar márgenes. Los cambios futuros de paleta deben separarse de la estructura del componente.
 

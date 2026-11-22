@@ -1401,12 +1401,21 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
   display:block;flex:none;min-width:0;margin:0;
   white-space:normal;
 }
+/* Large screens: the description uses exactly one line, no premature wrapping.
+   Narrow screens: up to two lines without overlapping title or toolbar. */
 .fold-heading > .subsection-heading-copy > .subsection-description,
 .fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description,
 .fold-native > summary .subsection-description {
-  display:-webkit-box;min-width:0;max-width:100%;margin:0;
-  overflow:hidden;overflow-wrap:anywhere;text-overflow:ellipsis;
-  -webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  display:block;min-width:0;max-width:100%;margin:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+@media(max-width:1100px){
+  .fold-heading > .subsection-heading-copy > .subsection-description,
+  .fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description,
+  .fold-native > summary .subsection-description {
+    display:-webkit-box;white-space:normal;overflow-wrap:anywhere;
+    -webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  }
 }
 .fold-native > summary .subsection-heading-copy {
   display:flex;flex:1 1 auto;min-width:0;align-items:stretch;

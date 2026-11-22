@@ -437,6 +437,12 @@
       <?!= include_('RealDataPanel'); ?>
       <section id="whatif-panel" class="card hidden" aria-labelledby="whatif-title">
         <div class="section-heading"><div><p class="eyebrow"><?= __ST_TEXT__('view.scenario_lab') ?></p><h2 id="whatif-title"><?= __ST_TEXT__('shell.what_if') ?></h2><p><?= __ST_TEXT__('view.review_the_recommendation_for_the_selected_simulation_and_create_a_proposed') ?></p></div></div>
+        <!-- Subsección reutilizable de What-if: se mantiene visible aun sin resultados. -->
+        <section id="whatif-subsection" class="fold-card" aria-labelledby="whatif-subsection-title">
+          <div class="fold-heading">
+            <h3 id="whatif-subsection-title"><button type="button" class="fold-toggle" data-subsection-toggle aria-expanded="true" aria-controls="whatif-subsection-content">Scenario options</button></h3>
+          </div>
+          <div id="whatif-subsection-content" class="fold-content">
         <div id="whatif-empty" class="empty"><h3><?= __ST_TEXT__('view.start_with_a_baseline_run') ?></h3><p><?= __ST_TEXT__('view.run_the_active_simulation_to_generate_an_evidence_based_recommendation') ?></p><button data-view="simulation" data-icon="play"><?= __ST_TEXT__('view.go_to_simulation') ?></button></div>
           <section id="simulation-analysis" class="simulation-analysis hidden" aria-labelledby="simulation-analysis-title">
             <div class="simulation-analysis-heading">
@@ -451,6 +457,8 @@
 
             <div id="simulation-analysis-content" class="simulation-analysis-content"></div>
           </section>
+          </div>
+        </section>
       </section>
       <section id="comparison-panel" class="card hidden">
         <div class="section-heading"><div><p class="eyebrow"><?= __ST_TEXT__('view.case_comparison') ?></p><h2><?= __ST_TEXT__('client.compare_simulations') ?></h2><p><?= __ST_TEXT__('view.select_exactly_two_saved_simulations') ?></p></div><details class="export-menu"><summary class="icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-comparison-json" class="ghost" disabled><?= __ST_TEXT__('exports.data_json') ?></button><button id="export-comparison-html" class="ghost" disabled><?= __ST_TEXT__('exports.html') ?></button><button id="export-comparison-pdf" class="ghost" disabled><?= __ST_TEXT__('exports.pdf') ?></button></div></details></div>

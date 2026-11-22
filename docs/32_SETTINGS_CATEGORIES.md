@@ -6,7 +6,7 @@ close icon or Escape applies pending settings through the existing save pipeline
 
 | Tab | Options | Scope |
 | --- | --- | --- |
-| Case | Name, include What-If DOE, equipment and VGraph colors, JSON-field visibility | Case JSON; normal case save policy |
+| Case | Name, include What-If DOE, equipment chart colors, JSON-field visibility | Case JSON; normal case save policy |
 | Appearance | Theme, accent palette, text size; existing restricted interface-mode selector | Browser preferences |
 | Simulation | Autosave and interval, fixed/random seed policy | Browser preferences; seed policy in both modes; autosave only in Advance, Basic saves manually |
 | Gemini | Model, private API key, mode-specific prompt sections and inclusion checkboxes | Google account User Properties |
@@ -41,14 +41,16 @@ Settings has a fixed 920px maximum width and 720px height, capped to the viewpor
 Its content scrolls inside the dialog without changing size between tabs.
 In Advance, equipment chart colors appear in a table in line order with complete
 wrapping names, circular swatches and HEX values. Only actual equipment is listed.
-V-Graph Series Colors is a separate Case section, available in both modes, with
-its own reset. Each reset clears only its respective color overrides. Circular
-swatches open a color map (saturation/brightness plus hue), synchronized with
-RGB and HEX fields. HEX accepts six digits with or without # and can be copied
-with the clipboard icon; edits remain a draft until Apply. Case deletion is
-available only from the gallery, with the existing confirmation dialog.
-VGraph stores current/recommended colors in `metadata.vgraphColors`. Each section resets its own overrides. JSON visibility uses `metadata.showJsonFields`,
-shared across modes; older cases use the legacy browser preference until set.
+V-Graph series colors are edited directly in the V-Graph legend: Current and
+Recommended each have a clickable circular swatch that opens the same series-color
+dialog (color map, hue, RGB, HEX and Apply/Cancel). The former V-Graph Series
+Colors section has been removed from Settings > Case. Colors retain the existing
+`metadata.vgraphColors.current` / `metadata.vgraphColors.recommended` fields;
+saved cases keep their overrides, and the legend and graph use the same color
+tokens. The equipment color table in Settings retains its separate Reset colors
+action. Case deletion is available only from the gallery, with the existing
+confirmation dialog. JSON visibility uses `metadata.showJsonFields`, shared
+across modes; older cases use the legacy browser preference until set.
 
 Both modes use the six-section header navigation. Advance retains its own equipment
 editor; the former sidebar is hidden, and comparison, Settings, close-case and

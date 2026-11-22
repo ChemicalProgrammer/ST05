@@ -63,7 +63,7 @@ Implementación central: [UiStandards.html](../apps-script/UiStandards.html), se
 
 ## Catálogo de componentes reutilizables
 
-Para consultar las muestras directamente en la aplicación, abre el diálogo **Sistema de diseño · SimuLine** con **Ctrl + Shift + S** (en Mac también Cmd + Shift + S), cuando el foco esté dentro de la aplicación de Apps Script. El catálogo y su interacción viven en [DesignReference.html](../apps-script/DesignReference.html), con pestañas **Controles**, **Tipografía**, **Márgenes** y **Tarjetas**. Los estilos de tarjetas y botones reutilizables viven en [ComponentStyles.html](../apps-script/ComponentStyles.html), incluidos en el encabezado de la aplicación después de los estilos de tema. No modifica casos ni resultados. Los controles de ejemplo son independientes del motor.
+Para consultar las muestras directamente en la aplicación, abre el diálogo **Sistema de diseño · SimuLine** con **Ctrl + Shift + S** (en Mac también Cmd + Shift + S), cuando el foco esté dentro de la aplicación de Apps Script. El catálogo y su interacción viven en [DesignReference.html](../apps-script/DesignReference.html), con pestañas **Controles**, **Tipografía**, **Márgenes** y **Tarjetas**. **Todas las pestañas muestran exactamente tres columnas:** **Control o diseño** (vista previa), **Explicación** (cuándo usarlo) y **Nombre del control** (nombre oficial y selector/token para pedir cambios). En pantallas estrechas, las tres columnas se mantienen mediante desplazamiento horizontal. Los estilos de tarjetas y botones reutilizables viven en [ComponentStyles.html](../apps-script/ComponentStyles.html), incluidos en el encabezado de la aplicación después de los estilos de tema. No modifica casos ni resultados. Los controles de ejemplo son independientes del motor.
 
 | Nombre oficial | Clase/módulo | Función y alcance |
 | --- | --- | --- |
@@ -71,15 +71,15 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Botón/Icono** | `.icon-button` | Acción sin texto visible con `aria-label` y `title`. Igual estilo en Header, Subsecciones y herramientas |
 | **Valor–unidad** | `STTimeControls.output()`, `STTimeControls.setOutput()`, `.time-value-control` | Output: convierte la cifra cuando cambia la unidad. Input: conserva la cifra y ajusta su interpretación al calcular |
 | **Etiqueta de estado** | `.badge`, clases semánticas | RUNNING, PASS, FAIL y otros estados sin depender solamente del color |
-| **Tarjeta de resultado** | `.metric-card.metric-card--result` | Métricas secundarias, como Virtual time, Output, Effective Runtime, Runtime Losses. Valor con el **mismo tamaño y peso** en toda la familia |
-| **KPI destacado** | `.metric-card.metric-card--featured` | Eficiencia teórica/simulada u otro indicador principal. Valor de mayor jerarquía y **borde superior grueso en color primario** |
+| **Tarjeta de resultado** | `.metric-card.metric-card--result` | Métricas secundarias en otras pantallas de resultados, con tipografía más compacta que el KPI destacado |
+| **KPI destacado** | `.metric-card.metric-card--featured` | Indicadores de eficiencia y, expresamente, las diez tarjetas de **Simulation Playback**. Valor grande y **borde superior grueso en color primario** |
 | **Tarjeta de escenario** | `.metric-card.metric-card--scenario` | Alternativas de What-if/CAPEX, con un borde lateral semántico y acciones del escenario |
 | **Tarjeta de estado** | `.metric-card.metric-card--status` | Resultado de validación, estado o diagnóstico; compacta y con etiqueta semántica |
 | **Tarjeta de equipo** | `.live-equipment-card` | Encabezado, estado, OEE y gráfico, con subsecciones internas configurables; no debe adoptar el estilo de KPI destacado |
 
 ### Reglas de comportamiento y aspecto
 
-- **Un componente, una responsabilidad.** No aplicar la jerarquía visual del KPI destacado a todas las tarjetas: los resultados secundarios, escenarios y estados requieren variantes diferentes.
+- **Un componente, una responsabilidad.** La jerarquía visual del KPI destacado se usa en las tarjetas de **Simulation Playback** por decisión de diseño. No debe trasladarse automáticamente a otros resultados secundarios, escenarios o estados.
 - **Propiedad de estilos:** modificar las variantes `.metric-card` y la apariencia compartida de los botones de Header en `ComponentStyles.html`, no en el archivo del diálogo. `DesignReference.html` contiene solamente la galería, sus ejemplos y el atajo.
 - **Color de fondo:** `--surface-soft` para Tarjeta de resultado y KPI destacado; `--surface` como superficie normal de Subsección. Evita mezclas de blancos sin contraste entre contenedores anidados.
 - **Valor–unidad:** tipografía del número coherente con los demás valores del grupo, unidades de menor énfasis y una separación natural (2 px). Las unidades son seleccionables, sin flecha visible.

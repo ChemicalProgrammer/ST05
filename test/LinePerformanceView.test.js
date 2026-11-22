@@ -22,7 +22,9 @@ test('results render an accessible speed profile and distinguish outlet from mac
   assert.equal(document.querySelectorAll('#vgraph-plot circle').length, 2);
   assert.equal(document.querySelectorAll('#vgraph-plot .vgraph-recommended-dot').length,1);
   assert.match(document.getElementById('performance-rows').textContent,/240/);
-  assert.equal(document.querySelector('#vgraph-plot svg').getAttribute('viewBox'),'0 0 1440 260','SVG coordinates match the displayed width so labels are not magnified');
+  const viewBox=document.querySelector('#vgraph-plot svg').getAttribute('viewBox').split(' ').map(Number);
+  assert.equal(viewBox[2],1440,'SVG coordinates match the available plot width');
+  assert.ok(viewBox[3]>=360,'V-Graph grows to the available viewport height');
   dom.window.close();
 });
 

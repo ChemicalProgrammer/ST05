@@ -404,6 +404,16 @@ html[data-visual-style=elegant] .subsection-title { color:var(--secondary-text);
   font-size:var(--font-card); font-weight:var(--weight-semibold); line-height:var(--leading-tight);
 }
 .fold-heading h3, #realdata-panel .fold-heading .real-data-section-title { margin:0; color:var(--accent); font:inherit; line-height:var(--leading-tight); }
+/* Reusable subsection pieces: title, optional descriptive subtitle and internal divider. */
+.fold-heading .subsection-heading-copy { min-width:0; flex:1 1 auto; }
+.fold-heading .subsection-heading-title, .fold-heading h3 { color:var(--accent);font-size:var(--font-card);font-weight:var(--weight-semibold);line-height:var(--leading-tight); }
+.fold-heading .subsection-description { margin:var(--space-2) 0 0;max-width:84ch;color:var(--muted);font-size:var(--font-secondary);font-weight:var(--weight-regular);line-height:var(--leading-body); }
+.fold-native > summary .subsection-heading-copy { display:flex;flex-direction:column;gap:var(--space-2);min-width:0; }
+.fold-native > summary .subsection-description { display:block;color:var(--muted);font-size:var(--font-secondary);font-weight:var(--weight-regular);line-height:var(--leading-body); }
+.subsection-fieldset { min-width:0; border:0;border-top:var(--border-width) solid var(--line);padding:var(--space-3) 0 0;margin:var(--space-4) 0 0; }
+.fold-card fieldset > legend.subsection-divider, legend.subsection-divider { padding:0 var(--space-2) 0 0;color:var(--accent);font-size:var(--font-secondary);font-weight:var(--weight-semibold);line-height:var(--leading-body); }
+.subsection-divider:not(legend) { display:flex;align-items:center;gap:var(--space-2);min-width:0;color:var(--accent);font-size:var(--font-secondary);font-weight:var(--weight-semibold); }
+.subsection-divider:not(legend)::after { content:"";height:var(--border-width);background:var(--line);flex:1; }
 .fold-heading p {
   margin:var(--space-2) 0 0;
   color:var(--muted); font-size:var(--font-secondary); font-weight:var(--weight-regular); line-height:var(--leading-body);
@@ -500,7 +510,7 @@ input[type=number] { -moz-appearance:textfield; appearance:textfield; }
 /* Duration input uses the same normal border as other numeric inputs;
    the unit is an unboxed, inline, reusable selector. */
 .time-value-control { border:0!important; border-radius:0!important; background:transparent!important;
-  overflow:visible!important; gap:var(--space-2); align-items:center; }
+  overflow:visible!important; gap:var(--time-unit-gap)!important; align-items:center; }
 .time-value-control > input[type=number] { min-width:0; flex:1; width:1%; background:var(--surface)!important;
   border:var(--border-width) solid var(--line)!important; border-radius:var(--radius-md)!important;
   padding-inline:var(--space-2); }

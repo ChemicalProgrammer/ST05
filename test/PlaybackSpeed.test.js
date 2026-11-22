@@ -78,3 +78,36 @@ test('starting a new run clears the previous round and replay before calculation
  assert.equal(state.run.roundIndex,0);
  assert.equal(preview.value,'');
 });
+
+test('numerical playback throttles visual frames without changing the virtual sample sequence',()=>{
+ const code=readClientSource();
+ const samples=Array.from({length:101},(_,i)=>({virtualSecond:i}));
+ const state={run:{result:{samples},sampleIndex:0,playing:true,active:true}};
+ let callback=null,delay=0,clock=0,rendered=0,completed=0;
+ const context={
+   state,roundSession:null,playbackClock:null,
+   playbackRenderStats:{lastPaintAt:-Infinity},
+   playbackRefreshIntervalMs:()=>100,
+   performance:{now:()=>clock},
+   document:{getElementById:()=>({value:'100'})},
+   window:{setTimeout(fn,ms){callback=fn;delay=ms;return 1;},clearTimeout(){}},
+   renderPlaybackFrame(){rendered++;context.playbackRenderStats.lastPaintAt=clock;},
+   syncRunControls(){},setPlaybackStatus(){},captureSimulationView(){},
+   autosave:{change(){}},finishRoundSession(){completed++;}
+ };
+ vm.createContext(context);
+ for(const name of ['findSampleIndexAtOrBefore','schedulePlaybackStep','playbackElapsed']){
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   assert.ok(start>=0&&end>start,'missing '+name);
+   vm.runInContext(code.slice(start,end),context);
+ }
+ vm.runInContext('schedulePlaybackStep()',context);
+ let callbacks=0;
+ while(callback&&state.run.playing&&callbacks<200){
+   const next=callback;callback=null;clock+=delay;callbacks++;next();
+ }
+ assert.equal(state.run.sampleIndex,100);
+ assert.equal(completed,1);
+ assert.ok(rendered<callbacks,'visual rendering should skip intermediate playback callbacks');
+ assert.ok(rendered>=2,'the first and final frames must be rendered');
+});

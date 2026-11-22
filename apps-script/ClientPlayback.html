@@ -252,7 +252,8 @@
           if(!unit)return;
           var model=state.activeCase.equipment[index];
           var chartModel=updateLiveEquipmentCard(card,unit,model,index,sample);
-          drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,chartModel);
+          if(window.STNumericCardDiagnostics?.chart!==false)
+            drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,chartModel);
         });
       },{rootMargin:'300px 0px',threshold:0});
       return liveEquipmentObserver;
@@ -285,7 +286,8 @@
         }
         if(observer&&!card._liveVisible) return;
         var chartModel=updateLiveEquipmentCard(card, unit, model, index, sample);
-        drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'), index, chartModel);
+        if(window.STNumericCardDiagnostics?.chart!==false)
+          drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'), index, chartModel);
       });
       Array.prototype.forEach.call(target.querySelectorAll('.live-equipment-card'), function(card) {
         if (!displayedEquipmentIds[card.getAttribute('data-equipment-id')]){
@@ -541,15 +543,19 @@
       var belt=conveyorCardRates(zone,model,availabilityState);
       var isConveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
       card._numericConveyor=isConveyor;
-      card.querySelector('.live-equipment-performance-group').hidden=isConveyor;
-      card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor;
+      var flags=window.STNumericCardDiagnostics||{};
+      card.querySelector('.live-equipment-2d-summary').hidden=flags.overview===false;
+      card.querySelector('.live-equipment-state-details').hidden=flags.states===false;
+      card.querySelector('.numeric-equipment-chart-side').hidden=flags.chart===false;
+      card.querySelector('.live-equipment-performance-group').hidden=isConveyor||flags.efficiency===false;
+      card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor||flags.geometry===false;
       var conveyorVerdict=card._numericConveyorVerdict
         ||card.querySelector('.numeric-conveyor-verdict');
-      if(conveyorVerdict)conveyorVerdict.hidden=!isConveyor;
-      updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
-      if(isConveyor)updateNumericalConveyorGeometry(card,model,zone);
+      if(conveyorVerdict)conveyorVerdict.hidden=!isConveyor||flags.geometry===false;
+      if(flags.overview!==false)updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
+      if(isConveyor&&flags.geometry!==false)updateNumericalConveyorGeometry(card,model,zone);
       var efficiencyCard=card.querySelector('.live-equipment-efficiency');
-      efficiencyCard.hidden=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
+      efficiencyCard.hidden=isConveyor||flags.efficiency===false;
       if(!efficiencyCard.hidden){
         // Collapsed view: Availability, Operational efficiency and Throughput.
         Array.prototype.forEach.call(efficiencyCard.children,function(metric,index){
@@ -574,6 +580,7 @@
       // The legacy extra-details group is intentionally hidden; all currently
       // presented state durations and production metrics live in the three
       // visible sections. Avoid updating an invisible DOM subtree per frame.
+      if(flags.states!==false){
       var stateDetails=card.querySelector('.live-equipment-state-grid');
       var durations=unit.stateSeconds||{},lookup={};
       Object.keys(durations).forEach(function(key){lookup[key.toUpperCase()]=Number(durations[key])||0;});
@@ -595,6 +602,7 @@
         ['Back-up stop',seconds(['BACKUP_STOP'],unit.backupStopSeconds)]
       ];
       updateNumerical2DRows(stateDetails,rows,'states',card);
+      }
       // The duplicate legacy loss counters are hidden permanently.
       // Their durations remain available in the States group and raw samples.
       card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatNumber(belt.capacityPerSecond*60)+' unid/min a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatNumber(model.processData.equipment.maximumSpeedBpm) + __ST_TEXT__('client.min_2') : '');

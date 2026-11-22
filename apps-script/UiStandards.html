@@ -1422,11 +1422,28 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
   flex-direction:column;flex-wrap:nowrap;gap:var(--space-1);
 }
 .fold-native > summary .subsection-native-title {display:block;}
-/* Playback status is a separate line, never appended to the description. */
+/* Título en su propio renglón; la descripción y el progreso comparten
+   un único segundo renglón mientras el ancho disponible lo permita. */
+#simulation-playback .subsection-playback-meta {
+  display:flex;flex-wrap:wrap;align-items:baseline;
+  column-gap:var(--space-3);row-gap:var(--space-1);
+  min-width:0;max-width:100%;
+}
+#simulation-playback .fold-heading .subsection-playback-meta > .subsection-description {
+  display:block;flex:0 1 auto;min-width:0;max-width:100%;margin:0;
+  white-space:nowrap;overflow:visible;text-overflow:clip;
+}
 #simulation-playback .fold-heading #simulation-playback-status {
-  display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--space-2);
-  min-width:0;max-width:100%;margin:var(--space-1) 0 0;
-  font-size:var(--font-secondary);color:var(--muted);
+  display:inline-flex;flex:0 0 auto;align-items:baseline;flex-wrap:nowrap;
+  gap:var(--space-2);min-width:0;max-width:100%;margin:0;
+  white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
+}
+@media(max-width:1100px){
+  #simulation-playback .fold-heading .subsection-playback-meta > .subsection-description {
+    display:-webkit-box;flex:1 1 100%;white-space:normal;
+    overflow:hidden;overflow-wrap:anywhere;text-overflow:ellipsis;
+    -webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  }
 }
 #simulation-playback #playback-performance {display:none!important;}
 

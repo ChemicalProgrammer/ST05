@@ -1153,6 +1153,21 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
 }
 .playback-performance:empty {display:none;}
 
+
+/* Run-scoped inclusion switches share the Simulation setup visual rhythm. */
+#simulation-duration-content .simulation-run-inclusions {
+  display:flex;align-items:center;flex-wrap:wrap;
+  column-gap:var(--space-4);row-gap:var(--space-2);
+  margin:var(--space-2) 0;
+}
+#simulation-duration-content .simulation-run-inclusions .checkbox-label {
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  margin:0;min-height:var(--control-height);
+}
+#simulation-duration-content .simulation-run-inclusions input[type=checkbox] {
+  flex:0 0 auto;margin:0;
+}
+
 </style>
 
 

@@ -72,4 +72,8 @@ test('Saved machine/conveyor cards are mounted before shell sync and protected a
   assert.match(basic,/separate===splitMounted&&list\.parentNode===expectedParent/);
   assert.match(cases,/if\(state\.activeCase\.equipment\?\.length&&!document\.querySelector\('#equipment-list \.equipment-card'\)\)renderEquipment\(\)/);
   assert.match(core,/if\(view==='editor'&&\(state\.activeCase\.equipment\?\.length\|\|0\)>0&&!document\.querySelector\('#equipment-list \.equipment-card'\)\)renderEquipment\(\)/);
+  const simulation=read('apps-script/ClientSimulation.html');
+  assert.match(simulation,/var isActiveSnapshot=state\.activeCase\.activeSimulationId/);
+  assert.match(simulation,/state\.activeCase\.simulations\?\.\[0\]\?\.id===simulation\.id/);
+  assert.match(simulation,/var useMirror=initial&&isActiveSnapshot&&stored\.length===0/);
 });

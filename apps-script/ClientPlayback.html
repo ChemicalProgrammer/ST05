@@ -683,7 +683,7 @@
       // notification. Cache by engineering inputs, rather than result identity.
       // A changed geometry or audit remains visible immediately.
       var geometrySignature=JSON.stringify([analysisFormatId,zone?.id,
-        zone?.geometry,zone?.prime,zone?.backup,model.processData?.accumulation,
+        zone?.geometry,model.processData?.accumulation,
         model.processData?.geometry,eng?.calculated,eng?.audit?.status]);
       if(card._geometryRenderedSignature===geometrySignature)return;
       card._geometryRenderedSignature=geometrySignature;

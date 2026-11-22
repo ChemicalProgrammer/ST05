@@ -1,4 +1,23 @@
     var playbackClock;
+    // The simulation clock retains its existing timing; only rendering is
+    // rate-limited. Measurements are per-frame and never saved in case data.
+    var playbackRenderStats={lastPaintAt:-Infinity,totalMs:0,frames:0,lastReportAt:0,
+      windowStartedAt:0,windowFrames:0,observedFps:0};
+    var playbackRefreshIntervalMs=100; // 10 FPS, independent of display sampling and tick size
+    function updatePlaybackPerformanceLabel(){
+      var target=document.getElementById('playback-performance');
+      if(!target)return;
+      var stats=playbackRenderStats;
+      var average=stats.frames?stats.totalMs/stats.frames:0;
+      var calculation=Number(state.run?.calculationWallMs);
+      target.textContent='UI '+average.toFixed(1)+' ms · '+stats.observedFps.toFixed(0)
+        +' FPS'+(Number.isFinite(calculation)&&calculation>0?' · Calc '+(calculation/1000).toFixed(1)+' s':'');
+    }
+    function resetPlaybackPerformance(){
+      playbackRenderStats={lastPaintAt:-Infinity,totalMs:0,frames:0,lastReportAt:0,
+        windowStartedAt:0,windowFrames:0,observedFps:0};
+      updatePlaybackPerformanceLabel();
+    }
 
     function startPlayback() {
       if (!state.run.result || state.run.playing) return;
@@ -51,7 +70,12 @@
       var offset=playbackElapsed(frame);
       var rate=Number(document.getElementById('run-playback-rate').value||1);
       playbackClock={frame,offset,rate,started:performance.now()};
-      renderPlaybackFrame();
+      var now=performance.now();
+      var ending=!next&&!roundSession?.streaming;
+      if(ending||now-playbackRenderStats.lastPaintAt>=playbackRefreshIntervalMs
+        ||playbackRenderStats.lastPaintAt===-Infinity){
+        renderPlaybackFrame();
+      }
       if (!next) {
         playbackClock=null;
         if(roundSession?.streaming){state.run.timer=window.setTimeout(function(){if(state.run.playing)schedulePlaybackStep();},50);return;}
@@ -105,7 +129,8 @@
       if (!state.run.result || !state.run.result.samples.length){
         if(progress)progress.textContent='0%';if(effectiveCard)effectiveCard.textContent='—';if(lossCard)lossCard.textContent='—';return;
       }
-      var scrollAnchor = captureLiveEquipmentScrollAnchor();
+      var renderStart=performance.now();
+      var scrollAnchor = state.uiView==='simulation'?captureLiveEquipmentScrollAnchor():null;
       var sample = state.run.result.samples[state.run.sampleIndex];
       var time = sample.virtualSecond;
       var duration=Number(state.run.result.durationSeconds);if(progress)progress.textContent=(duration>0?Math.max(0,Math.min(100,time/duration*100)).toFixed(1):'0')+'%';
@@ -127,6 +152,21 @@
       drawSimulationChart();
       drawEquipmentSpeedChart();
       restoreLiveEquipmentScrollAnchor(scrollAnchor);
+      var finishedAt=performance.now(),stats=playbackRenderStats;
+      stats.totalMs+=Math.max(0,finishedAt-renderStart);
+      stats.frames+=1;
+      stats.windowFrames+=1;
+      if(!stats.windowStartedAt)stats.windowStartedAt=finishedAt;
+      var span=finishedAt-stats.windowStartedAt;
+      if(span>=1000){
+        stats.observedFps=stats.windowFrames*1000/span;
+        stats.windowFrames=0;stats.windowStartedAt=finishedAt;
+      }
+      stats.lastPaintAt=finishedAt;
+      if(finishedAt-stats.lastReportAt>=1000){
+        stats.lastReportAt=finishedAt;
+        updatePlaybackPerformanceLabel();
+      }
     }
 
     function captureLiveEquipmentScrollAnchor() {

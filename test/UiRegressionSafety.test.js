@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import {JSDOM} from 'jsdom';
 
 const read=(file)=>fs.readFileSync(file,'utf8');
@@ -66,8 +67,8 @@ test('Saved machine/conveyor cards are mounted before shell sync and protected a
   const core=read('apps-script/ClientCore.html');
   const editor=equipment.slice(equipment.indexOf('function renderEditor()'),equipment.indexOf('function renderEditorMeta()'));
   assert.ok(editor.indexOf('renderEquipment()')>=0&&editor.indexOf('renderEquipment()')<editor.indexOf('renderEditorMeta()'));
-  assert.match(equipment,/if\(!cards\.length&&\(state\.activeCase\.equipment\?\.length\|\|0\)>0\)/);
-  assert.match(equipment,/EQUIPMENT_EDITOR_NOT_RENDERED/);
+  assert.match(equipment,/if\(!cards\.length&&savedCount>0\)return true/);
+  assert.match(equipment,/EQUIPMENT_EDITOR_INCOMPLETE/);
   assert.match(basic,/var expectedParent=separate\?layout:listHome/);
   assert.match(basic,/separate===splitMounted&&list\.parentNode===expectedParent/);
   assert.match(cases,/if\(state\.activeCase\.equipment\?\.length&&!document\.querySelector\('#equipment-list \.equipment-card'\)\)renderEquipment\(\)/);
@@ -76,4 +77,69 @@ test('Saved machine/conveyor cards are mounted before shell sync and protected a
   assert.match(simulation,/var isActiveSnapshot=state\.activeCase\.activeSimulationId/);
   assert.match(simulation,/state\.activeCase\.simulations\?\.\[0\]\?\.id===simulation\.id/);
   assert.match(simulation,/var useMirror=initial&&isActiveSnapshot&&stored\.length===0/);
+});
+
+test('Simulation and save use committed machine/conveyor data when editor is not mounted',()=>{
+  const source=read('apps-script/ClientEquipment.html');
+  const model=[
+    {id:'filler-01',type:'FILLER',name:'Filler 01',nominalRatePerSecond:4},
+    {id:'conveyor-01',type:'CONVEYOR',name:'Conveyor 01',nominalRatePerSecond:4}
+  ];
+  const context={
+    state:{activeCase:{name:'Demo line',equipment:structuredClone(model)}},
+    document:{querySelectorAll(selector){
+      assert.equal(selector,'#equipment-list .equipment-card');
+      return [];
+    }},
+    cloneJson:value=>JSON.parse(JSON.stringify(value)),
+    showError:()=>assert.fail('Hidden editor should not create an application error'),
+    STProducts:{reconcile:()=>assert.fail('No editor controls were changed')},
+    renderRawJson:()=>assert.fail('No editor controls were changed')
+  };
+  vm.createContext(context);
+  const previewStart=source.indexOf('function basicEquipmentPreview()');
+  const previewEnd=source.indexOf('function refreshDesignGraph()',previewStart);
+  const syncStart=source.indexOf('function syncEquipmentFromEditor()');
+  const syncEnd=source.indexOf('function parseJsonObject(',syncStart);
+  assert.ok(previewStart>=0&&previewEnd>previewStart&&syncStart>=0&&syncEnd>syncStart);
+  vm.runInContext(source.slice(previewStart,previewEnd)+'\n'+source.slice(syncStart,syncEnd),context);
+  assert.equal(context.syncEquipmentFromEditor(),true,'A hidden editor does not block simulation or save');
+  assert.deepEqual(context.state.activeCase.equipment,model,'The committed equipment is preserved');
+  const preview=context.basicEquipmentPreview();
+  assert.deepEqual(JSON.parse(JSON.stringify(preview)),model,'Numerical previews read the model');
+  preview.pop();
+  assert.equal(context.state.activeCase.equipment.length,2,'Preview changes never mutate the model');
+});
+
+test('A partially rendered editor cannot silently drop machines or conveyors',()=>{
+  const source=read('apps-script/ClientEquipment.html');
+  const start=source.indexOf('function syncEquipmentFromEditor()');
+  const end=source.indexOf('function parseJsonObject(',start);
+  let failure;
+  const original=[
+    {id:'filler-01',type:'FILLER',name:'Filler 01'},
+    {id:'conveyor-01',type:'CONVEYOR',name:'Conveyor 01'}
+  ];
+  const context={
+    state:{activeCase:{equipment:structuredClone(original)}},
+    document:{querySelectorAll:()=>[{}]},
+    showError:err=>{failure=err;}
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(start,end),context);
+  assert.equal(context.syncEquipmentFromEditor(),false);
+  assert.equal(failure.code,'EQUIPMENT_EDITOR_INCOMPLETE');
+  assert.deepEqual(context.state.activeCase.equipment,original);
+});
+
+test('The global error button is solid red and announces the error count',()=>{
+  const css=read('apps-script/ComponentStyles.html');
+  const web=read('apps-script/WebApp.html');
+  const dialogs=read('apps-script/Dialogs.html');
+  assert.match(css,/#header-errors:not\(\.hidden\) #header-error-button \{/);
+  assert.match(css,/background:var\(--danger\)!important;color:var\(--page\)!important/);
+  assert.match(css,/#header-errors:not\(\.hidden\)::after \{[\s\S]*?content:attr\(data-count\)/);
+  assert.match(web,/id="header-error-button"/);
+  assert.match(dialogs,/button\.setAttribute\('aria-label',label\)/);
+  assert.match(dialogs,/header\.dataset\.count=String\(count\)/);
 });

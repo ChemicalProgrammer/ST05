@@ -48,6 +48,12 @@ test('Ctrl+Shift+S abre catálogo accesible y las pestañas funcionan',()=>{
     }
     const columns=w.document.querySelector('.design-reference-column-heads');
     assert.ok(columns);
+    assert.ok(w.document.querySelector('.design-reference-control-name strong')?.textContent.includes('Subsección'));
+    for(const name of ['Título de subsección','Descripción de subsección','Separador interno de subsección']){
+      assert.ok([...w.document.querySelectorAll('.design-reference-control-name strong')].some(node=>node.textContent===name),name);
+    }
+    assert.ok(w.document.querySelector('fieldset.subsection-fieldset > legend.subsection-divider'));
+    assert.equal(w.document.querySelectorAll('.design-reference-column-heads').length,4);
     w.document.getElementById('design-ref-tab-controls').click();
     w.document.querySelector('.design-reference-counter-button').click();
     assert.equal(w.document.getElementById('design-ref-counter').textContent,'1');
@@ -81,9 +87,36 @@ test('KPI, resultado y escenario tienen nombres y reglas distintas',()=>{
   assert.match(basic,/row\.classList\.add\('metric-card','metric-card--featured'\)/);
   assert.match(whatif,/metric-card--scenario/);
   const playback=web.split('id="simulation-playback-metrics"')[1].split('</div>')[0];
-  assert.equal((playback.match(/class="metric-card metric-card--featured"/g)||[]).length,10);
-  assert.doesNotMatch(playback,/metric-card--result/);
-  assert.match(style,/#simulation-playback-metrics > article\.metric-card--featured/);
-  assert.match(style,/#simulation-playback-metrics > article > strong \{[\s\S]*?font-size:var\(--font-kpi\)/);
+  assert.equal((playback.match(/class="metric-card metric-card--result"/g)||[]).length,10);
+  assert.doesNotMatch(playback,/metric-card--featured/);
+  assert.match(style,/#simulation-playback-metrics > article\.metric-card--result/);
+  assert.match(style,/#simulation-playback-metrics > article\.metric-card--result > strong,[\s\S]*?font-size:var\(--font-section\)/);
+  assert.match(style,/\.metric-card--result > strong \.st-time-output b \{font-size:inherit!important/);
+  assert.match(basic,/metric\(efficiencies,'Theoretical equipment efficiency'/);
+  assert.match(basic,/metric\(efficiencies,'Simulated efficiency'/);
   assert.match(web,/include_\('ComponentStyles'\)/);
+});
+
+test('Las unidades tienen un slot fijo y las subsecciones muestran descripciones',()=>{
+  const styles=fs.readFileSync('apps-script/ComponentStyles.html','utf8');
+  const tokens=fs.readFileSync('apps-script/DesignTokens.html','utf8');
+  const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
+  const web=fs.readFileSync('apps-script/WebApp.html','utf8');
+  const real=fs.readFileSync('apps-script/RealDataPanel.html','utf8');
+  const products=fs.readFileSync('apps-script/Products.html','utf8');
+  assert.match(tokens,/--time-unit-gap:\s*2px/);
+  assert.match(tokens,/--time-unit-slot:\s*3\.25em/);
+  assert.match(styles,/\.time-value-control > select \{flex:0 0 var\(--time-unit-slot\)!important/);
+  assert.match(styles,/\.st-time-output,\.live-equipment-card \.st-time-output\[data-variant=metric\]/);
+  assert.match(ui,/\.subsection-heading-title/);
+  assert.match(ui,/\.subsection-description/);
+  assert.match(ui,/\.subsection-divider/);
+  assert.match(web,/class="simulation2d-setting-toggles subsection-fieldset"><legend class="subsection-divider">Options/);
+  assert.match(web,/id="simulation-playback-status"/);
+  assert.match(real,/class="subsection-description"/);
+  assert.match(products,/var guidance=\{/);
+  const buttons=[...web.matchAll(/<button[^>]*data-subsection-toggle[^>]*>/g)];
+  assert.ok(buttons.length>=12,'Las pantallas principales conservan subsecciones plegables');
+  const descriptions=(web.match(/class="subsection-description"/g)||[]).length;
+  assert.ok(descriptions>=13,'Las subsecciones principales tienen descripción');
 });

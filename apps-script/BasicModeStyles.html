@@ -202,12 +202,6 @@ html[data-ui-mode=basic] .live-speed-cell .equipment-speed-sparkline { flex:none
  html[data-ui-mode=basic] .live-speed-cell { grid-column:1 / -1; grid-row:auto; }
 }
 @media(max-width:760px){html[data-ui-mode=basic] .live-equipment-card__row { grid-template-columns:1fr; }}
-/* Show individual simulation controls even if event scheduling is disabled.
-   Controls remain disabled by ClientPlayback until scenario events are enabled. */
-html[data-ui-mode=basic] .live-equipment-controls { display:grid!important; grid-column:1 / -1; grid-row:auto; grid-template-columns:repeat(6,minmax(0,var(--control-height))); justify-content:end; }
-html[data-ui-mode=basic] .live-equipment-controls button { width:var(--control-height); height:var(--control-height); }
-html[data-ui-mode=basic][data-events-enabled=true] .live-equipment-controls { grid-column:1 / -1; grid-row:auto; }
-@media(max-width:600px) { html[data-ui-mode=basic] .live-equipment-controls { justify-content:start; } }
 html[data-ui-mode=basic][data-basic-view=results] #batch-results,
 html[data-ui-mode=basic][data-basic-view=results] #results-table,
 html[data-ui-mode=basic][data-basic-view=results] #results-reference,

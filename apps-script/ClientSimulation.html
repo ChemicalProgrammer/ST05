@@ -337,17 +337,23 @@
       syncRunControls();
     }
     function runControlsLocked(){return Boolean(state.run.active||state.run.playing||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty);}
+    var last2DLockState=null;
     function syncRunControls(){
       var locked=runControlsLocked();
+      var twoDRunning=Boolean(window.STSimulation2D?.isRunning?.());
+      if(last2DLockState!==locked){
+        last2DLockState=locked;
+        window.STSimulation2D?.refreshRunLocks?.();
+      }
       STReports.bindChartExports(state.run.result,state.activeCase,activePersistentSimulation(),state.run.roundIndex+1);
       ['run-initial-format','duration-mode','run-duration','run-sample-interval','run-sample-interval-unit','run-seed','run-rounds','run-shift-hours','run-shift-count','add-control-event','open-event-generator'].forEach(function(id){document.getElementById(id).disabled=locked||(id==='run-duration'&&document.getElementById('duration-mode').value==='SHIFTS');});
       document.querySelectorAll('#event-time-tools input,#event-time-tools select,#event-time-tools button,#control-events input,#control-events select,#control-events button').forEach(function(control){control.disabled=locked;});
       document.querySelectorAll('[data-control]').forEach(function(button){button.disabled=document.getElementById(button.dataset.control).disabled;});
       var playButton=document.getElementById('play-simulation');
       var hasResult=Boolean(state.run.result);
-      playButton.disabled=hasResult
+      playButton.disabled=twoDRunning||(hasResult
         ? state.run.result?.detailCoverage?.recordingMode==='SUMMARY'
-        : locked||!isRunReady();
+        : locked||!isRunReady());
       playButton.setAttribute('aria-label',hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation'));
       playButton.title=hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation');
       document.querySelectorAll('#products-workspace input,#products-workspace select,#products-workspace button,#planned-line-events input,#planned-line-events select,#planned-line-events button,#add-product-changeover').forEach(function(control){control.disabled=locked||control.dataset.formatDisabled==='true';});
@@ -745,6 +751,10 @@
 
     async function runSimulation() {
       if(runControlsLocked())return;
+      if(window.STSimulation2D?.isRunning?.()){
+        showError({message:'Pause or stop Simulation 2D before starting the numerical simulation.'});
+        return;
+      }
       if ((state.isDirty || window.STBasicMode?.isBasic()) && !collectCaseEditor()) return;
       var run = readRunConfiguration();
       if (!run) return;

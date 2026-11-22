@@ -29,6 +29,28 @@ test('Ctrl+Shift+S abre catálogo accesible y las pestañas funcionan',()=>{
     assert.equal(w.document.getElementById('design-ref-cards').hidden,false);
     assert.equal(w.document.getElementById('design-ref-controls').hidden,true);
     assert.ok(w.document.querySelector('#design-ref-time-output .st-time-output'));
+    for(const tab of tabs){
+      const panel=w.document.getElementById(tab.getAttribute('aria-controls'));
+      const catalog=panel.querySelector('[role="table"]');
+      assert.ok(catalog,'Cada pestaña debe incluir la tabla de tres columnas');
+      const headers=[...catalog.querySelectorAll('[role="columnheader"]')].map(el=>el.textContent.trim());
+      assert.deepEqual(headers,['Control o diseño','Explicación','Nombre del control']);
+      const rows=[...catalog.querySelectorAll('.design-reference-row')];
+      assert.ok(rows.length>0,'Cada pestaña debe mostrar ejemplos');
+      for(const row of rows){
+        const cells=[...row.children].filter(child=>child.getAttribute('role')==='cell');
+        assert.equal(cells.length,3,'Cada fila tiene vista previa, descripción y nombre');
+        assert.ok(cells[0].children.length,'La primera columna muestra el control o diseño');
+        assert.ok(cells[1].textContent.trim(),'La segunda columna describe su función');
+        assert.ok(cells[2].querySelector('strong')?.textContent.trim(),'La tercera columna identifica el nombre reutilizable');
+        assert.ok(cells[2].querySelector('code')?.textContent.trim(),'El nombre incluye selector o token técnico');
+      }
+    }
+    const columns=w.document.querySelector('.design-reference-column-heads');
+    assert.ok(columns);
+    w.document.getElementById('design-ref-tab-controls').click();
+    w.document.querySelector('.design-reference-counter-button').click();
+    assert.equal(w.document.getElementById('design-ref-counter').textContent,'1');
     w.document.getElementById('design-reference-close').click();
     assert.equal(modal.open,false);
   }finally{dom.window.close();}
@@ -58,6 +80,10 @@ test('KPI, resultado y escenario tienen nombres y reglas distintas',()=>{
   assert.match(style,/@media\(hover:hover\) and \(pointer:fine\)/);
   assert.match(basic,/row\.classList\.add\('metric-card','metric-card--featured'\)/);
   assert.match(whatif,/metric-card--scenario/);
-  assert.match(web,/metric-card--result/);
+  const playback=web.split('id="simulation-playback-metrics"')[1].split('</div>')[0];
+  assert.equal((playback.match(/class="metric-card metric-card--featured"/g)||[]).length,10);
+  assert.doesNotMatch(playback,/metric-card--result/);
+  assert.match(style,/#simulation-playback-metrics > article\.metric-card--featured/);
+  assert.match(style,/#simulation-playback-metrics > article > strong \{[\s\S]*?font-size:var\(--font-kpi\)/);
   assert.match(web,/include_\('ComponentStyles'\)/);
 });

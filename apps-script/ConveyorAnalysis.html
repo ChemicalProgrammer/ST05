@@ -11,10 +11,33 @@
 #conveyor-analysis-body { min-width:0; max-width:100%; overflow-y:auto; overflow-x:hidden; }
 #conveyor-analysis-body > section { min-width:0; max-width:100%; }
 #conveyor-analysis-body .table-scroll { min-width:0;max-width:100%;width:100%;overflow-x:auto;overflow-y:visible; }
-#conveyor-analysis-body table { width:100%;min-width:0;table-layout:fixed; }
-#conveyor-analysis-body :is(td,th) { min-width:0;overflow-wrap:anywhere;white-space:normal; }
-#conveyor-analysis-body :is(td,th):first-child { width:65%; }
-@media(max-width:600px){#conveyor-analysis-body :is(td,th):first-child{width:55%;}}
+/* Columnas autoajustables: Parameter takes the leftover room, while
+   every value/format/unit column occupies only its intrinsic content width.
+   The table scrolls horizontally only when all columns genuinely cannot fit. */
+#conveyor-analysis-body table {
+  width:100%;min-width:0;table-layout:auto;
+}
+#conveyor-analysis-body :is(td,th) {
+  min-width:0;padding:var(--space-2) var(--space-3);
+  overflow-wrap:anywhere;white-space:normal;
+}
+#conveyor-analysis-body tbody th[scope=row]:not([colspan]) {
+  width:auto;white-space:normal;overflow-wrap:break-word;
+}
+#conveyor-analysis-body :is(thead th,tbody td):not(:first-child) {
+  width:1%;padding-inline:var(--space-2);
+}
+#conveyor-analysis-body tbody td {white-space:nowrap;font-variant-numeric:tabular-nums;}
+#conveyor-analysis-body thead th:not(:first-child) {
+  min-width:4rem;max-width:12rem;white-space:normal;text-align:right;
+}
+#conveyor-analysis-body :is(td,th)[colspan] {
+  width:auto;text-align:left;white-space:normal;
+}
+@media(max-width:600px){
+  #conveyor-analysis-body :is(td,th) {padding:var(--space-2);}
+  #conveyor-analysis-body thead th:not(:first-child) {min-width:3rem;}
+}
 #conveyor-analysis-body { display:grid; gap:var(--space-4); }
 #conveyor-analysis-body h3 { margin:0 0 var(--space-2); }
 #conveyor-analysis-body .chart-note { margin:0; }

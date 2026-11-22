@@ -111,7 +111,12 @@
       state.workspaceView = 'simulation';
       state.uiView = 'simulation';
       toggle('comparison-panel', false);
-      state.activeCase.equipment = cloneJson(simulation.equipment || []);
+      // A legacy/misaligned saved active simulation may have an empty equipment
+      // snapshot even when the case-level mirror still contains the line.
+      // Recover only from the *same active simulation's* case mirror.
+      var mirror=state.activeCase.equipment,stored=Array.isArray(simulation.equipment)?simulation.equipment:[];
+      var useMirror=initial&&state.activeCase.activeSimulationId===simulation.id&&stored.length===0&&Array.isArray(mirror)&&mirror.length>0;
+      state.activeCase.equipment=cloneJson(useMirror?mirror:stored);
       state.run.commands = cloneJson(simulation.dynamicConfig?.commands || []);
       state.run.plannedStops=simulation.dynamicConfig?.plannedStops===undefined?undefined:
         cloneJson(simulation.dynamicConfig.plannedStops.filter(function(event){return event?.source!=='PLANT_CALENDAR';}));

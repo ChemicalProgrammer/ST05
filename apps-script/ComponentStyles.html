@@ -5,11 +5,11 @@
    No se cambia el valor ni la frecuencia de los resultados: CSS-only.
    El relieve aparece únicamente al pasar el puntero, sin will-change. */
 .metric-card {min-width:0;border:var(--border-width) solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);background:var(--surface);}
-.metric-card--result,#results-kpis .result-kpi,.result-loss-kpis .result-kpi {
+.metric-card--result,#simulation-playback-metrics > article.metric-card--result,#results-kpis .result-kpi,.result-loss-kpis .result-kpi {
   background:var(--surface-soft);border:var(--border-width) solid var(--line-strong);
   border-radius:var(--radius-md);padding:var(--space-3);min-width:0;
 }
-.metric-card--featured,#simulation-playback-metrics > article.metric-card--featured,html[data-ui-mode=basic] #basic-efficiencies > div {
+.metric-card--featured,html[data-ui-mode=basic] #basic-efficiencies > div {
   background:var(--surface-soft);border:var(--border-width) solid var(--line);
   border-top:4px solid var(--accent);border-radius:var(--radius-md);
   padding:var(--space-3);min-width:0;
@@ -22,17 +22,30 @@
 .scenario-tier-grid > .metric-card--scenario:has(.analysis-capex[data-tier=MEDIUM]) {border-inline-start-color:var(--capex-medium);}
 .scenario-tier-grid > .metric-card--scenario:has(.analysis-capex[data-tier=HIGH]) {border-inline-start-color:var(--capex-high);}
 .metric-card--status {background:var(--surface-soft);}
-/* Las cifras KPI necesitan más ancho que los contadores compactos. */
-#simulation-playback-metrics {grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--size-180)),1fr));}
+/* El grid conserva las tarjetas de resultado compactas; sólo las eficiencias son destacadas. */
 #simulation-playback-metrics > article > span {display:block;font-size:var(--font-secondary);color:var(--muted);}
-#simulation-playback-metrics > article > strong {
-  display:block;font-size:var(--font-kpi);line-height:1.15;
+#simulation-playback-metrics > article.metric-card--result > strong,
+.metric-card--result > strong {
+  display:block;font-size:var(--font-section);line-height:1.25;
   font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;
   margin-block-start:var(--space-2);
 }
-#simulation-playback-metrics > article > strong .st-time-output {display:inline-flex!important;align-items:baseline;gap:2px!important;font-size:inherit!important;line-height:inherit;}
-#simulation-playback-metrics > article > strong .st-time-output b {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--ink);}
-#simulation-playback-metrics > article > strong .st-time-output select {font-size:var(--font-secondary)!important;min-height:0!important;height:auto!important;width:auto!important;min-width:0!important;padding:0!important;margin:0!important;line-height:inherit!important;vertical-align:baseline;color:var(--muted);}
+/* Input and output use the same fixed-size unit slot, independent of the selected unit's text width. */
+.time-value-control {gap:var(--time-unit-gap)!important;}
+.time-value-control > input[type=number] {padding-inline-end:var(--space-1)!important;}
+.time-value-control > select {flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;box-sizing:border-box;text-align:start!important;text-align-last:start!important;padding-inline:0!important;}
+.st-time-output,.time-output-value {gap:var(--time-unit-gap)!important;align-items:baseline;}
+:is(.st-time-output,.live-equipment-card .st-time-output[data-variant=metric]) > .st-time-unit {
+  flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;
+  min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;
+  box-sizing:border-box;text-align:start!important;text-align-last:start!important;
+  padding:0!important;margin:0!important;height:auto!important;min-height:0!important;
+  background:transparent!important;border:0!important;
+}
+/* STTimeControls.output inherits its parent card's value style, including nested b. */
+.metric-card--result > strong .st-time-output,
+.metric-card--result > strong .st-time-output b {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:inherit;}
+.metric-card--result > strong .st-time-output select {font-size:.75em!important;line-height:inherit!important;color:var(--muted);vertical-align:baseline;}
 @media(hover:hover) and (pointer:fine) {
   :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
        #simulation-playback-metrics > article,#results-kpis .result-kpi,

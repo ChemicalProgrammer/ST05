@@ -533,7 +533,11 @@ function numericInputValue(input) {
 
     function collectCaseEditor() {
       if (!state.activeCase || !syncEquipmentFromEditor()) return null;
-      state.activeCase.name = document.getElementById('case-name').value;
+      var nameField=document.getElementById('case-name');
+      // A transient blank editor field cannot erase an existing case name.
+      if(!nameField.value.trim()&&state.activeCase.name?.trim())nameField.value=state.activeCase.name;
+      if(!nameField.value.trim())return null;
+      state.activeCase.name = nameField.value.trim();
       return {
         id: state.activeCase.id,
         expectedRevision: state.activeCase.revision,
@@ -570,7 +574,12 @@ function numericInputValue(input) {
     }
     function syncEquipmentFromEditor() {
       if (!state.activeCase) return false;
-      var cards = Array.prototype.slice.call(document.querySelectorAll('.equipment-card'));
+      var cards = Array.prototype.slice.call(document.querySelectorAll('#equipment-list .equipment-card'));
+      // Missing DOM cards are not the same as an intentionally empty line.
+      if(!cards.length&&(state.activeCase.equipment?.length||0)>0){
+        showError({code:'EQUIPMENT_EDITOR_NOT_RENDERED',message:'The equipment editor did not render the saved line. Reopen Equipment before saving; existing equipment was preserved.'});
+        return false;
+      }
       var equipment = [];
       for (var index = 0; index < cards.length; index += 1) {
         var card = cards[index];

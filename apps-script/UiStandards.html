@@ -1259,7 +1259,10 @@ dialog[open] .table-scroll {max-inline-size:100%;min-inline-size:0;scrollbar-gut
   margin-block:0;
   min-width:0;
 }
-.workspace-content :is(.fold-card,.fold-native) + :is(.fold-card,.fold-native) {
+/* El combinador general permite bloques intermedios ocultos o vacíos sin
+   perder el ritmo entre Subsecciones realmente visibles. */
+.workspace-content :is(.fold-card,.fold-native):not(.hidden):not([hidden])
+  ~ :is(.fold-card,.fold-native):not(.hidden):not([hidden]) {
   margin-block-start:var(--subsection-gap);
 }
 .workspace-content > .card > :is(.fold-card,.fold-native):first-of-type,

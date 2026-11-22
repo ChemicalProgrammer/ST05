@@ -21,8 +21,8 @@ test('Ctrl+Shift+S abre catálogo accesible y las pestañas funcionan',()=>{
     w.dispatchEvent(key);
     assert.equal(modal.open,true);
     assert.equal(key.defaultPrevented,true);
-    const tabs=[...modal.querySelectorAll('[role=tab]')];
-    assert.equal(tabs.length,4);
+    const tabs=[...modal.querySelector('.design-reference-tabs').children].filter(node=>node.getAttribute('role')==='tab');
+    assert.equal(tabs.length,5);
     const cards=w.document.getElementById('design-ref-tab-cards');
     cards.click();
     assert.equal(cards.getAttribute('aria-selected'),'true');
@@ -53,8 +53,29 @@ test('Ctrl+Shift+S abre catálogo accesible y las pestañas funcionan',()=>{
       assert.ok([...w.document.querySelectorAll('.design-reference-control-name strong')].some(node=>node.textContent===name),name);
     }
     assert.ok(w.document.querySelector('fieldset.subsection-fieldset > legend.subsection-divider'));
-    assert.equal(w.document.querySelectorAll('.design-reference-column-heads').length,4);
+    assert.equal(w.document.querySelectorAll('.design-reference-column-heads').length,5);
+    // Interactive preview navigation never changes the selected real catalog tab.
+    w.document.getElementById('design-ref-tab-navigation').click();
+    const sampleNav=w.document.querySelector('.design-reference-main-navigation');
+    const examples=[...sampleNav.querySelectorAll('[data-design-preview-option]')];
+    examples[1].click();
+    assert.equal(examples[1].getAttribute('aria-current'),'page');
+    assert.equal(examples[0].getAttribute('aria-current'),'false');
+    assert.equal(w.document.getElementById('design-ref-tab-navigation').getAttribute('aria-selected'),'true');
+    const sampleDialog=w.document.querySelector('.design-reference-dialog-tabs-preview');
+    const dialogExamples=[...sampleDialog.querySelectorAll('[data-design-preview-option]')];
+    dialogExamples[1].click();
+    assert.equal(dialogExamples[1].getAttribute('aria-selected'),'true');
+    assert.equal(dialogExamples[0].getAttribute('aria-selected'),'false');
     w.document.getElementById('design-ref-tab-controls').click();
+    const controls=[...w.document.querySelectorAll('.design-reference-control-name strong')].map(el=>el.textContent.trim());
+    for(const name of ['Pestaña de navegación principal','Pestañas de cuadro de diálogo','Pestaña de simulación','Selector de simulación','Botón principal','Botón de peligro','Campo de búsqueda','Menú desplegable de acciones','Panel de gráfica','Tabla de datos','Selector circular de color']){
+      assert.ok(controls.includes(name),'Missing reusable control: '+name);
+    }
+    assert.equal(controls.length,new Set(controls).size,'Cada control debe tener un nombre único');
+    const primary=w.document.querySelector('[data-design-preview-action]');
+    primary.click();
+    assert.equal(w.document.getElementById('design-ref-action-output').textContent,'1');
     w.document.querySelector('.design-reference-counter-button').click();
     assert.equal(w.document.getElementById('design-ref-counter').textContent,'1');
     w.document.getElementById('design-reference-close').click();
@@ -141,4 +162,23 @@ test('El encabezado es compacto, el estado no revela frames y las eficiencias mu
   assert.match(style,/#simulation-playback-efficiencies #basic-efficiencies > \.metric-card--featured > strong/);
   const cards=web.split('id="simulation-playback-metrics"')[1].split('</div>')[0];
   assert.equal((cards.match(/metric-card--result/g)||[]).length,10);
+});
+
+test('La descripción usa una sola línea en escritorio y hasta dos en pantallas estrechas',()=>{
+  const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
+  assert.match(ui,/\.fold-heading > \.subsection-heading-copy > \.subsection-description,[\s\S]*?display:block;min-width:0;max-width:100%;margin:0;[\s\S]*?white-space:nowrap/);
+  assert.match(ui,/@media\(max-width:1100px\)\{[\s\S]*?display:-webkit-box;white-space:normal;overflow-wrap:anywhere;[\s\S]*?-webkit-line-clamp:2/);
+  assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?align-items:stretch;flex-direction:column;flex-wrap:nowrap/);
+});
+
+test('El Header utiliza su clase de navegación reutilizable',()=>{
+  const basic=fs.readFileSync('apps-script/BasicMode.html','utf8');
+  const css=fs.readFileSync('apps-script/ComponentStyles.html','utf8');
+  assert.match(basic,/b\.classList\.add\('app-section-tab'\)/);
+  assert.match(css,/\.app-section-tab\[aria-current=page\]/);
+  const source=fs.readFileSync('apps-script/DesignReference.html','utf8');
+  const rows=(source.match(/class="design-reference-row"/g)||[]).length;
+  assert.ok(rows>=75,'El catálogo debe incluir navegación, controles, tipografía, márgenes y tarjetas');
+  assert.equal((source.match(/class="design-reference-column-heads"/g)||[]).length,5);
+  assert.match(source,/querySelector\('\.design-reference-tabs'\)\.querySelectorAll\(':scope > \[role=tab\]'\)/);
 });

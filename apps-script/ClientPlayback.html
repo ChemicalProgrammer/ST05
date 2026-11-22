@@ -244,32 +244,34 @@
       // efficiency (compact side-by-side), plus the existing speed chart.
       var detailGrid=document.createElement('div');
       detailGrid.className='live-equipment-detail-grid';
-      var statePanel=document.createElement('section');
+      var statePanel=document.createElement('details');
       statePanel.className='live-equipment-state-details';
-      var stateHeading=document.createElement('strong');
+      var stateHeading=document.createElement('summary');
       stateHeading.textContent='States';
+      stateHeading.setAttribute('aria-label','Expand or collapse equipment states');
       var stateGrid=document.createElement('div');
       stateGrid.className='live-equipment-state-grid';
       stateGrid.addEventListener('change',function(event){
         if(event.target.matches('.st-time-unit'))card.dataset.stateTimeUnit=event.target.value;
       });
       statePanel.append(stateHeading,stateGrid);
-      var performanceGroup=document.createElement('section');
+      var performanceGroup=document.createElement('details');
       performanceGroup.className='live-equipment-performance-group';
-      var performanceHeading=document.createElement('strong');
+      var performanceHeading=document.createElement('summary');
       performanceHeading.textContent='Equipment efficiency';
       var extraDetails=document.createElement('div');
       extraDetails.className='live-equipment-summary-details';
       performanceGroup.append(performanceHeading,efficiency,extraDetails);
-      var summaryPanel=document.createElement('section');summaryPanel.className='live-equipment-2d-summary';
-      var summaryHeading=document.createElement('div');summaryHeading.className='live-equipment-2d-title';summaryHeading.textContent='Overview';
+      var summaryPanel=document.createElement('details');summaryPanel.className='live-equipment-2d-summary';
+      var summaryHeading=document.createElement('summary');summaryHeading.className='live-equipment-2d-title';summaryHeading.textContent='Overview';
       var summaryRows=document.createElement('div');summaryRows.className='live-equipment-2d-rows';
       summaryPanel.append(summaryHeading,summaryRows);
-      var geometryGroup=document.createElement('section');geometryGroup.className='live-equipment-geometry-group';
-      var geometryHeader=document.createElement('div');geometryHeader.className='live-equipment-2d-section-heading';
+      var geometryGroup=document.createElement('details');geometryGroup.className='live-equipment-geometry-group';
+      var geometryHeader=document.createElement('summary');geometryHeader.className='live-equipment-2d-section-heading';
       geometryHeader.innerHTML='<strong>Conveyor Geometry</strong><span class="live-equipment-geometry-verdict"></span>';
       var geometryRows=document.createElement('div');geometryRows.className='live-equipment-2d-rows';
       geometryGroup.append(geometryHeader,geometryRows);
+      // All three groups start compact; native details preserve their state between playback frames.
       detailGrid.append(summaryPanel,statePanel,performanceGroup,geometryGroup);
       var visualHeader=document.createElement('header');visualHeader.className='numeric-equipment-header';
       var headerDetails=document.createElement('div');headerDetails.className='numeric-equipment-header-details';
@@ -332,6 +334,10 @@
       var efficiencyCard=card.querySelector('.live-equipment-efficiency');
       efficiencyCard.hidden=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
       if(!efficiencyCard.hidden){
+        // Collapsed view: Availability, Operational efficiency and Throughput.
+        Array.prototype.forEach.call(efficiencyCard.children,function(metric,index){
+          metric.classList.toggle('numeric-compact-key',index===0||index===2||index===3);
+        });
         var efficiency=STEquipmentEfficiency.fromNumerical(unit,model);
         var outputUnit=window.STBasicMode?.unitLabel(unit.unitOfFlow||model.unitOfFlow)||unit.unitOfFlow||model.unitOfFlow||'units';
         STEquipmentEfficiency.fields.forEach(function([key]){
@@ -431,6 +437,14 @@
           el.append(label,slot);host.append(el);
         }
         el.firstElementChild.textContent=row[0];
+        // A few high-value fields remain visible while their group is collapsed.
+        var compactRows={
+          summary:new Set([1,2,3,4]), // speed, flow, output, inside/on-belt
+          states:new Set(type==='states'&&card.querySelector('.live-equipment-geometry-group')?.hidden===false
+            ?[0,1,2]:[0,1,2,3]), // conveyor: empty / flowing / accumulating
+          geometry:new Set([6,7,9,10]) // accumulation, usable length, Back-up and Prime
+        };
+        el.classList.toggle('numeric-compact-key',Boolean(compactRows[type]?.has(index)));
         var slot=el.lastElementChild;
         if(type==='states'&&Number.isFinite(row[1])){
           STTimeControls.setOutput(slot,row[1],{unit:card.dataset.stateTimeUnit||'s',scope:host,label:'Change equipment states unit'});

@@ -875,6 +875,90 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
   }
 }
 
+
+/* Keep the simulation start action visible in Basic when event scheduling opens. */
+html[data-ui-mode=basic] #run-panel > .section-heading {
+  display:flex!important;
+  justify-content:flex-end;
+  min-height:var(--control-height);
+  margin:0 0 var(--space-2);
+}
+html[data-ui-mode=basic] #run-panel > .section-heading > .button-row {display:flex!important;}
+
+/* Event selection toolbar follows the same spacing as other sub-section toolbars. */
+#simulation-event-content {min-width:0;}
+#simulation-event-content .event-selection-toolbar {
+  display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;
+  margin:0!important; padding:var(--space-1) 0!important; min-height:var(--control-height);
+}
+#simulation-event-content #event-time-tools:empty {display:none;}
+#simulation-event-content .event-selection-toolbar .checkbox-label {display:inline-flex;align-items:center;gap:var(--space-2);margin:0;}
+#simulation-event-content .event-selection-toolbar .icon-button {flex:0 0 auto;margin:0;}
+#simulation-event-content .event-selection-hint {margin:var(--space-1) 0!important;}
+#simulation-event-content #control-events:empty,
+#simulation-event-content #planned-line-events:empty {display:none!important;}
+
+/* Card-wide compact view, without hiding the graph or the event controls. */
+.live-equipment-card .numeric-card-toggle {
+  display:inline-grid;place-items:center;flex:0 0 23px;
+  width:23px;height:23px;min-height:0;margin:0;padding:2px;
+  border:0;border-radius:var(--radius-sm);background:transparent;color:var(--accent);cursor:pointer;
+}
+.live-equipment-card .numeric-card-toggle svg {width:18px;height:18px;
+  transition:transform 240ms cubic-bezier(.2,.75,.25,1);}
+.live-equipment-card[data-card-collapsed=true] .numeric-card-toggle svg {transform:rotate(-90deg);}
+.live-equipment-card .numeric-card-toggle:hover {background:var(--surface-hover);}
+.live-equipment-card .numeric-card-toggle:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.live-equipment-card[data-card-collapsed=true] .numeric-equipment-layout {
+  display:grid!important;grid-template-columns:minmax(190px,1fr) minmax(0,2fr)!important;
+  gap:var(--space-2);align-items:stretch;
+}
+.live-equipment-card[data-card-collapsed=true] .numeric-equipment-overview-side {
+  display:contents!important;
+}
+.live-equipment-card[data-card-collapsed=true] .numeric-equipment-header {
+  grid-column:1;grid-row:1;align-self:stretch;min-width:0;
+}
+.live-equipment-card[data-card-collapsed=true] .numeric-equipment-chart-side {
+  grid-column:2;grid-row:1;align-self:stretch;min-width:0;
+}
+.live-equipment-card[data-card-collapsed=true] .numeric-equipment-layout > .live-equipment-detail-grid {
+  display:none!important;
+}
+.live-equipment-card[data-card-collapsed=true] .numeric-equipment-chart-side .equipment-speed-sparkline {
+  height:120px;
+}
+@container(max-width:650px) {
+ .live-equipment-card[data-card-collapsed=true] .numeric-equipment-layout {
+   grid-template-columns:minmax(0,1fr)!important;
+ }
+ .live-equipment-card[data-card-collapsed=true] .numeric-equipment-header {
+   grid-column:1;grid-row:1;
+ }
+ .live-equipment-card[data-card-collapsed=true] .numeric-equipment-chart-side {
+   grid-column:1;grid-row:2;
+ }
+}
+/* Match time values to other compact field values: no native select minimum height. */
+.live-equipment-card .st-time-output[data-variant=metric] {
+  display:inline-flex!important;align-items:baseline!important;
+  gap:2px!important;min-height:0!important;height:auto!important;
+  vertical-align:baseline;
+}
+.live-equipment-card .st-time-output[data-variant=metric] :is(b,select) {
+  font-size:var(--font-secondary)!important;line-height:1.2!important;
+  min-height:0!important;height:auto!important;padding-block:0!important;margin-block:0!important;
+}
+.live-equipment-card .st-time-output[data-variant=metric] select {
+  appearance:none!important;-webkit-appearance:none!important;
+  width:auto!important;min-width:0!important;max-width:none!important;
+  padding:0!important;border:0!important;background:transparent!important;
+  box-shadow:none!important;display:inline-block!important;
+}
+@media(prefers-reduced-motion:reduce) {
+  .live-equipment-card .numeric-card-toggle svg {transition:none!important;}
+}
+
 </style>
 
 

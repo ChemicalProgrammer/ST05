@@ -34,4 +34,30 @@
 .formats-tabs { padding-inline:0; margin-bottom:var(--space-3); }
 .product-settings-table input[type=text] { text-align:left; min-width:10rem; }
 .products-editor .settings-tabs button { min-width:0; }
+
+/* Subsecciones de Formats: el contenedor flex aporta TODA la separación.
+   Evitar que .settings-section (de los diálogos) y el selector global de
+   Subsección sumen padding/márgenes sobre el gap existente. */
+#products-workspace .products-editor > .dialog-body {
+  display:flex;
+  flex-direction:column;
+  gap:var(--subsection-gap);
+}
+#products-workspace .products-editor > .dialog-body > .product-subsection {
+  margin:0;
+  padding:var(--subsection-padding);
+  border:var(--border-width) solid var(--line);
+  border-radius:var(--radius-md);
+  min-width:0;
+}
+#products-workspace .products-editor > .dialog-body > .product-subsection
+  + .product-subsection {
+  margin-block-start:0;
+}
+#products-workspace .products-editor > .formats-tabs {
+  margin-bottom:0;
+}
+#products-workspace .products-editor > .dialog-body {
+  padding-block-start:var(--workspace-gutter);
+}
 </style>

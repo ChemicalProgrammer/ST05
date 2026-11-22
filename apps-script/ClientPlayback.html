@@ -491,6 +491,7 @@
       if(zone)zone=Object.assign({},state.run.result?.zoneDefinitions?.[zone.id],zone);
       var belt=conveyorCardRates(zone,model,availabilityState);
       var isConveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
+      card._numericConveyor=isConveyor;
       card.querySelector('.live-equipment-performance-group').hidden=isConveyor;
       card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor;
       updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
@@ -611,14 +612,15 @@
           el.append(label,slot);host.append(el);
         }
         el.firstElementChild.textContent=row[0];
-        // A few high-value fields remain visible while their group is collapsed.
-        var compactRows={
-          summary:new Set([1,2,3,4]), // speed, flow, output, inside/on-belt
-          states:new Set(type==='states'&&card.querySelector('.live-equipment-geometry-group')?.hidden===false
-            ?[0,1,2]:[0,1,2,3]), // conveyor: empty / flowing / accumulating
-          geometry:new Set([6,7,9,10]) // accumulation, usable length, Back-up and Prime
-        };
-        el.classList.toggle('numeric-compact-key',Boolean(compactRows[type]?.has(index)));
+        // Cheap, fixed index rules instead of building Set objects and
+        // querying the Geometry section separately for every field.
+        var important=type==='summary'?(index>=1&&index<=4)
+          :type==='geometry'?(index===6||index===7||index===9||index===10)
+          :type==='states'?(card._numericConveyor?index<=2:index<=3):false;
+        if(el._compactKey!==important){
+          el.classList.toggle('numeric-compact-key',important);
+          el._compactKey=important;
+        }
         var slot=el.lastElementChild;
         if(type==='states'&&Number.isFinite(row[1])){
           STTimeControls.setOutput(slot,row[1],{
@@ -675,6 +677,16 @@
       }catch(error){return null;}
     }
     function updateNumericalConveyorGeometry(card,model,zone){
+      var analysisFormatId=window.STProducts?.currentFormat?.()?.id||'base';
+      // Geometry and the worksheet verdict are invariant across frames of the
+      // same run/format. Avoid resolving formats and reconstructing 13 rows
+      // on every playback tick.
+      if(card._geometryRenderedResult===state.run.result
+        &&card._geometryRenderedFormatId===analysisFormatId
+        &&card._geometryRenderedZoneId===zone?.id)return;
+      card._geometryRenderedResult=state.run.result;
+      card._geometryRenderedFormatId=analysisFormatId;
+      card._geometryRenderedZoneId=zone?.id;
       var eng=state.run.result?.accumulationZoneMetrics?.[zone?.id]?.engineering;
       var cal=eng?.calculated||{},geo=zone?.geometry||{},input=model.processData?.accumulation||{};
       var first=function(){for(var i=0;i<arguments.length;i++)if(Number.isFinite(arguments[i]))return arguments[i];return null;};
@@ -694,7 +706,6 @@
       var status=eng?.audit?.status||'NOT EVALUATED';
       // Prefer the same conveyor engineering worksheet that powers the 2D dialog.
       // Cache only within this result/card so repeated playback frames stay inexpensive.
-      var analysisFormatId=window.STProducts?.currentFormat?.()?.id||'base';
       if(card._numericalConveyorAnalysisResult!==state.run.result
         ||card._numericalConveyorAnalysisFormatId!==analysisFormatId){
         card._numericalConveyorAnalysisResult=state.run.result;

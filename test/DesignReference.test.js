@@ -69,7 +69,7 @@ test('Ctrl+Shift+S abre catálogo accesible y las pestañas funcionan',()=>{
     assert.equal(dialogExamples[0].getAttribute('aria-selected'),'false');
     w.document.getElementById('design-ref-tab-controls').click();
     const controls=[...w.document.querySelectorAll('.design-reference-control-name strong')].map(el=>el.textContent.trim());
-    for(const name of ['Pestaña de navegación principal','Pestañas de cuadro de diálogo','Pestaña de simulación','Selector de simulación','Botón principal','Botón de peligro','Campo de búsqueda','Menú desplegable de acciones','Panel de gráfica','Tabla de datos','Selector circular de color']){
+    for(const name of ['Pestaña de navegación principal','Pestañas de cuadro de diálogo','Pestaña de simulación','Selector de simulación','Botón principal','Botón de peligro','Botón de errores','Campo de búsqueda','Menú desplegable de acciones','Panel de gráfica','Tabla de datos','Selector circular de color']){
       assert.ok(controls.includes(name),'Missing reusable control: '+name);
     }
     assert.equal(controls.length,new Set(controls).size,'Cada control debe tener un nombre único');

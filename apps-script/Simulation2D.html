@@ -543,6 +543,7 @@ window.STSimulation2D=(function(){
           primeRampSeconds:zones[index-1]?.primeSensorPositionMm!=null?zones[index-1].downstreamRampUpSeconds:undefined,
           rampAfterRepair:data.downstream?.rampAfterRepair===true,
           configuredReliability:data.equipment?.stopInputs||item.noiseProfile?.reliability||null,
+          reliabilityCategories:config.reliabilityCategories||{},
           failures:failuresFor(item,config),
           startDelay:item.startupDelaySeconds??data.upstream?.startupTimeSeconds??0,batch};
       }
@@ -1018,7 +1019,7 @@ window.STSimulation2D=(function(){
     if(!belt&&scheduleOptions.failures.checked){
       const profiles=item.configuredReliability;
       const active=profiles&&(Number.isFinite(profiles.mtbfMinutes)
-        ?[profiles]:Object.entries(profiles).filter(([category])=>schedule?.reliabilityCategories?.[category]!==false).map(([,value])=>value))
+        ?[profiles]:Object.entries(profiles).filter(([category])=>item.reliabilityCategories?.[category]!==false).map(([,value])=>value))
         ||[];
       const eligible=active.filter(p=>p&&p.mtbfMinutes>0&&p.mttrMinutes>0);
       if(eligible.length===1){

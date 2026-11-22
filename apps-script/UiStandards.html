@@ -963,6 +963,64 @@ html[data-ui-mode=basic] #run-panel > .section-heading > .button-row {display:fl
 /* Simulation is started from its persistent playback toolbar, not the old header. */
 #run-panel > .section-heading { display:none!important; }
 
+
+/* Equipment actions now live in the upper overview, not under Speed trend. */
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) var(--control-height);
+  grid-template-rows:auto auto;
+  align-items:start;
+  column-gap:var(--space-2);
+}
+.live-equipment-card .numeric-equipment-header-details {
+  grid-column:1;grid-row:1;min-width:0;
+}
+.live-equipment-card .numeric-equipment-header-kpis {
+  grid-column:1;grid-row:2;align-self:end;
+}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock {
+  grid-column:2!important;grid-row:1 / span 2!important;
+  display:flex!important;flex-direction:column!important;align-items:center;
+  justify-content:start!important;flex-wrap:nowrap!important;
+  width:var(--control-height);gap:var(--space-1);
+  margin:0!important;padding:0!important;border:0!important;
+  background:transparent;min-width:0;
+}
+.live-equipment-card .numeric-equipment-control-dock > button {
+  display:inline-grid;place-items:center;
+  width:var(--control-height)!important;
+  height:var(--control-height)!important;
+  min-height:var(--control-height)!important;
+  flex:0 0 var(--control-height);
+  margin:0!important;padding:0!important;
+  grid-column:auto!important;grid-row:auto!important;
+}
+.live-equipment-card .numeric-equipment-control-dock > .loss-toggle {display:none!important;}
+html[data-events-enabled=false] .live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock {
+  display:none!important;
+}
+html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock {
+  grid-column:2!important;grid-row:1 / span 2!important;
+  display:flex!important;flex-direction:column!important;
+}
+html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock {
+  display:none!important;
+}
+.live-equipment-card .numeric-equipment-chart-side {gap:var(--space-1);}
+.live-equipment-card .numeric-equipment-chart-side .equipment-speed-sparkline {margin-bottom:0;}
+/* The counters are represented in States. Never render their legacy panel. */
+.live-equipment-card .live-equipment-stats {display:none!important;}
+.live-equipment-card.show-losses .live-equipment-stats {display:none!important;}
+/* Card disclosure: clipping prevents a jump during height interpolation. */
+.live-equipment-card {overflow:clip;}
+.live-equipment-card .numeric-equipment-layout {min-width:0;}
+@container(max-width:650px){
+  .live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) var(--control-height)!important;
+  }
+}
+
 </style>
 
 

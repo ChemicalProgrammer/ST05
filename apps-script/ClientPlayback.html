@@ -161,7 +161,12 @@
     // No production, OEE or rate is extrapolated from the transition stream.
     function updateLiveEquipmentStateBadges(virtualSecond){
       var result=state.run.result,changes=result?.stateTransitions;
-      if(!Array.isArray(changes)||!changes.length)return;
+      if(!Array.isArray(changes)||!changes.length){
+        document.querySelectorAll('#live-equipment .numeric-state-elapsed').forEach(function(label){
+          if(!label.hidden)label.hidden=true;
+        });
+        return;
+      }
       if(playbackStateTimelineCache.result!==result||playbackStateTimelineCache.length!==changes.length){
         var byEquipment=[];
         changes.forEach(function(entry){

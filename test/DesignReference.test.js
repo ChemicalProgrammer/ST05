@@ -132,7 +132,10 @@ test('Las unidades tienen un slot fijo y las subsecciones muestran descripciones
   assert.match(ui,/\.subsection-heading-title/);
   assert.match(ui,/\.subsection-description/);
   assert.match(ui,/\.subsection-divider/);
-  assert.match(web,/class="simulation2d-setting-toggles subsection-fieldset"><legend class="subsection-divider">Options/);
+  assert.match(web,/<fieldset class="simulation2d-setting-toggles" aria-label="2D simulation options">/);
+  assert.doesNotMatch(web,/simulation2d-setting-toggles subsection-fieldset|<legend class="subsection-divider">Options<\/legend>/);
+  const simulation2d=fs.readFileSync('apps-script/Simulation2D.html','utf8');
+  assert.doesNotMatch(simulation2d,/\.simulation2d-setting-toggles[^\n]*border-top/);
   assert.match(web,/id="simulation-playback-status"/);
   assert.match(real,/class="subsection-description"/);
   assert.match(products,/var guidance=\{/);

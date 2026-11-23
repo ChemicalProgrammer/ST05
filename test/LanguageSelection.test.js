@@ -10,8 +10,8 @@ assert.ok(javascript,'Language module must include an executable script');
 function screen(initial={}) {
   const dom=new JSDOM('<!doctype html><html lang="en"><head><title>Simulation results</title></head><body>'+
     '<section id="settings-page-appearance"><label for="settings-language">Language</label>'+
-    '<select id="settings-language" data-st-no-translate aria-label="Interface language">'+
-    '<option value="en">English</option><option value="es">Español</option></select></section>'+
+    '<select id="settings-language" aria-label="Interface language">'+
+    '<option value="en" data-st-no-translate>English</option><option value="es" data-st-no-translate>Español</option></select></section>'+
     '<h3 id="heading">Simulation playback</h3>'+
     '<p id="help">Play a simulation round and monitor efficiencies, output, and runtime metrics.</p>'+
     '<button id="run" title="Run simulation" aria-label="Run simulation">Run simulation</button>'+
@@ -36,8 +36,8 @@ test('English is the default, even when the browser locale would be Spanish',()=
     assert.equal(doc.getElementById('run').getAttribute('title'),'Run simulation');
     const web=fs.readFileSync('apps-script/WebApp.html','utf8');
     assert.match(web,/include_\('Language'\)/);
-    assert.match(web,/id="settings-language"[^>]*data-st-no-translate/);
-    assert.match(web,/<option value="en">English<\/option><option value="es">Español<\/option>/);
+    assert.match(web,/id="settings-language"[^>]*aria-label="Interface language"/);
+    assert.match(web,/<option value="en" data-st-no-translate>English<\/option><option value="es" data-st-no-translate>Español<\/option>/);
   }finally{dom.window.close();}
 });
 
@@ -53,6 +53,7 @@ test('Spanish selection translates labels and dynamic states without modifying c
     assert.equal(doc.getElementById('heading').textContent,'Reproducción de simulación');
     assert.match(doc.getElementById('help').textContent,/Reproduce una ronda/);
     assert.equal(doc.getElementById('run').getAttribute('aria-label'),'Ejecutar simulación');
+    assert.equal(doc.getElementById('settings-language').getAttribute('aria-label'),'Idioma de la interfaz');
     assert.equal(doc.getElementById('run').title,'Ejecutar simulación');
     assert.equal(doc.getElementById('state').textContent,'ACELERANDO');
     assert.equal(doc.querySelector('#cases-list strong').textContent,'Settings','Never translate a case name');

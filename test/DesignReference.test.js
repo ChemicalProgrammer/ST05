@@ -171,7 +171,7 @@ test('La descripción usa las líneas necesarias y conserva la separación compa
   const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
   assert.match(ui,/overflow:visible;overflow-wrap:anywhere;white-space:normal;text-overflow:clip/);
   assert.match(ui,/row-gap:var\(--subsection-description-gap\)/);
-  assert.match(ui,/grid-column:1 \/ -1;grid-row:2/);
+  assert.match(ui,/\.st-subsection > \.st-subsection-header > \.subsection-heading-copy \{\s*display:flex;flex-direction:column;align-items:stretch;align-self:center;\s*grid-column:1;grid-row:1;gap:var\(--subsection-description-gap\)/);
   assert.match(ui,/padding-inline-start:var\(--subsection-text-inset\)/);
   const catalog=fs.readFileSync('apps-script/DesignReference.html','utf8');
   assert.match(catalog,/STSubsection.create\(\{title, description, tools\}\)/);

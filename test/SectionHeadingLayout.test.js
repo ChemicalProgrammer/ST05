@@ -57,23 +57,25 @@ function value(element,property,width=1440){
     ||compare(a.specificity,b.specificity)||a.order-b.order).at(-1)?.value;
 }
 
-test('subsection descriptions own the full row independently of the title toolbar',()=>{
+test('subsection copy keeps title and description in one compact column',()=>{
   const copies=[...document.querySelectorAll('.fold-heading > .subsection-heading-copy, .fold-heading > div:has(> h3 > .fold-toggle)')];
   assert(copies.length>=15,'Exercise regular, legacy, simulation, results and reference headings');
   for(const width of [360,760,1440])for(const copy of copies){
     const title=copy.querySelector(':scope > h3');
     const description=copy.querySelector(':scope > .subsection-description, :scope > .subsection-playback-meta');
-    assert.equal(value(copy,'display',width),'contents',title.textContent.trim());
+    assert.equal(value(copy,'display',width),'flex',title.textContent.trim());
+    assert.equal(value(copy,'flex-direction',width),'column');
+    assert.equal(value(copy,'gap',width),'var(--subsection-description-gap)');
     assert.equal(value(title,'order',width),'0');
-    assert.equal(value(title,'flex',width),'1 1 auto');
+    assert.equal(value(title,'flex',width),'0 1 auto');
     assert.ok(description);
     assert.equal(value(description,'order',width),'2');
-    assert.equal(value(description,'flex',width),'1 0 100%',title.textContent.trim()+' reserves a complete descriptive row');
+    assert.equal(value(description,'flex',width),'0 1 auto',title.textContent.trim()+' keeps the description at its text height');
     assert.equal(value(description,'max-width',width),'100%');
   }
 });
 
-test('custom and native headings center titles and tools with a shared row height in every visual mode',()=>{
+test('custom and native headings center tools against the complete compact copy in every visual mode',()=>{
   const root=document.documentElement;
   const originalMode=root.getAttribute('data-ui-mode'),originalStyle=root.getAttribute('data-visual-style');
   const copies=[...document.querySelectorAll('.fold-heading > .subsection-heading-copy, .fold-heading > div:has(> h3 > .fold-toggle)')];
@@ -97,17 +99,18 @@ test('custom and native headings center titles and tools with a shared row heigh
           const heading=copy.parentElement,title=copy.querySelector(':scope > h3'),toggle=title.querySelector('.fold-toggle');
           const label=context+' / '+title.textContent.trim();
           assert.equal(value(heading,'row-gap',width),'var(--subsection-description-gap)',label);
-          // Center both controls in one minimum-height row. Its 4 px gap to
-          // the description is shared even when the toolbar is empty.
+          // Center the whole text column against the toolbar; the title must
+          // keep its natural height instead of inheriting button height.
           assert.equal(value(title,'display',width),'flex',label);
-          assert.equal(value(title,'align-self',width),'center',label);
+          assert.equal(value(title,'align-self',width),'stretch',label);
           assert.equal(value(title,'align-items',width),'center',label);
-          assert.equal(value(title,'min-block-size',width),'var(--control-height)',label);
+          assert.equal(value(title,'min-block-size',width),'0',label);
           assert.equal(value(heading,'align-items',width),'center',label);
           assert.equal(value(heading.querySelector(':scope > .fold-tools'),'align-self',width),'center',label);
           assert.equal(value(heading,'display',width),'grid',label);
-          assert.equal(value(title,'grid-row',width),'1',label);
-          assert.equal(value(copy.querySelector(':scope > .subsection-description, :scope > .subsection-playback-meta'),'grid-row',width),'2',label);
+          assert.equal(value(copy,'grid-row',width),'1',label);
+          assert.equal(value(copy,'align-self',width),'center',label);
+          assert.equal(value(copy,'gap',width),'var(--subsection-description-gap)',label);
           assert.equal(value(title,'margin',width),'0',label);
           assert.equal(value(title,'min-width',width),'0',label);
           assert.equal(value(toggle,'padding',width),'0',label);
@@ -120,14 +123,17 @@ test('custom and native headings center titles and tools with a shared row heigh
         for(const copy of nativeCopies){
           const title=copy.querySelector('.subsection-native-title');
           const label=context+' / '+title.textContent.trim();
-          assert.equal(value(copy,'display',width),'contents',label);
-          assert.equal(value(title,'align-self',width),'center',label);
+          assert.equal(value(copy,'display',width),'flex',label);
+          assert.equal(value(copy,'flex-direction',width),'column',label);
+          assert.equal(value(copy,'align-self',width),'center',label);
+          assert.equal(value(copy,'gap',width),'var(--subsection-description-gap)',label);
+          assert.equal(value(title,'align-self',width),'stretch',label);
           assert.equal(value(title,'align-items',width),'center',label);
-          assert.equal(value(title,'min-block-size',width),'var(--control-height)',label);
+          assert.equal(value(title,'min-block-size',width),'0',label);
           assert.equal(value(copy.parentElement.querySelector(':scope > .fold-tools'),'align-self',width),'center',label);
           assert.equal(value(copy.parentElement,'display',width),mode==='basic'&&copy.parentElement.parentElement.id==='run-config'?'none':'grid',label);
           assert.equal(value(copy.parentElement,'row-gap',width),'var(--subsection-description-gap)',label);
-          assert.equal(value(copy.querySelector('.subsection-description'),'grid-row',width),'2',label);
+          assert.equal(value(copy.querySelector('.subsection-description'),'flex',width),'0 1 auto',label);
           assert.equal(value(copy.querySelector('.subsection-description'),'margin',width),'0',label);
         }
       }
@@ -186,23 +192,28 @@ test('shared descriptions stay readable at narrow widths and toolbars can wrap',
 });
 
 
-test('canonical grids keep wrapped tools beside the title and descriptions on their own row',()=>{
+test('canonical grids center wrapped tools beside the entire title and description column',()=>{
   for(const header of document.querySelectorAll('.st-subsection-header')){
-    const title=header.querySelector('.subsection-heading-title,.subsection-native-title');
+    const copy=header.querySelector(':scope > .subsection-heading-copy');
     const description=header.querySelector('.subsection-playback-meta')||header.querySelector('.subsection-description');
     const tools=header.querySelector(':scope > .fold-tools');
     for(const width of [360,760,1440]){
       const context=header.closest('.fold-card').id+' / '+width;
       assert.equal(value(header,'display',width),'grid',context);
-      assert.equal(value(title,'grid-row',width),'1',context);
+      assert.equal(value(copy,'grid-row',width),'1',context);
+      assert.equal(value(copy,'grid-column',width),'1',context);
+      assert.equal(value(copy,'display',width),'flex',context);
+      assert.equal(value(copy,'flex-direction',width),'column',context);
+      assert.equal(value(copy,'align-self',width),'center',context);
       if(description){
-        assert.equal(value(description,'grid-row',width),'2',context);
-        assert.equal(value(description,'grid-column',width),'1 / -1',context);
+        assert.equal(description.parentElement,copy,context);
+        assert.equal(value(description,'flex',width),'0 1 auto',context);
         assert.equal(value(description,'padding-inline-start',width),'var(--subsection-text-inset)',context);
       }
       if(tools){
         assert.equal(value(tools,'grid-row',width),'1',context);
         assert.equal(value(tools,'grid-column',width),'2',context);
+        assert.equal(value(tools,'align-self',width),'center',context);
         assert.equal(value(tools,'flex-wrap',width),'wrap',context);
       }
     }

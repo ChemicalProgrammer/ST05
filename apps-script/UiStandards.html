@@ -1318,10 +1318,8 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
   .workspace-content {padding-block-start:var(--workspace-gutter);}
 }
 
-/* Title and tools share the first row when they fit. Descriptive content owns
-   the full following row, so a wide toolbar cannot shorten its text column.
-   display:contents flattens only the copy wrapper, preserving the h3 and its
-   accessible toggle, and leaves native summary elements untouched. */
+/* Keep title and description together as compact copy. Tools align against
+   the center of that complete block, independently of their own height. */
 .fold-heading {row-gap:var(--subsection-description-gap);}
 .fold-heading > :is(.fold-tools,.button-row),
 .fold-heading .fold-tools > .button-row {
@@ -1333,20 +1331,20 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
 .fold-heading .fold-tools > .button-row > :is(button,details) {flex-shrink:0;}
 .fold-heading > .subsection-heading-copy,
 .fold-heading > div:has(> h3 > .fold-toggle) {
-  display:contents;
+  display:flex;flex-direction:column;align-items:stretch;
+  gap:var(--subsection-description-gap);min-width:0;
 }
-/* Título y herramientas comparten el centro de la primera fila. La altura
-   mínima común también se conserva cuando una Subsección no tiene botones. */
+/* The title uses its text height; button height must not enlarge its gap. */
 .fold-heading > .subsection-heading-copy > :is(h3,.subsection-heading-title),
 .fold-heading > div:has(> h3 > .fold-toggle) > h3 {
-  display:flex;align-items:center;align-self:center;order:0;flex:1 1 auto;
-  min-block-size:var(--control-height);min-width:0;margin:0;
+  display:flex;align-items:center;align-self:stretch;order:0;flex:0 1 auto;
+  min-block-size:0;min-width:0;margin:0;
   white-space:normal;
 }
 .fold-heading > .subsection-heading-copy > .subsection-description,
 .fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description,
 .fold-heading > .subsection-heading-copy > .subsection-playback-meta {
-  order:2;flex:1 0 100%;min-width:0;max-width:100%;
+  order:2;flex:0 1 auto;min-width:0;max-width:100%;
   padding-inline-start:var(--subsection-text-inset);
 }
 /* Natural wrapping uses the actual section width. Do not clamp explanatory
@@ -1408,21 +1406,23 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
 }
 
 
-/* El constructor centra títulos y herramientas en una primera fila de altura
-   mínima común, incluso sin herramientas o descripción. El token de espacio
-   separa esta fila de la descripción; no mide el borde visible de los glifos. */
+/* Título y descripción forman una columna compacta. La barra se centra
+   verticalmente respecto al bloque completo, también si no hay descripción. */
 .st-subsection > .st-subsection-header {
   display:grid;grid-template-columns:minmax(0,1fr) fit-content(65%);
   column-gap:var(--space-3);row-gap:var(--subsection-description-gap);
   align-items:center;
 }
-.st-subsection > .st-subsection-header > .subsection-heading-copy {display:contents;}
+.st-subsection > .st-subsection-header > .subsection-heading-copy {
+  display:flex;flex-direction:column;align-items:stretch;align-self:center;
+  grid-column:1;grid-row:1;gap:var(--subsection-description-gap);min-width:0;
+}
 .st-subsection > .st-subsection-header > .subsection-heading-copy > :is(h3,.subsection-native-title) {
-  grid-column:1;grid-row:1;align-self:center;align-items:center;
-  min-block-size:var(--control-height);min-width:0;margin:0;
+  align-self:stretch;align-items:center;
+  min-block-size:0;min-width:0;margin:0;
 }
 .st-subsection > .st-subsection-header > .subsection-heading-copy > :is(.subsection-description,.subsection-playback-meta) {
-  grid-column:1 / -1;grid-row:2;align-self:start;
+  align-self:stretch;
   padding-inline-start:var(--subsection-text-inset);min-width:0;
 }
 .st-subsection > .st-subsection-header > .fold-tools {
@@ -1436,9 +1436,9 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
   width:var(--subsection-marker-size);height:var(--subsection-marker-size);
 }
 .st-subsection.fold-native > summary.st-subsection-header::before {content:none;display:none;}
-.st-subsection.fold-native > summary.st-subsection-header > .subsection-heading-copy {display:contents;}
+.st-subsection.fold-native > summary.st-subsection-header > .subsection-heading-copy {display:flex;}
 .st-subsection.fold-native > summary.st-subsection-header .subsection-native-title {
-  display:flex;align-items:center;align-self:center;order:0;flex:1 1 auto;
+  display:flex;align-items:center;align-self:stretch;order:0;flex:0 1 auto;
   min-width:0;margin:0;font-size:var(--font-card);line-height:var(--leading-tight);
   gap:var(--space-2);
 }
@@ -1449,7 +1449,7 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
 }
 .st-subsection.fold-native:not([open]) > summary.st-subsection-header .subsection-native-title::before {transform:rotate(-45deg);}
 .st-subsection.fold-native > summary.st-subsection-header .subsection-description {
-  order:2;flex:1 0 100%;padding-inline-start:var(--subsection-text-inset);
+  order:2;flex:0 1 auto;padding-inline-start:var(--subsection-text-inset);
   min-width:0;max-width:100%;margin:0;
 }
 .st-subsection.fold-native > summary.st-subsection-header > .fold-tools {

@@ -80,6 +80,14 @@
 <div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><button type="button" class="ghost" data-design-preview-action>Cancel</button></div><div class="design-reference-cell design-reference-explanation" role="cell">Acción discreta para cancelar, retroceder o no competir con la principal.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Botón discreto</strong><code>button.ghost</code></div></div>
 <div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><button type="button" class="danger" data-design-preview-action>Delete</button></div><div class="design-reference-cell design-reference-explanation" role="cell">Acción destructiva con color semántico; fuera del catálogo debe requerir confirmación cuando corresponda.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Botón de peligro</strong><code>button.danger</code></div></div>
 <div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><button type="button" class="icon-button error-details-trigger design-reference-error-button" data-design-preview-action aria-label="Ver errores de ejemplo" title="Errores">!</button><span class="design-reference-error-counter">2</span></div></div><div class="design-reference-cell design-reference-explanation" role="cell">Señala errores activos en el encabezado con botón rojo y contador visible; al pulsarlo en la app se abre el detalle del error.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Botón de errores</strong><code>#header-error-button · .error-details-trigger</code></div></div>
+<div class="design-reference-row" role="row">
+  <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row">
+    <button type="button" class="secondary icon-button equipment-filter-toggle" data-icon="machine" data-design-preview-press aria-label="Show machines" aria-pressed="true" title="Show machines"></button>
+    <button type="button" class="secondary icon-button equipment-filter-toggle" data-icon="conveyor" data-design-preview-press aria-label="Show conveyors" aria-pressed="true" title="Show conveyors"></button>
+  </div></div>
+  <div class="design-reference-cell design-reference-explanation" role="cell">Dos botones/icono con estado pulsado independiente (como Pin header). Muestran u ocultan máquinas y conveyors sin modificar los datos de simulación.</div>
+  <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Filtro de visibilidad por equipo</strong><code>.equipment-filter-toggle · aria-pressed</code></div>
+</div>
 <div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><button type="button" disabled>Save</button></div><div class="design-reference-cell design-reference-explanation" role="cell">Estado no disponible que conserva el tamaño del botón y evita activar una acción inválida.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Botón deshabilitado</strong><code>button:disabled</code></div></div>
 <div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-mini-menu"><details class="export-menu"><summary class="secondary icon-button" role="button" aria-label="Ejemplo de exportación" title="Exportar">⇧</summary><div><button type="button" class="ghost" data-design-preview-action>JSON</button><button type="button" class="ghost" data-design-preview-action>HTML</button></div></details></div></div><div class="design-reference-cell design-reference-explanation" role="cell">Menú desplegable que reúne varias acciones bajo un icono de cabecera, como Import/Export.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Menú desplegable de acciones</strong><code>.export-menu</code></div></div>
 <div class="design-reference-row" role="row"><div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-input-preview"><label>Case name<input type="text" value="Demo bottling line" aria-label="Nombre de caso de ejemplo"></label></div></div><div class="design-reference-cell design-reference-explanation" role="cell">Campo editable de una sola línea para nombres y valores de texto.</div><div class="design-reference-cell design-reference-control-name" role="cell"><strong>Campo de texto</strong><code>input[type=text]</code></div></div>
@@ -358,6 +366,9 @@
 
 
 .design-reference-demo-output {min-width:2em;font-size:var(--font-secondary);color:var(--accent);font-variant-numeric:tabular-nums;}
+#design-reference-dialog .design-reference-preview .equipment-filter-toggle[aria-pressed=true] {
+  background:var(--selected);color:var(--accent);border-color:var(--accent);
+}
 .design-reference-preview button.design-reference-error-button {background:var(--danger)!important;color:var(--page)!important;border:2px solid var(--danger)!important;}
 .design-reference-error-counter {display:inline-grid;place-items:center;min-width:19px;height:19px;border-radius:var(--radius-pill);font-size:var(--font-caption);font-weight:var(--weight-bold);color:var(--danger);background:var(--surface);border:1px solid var(--danger);}
 .design-reference-input-preview,.design-reference-radio-preview {width:min(100%,270px);min-width:0;}
@@ -447,6 +458,12 @@
       var changed=button.dataset.previewColor==='recommended';
       button.dataset.previewColor=changed?'current':'recommended';
       button.style.backgroundColor=changed?'var(--vgraph-current)':'var(--vgraph-recommended)';
+    });
+  });
+  // Los botones tipo checkbox en el catálogo sólo cambian la vista previa.
+  dialog.querySelectorAll('[data-design-preview-press]').forEach(function(button){
+    button.addEventListener('click',function(){
+      button.setAttribute('aria-pressed',String(button.getAttribute('aria-pressed')!=='true'));
     });
   });
   function refreshTokens(){

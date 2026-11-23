@@ -137,6 +137,9 @@
         playbackMetricTimer=null;
         if(!state.run.playing)return;
         refreshPlaybackMetricCards();
+        // Equipment overview uses the same recorded frame as the KPI cards,
+        // without waiting for a costly chart/card repaint.
+        if(state.uiView==='simulation')refreshNumericalOverviewFromSample();
         schedulePlaybackMetricTick();
       },PLAYBACK_METRIC_REFRESH_MS);
     }
@@ -171,13 +174,31 @@
       var time=Math.max(0,Number(virtualSecond)||0);
       document.querySelectorAll('#live-equipment .live-equipment-card:not([hidden])').forEach(function(card){
         var index=Number(card.dataset.equipmentIndex),timeline=playbackStateTimelineCache.byEquipment[index];
-        if(!timeline?.length)return;
+        if(!timeline?.length){
+          var missing=card.querySelector('.numeric-state-elapsed');
+          if(missing)missing.hidden=true;
+          return;
+        }
         var low=0,high=timeline.length-1,last=-1;
         while(low<=high){
           var mid=(low+high)>>1;
           if(timeline[mid][0]<=time+1e-8){last=mid;low=mid+1;}else high=mid-1;
         }
         if(last<0)return;
+        // Elapsed virtual time in the current recorded state is meaningful
+        // even when flow and cumulative production are legitimately unchanged.
+        // Do not extrapolate counters or rely on a truncated transition log.
+        var elapsed=card.querySelector('.numeric-state-elapsed');
+        if(elapsed){
+          var age=time-timeline[last][0];
+          var complete=!(result.detailCoverage?.stateTransitionsOmitted>0);
+          if(complete&&Number.isFinite(age)&&age>=0){
+            var label=(window.STLanguage?.translate?.('Time in state')||'Time in state')
+              +': '+formatNumber(age)+' s';
+            if(elapsed.textContent!==label)elapsed.textContent=label;
+            elapsed.hidden=false;
+          }else elapsed.hidden=true;
+        }
         var next=timeline[last][2],previous=card.dataset.displayedAvailabilityState;
         if(!next||next===previous)return;
         if(previous)card.classList.remove('state-'+previous.toLowerCase().replace(/_/g,'-'));
@@ -185,6 +206,32 @@
         card.dataset.displayedAvailabilityState=next;
         var badge=card.querySelector('.live-state');
         if(badge)badge.textContent=next.replace(/_/g,' ');
+      });
+    }
+
+    // Refresh only the currently displayed Overview rows at the light 250ms
+    // cadence. All counts, rates and inventories come from the real sample;
+    // no production is interpolated between recording boundaries.
+    function refreshNumericalOverviewFromSample(){
+      var result=state.run.result,sample=result?.samples?.[state.run.sampleIndex];
+      if(!sample?.equipment||window.STNumericCardDiagnostics?.overview===false)return;
+      var models=state.activeCase?.equipment||[];
+      document.querySelectorAll('#live-equipment .live-equipment-card:not([hidden])').forEach(function(card){
+        if(card._liveVisible===false||card.querySelector('.live-equipment-2d-summary')?.hidden)return;
+        var index=Number(card.dataset.equipmentIndex),unit=sample.equipment[index],model=models[index];
+        if(!unit||!model||unit.id!==model.id||card.dataset.equipmentId!==unit.id
+            ||card._lastOverviewSample===sample)return;
+        var zone=sample.accumulationZones?.find(function(candidate){
+          return (candidate.ownerEquipmentId||result.zoneDefinitions?.[candidate.id]?.ownerEquipmentId)===unit.id;
+        })||null;
+        if(zone)zone=Object.assign({},result.zoneDefinitions?.[zone.id],zone);
+        var status=unit.availabilityState||unit.mode||'UNKNOWN';
+        var belt=conveyorCardRates(zone,model,status);
+        updateNumericalSummaryRows(card,unit,model,zone,belt,status);
+        var oee=card.querySelector('.live-oee');
+        if(oee)oee.textContent=sample.virtualSecond>0&&Number.isFinite(unit.oeePercent)
+          ?formatPercent(unit.oeePercent/100):'—';
+        card._lastOverviewSample=sample;
       });
     }
 
@@ -631,7 +678,10 @@
       cardToggle.type='button';cardToggle.className='numeric-card-name-toggle';
       cardToggle.append(title);heading.append(symbol,cardToggle);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
-      var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);headerDetails.append(card.querySelector('.live-equipment-identity'));
+      var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);
+      var stateAge=document.createElement('span');stateAge.className='case-description numeric-state-elapsed';
+      stateAge.hidden=true;card.querySelector('.live-equipment-identity').appendChild(stateAge);
+      headerDetails.append(card.querySelector('.live-equipment-identity'));
       // Align the status of every machine and conveyor in the same right column.
       // It remains the original badge updated by renderLiveEquipment().
       visualHeader.append(card.querySelector('.live-state'));
@@ -751,7 +801,10 @@
       var conveyorVerdict=card._numericConveyorVerdict
         ||card.querySelector('.numeric-conveyor-verdict');
       if(conveyorVerdict)conveyorVerdict.hidden=!isConveyor||flags.geometry===false;
-      if(flags.overview!==false)updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
+      if(flags.overview!==false){
+        updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
+        card._lastOverviewSample=sample;
+      }else card._lastOverviewSample=null;
       if(isConveyor&&flags.geometry!==false)updateNumericalConveyorGeometry(card,model,zone);
       var efficiencyCard=card.querySelector('.live-equipment-efficiency');
       efficiencyCard.hidden=isConveyor||flags.efficiency===false;

@@ -509,6 +509,17 @@
       return measured&&measured.virtualSecond+1e-8>=base.virtualSecond?measured:base;
     }
 
+    function playbackFlowUnit() {
+      return state.run.result?.unitOfFlow||state.activeCase?.unitOfFlow||'units';
+    }
+
+    function setPlaybackMetricUnit(id,unit) {
+      var label=document.getElementById(id+'-unit');
+      // Keep translated labels intact between frames; resetting them to English
+      // would create a needless text/layout mutation on every refresh.
+      if(label&&label._flowUnit!==unit){label.textContent=unit;label._flowUnit=unit;}
+    }
+
     // Update the ten playback cards and progress from actual recorded samples.
     // Only the virtual-time display interpolates from the playback clock.
     function refreshPlaybackMetricCards(sample,displaySecond){
@@ -522,7 +533,9 @@
         ?Math.max(0,Math.min(100,clockSecond/duration*100)).toFixed(1):'0')+'%';
       STTimeControls.setOutput(document.getElementById('metric-time'),clockSecond,
         {unit:'min',label:'Change virtual time unit'});
+      var flowUnits=flowUnitLabels(playbackFlowUnit());
       document.getElementById('metric-output').textContent=formatNumber(sample.outputCount);
+      setPlaybackMetricUnit('metric-output',flowUnits.count);
       var finalSummary=!state.run.result.provisional&&sample.virtualSecond>=duration
         ?state.run.result.summary:null;
       var losses=sample.runtimeLossSeconds??finalSummary?.lineRateLossSeconds;
@@ -541,12 +554,18 @@
           {unit:'min',label:'Change Runtime Losses unit'});
         else lossCard.textContent='—';
       }
-      document.getElementById('metric-instant-rate').textContent=formatInstantaneousOutputRate(sample);
+      document.getElementById('metric-instant-rate').textContent=formatInstantaneousOutputRate(sample,false);
+      setPlaybackMetricUnit('metric-instant-rate',flowUnits.rate);
       document.getElementById('metric-rate').textContent=sample.virtualSecond>0
-        ?formatRatePerMinute(sample.outputCount/sample.virtualSecond):'—';
+        ?formatNumber(sample.outputCount/sample.virtualSecond*60):'—';
+      setPlaybackMetricUnit('metric-rate',flowUnits.rate);
       document.getElementById('metric-buffer').textContent=formatNumber(sum(sample.buffers));
+      // These two totals count native items across zones, which may contain
+      // both bottles and cases. They are not normalized bottle equivalents.
+      setPlaybackMetricUnit('metric-buffer','units');
       document.getElementById('metric-overflow').textContent=formatNumber(
         sum((sample.accumulationZones||[]).map(function(zone){return zone.overflowUnits||0;})));
+      setPlaybackMetricUnit('metric-overflow','units');
       STTimeControls.setOutput(document.getElementById('metric-backup-stop'),
         sum(sample.equipment.map(function(unit){return unit.backupStopSeconds||0;})),
         {unit:'min',label:'Change Back-up Stop unit'});
@@ -701,19 +720,25 @@
       });
     }
 
-    function formatInstantaneousOutputRate(sample) {
+    function instantaneousOutputRatePerSecond(sample) {
       if(sample&&sample!==state.run.result?.samples?.[state.run.sampleIndex]
          &&Number.isFinite(sample.instantaneousOutputRatePerSecond))
-        return formatRatePerMinute(sample.instantaneousOutputRatePerSecond);
+        return sample.instantaneousOutputRatePerSecond;
       // Summary retains only endpoint samples: an all-run average is not an
       // instantaneous rate. The cumulative average has its own metric card.
-      if (state.run.result?.detailCoverage?.recordingMode==='SUMMARY') return '—';
-      if (!state.run.result || state.run.sampleIndex === 0) return '—';
+      if (state.run.result?.detailCoverage?.recordingMode==='SUMMARY') return null;
+      if (!state.run.result || state.run.sampleIndex === 0) return null;
       var current = state.run.result.samples[state.run.sampleIndex];
       var previous = state.run.result.samples[state.run.sampleIndex - 1];
       var elapsed = current.virtualSecond - previous.virtualSecond;
-      if (!(elapsed > 0)) return '—';
-      return formatRatePerMinute((current.outputCount - previous.outputCount) / elapsed);
+      if (!(elapsed > 0)) return null;
+      return (current.outputCount - previous.outputCount) / elapsed;
+    }
+
+    function formatInstantaneousOutputRate(sample,includeUnit) {
+      var rate=instantaneousOutputRatePerSecond(sample);
+      if(!Number.isFinite(rate))return '—';
+      return includeUnit===false?formatNumber(rate*60):formatRatePerMinute(rate,playbackFlowUnit());
     }
 
     function formatLineOeeAtSample(sample) {
@@ -1037,6 +1062,7 @@
 
     function updateLiveEquipmentCard(card, unit, model, index, sample) {
       var isConveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
+      var equipmentFlowUnit=unit.unitOfFlow||model.processData?.flowUnits?.output||model.unitOfFlow||'units';
       card._numericConveyor=isConveyor;
       card.querySelector('.numeric-equipment-header-kpis').hidden=isConveyor;
       var availabilityState = unit.availabilityState || unit.mode || 'UNKNOWN';
@@ -1097,11 +1123,10 @@
           metric.classList.toggle('numeric-compact-key',index===0||index===2||index===3);
         });
         var efficiency=STEquipmentEfficiency.fromNumerical(unit,model);
-        var outputUnit=window.STBasicMode?.unitLabel(unit.unitOfFlow||model.unitOfFlow)||unit.unitOfFlow||model.unitOfFlow||'units';
         STEquipmentEfficiency.fields.forEach(function([key]){
           var value=efficiency[key];
           efficiencyCard.querySelector('[data-efficiency="'+key+'"]').textContent=!Number.isFinite(value)?'—':
-            key==='throughput'?formatNumber(value*60)+' '+outputUnit+'/min':formatPercent(value);
+            key==='throughput'?formatRatePerMinute(value,equipmentFlowUnit):formatPercent(value);
         });
       }
       var rate=card.querySelector('.live-rate');
@@ -1109,7 +1134,7 @@
         ?model.processData.equipment.maximumSpeedBpm/60:model.nominalRatePerSecond);
       var machineRate=Number.isFinite(unit.actualRatePerSecond)&&machineLimit>0
         ?Math.min(unit.actualRatePerSecond,machineLimit):unit.actualRatePerSecond;
-      rate.textContent=belt?formatNumber(belt.speedMmPerSecond*0.06)+' m/min de banda · '+formatNumber((unit.actualRatePerSecond??0)*60)+' unid/min de flujo':formatRatePerMinute(machineRate);
+      rate.textContent=belt?formatNumber(belt.speedMmPerSecond*0.06)+' m/min de banda · '+formatRatePerMinute(unit.actualRatePerSecond??0,equipmentFlowUnit)+' de flujo':formatRatePerMinute(machineRate,equipmentFlowUnit);
       rate.title=belt?'Velocidad de banda y flujo de producto procesado. La banda puede moverse aunque reciba menos producto o esté vacía.':'';
 
       // The legacy extra-details group is intentionally hidden; all currently
@@ -1140,8 +1165,8 @@
       }
       // The duplicate legacy loss counters are hidden permanently.
       // Their durations remain available in the States group and raw samples.
-      card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatNumber(belt.capacityPerSecond*60)+' unid/min a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatNumber(model.processData.equipment.maximumSpeedBpm) + __ST_TEXT__('client.min_2') : '');
-      card.querySelector('.live-sparkline-nominal-rate').textContent = formatRatePerMinute(belt?belt.capacityPerSecond:model.nominalRatePerSecond);
+      card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatRatePerMinute(belt.capacityPerSecond,equipmentFlowUnit)+' a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond,equipmentFlowUnit) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatRatePerMinute(model.processData.equipment.maximumSpeedBpm/60,equipmentFlowUnit) : '');
+      card.querySelector('.live-sparkline-nominal-rate').textContent = formatRatePerMinute(belt?belt.capacityPerSecond:model.nominalRatePerSecond,equipmentFlowUnit);
       card.querySelector('.equipment-speed-sparkline-heading span').textContent=state.run.result?.detailCoverage?.recordingMode==='SUMMARY'?'Summary · endpoint snapshots':STRunOptions.windowLabel()+(state.run.result?.detailCoverage?.aggregated?' · aggregated':'');
       var action=state.run.equipmentControlActions?.[model.id];
       if(!action){
@@ -1214,12 +1239,13 @@
     function updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState){
       var conveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
       var factor=unit.internalInputBottleFactor||1,capacity=unit.internalCapacityBottles??model.processData?.equipment?.internalCapacityBottles;
-      var flowUnit=unit.unitOfFlow==='CASES'?'cpm':'bpm';
+      var flowUnits=flowUnitLabels(unit.unitOfFlow||model.processData?.flowUnits?.output||model.unitOfFlow);
+      var flowUnit=flowUnits.rate;
       var speed=conveyor?(Number.isFinite(zone?.geometry?.conveyorSpeedMmPerSecond)?zone.geometry.conveyorSpeedMmPerSecond*0.06:null):(unit.designSpeedPerSecond??model.nominalRatePerSecond)*60;
       var rows=[['State',availabilityState.replace(/_/g,' ')],
         ['Design speed',Number.isFinite(speed)?formatNumber(speed):'—',conveyor?'m/min':flowUnit],
         ['Flow',formatNumber((unit.actualRatePerSecond||0)*60),flowUnit],
-        ['Processed',formatNumber(unit.processedUnits??unit.outputCount),unit.unitOfFlow==='CASES'?'cases':'bottles']];
+        ['Processed',formatNumber(unit.processedUnits??unit.outputCount),flowUnits.count]];
       if(conveyor){
         rows.push(['On belt',Number.isFinite(zone?.inventoryUnits)?formatNumber(zone.inventoryUnits):'—','units'],
           ['Back-up',zone?.backup?.controlActive?'Active':zone?.backup?.configured?'Clear':'—'],
@@ -1227,7 +1253,7 @@
       }else{
         var inside=Number.isFinite(unit.internalInventoryBottles)?formatNumber(unit.internalInventoryBottles/factor):'—';
         var cap=Number.isFinite(capacity)?formatNumber(capacity/factor):'—';
-        rows.push(['Inside',inside+' / '+cap,unit.internalInputUnit==='CASES'?'cases':'bottles'],
+        rows.push(['Inside',inside+' / '+cap,flowUnitLabels(unit.internalInputUnit||model.processData?.flowUnits?.input||'bottles').count],
           ['Residence time',Number.isFinite(unit.estimatedResidenceSeconds)?formatNumber(unit.estimatedResidenceSeconds):'—','s'],
           ['Repair ramp',model.processData?.downstream?.rampAfterRepair?formatNumber(model.processData?.downstream?.rampUpTimeSeconds||0):'Off',
             model.processData?.downstream?.rampAfterRepair?'s':''],

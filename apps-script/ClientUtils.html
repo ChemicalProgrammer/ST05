@@ -10,8 +10,16 @@
       return isFiniteNumber(value) ? formatNumber(value) + ' s' : '—';
     }
 
-    function formatRatePerMinute(ratePerSecond) {
-      return formatNumber(Number(ratePerSecond || 0) * 60) + __ST_TEXT__('client.min_3');
+    function flowUnitLabels(unit) {
+      var raw=String(unit??'').trim(),normalized=raw.toLowerCase();
+      if(['bottle','bottles','botella','botellas'].includes(normalized))return {count:'bottles',rate:'bpm'};
+      if(['case','cases','caja','cajas'].includes(normalized))return {count:'cases',rate:'cpm'};
+      if(!normalized||['unit','units','unidad','unidades'].includes(normalized))return {count:'units',rate:'units/min'};
+      return {count:raw,rate:raw+'/min'};
+    }
+
+    function formatRatePerMinute(ratePerSecond,unit) {
+      return formatNumber(Number(ratePerSecond || 0) * 60)+' '+flowUnitLabels(unit).rate;
     }
 
     function formatPercent(value) {

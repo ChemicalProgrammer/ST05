@@ -79,6 +79,7 @@ function playbackHarness({factory=createNumericalPlayback,input=physicalInput()}
   // All playback functions execute from the actual production source. Replace
   // only unrelated canvas/layout boundaries with observing test adapters.
   vm.runInContext(read('ClientPlayback'),context);
+  load(context,read('ClientUtils'),['flowUnitLabels']);
   load(context,read('ClientSimulation'),['copyRunConfiguration']);
   Object.assign(context,{
     updateNumericalEquipmentVisibility:()=>true,captureLiveEquipmentScrollAnchor:()=>null,

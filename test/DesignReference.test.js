@@ -166,8 +166,9 @@ test('El encabezado es compacto, el estado no revela frames y las eficiencias mu
 
 test('La descripción usa una sola línea en escritorio y hasta dos en pantallas estrechas',()=>{
   const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
-  assert.match(ui,/\.fold-heading > \.subsection-heading-copy > \.subsection-description,[\s\S]*?display:block;min-width:0;max-width:100%;margin:0;[\s\S]*?white-space:nowrap/);
-  assert.match(ui,/@media\(max-width:1100px\)\{[\s\S]*?display:-webkit-box;white-space:normal;overflow-wrap:anywhere;[\s\S]*?-webkit-line-clamp:2/);
+  assert.match(ui,/\.fold-heading > \.subsection-heading-copy > \.subsection-description,[\s\S]*?display:-webkit-box;min-width:0;max-width:100%;margin:0;[\s\S]*?white-space:normal/);
+  assert.match(ui,/overflow:hidden;overflow-wrap:anywhere;white-space:normal;text-overflow:ellipsis;[\s\S]*?-webkit-line-clamp:2/);
+  assert.doesNotMatch(ui,/@media\(max-width:1100px\)[\s\S]*?subsection-description/);
   assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?align-items:stretch;flex-direction:column;flex-wrap:nowrap/);
 });
 

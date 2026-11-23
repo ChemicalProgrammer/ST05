@@ -60,6 +60,10 @@ test('Playback numeric cards refresh within 500ms independently of recorded samp
   assert.equal(element('metric-output').textContent,'20','The next real sample updates the counters');
   assert.equal(element('metric-buffer').textContent,'3');
   state.run.playing=false;
+  state.run.sampleIndex=0;
+  context.playbackClock={frame:samples[0],offset:.75,rate:1,started:null};
+  assert.equal(vm.runInContext('playbackDisplaySecond(state.run.result.samples[0])',context),.75,
+    'The paused display retains the exact elapsed virtual time');
   let canceled=0;context.window.clearTimeout=()=>{canceled++};
   vm.runInContext('stopPlaybackTimer()',context);
   assert.ok(canceled>=1,'The display timer is canceled when playback stops');

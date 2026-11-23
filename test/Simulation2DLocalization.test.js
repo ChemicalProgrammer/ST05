@@ -55,8 +55,7 @@ test('Spanish mode translates all visible 2D Settings and Layout labels in the s
       ['#simulation2d-source option[value=representative]','Semilla de la ronda representativa'],
       ['#simulation2d-results #simulation2d-title','Distribución de línea'],
       ['#simulation2d-results .subsection-description','Observa la distribución de la línea y el comportamiento de los equipos y transportadores durante la ejecución.'],
-      ['#simulation2d-results dt:nth-child(1)',''],
-      ['#simulation2d-metrics','']
+
     ];
     for(const [selector,expected] of wanted.filter(row=>row[1]))
       assert.equal(content(doc,selector),expected,selector);
@@ -104,5 +103,8 @@ test('2D dynamic status/engineering UI is localized without changing internal st
   assert.match(simulation2d,/text\(localize2D\(label\),parameterX,baseline/);
   assert.match(simulation2d,/context\.fillText\(localize2D\('Production'\)/);
   assert.match(simulation2d,/localize2D\('calendar stops'\)/);
+  const languageHandler=simulation2d.indexOf("window.addEventListener('st-language-change'");
+  const returnApi=simulation2d.indexOf('return {pause,capture,isRunning');
+  assert.ok(languageHandler>=0&&returnApi>languageHandler,'The language-change listener must be registered before the module returns');
   assert.ok(!simulation2d.includes('runState=localize2D('),'Do not mutate simulation enums');
 });

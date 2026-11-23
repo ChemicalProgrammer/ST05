@@ -11,6 +11,7 @@
       STProducts.render();
       STProducts.renderInitialSelector();
       renderWorkspaceTabs();
+      if(typeof updateNumericalEquipmentVisibility==='function')updateNumericalEquipmentVisibility();
       if (!state.run.result) {
         toggle('simulation-results', false);
         renderSimulationAnalysis();

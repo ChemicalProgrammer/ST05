@@ -1893,6 +1893,14 @@ window.STSimulation2D=(function(){
   if(window.ResizeObserver){const observer=new ResizeObserver(()=>{if(!panel.classList.contains('hidden')&&canvas.clientWidth){if(camera.fit&&viewportCount===1)fit();else draw();}});viewports.forEach(view=>observer.observe(view.canvas));}
   setViewportCount(Number(window.STPreferences?.read('simulation2dViewports'))||1);
   window.addEventListener('st:theme',()=>draw());
+  // Redraw localized text without restarting or mutating the 2D simulation.
+  window.addEventListener('st-language-change',function(){
+    render2DEventsNote();
+    if(!model)return;
+    measureTelemetry(model.line||[]);
+    status();
+    draw();
+  });
   return {pause,capture,isRunning:()=>runState==='Running',refreshRunLocks:syncControls,
     hasState:()=>Boolean(viewKey&&model),syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
     const configuredHours=config.shiftHours??config.durationOptions?.shiftHours??config.shiftSeconds/3600;
@@ -1966,13 +1974,5 @@ window.STSimulation2D=(function(){
     if(restoredRun)restorePresentation(resumedPresentation);
     if(newView){restoringView=false;draw();}else if(restoredRun)draw();
   }};
-  // A language switch updates run-state text without restarting the 2D engine.
-  window.addEventListener('st-language-change',function(){
-    render2DEventsNote();
-    if(!model)return;
-    measureTelemetry(model.line||[]);
-    status();
-    draw();
-  });
 })();
 </script>

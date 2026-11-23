@@ -220,7 +220,7 @@ test('Recorded numeric samples refresh between expensive chart frames during hig
  assert.equal(charts,1,'Full chart render remains FPS-limited');
  now=70;callback();
  assert.equal(state.run.sampleIndex,70);
- assert.deepEqual(light,[['kpi',35],['equipment',35]],
+ assert.deepEqual(light,[['kpi',70],['equipment',70]],
    'Equipment data must change from the actual new sample before the next chart redraw');
  assert.equal(charts,1);
  now=105;callback();

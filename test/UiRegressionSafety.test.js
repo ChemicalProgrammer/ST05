@@ -159,3 +159,11 @@ test('Equipment-performance status badge is right aligned for machines and conve
   assert.match(css,/\.numeric-equipment-header-details \{grid-column:1;grid-row:1/);
   assert.match(css,/\.numeric-equipment-control-dock \{[\s\S]*?grid-column:2!important;grid-row:2 \/ span 2!important/);
 });
+
+test('Elegant combobox highlights selected text and checkmark in white on the solid accent',()=>{
+  const css=read('apps-script/ElegantStyles.html');
+  assert.match(css,/select option:checked:not\(:disabled\)\s*\{\s*color:#fff!important; background:var\(--accent\)!important;/);
+  assert.match(css,/option:checked:not\(:disabled\)::checkmark\s*\{\s*color:#fff!important;/);
+  assert.match(css,/option:not\(:disabled\):not\(:checked\):is\(:hover,:focus\)/,
+    'Unselected hover items retain their separate style');
+});

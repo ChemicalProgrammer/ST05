@@ -233,7 +233,11 @@ html[data-ui-mode=basic] .settings-option-group > p { display:none; }
 /* Progressive native select styling preserves the original form values,
    events, keyboard interaction and accessible labels. */
 html[data-visual-style=elegant] select option { color:var(--ink); background:var(--surface); }
-html[data-visual-style=elegant] select option:checked { color:var(--on-accent); background:var(--accent); }
+/* Selected picker rows use white foreground on the solid accent in both themes.
+   Do not change the closed select's text, nor hover/disabled options. */
+html[data-visual-style=elegant] select option:checked:not(:disabled) {
+  color:#fff!important; background:var(--accent)!important;
+}
 @supports (appearance:base-select) {
   html[data-visual-style=elegant] select:not([multiple]):not([size]),
   html[data-visual-style=elegant] select:not([multiple]):not([size])::picker(select) { appearance:base-select; }
@@ -262,7 +266,8 @@ html[data-visual-style=elegant] select option:checked { color:var(--on-accent); 
   html[data-visual-style=elegant] select:not([multiple]):not([size]) option:not(:disabled):not(:checked):is(:hover,:focus) {
     color:var(--selected-text); background:var(--accent-soft);
   }
-  html[data-visual-style=elegant] select:not([multiple]):not([size]) option::checkmark { margin-inline-start:auto; order:1; color:var(--on-accent); }
+  html[data-visual-style=elegant] select:not([multiple]):not([size]) option::checkmark { margin-inline-start:auto; order:1; color:currentColor; }
+  html[data-visual-style=elegant] select:not([multiple]):not([size]) option:checked:not(:disabled)::checkmark { color:#fff!important; }
   html[data-visual-style=elegant] select:not([multiple]):not([size]) option:disabled { color:var(--disabled); background:var(--disabled-bg); }
 }
 @media(prefers-reduced-motion:reduce) {

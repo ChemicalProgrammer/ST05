@@ -316,3 +316,20 @@ La captura de Productos mostró que centrar la barra respecto a la primera fila 
 ### Ajustes de presentación del 23 de noviembre de 2026
 
 El menú Valor–unidad ahora muestra exclusivamente las abreviaturas con selección visual de combobox. El OEE global usa `metric-card--featured` sin concatenar texto traducible a clases CSS. Las barras de Subsección y Registro ocupan una línea en escritorio, con desplazamiento horizontal en vista estrecha. Comparación ya no presenta la nota automática Baseline/Proposed. El catálogo conserva tres columnas y añade el tipo Básico/Compuesto y la composición de cada control bajo su nombre técnico.
+
+
+### Ajuste visual puntual de 2D y Formats · 23 nov 2026
+
+- La primera tabla de cada equipo de **Simulation 2D** muestra icono, nombre y
+  etiqueta de estado de fondo suave, punto y texto semántico, conforme al diseño
+  reutilizable `.live-state` de Simulation numérica. La fila **State** usa esa
+  misma paleta.
+- La etiqueta sobre máquinas y transportadores tiene 20 px en pantalla: su
+  escala se compensa con el zoom del canvas para que nunca se convierta en una
+  cápsula gigante. Los estados siguen dependiendo del motor, no del tema visual.
+- **Conveyor Geometry** mantiene su título y el botón PASS/FAIL de evaluación
+  conserva su acción de abrir el análisis. La etiqueta usa los mismos tokens
+  semánticos, una altura de 20 px y **no** se escala junto con el zoom.
+- La primera Subsección de **Products & Formats** toma el espacio superior del
+  `--workspace-gutter` del workspace; el cuerpo del editor no suma un segundo
+  padding superior.

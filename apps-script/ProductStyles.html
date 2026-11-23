@@ -67,7 +67,9 @@
 #products-workspace .products-editor > .formats-tabs {
   margin-bottom:0;
 }
+/* El margen superior ya lo aporta .workspace-content. Antes aquí se sumaba
+   un segundo --workspace-gutter, desplazando el primer control hacia abajo. */
 #products-workspace .products-editor > .dialog-body {
-  padding-block-start:var(--workspace-gutter);
+  padding-block-start:0;
 }
 </style>

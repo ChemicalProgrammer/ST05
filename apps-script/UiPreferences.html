@@ -148,6 +148,7 @@ window.STPreferences = (function() {
     Object.keys(localStorage).filter(function(name){return name.indexOf(key)===0;}).forEach(function(name){localStorage.removeItem(name);});
     theme=STThemeResources.defaultTheme||'auto';document.documentElement.classList.remove('restoring-session');
     setTheme(theme);setAccent(STThemeResources.defaultAccent);
+    window.STLanguage?.setLanguage('en');
   }
   return {reset:reset,caseOptions:caseOptions,setCaseOptions:setCaseOptions,initializeCaseOptions:initializeCaseOptions, connectCase:function(provider,changed){caseProvider=provider;caseChanged=changed;},read: read, write: write, setTheme: setTheme,setAccent:setAccent,automaticThemeAt:automaticThemeAt,setFontScale:setFontScale,applyFontScale:applyFontScale, applyJsonFields:applyJsonFields,applyPalette:applyPalette,resolveInterfaceMode:resolveInterfaceMode };
 })();

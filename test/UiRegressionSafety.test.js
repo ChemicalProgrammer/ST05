@@ -141,7 +141,7 @@ test('The global error button is solid red and announces the error count',()=>{
   const web=read('apps-script/WebApp.html');
   const dialogs=read('apps-script/Dialogs.html');
   assert.match(css,/#header-errors:not\(\.hidden\) #header-error-button \{/);
-  assert.match(css,/background:var\(--danger\)!important;color:var\(--page\)!important/);
+  assert.match(css,/background:var\(--danger\)!important;color:#fff!important/);
   assert.match(css,/#header-errors:not\(\.hidden\)::after \{[\s\S]*?content:attr\(data-count\)/);
   assert.match(web,/id="header-error-button"/);
   assert.match(dialogs,/button\.setAttribute\('aria-label',label\)/);

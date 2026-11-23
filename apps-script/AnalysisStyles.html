@@ -102,6 +102,15 @@
 .scenario-grid .analysis-recommendation { min-width:0; border-left:var(--state-border-width) solid var(--accent); }
 .scenario-changes { font-size:var(--font-caption); padding-left:var(--space-4); overflow-wrap:anywhere; }
 .analysis-recommendation .badge { margin-left:var(--space-2); white-space:normal; }
+.analysis-recommendation > .scenario-card-header {
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:var(--space-2) var(--space-3);min-width:0;
+}
+.scenario-card-header > :is(.analysis-capex,.scenario-card-basis) { min-width:0;max-width:100%;box-sizing:border-box; }
+.analysis-recommendation .scenario-card-header > .scenario-card-basis {
+  margin:0 0 0 auto;white-space:normal;overflow-wrap:anywhere;text-align:right;
+}
+.analysis-recommendation > .scenario-card-header + h4 { overflow-wrap:anywhere; }
 .gemini-messages .analysis-recommendation { margin:var(--space-3) 0; }
   .analysis-capex[data-tier="ZERO"] { color: var(--capex-zero); background: var(--capex-zero-bg); }
   .analysis-capex[data-tier="MEDIUM"] { color: var(--capex-medium); background: var(--capex-medium-bg); }

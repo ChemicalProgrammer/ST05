@@ -60,7 +60,8 @@ html[data-ui-mode=basic] .basic-buffer { font-size:var(--font-input); font-weigh
 html[data-ui-mode=basic] .basic-availability { font-size:var(--font-secondary); }
 html[data-ui-mode=basic] #basic-conveyor-layout { margin-top:0; gap:var(--section-gap); }
 html[data-ui-mode=basic] #basic-conveyor-panel { padding:var(--space-3); }
-html[data-ui-mode=basic] #basic-conveyor-panel .format-zone-setup { padding:0; margin:0; border:0; }
+/* The worksheet groups provide their own frames; the outer setup adds none. */
+html[data-equipment-layout=split] #basic-conveyor-panel .format-zone-setup { padding:0; margin:0; border:0; border-radius:0; box-shadow:none; }
 .live-equipment-columns,.equipment-speed-sparkline-heading { text-transform:none; letter-spacing:normal; }
 @media(max-width:760px) {
  :root { --panel-padding:var(--space-3); }
@@ -112,7 +113,7 @@ html[data-ui-mode=basic][data-basic-view=conveyors] .equipment-card { display:fl
 html[data-ui-mode=basic][data-basic-view=conveyors] .equipment-header { align-items:center; margin:0; }
 /* Basic presents the same evaluated values without the advanced comparison table. */
 .scenario-basic-metrics { display:none; }
-html[data-ui-mode=basic] .analysis-recommendation > .badge,
+html[data-ui-mode=basic] .analysis-recommendation > .scenario-card-header > .badge,
 html[data-ui-mode=basic] .analysis-recommendation:has(.analysis-capex) > h4,
 html[data-ui-mode=basic] .scenario-metric-table,
 html[data-ui-mode=basic] .scenario-preview-context { display:none; }
@@ -147,7 +148,7 @@ html[data-ui-mode=advance] :is(.analysis-attention,.scenario-audit-warnings,.rou
 .editor-subheading > .button-row { align-items:center; }
 html[data-ui-mode=basic] .scenario-tier-grid { grid-template-columns:repeat(4,minmax(210px,1fr)); align-items:stretch; overflow-x:auto; padding-bottom:var(--space-2); }
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation { min-width:0; display:flex; flex-direction:column; padding:var(--space-3); }
-html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > .analysis-capex,
+html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > .scenario-card-header,
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > h4 { margin:0 0 var(--space-4); min-height:var(--control-height); align-content:center; font-size:var(--font-card); }
 html[data-ui-mode=basic] .scenario-tier-grid .scenario-actions { margin-top:auto; padding-top:var(--space-3); gap:var(--space-1); flex-wrap:nowrap; }
 html[data-ui-mode=basic] .scenario-tier-grid .scenario-actions .icon-button { width:var(--control-height); height:var(--control-height); flex-basis:var(--control-height); }
@@ -163,7 +164,7 @@ html[data-ui-mode=basic] .scenario-search-progress { display:none; }
 html[data-ui-mode=basic] .scenario-preview-status { display:block; color:var(--muted); font-weight:var(--weight-regular); }
 .scenario-preview-status[data-state=review] { border-left:3px solid var(--warning); }
 html[data-ui-mode=basic] .scenario-basic-metric:first-child .scenario-basic-change { align-self:flex-start; padding:var(--space-1) var(--space-2); border-radius:var(--radius-sm); background:var(--surface-soft); margin-top:var(--space-1); }
-html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > .analysis-capex { align-self:flex-start; padding:var(--space-2) var(--space-3); min-height:0; line-height:var(--leading-body); }
+html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > .scenario-card-header > .analysis-capex { align-self:flex-start; padding:var(--space-2) var(--space-3); min-height:0; line-height:var(--leading-body); }
 .analysis-capex[data-tier=MEDIUM] { color:var(--info); background:var(--info-soft); }
 html[data-equipment-layout=split][data-basic-view=conveyors] #equipment-list .equipment-card { padding:var(--space-3) var(--space-4); min-height:64px; box-sizing:border-box; justify-content:center; }
 html[data-equipment-layout=split][data-basic-view=conveyors] #equipment-list .equipment-header { margin:0; padding:0; border:0; width:100%; flex-direction:row; align-items:center; }
@@ -340,8 +341,6 @@ html[data-events-enabled=false] .live-equipment-controls > button:not(.loss-togg
 #settings-page-simulation .settings-simulation-grid > label, #settings-page-simulation .settings-option-group { min-width:0; margin:0; }
 #settings-page-simulation .settings-simulation-grid label:not(.checkbox-label):not(.settings-reliability-toggle) { display:flex; flex-direction:column; gap:var(--space-2); }
 #settings-page-simulation .settings-simulation-grid select, #settings-page-simulation .settings-simulation-grid input:not([type=checkbox]) { width:100%; box-sizing:border-box; }
-#settings-page-simulation .simulation-toggle-grid > label { display:flex; align-items:center; gap:var(--space-2); padding:var(--space-3); margin:0; min-height:var(--control-height); border:var(--border-width) solid var(--line); border-radius:var(--radius-md); }
-#settings-page-simulation .simulation-toggle-grid input[type=checkbox] { flex:0 0 auto; margin:0; }
 #settings-page-simulation .recording-toggle-grid { margin-top:var(--space-4); }
 #settings-page-simulation .simulation-settings-groups > .settings-section { padding-block:var(--space-4); }
 #settings-page-simulation .simulation-settings-groups h3 { margin:0 0 var(--space-3); }
@@ -1121,12 +1120,6 @@ dialog[open] .table-scroll {max-inline-size:100%;min-inline-size:0;scrollbar-gut
 #settings-numeric-diagnostics .settings-numeric-diagnostics-grid {
   display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
   gap:var(--space-1) var(--space-2);min-width:0;
-}
-#settings-numeric-diagnostics .checkbox-label {
-  display:flex;align-items:center;gap:var(--space-2);
-  padding:var(--space-2);margin:0;min-width:0;
-  border:var(--border-width) solid var(--line);border-radius:var(--radius-md);
-  font-size:var(--font-secondary);background:var(--surface-soft);
 }
 .live-equipment-card .numeric-equipment-chart-side[hidden],
 .live-equipment-card .live-equipment-detail-grid > section[hidden] {display:none!important;}

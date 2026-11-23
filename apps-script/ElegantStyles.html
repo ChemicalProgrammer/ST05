@@ -69,7 +69,7 @@ html[data-visual-style=elegant] :is(.equipment-card,.chart-panel,.equipment-spee
   box-shadow:var(--shadow);
 }
 html[data-visual-style=elegant] .equipment-card {
-  border-top:2px solid var(--elegant-border);
+  border-top:4px solid var(--accent);
   transition:border-color var(--duration-fast),background var(--duration-fast),opacity var(--duration-fast);
 }
 html[data-visual-style=elegant] .equipment-card .equipment-header {
@@ -87,9 +87,9 @@ html[data-visual-style=elegant] .equipment-selected .equipment-header strong { c
 .equipment-card-symbol { display:none; }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list { grid-template-columns:minmax(0,1fr); align-items:start; }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card {
-  min-width:0; padding:var(--space-3); border:1px solid var(--elegant-border); border-left:3px solid var(--accent); border-radius:var(--radius-md); background:var(--surface);
+  min-width:0; padding:var(--space-3); border:1px solid var(--elegant-border); border-top:4px solid var(--accent); border-radius:var(--radius-md); background:var(--surface);
 }
-html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card[data-equipment-type=CONVEYOR] { border-left-color:var(--secondary); }
+html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card[data-equipment-type=CONVEYOR] { border-top-color:var(--secondary); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header {
   display:grid; grid-template-columns:var(--control-height) minmax(0,1fr) auto; align-items:center; gap:var(--space-2); padding:0; margin:0; background:transparent;
 }
@@ -100,10 +100,10 @@ html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list 
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-title-meta { display:block; margin-top:var(--space-1); color:var(--muted); font-size:var(--font-caption); font-weight:var(--weight-regular); font-variant-numeric:tabular-nums; line-height:var(--leading-body); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .button-row { flex-wrap:nowrap; gap:var(--space-1); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .icon-button { width:30px; min-height:30px; height:30px; padding:var(--space-1); border:1px solid var(--line); background:transparent; }
-html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card:hover { border-color:var(--secondary); border-left-color:var(--accent); background:color-mix(in srgb,var(--secondary-soft) 25%,var(--surface)); }
-html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card[data-equipment-type=CONVEYOR]:hover { border-left-color:var(--secondary); }
+html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card:hover { border-color:var(--secondary); border-top-color:var(--accent); background:color-mix(in srgb,var(--secondary-soft) 25%,var(--surface)); }
+html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card[data-equipment-type=CONVEYOR]:hover { border-top-color:var(--secondary); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card.equipment-selected,
-html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card.equipment-selected:hover { border-color:var(--accent); border-left-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent); }
+html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card.equipment-selected:hover { border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-selected .equipment-header strong { color:var(--selected-text); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .icon-button:hover { background:var(--secondary-soft); color:var(--secondary-text); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .remove-equipment:hover { background:var(--danger-soft); color:var(--danger); border-color:var(--danger); }

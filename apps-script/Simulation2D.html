@@ -1073,7 +1073,7 @@ window.STSimulation2D=(function(){
     }
     return rows;
   }
-  function telemetryData(item,signal){
+  function telemetryData(item){
     const belt=item.kind==='belt',cases=item.unit==='CASES';
     const produced=item.produced??0;
     const unit=cases?'cases/min':'bpm';
@@ -1083,8 +1083,7 @@ window.STSimulation2D=(function(){
     const rate=belt?measuredRate:Math.min(measuredRate,designSpeed*60);
     const bottles=value=>num(item.bottlesPerUnit>0?value*item.bottlesPerUnit:NaN);
     const duration=(label,key)=>[label,num(item.durations?.[key]??0),'s'];
-    const summary=[['State',signal.state,''],
-      ['Design speed',num(belt?item.speed*.06:designSpeed*60),belt?'m/min':cases?'cpm':'bpm'],
+    const summary=[['Design speed',num(belt?item.speed*.06:designSpeed*60),belt?'m/min':cases?'cpm':'bpm'],
       ['Flow',bottles(rate),'bpm'],['Processed',bottles(produced),'bottles']];
     if(cases)summary.push(['Case flow',num(rate),'cpm'],['Cases made',num(produced),'cases']);
     if(belt){
@@ -1161,8 +1160,7 @@ window.STSimulation2D=(function(){
     const context=telemetryMeasureContext??=canvas.getContext('2d');
     context.save();
     for(const item of line){
-      const signal=item.kind==='belt'?beltSignal(item):machineSignal(item);
-      for(const card of telemetryData(item,signal)){
+      for(const card of telemetryData(item)){
         const columns=telemetryColumns[card.column];
         for(const row of [['Parameter','Value','Unit'],...card.rows]){
           row.forEach((value,column)=>{
@@ -1204,8 +1202,8 @@ window.STSimulation2D=(function(){
       context.fillRect(left+1,y+6*tableScale,width-2,39*tableScale);
       context.font='600 '+telemetryFont;context.textAlign='left';
       if(showSignal){
-        // La primera tarjeta conserva nombre con icono; el estado se muestra
-        // como etiqueta de color en su fila State y sobre el equipo.
+        // La primera tarjeta muestra el estado una sola vez en su cabecera,
+        // junto al nombre y al icono del equipo.
         const glyphX=parameterX,glyphY=y+21*tableScale-1*tableScale;
         drawTelemetryIcon(context,glyphX,glyphY,item.kind==='belt',colors.info||ink);
         context.fillStyle=ink;
@@ -1241,21 +1239,14 @@ window.STSimulation2D=(function(){
         context.font=telemetryFont;context.fillStyle=muted;
         text(localize2D(label),parameterX,baseline,parameterWidth);
         context.font='600 '+telemetryFont;context.textAlign='right';
-        if(showSignal&&label==='State'){
-          // Etiqueta de la primera tabla con el mismo fondo suave, punto y
-          // color de texto que .live-state en la simulación numérica.
-          drawTableStatusPill(context,value,signal.lamp,colors,
-            valueX-valueWidth/2,baseline-4*tableScale,Math.min(110*tableScale,valueWidth));
-        }else{
-          context.fillStyle=ink;
-          text(localize2D(value),valueX,baseline,valueWidth);
-        }
+        context.fillStyle=ink;
+        text(localize2D(value),valueX,baseline,valueWidth);
         context.fillStyle=muted;context.font=telemetryFont;context.textAlign='left';
         text(localize2D(unit),unitX,baseline,unitWidth);
       });
     }
     let cardLeft=left;
-    for(const data of telemetryData(item,signal)){
+    for(const data of telemetryData(item)){
       card(data.column,cardLeft,data.title,data.rows,data.showSignal,data.verdict);
       cardLeft+=telemetryWidths[data.column]+telemetryGap;
     }
@@ -1727,10 +1718,7 @@ window.STSimulation2D=(function(){
       (stops.some(event=>event.targetProductId)?' '+localize2D('Changeovers stop the line; 2D keeps the selected format.'):'');
   }
   function status(){
-    const sourceStatus=(defaultRun
-      ?' · '+localize2D('Round')+' '+representative.round+' · '+localize2D('Seed')+' '+representative.seed
-      :' · '+localize2D('Seed')+' '+seed)
-      +(representative?'':' · '+localize2D('No representative seed available. Run the numerical simulation.'));
+    const sourceStatus=defaultRun?' · '+localize2D('Round')+' '+representative.round:'';
     const line=model?.line||[];
     const first=line[0];
     const waitingForFirst=runState==='Running'&&first?.produced===0

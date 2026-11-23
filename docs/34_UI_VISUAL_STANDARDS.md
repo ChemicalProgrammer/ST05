@@ -130,14 +130,15 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Etiqueta de estado** | `.badge`, clases semánticas | RUNNING, PASS, FAIL y otros estados sin depender solamente del color |
 | **Tarjeta de resultado** | `.metric-card.metric-card--result` | Las **diez** tarjetas de Simulation Playback (Virtual time, Output, Effective Runtime, Runtime Losses y demás) y resultados secundarios. `STTimeControls.output()` hereda el tamaño del valor del contenedor |
 | **KPI destacado** | `.metric-card.metric-card--featured` | Dentro de Simulation Playback, **solo** Theoretical equipment efficiency y Simulated efficiency. Valor grande y borde superior grueso en color primario |
-| **Tarjeta de escenario** | `.metric-card.metric-card--scenario` | Alternativas de What-if/CAPEX, con un borde lateral semántico y acciones del escenario |
+| **Tarjeta de escenario** | `.metric-card.metric-card--scenario` | Alternativas de What-if/CAPEX, con un borde lateral semántico y acciones del escenario. `.scenario-card-header` alinea el nivel a la izquierda y la etiqueta de origen a la derecha, con salto de línea en vistas estrechas |
 | **Tarjeta de estado** | `.metric-card.metric-card--status` | Resultado de validación, estado o diagnóstico; compacta y con etiqueta semántica |
 | **Tarjeta de equipo** | `.live-equipment-card` | Encabezado, estado, OEE y gráfico, con subsecciones internas configurables; el tag de estado en Equipment performance se alinea siempre a la derecha, tanto en máquinas como conveyors |
 | **KPI de resultado** | `.result-kpi`, `.metric-card--result` | Indicadores KPI en Results, no equivalentes a los KPI destacados de eficiencia |
 | **Panel de gráfica** | `.chart-panel` | Contenedor de gráficos y sus títulos |
 | **Tabla de datos** | `.table-scroll`, `table` | Tabla con columnas optimizadas y scroll horizontal |
 | **Fila de caso** | `.case-row` | Vista de un caso en el catálogo |
-| **Tarjeta de configuración de equipo** | `.equipment-card` | Formulario/tarjeta de máquina o conveyor, distinto de resultado en vivo |
+| **Tarjeta de configuración de equipo** | `.equipment-card` | Formulario/tarjeta de máquina o conveyor con borde superior de 4 px, consistente con el acento de los KPI |
+| **Casilla enmarcada** | `label.st-checkbox-card` | Control compartido en Simulation, 2D y Settings; fondo suave, borde, espaciado y foco comunes, con el label completo como área clicable |
 
 ### Cobertura de muestras
 El catálogo mantiene los nombres oficiales en la **tercera columna de todas las pestañas**. Incluye navegación real del Header, pestañas de diálogos, navegación entre simulaciones, variantes de botones, campos, menús, estado/progreso, tablas, gráficas y las familias de tarjetas. Los ejemplos interactivos están aislados: cambiar la pestaña o el color de un ejemplo no modifica el caso, su simulación, ni el selector de colores real. Los estilos viven en sus módulos propietarios; `DesignReference.html` incluye sólo la vista previa y su interacción.
@@ -322,8 +323,8 @@ El menú Valor–unidad ahora muestra exclusivamente las abreviaturas con selecc
 
 - La primera tabla de cada equipo de **Simulation 2D** muestra icono, nombre y
   etiqueta de estado de fondo suave, punto y texto semántico, conforme al diseño
-  reutilizable `.live-state` de Simulation numérica. La fila **State** usa esa
-  misma paleta.
+  reutilizable `.live-state` de Simulation numérica. El estado aparece una sola
+  vez en la cabecera de la tabla, sin una fila **State** adicional.
 - La etiqueta sobre máquinas y transportadores tiene 20 px en pantalla: su
   escala se compensa con el zoom del canvas para que nunca se convierta en una
   cápsula gigante. Los estados siguen dependiendo del motor, no del tema visual.
@@ -442,7 +443,7 @@ pixel verification or deployment to Apps Script.
   incluye las clasificaciones de demo actuales y heredadas, además de los
   demos modificados mediante importación de datos. Los metadatos
   originales del caso se conservan para guardar y exportar.
-- En las tablas 2D, el estado de cabecera, la fila State y el botón PASS/FAIL
+- En las tablas 2D, el estado de cabecera y el botón PASS/FAIL
   mantienen sus dimensiones respecto de las filas. El zoom escala la tabla y
   sus etiquetas en conjunto, incluido el espacio reservado en la cabecera.
   Las etiquetas sobre los equipos mantienen su tamaño fijo en pantalla.
@@ -451,3 +452,24 @@ Verificación: 33 pruebas focalizadas de contratos del caso, presentación y
 tablas 2D. La geometría de las etiquetas se comprueba con factores de zoom
 0.1, 1 y 6, incluida la posición final del botón PASS/FAIL. Las comprobaciones
 del aviso cubren demos actuales, heredados y modificados por importación.
+
+### Limpieza de tablas y consistencia de tarjetas · 23 nov 2026
+
+- **Tablas 2D:** se elimina la fila Estado para máquinas y transportadores. La
+  cabecera conserva su etiqueta y las etiquetas sobre equipos siguen visibles.
+- **Distribución de línea:** la línea de estado deja de mostrar la semilla y el
+  aviso de semilla representativa ausente. Conserva reproducción, ronda,
+  esperas y validación; los valores de semilla del motor no cambian.
+- **Equipment:** las tarjetas usan un borde superior de 4 px, como el acento
+  de los KPI, en Classic y Elegant. La vista combinada también usa ese borde
+  superior en lugar de sumar un acento lateral.
+- **Conveyors:** en la vista separada se retira el marco exterior redundante
+  del bloque de configuración. Los grupos Upstream/Downstream conservan sus
+  propios bordes y la organización de campos.
+- **Settings:** las casillas estáticas y las generadas para pérdidas de tasa y
+  prompts reutilizan `.st-checkbox-card`. Se retiran los estilos duplicados
+  de las opciones de simulación y diagnóstico.
+- **CAPEX:** las tarjetas con resultados y las vacías comparten encabezado.
+  El nivel se alinea a la izquierda y la etiqueta de origen a la derecha; el
+  título ocupa la fila siguiente. El encabezado admite salto de línea y texto
+  largo sin desbordar la tarjeta. Basic conserva su presentación simplificada.

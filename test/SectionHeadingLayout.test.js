@@ -73,14 +73,14 @@ test('subsection descriptions own the full row independently of the title toolba
   }
 });
 
-test('custom and native headings share a description gap independent of toolbar height in every visual mode',()=>{
+test('custom and native headings center titles and tools with a shared row height in every visual mode',()=>{
   const root=document.documentElement;
   const originalMode=root.getAttribute('data-ui-mode'),originalStyle=root.getAttribute('data-visual-style');
   const copies=[...document.querySelectorAll('.fold-heading > .subsection-heading-copy, .fold-heading > div:has(> h3 > .fold-toggle)')];
   const nativeCopies=[...document.querySelectorAll('.fold-native > summary > .subsection-heading-copy')];
-  for(const id of ['results-title','results-loss-title']){
+  for(const id of ['results-title','results-loss-title','simulation-equipment-title']){
     const title=document.getElementById(id);
-    assert(copies.includes(title.parentElement),'Cover the reported Results headings');
+    assert(copies.includes(title.parentElement),'Cover the reported Results and Equipment performance headings');
     assert.ok(title.closest('.fold-heading').querySelector(':scope > .fold-tools'));
   }
   assert.ok(copies.some(copy=>copy.closest('.design-reference-subsection')),'The reusable example shares the production rule');
@@ -97,10 +97,14 @@ test('custom and native headings share a description gap independent of toolbar 
           const heading=copy.parentElement,title=copy.querySelector(':scope > h3'),toggle=title.querySelector('.fold-toggle');
           const label=context+' / '+title.textContent.trim();
           assert.equal(value(heading,'row-gap',width),'var(--subsection-description-gap)',label);
-          // Align the text to the bottom of the row established by any toolbar
-          // height. A flex title also removes its inline button's baseline gap.
+          // Center both controls in one minimum-height row. Its 4 px gap to
+          // the description is shared even when the toolbar is empty.
           assert.equal(value(title,'display',width),'flex',label);
-          assert.equal(value(title,'align-self',width),'end',label);
+          assert.equal(value(title,'align-self',width),'center',label);
+          assert.equal(value(title,'align-items',width),'center',label);
+          assert.equal(value(title,'min-block-size',width),'var(--control-height)',label);
+          assert.equal(value(heading,'align-items',width),'center',label);
+          assert.equal(value(heading.querySelector(':scope > .fold-tools'),'align-self',width),'center',label);
           assert.equal(value(heading,'display',width),'grid',label);
           assert.equal(value(title,'grid-row',width),'1',label);
           assert.equal(value(copy.querySelector(':scope > .subsection-description, :scope > .subsection-playback-meta'),'grid-row',width),'2',label);
@@ -114,8 +118,13 @@ test('custom and native headings share a description gap independent of toolbar 
             assert.equal(value(description,'margin',width),'0',label);
         }
         for(const copy of nativeCopies){
-          const label=context+' / '+copy.querySelector('.subsection-native-title').textContent.trim();
+          const title=copy.querySelector('.subsection-native-title');
+          const label=context+' / '+title.textContent.trim();
           assert.equal(value(copy,'display',width),'contents',label);
+          assert.equal(value(title,'align-self',width),'center',label);
+          assert.equal(value(title,'align-items',width),'center',label);
+          assert.equal(value(title,'min-block-size',width),'var(--control-height)',label);
+          assert.equal(value(copy.parentElement.querySelector(':scope > .fold-tools'),'align-self',width),'center',label);
           assert.equal(value(copy.parentElement,'display',width),mode==='basic'&&copy.parentElement.parentElement.id==='run-config'?'none':'grid',label);
           assert.equal(value(copy.parentElement,'row-gap',width),'var(--subsection-description-gap)',label);
           assert.equal(value(copy.querySelector('.subsection-description'),'grid-row',width),'2',label);

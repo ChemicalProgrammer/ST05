@@ -16,6 +16,10 @@ test('V-Graph shows two accessible series swatches, not the old Settings section
     const buttons=[...dom.window.document.querySelectorAll('.vgraph-color-trigger')];
     assert.equal(buttons.length,2);
     assert.deepEqual(buttons.map(b=>b.dataset.vgraphSeries),['current','recommended']);
+    const vgraph=web.slice(web.indexOf('id="vgraph-profile"'),web.indexOf('id="vgraph-plot"'));
+    assert.match(vgraph,/class="fold-tools vgraph-toolbar"[^>]*role="toolbar"/);
+    assert.ok(vgraph.indexOf('class="vgraph-legend"')<vgraph.indexOf('id="vgraph-content"'),
+      'V-Graph legend must be in the heading toolbar, not the chart body');
     for(const button of buttons){
       assert.equal(button.type,'button');
       assert.equal(button.getAttribute('aria-haspopup'),'dialog');

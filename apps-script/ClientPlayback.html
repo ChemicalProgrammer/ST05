@@ -37,6 +37,8 @@
     function pausePlayback() {
       if(roundSession?.firstUpdating)roundSession.resumeAfterEdit=false;
       stopPlaybackTimer(true);
+      // Preserve the precise displayed virtual time at the pause position.
+      refreshPlaybackMetricCards();
       setPlaybackStatus('Paused');
       if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
     }
@@ -139,9 +141,11 @@
     // The virtual clock can advance smoothly; counters retain their last
     // recorded value until a genuine sample is reached (no synthetic bottles).
     function playbackDisplaySecond(sample){
-      if(!sample||!state.run.playing)return sample?.virtualSecond||0;
+      if(!sample)return 0;
       var next=state.run.result?.samples?.[state.run.sampleIndex+1];
-      if(!next)return sample.virtualSecond;
+      if(!next||playbackClock?.frame!==sample)return sample.virtualSecond;
+      // A preserved paused clock has started===null and a nonzero offset.
+      if(!state.run.playing&&playbackClock.started!==null)return sample.virtualSecond;
       return Math.min(next.virtualSecond,Math.max(sample.virtualSecond,
         sample.virtualSecond+playbackElapsed(sample)));
     }

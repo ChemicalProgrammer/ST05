@@ -10,7 +10,7 @@ window.STLanguage=(function(){
   var language=window.STPreferences?.read('language')==='es'?'es':'en';
   var originals=new WeakMap(),attributes=new WeakMap(),observer=null,applying=false;
   var attributeNames=['title','aria-label','placeholder','data-label','alt'];
-  var skipSelector='script,style,noscript,svg,canvas,textarea,pre,code,[contenteditable],[data-st-no-translate],'+
+  var skipSelector='script,style,noscript,svg,canvas,pre,code,[contenteditable],[data-st-no-translate],'+
     '#cases-list .case-identity,#breadcrumb-case,#header-case-name,#editor-title,'+
     '#simulation-selector,#workspace-tabs .workspace-tab .nav-label,#case-data-note,'+
     '.live-equipment-identity strong,.equipment-title-name,.case-identity strong,'+
@@ -30,7 +30,7 @@ window.STLanguage=(function(){
     return !parent||!!parent.closest?.(skipSelector);
   }
   function updateText(node){
-    if(!node||node.nodeType!==3||skipped(node))return;
+    if(!node||node.nodeType!==3||skipped(node)||node.parentElement?.closest('textarea'))return;
     var raw=node.nodeValue||'',entry=originals.get(node);
     if(!entry||raw!==entry.en&&raw!==entry.es){
       entry={en:raw,es:localized(raw,'es')};

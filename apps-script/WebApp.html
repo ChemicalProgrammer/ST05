@@ -303,10 +303,10 @@
             <button id="stop-simulation" class="secondary icon-button" type="button" data-icon="stop" aria-label="Stop playback" title="Stop playback and return to the beginning"></button>
             <button id="reset-playback" class="secondary icon-button" type="button" data-icon="refresh" aria-label="<?= __ST_TEXT__('client.reset') ?>" title="<?= __ST_TEXT__('client.reset') ?>"></button>
             <details class="export-menu">
-              <summary class="secondary icon-button" data-icon="upload" aria-label="Exportar gráficas" title="Exportar gráficas de la ronda seleccionada"></summary>
+              <summary class="secondary icon-button" data-icon="upload" aria-label="Export charts" title="Export charts for the selected round"></summary>
               <div>
-                <button id="export-live-charts-html" class="ghost" type="button" disabled>Gráficas (HTML)</button>
-                <button id="export-live-charts-csv" class="ghost" type="button" disabled>Datos de gráficas (CSV)</button>
+                <button id="export-live-charts-html" class="ghost" type="button" disabled>Charts (HTML)</button>
+                <button id="export-live-charts-csv" class="ghost" type="button" disabled>Chart data (CSV)</button>
               </div>
             </details>
           </div></div>
@@ -316,8 +316,8 @@
           <div id="simulation-playback-metrics" class="metrics-grid">
             <article class="metric-card metric-card--result"><span><?= __ST_TEXT__('view.virtual_time') ?></span><strong id="metric-time">—</strong></article>
             <article class="metric-card metric-card--result"><span><?= __ST_TEXT__('view.output') ?></span><strong id="metric-output">—</strong></article>
-            <article class="metric-card metric-card--result"><span title="Tiempo acumulado con salida menos la pérdida bruta de velocidad. Cada minuto de reloj aporta como máximo un minuto efectivo.">Effective Runtime</span><strong id="metric-effective-runtime">—</strong></article>
-            <article class="metric-card metric-card--result"><span title="Minutos equivalentes de pérdida bruta de velocidad mientras hay producción a la salida. Las paradas sin producción se contabilizan aparte.">Runtime Losses</span><strong id="metric-runtime-losses">—</strong></article>
+            <article class="metric-card metric-card--result"><span title="Accumulated time with output minus gross rate loss. Each clock minute contributes at most one effective minute.">Effective Runtime</span><strong id="metric-effective-runtime">—</strong></article>
+            <article class="metric-card metric-card--result"><span title="Equivalent minutes of gross rate loss while output is being produced. Stops without output are accounted for separately.">Runtime Losses</span><strong id="metric-runtime-losses">—</strong></article>
             <article class="metric-card metric-card--result"><span><?= __ST_TEXT__('view.instantaneous_output_rate') ?></span><strong id="metric-instant-rate">—</strong></article>
             <article class="metric-card metric-card--result"><span><?= __ST_TEXT__('view.cumulative_average_rate') ?></span><strong id="metric-rate">—</strong></article>
             <article class="metric-card metric-card--result"><span><?= __ST_TEXT__('view.accumulation_inventory') ?></span><strong id="metric-buffer">—</strong></article>
@@ -418,7 +418,7 @@
           <details id="results-history-group" class="results-group fold-card fold-native" open>
             <summary><span class="subsection-heading-copy"><span class="subsection-native-title">Charts and history</span><span class="subsection-description">Explore the recorded simulation curves and historical trends.</span></span></summary>
             <div class="results-group-content">
-              <p class="chart-note">Las gráficas muestran el historial de la ronda que está seleccionada para reproducción en Simulación.</p>
+              <p class="chart-note">Charts show the history of the round currently selected for playback in Simulation.</p>
               <div class="chart-layout">
                 <section class="chart-panel">
                   <h3><?= __ST_TEXT__('view.cumulative_production') ?></h3>
@@ -555,7 +555,7 @@
   </div>
 </section>
 <section class="settings-section"><h3>Sections</h3><div class="settings-simulation-grid simulation-toggle-grid"><label class="checkbox-label"><input id="settings-show-real-data" type="checkbox" checked><span>Show Real data</span></label></div><p class="chart-note">Show or hide the Real data section for this case. Stored observations are retained.</p></section>
-<section class="settings-section"><h3>Rate Loss reportado</h3><p class="chart-note">Selecciona qué pérdidas se incluyen en el indicador reportado y en la comparación con planta.</p><div id="settings-rate-loss-categories" class="settings-simulation-grid simulation-toggle-grid"></div></section>
+<section class="settings-section"><h3>Reported rate loss</h3><p class="chart-note">Select which losses are included in the reported indicator and the plant comparison.</p><div id="settings-rate-loss-categories" class="settings-simulation-grid simulation-toggle-grid"></div></section>
 </div>
           <p id="settings-basic-simulation-note" class="chart-note hidden">Set events, chart window and recording here. Duration and playback speed are configured in Simulation.</p>
 

@@ -119,6 +119,7 @@ test('Numerical Live, Fast and Summary cards distinguish completion from paused 
 });
 
 test('Numerical card frames avoid repeated input locking when the playback state does not change',()=>{
-  assert.match(source,/var playbackControlSignature=null;/);
-  assert.match(source,/if\(controlSignature!==playbackControlSignature\)\{playbackControlSignature=controlSignature;syncRunControls\(\);\}/);
+  assert.match(source,/var playbackControlSignature=null,playbackBoundExportResult=null;/);
+  assert.match(source,/if\(controlSignature!==playbackControlSignature\)\{[\s\S]*?syncRunControls\(\);[\s\S]*?playbackBoundExportResult=state\.run\.result;/);
+  assert.match(source,/else if\(state\.run\.result!==playbackBoundExportResult&&!state\.run\.result\?\.provisional\)/);
 });

@@ -327,6 +327,14 @@ async function openCase(caseId, initialView) {
       toggle('simulation-results',false);
       // Keep the heading and explain why equipment cards need a new run.
       document.getElementById('live-equipment')?.replaceChildren?.();
+      // The metric cards remain mounted even when the old result is invalid.
+      // Remove stale values immediately after changing the equipment model.
+      document.querySelectorAll?.('#simulation-playback-metrics > article strong')
+        .forEach(function(value){value.textContent='—';});
+      var progress=document.getElementById('playback-progress');
+      if(progress)progress.textContent='0%';
+      var playbackStatus=document.getElementById('playback-status');
+      if(playbackStatus)playbackStatus.textContent=window.STLanguage?.translate?.('Ready')||'Ready';
       if(typeof updateNumericalEquipmentVisibility==='function')updateNumericalEquipmentVisibility();
     }
     function markCaseDirty(event) {

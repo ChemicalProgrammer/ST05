@@ -251,23 +251,23 @@
           return unit?.id&&unit.id===current[index]?.id;
         });
       var show=Boolean(result&&matches),container=document.getElementById('simulation-results');
-      if(container)container.classList.toggle('hidden',!show);
+      if(container&&container.classList.contains('hidden')===show)
+        container.classList.toggle('hidden',!show);
       var empty=document.getElementById('simulation-equipment-empty');
       if(empty){
-        var message=current.length<2
-          ?'Add at least two pieces of equipment to simulate the line.'
-          :!result?'Run a numerical simulation to display equipment performance.'
-          :result.detailCoverage?.recordingMode==='SUMMARY'
-            ?'Summary only stores aggregate results. Use Live or Fast calculation for equipment cards.'
-          :sample&&!matches
-            ?'Saved results do not match the current equipment. Run the simulation again.'
-            :'This result has no recorded equipment frames. Run Live or Fast calculation to view equipment cards.';
-        if(empty.textContent!==message&&window.STLanguage?.current?.()!=='es')empty.textContent=message;
-        else if(window.STLanguage?.current?.()==='es'){
-          var localized=window.STLanguage.translate(message);
-          if(empty.textContent!==localized)empty.textContent=localized;
+        if(!show){
+          var message=current.length<2
+            ?'Add at least two pieces of equipment to simulate the line.'
+            :!result?'Run a numerical simulation to display equipment performance.'
+            :result.detailCoverage?.recordingMode==='SUMMARY'
+              ?'Summary only stores aggregate results. Use Live or Fast calculation for equipment cards.'
+            :sample&&!matches
+              ?'Saved results do not match the current equipment. Run the simulation again.'
+              :'This result has no recorded equipment frames. Run Live or Fast calculation to view equipment cards.';
+          var translated=window.STLanguage?.translate?.(message)||message;
+          if(empty.textContent!==translated)empty.textContent=translated;
         }
-        empty.classList.toggle('hidden',show);
+        if(empty.classList.contains('hidden')!==show)empty.classList.toggle('hidden',show);
       }
       return show;
     }

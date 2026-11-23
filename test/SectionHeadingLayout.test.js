@@ -7,8 +7,10 @@ import {renderAppsScript} from '../scripts/render-apps-script.mjs';
 
 // Evaluate the actual generated markup and winning stylesheet declarations.
 // These checks protect the responsive layout contract, not measured browser pixels.
-const dom=new JSDOM(renderAppsScript().html,{virtualConsole:new VirtualConsole()});
+const dom=new JSDOM(renderAppsScript().html,{runScripts:'outside-only',virtualConsole:new VirtualConsole()});
 const document=dom.window.document,rules=[];
+dom.window.eval([...document.scripts].find(script=>script.textContent.includes('window.STSubsection=')).textContent);
+dom.window.STSubsection.init();
 after(()=>dom.window.close());
 function compare(a,b){return a[0]-b[0]||a[1]-b[1]||a[2]-b[2];}
 function specificity(node){
@@ -41,12 +43,13 @@ const matchingCache=new WeakMap();
 function value(element,property,width=1440){
   let cache=matchingCache.get(element);
   if(!cache){cache=new Map();matchingCache.set(element,cache);}
-  if(!cache.has(width))cache.set(width,rules.map((rule,order)=>({...rule,order})).filter(rule=>{
+  const key=[width,document.documentElement.dataset.uiMode,document.documentElement.dataset.visualStyle].join(':');
+  if(!cache.has(key))cache.set(key,rules.map((rule,order)=>({...rule,order})).filter(rule=>{
     if(!applies(rule,width))return false;
     try{return element.matches(rule.selector);}catch{return false;}
   }));
   const matches=[];
-  cache.get(width).forEach(rule=>{
+  cache.get(key).forEach(rule=>{
     for(const declaration of rule.declarations)if(declaration.prop===property)
       matches.push({...rule,value:declaration.value,important:Boolean(declaration.important)});
   });
@@ -70,6 +73,63 @@ test('subsection descriptions own the full row independently of the title toolba
   }
 });
 
+test('custom and native headings share a description gap independent of toolbar height in every visual mode',()=>{
+  const root=document.documentElement;
+  const originalMode=root.getAttribute('data-ui-mode'),originalStyle=root.getAttribute('data-visual-style');
+  const copies=[...document.querySelectorAll('.fold-heading > .subsection-heading-copy, .fold-heading > div:has(> h3 > .fold-toggle)')];
+  const nativeCopies=[...document.querySelectorAll('.fold-native > summary > .subsection-heading-copy')];
+  for(const id of ['results-title','results-loss-title']){
+    const title=document.getElementById(id);
+    assert(copies.includes(title.parentElement),'Cover the reported Results headings');
+    assert.ok(title.closest('.fold-heading').querySelector(':scope > .fold-tools'));
+  }
+  assert.ok(copies.some(copy=>copy.closest('.design-reference-subsection')),'The reusable example shares the production rule');
+  assert.ok(nativeCopies.some(copy=>copy.closest('#results-production-group')),'Compare against the compact native Results heading');
+  assert.ok(nativeCopies.some(copy=>copy.closest('.design-reference-native-preview')),'The native example has no local gap override');
+  try{
+    for(const mode of ['basic','advance'])for(const style of ['classic','elegant']){
+      root.setAttribute('data-ui-mode',mode);
+      root.setAttribute('data-visual-style',style);
+      for(const width of [360,760,1440]){
+        const context=mode+'/'+style+' at '+width+' px';
+        assert.equal(value(root,'--subsection-description-gap',width),'var(--space-1)',context);
+        for(const copy of copies){
+          const heading=copy.parentElement,title=copy.querySelector(':scope > h3'),toggle=title.querySelector('.fold-toggle');
+          const label=context+' / '+title.textContent.trim();
+          assert.equal(value(heading,'row-gap',width),'var(--subsection-description-gap)',label);
+          // Align the text to the bottom of the row established by any toolbar
+          // height. A flex title also removes its inline button's baseline gap.
+          assert.equal(value(title,'display',width),'flex',label);
+          assert.equal(value(title,'align-self',width),'end',label);
+          assert.equal(value(heading,'display',width),'grid',label);
+          assert.equal(value(title,'grid-row',width),'1',label);
+          assert.equal(value(copy.querySelector(':scope > .subsection-description, :scope > .subsection-playback-meta'),'grid-row',width),'2',label);
+          assert.equal(value(title,'margin',width),'0',label);
+          assert.equal(value(title,'min-width',width),'0',label);
+          assert.equal(value(toggle,'padding',width),'0',label);
+          assert.equal(value(toggle,'margin',width),'0',label);
+          assert.equal(value(toggle,'min-height',width),'0',label);
+          assert.equal(value(toggle,'font',width),'inherit',label);
+          for(const description of copy.querySelectorAll('.subsection-description'))
+            assert.equal(value(description,'margin',width),'0',label);
+        }
+        for(const copy of nativeCopies){
+          const label=context+' / '+copy.querySelector('.subsection-native-title').textContent.trim();
+          assert.equal(value(copy,'display',width),'contents',label);
+          assert.equal(value(copy.parentElement,'display',width),mode==='basic'&&copy.parentElement.parentElement.id==='run-config'?'none':'grid',label);
+          assert.equal(value(copy.parentElement,'row-gap',width),'var(--subsection-description-gap)',label);
+          assert.equal(value(copy.querySelector('.subsection-description'),'grid-row',width),'2',label);
+          assert.equal(value(copy.querySelector('.subsection-description'),'margin',width),'0',label);
+        }
+      }
+    }
+  }finally{
+    for(const [attribute,original] of [['data-ui-mode',originalMode],['data-visual-style',originalStyle]]){
+      if(original===null)root.removeAttribute(attribute);else root.setAttribute(attribute,original);
+    }
+  }
+});
+
 test('numerical and 2D headings share the description and progress row without changing control targets',()=>{
   for(const [sectionId,stateId,progressId,contentId] of [
     ['simulation-playback','playback-status','playback-progress','simulation-playback-content'],
@@ -87,10 +147,10 @@ test('numerical and 2D headings share the description and progress row without c
       assert.equal(value(meta,'display',width),'flex');
       assert.equal(value(meta,'flex-wrap',width),'wrap');
       assert.equal(value(meta,'align-items',width),'baseline');
-      assert.equal(value(description,'flex',width),'1 1 auto');
+      assert.equal(value(description,'flex',width),'0 1 auto');
       assert.equal(value(status,'display',width),'inline-flex');
       assert.equal(value(status,'white-space',width),'nowrap');
-      assert.equal(value(status,'margin-inline-start',width),'auto');
+      assert.equal(value(status,'margin-inline-start',width),'0');
     }
   }
 });
@@ -112,6 +172,30 @@ test('shared descriptions stay readable at narrow widths and toolbars can wrap',
       assert.equal(value(tools,'order',width),'1');
       assert.equal(value(tools,'flex-wrap',width),'wrap',(tools.parentElement.parentElement.id||tools.className)+' at '+width+' px');
       assert.equal(value(tools,'max-width',width),'100%');
+    }
+  }
+});
+
+
+test('canonical grids keep wrapped tools beside the title and descriptions on their own row',()=>{
+  for(const header of document.querySelectorAll('.st-subsection-header')){
+    const title=header.querySelector('.subsection-heading-title,.subsection-native-title');
+    const description=header.querySelector('.subsection-playback-meta')||header.querySelector('.subsection-description');
+    const tools=header.querySelector(':scope > .fold-tools');
+    for(const width of [360,760,1440]){
+      const context=header.closest('.fold-card').id+' / '+width;
+      assert.equal(value(header,'display',width),'grid',context);
+      assert.equal(value(title,'grid-row',width),'1',context);
+      if(description){
+        assert.equal(value(description,'grid-row',width),'2',context);
+        assert.equal(value(description,'grid-column',width),'1 / -1',context);
+        assert.equal(value(description,'padding-inline-start',width),'var(--subsection-text-inset)',context);
+      }
+      if(tools){
+        assert.equal(value(tools,'grid-row',width),'1',context);
+        assert.equal(value(tools,'grid-column',width),'2',context);
+        assert.equal(value(tools,'flex-wrap',width),'wrap',context);
+      }
     }
   }
 });

@@ -85,6 +85,9 @@ function playbackHarness({factory=createNumericalPlayback,input=physicalInput()}
     updateNumericalEquipmentVisibility:()=>true,captureLiveEquipmentScrollAnchor:()=>null,
     restoreLiveEquipmentScrollAnchor(){},drawSimulationChart(){},drawEquipmentSpeedChart(){},
     renderLiveEquipment:sample=>equipmentFrames.push(sample),
+    // Grouping still runs from physical zone data; only mounting the unit
+    // spans is isolated here (real DOM coverage is in PlaybackUnits).
+    renderPlaybackNativeCounts(id,groups){element(id).textContent=String(groups[0]?.value??0);},
     refreshNumericalOverviewFromSample(){},updateLiveEquipmentStateBadges(){},
     findSampleIndexAtOrBefore(samples,second){let index=0;while(index+1<samples.length&&samples[index+1].virtualSecond<=second+1e-8)index++;return index;}
   });
@@ -273,6 +276,28 @@ test('changing visual FPS changes refresh scheduling without restarting or chang
   }finally{h.close();}
 });
 
+test('high-speed catch-up calculates between paints instead of waiting for each FPS interval',async()=>{
+  const input=physicalInput();input.run.durationSeconds=10;
+  const initial=createLinePlaybackSession(input).snapshot(),requests=[];
+  const h=playbackHarness({input,factory:()=>{
+    let time=0;
+    return {get time(){return time;},get finished(){return time>=10;},tickSeconds:1/120,durationSeconds:10,
+      close(){},async advanceTo(target,settings){
+        requests.push({target,budget:settings.budgetMs});time=Math.min(target,time+1);
+        return {...copy(initial),virtualSecond:time,chartSamples:[]};
+      }};
+  }});
+  try{
+    h.element('run-playback-rate').value='50000';h.element('run-display-fps').value='5';
+    h.context.startPlayback();await h.settle();await h.tick(200);
+    assert.equal(h.controllers[0].time,10,'Catch-up must complete all bounded requests inside one visual period');
+    assert(requests.length>=11,'The test exercises multiple partial calculation responses');
+    assert(requests.every(request=>request.budget===32),'Visual FPS must not reduce the work budget');
+    assert(h.renders.length<requests.length,'Intermediate calculations must not force expensive paints');
+    assert.equal(h.state.run.playing,false);assert.equal(h.state.run._displayedVirtualSecond,10);
+  }finally{h.close();}
+});
+
 test('reopening a saved view reconstructs its precise time even when the compact history has no matching frame',async()=>{
   const h=playbackHarness();
   try{
@@ -282,6 +307,7 @@ test('reopening a saved view reconstructs its precise time even when the compact
       syncPlaybackRounds(){},renderEditor(){},renderResultJsonPreview(){},renderSimulationAnalysis(){},shell:{sync(){}}});
     load(h.context,read('ClientSimulation'),['activatePersistentSimulation','expandStoredReplay',
       'copyRunConfiguration','playbackRoundFrame','playbackRoundPositions','captureSimulationView']);
+    load(h.context,read('ClientUtils'),['restorePlaybackSpeed']);
     h.context.activatePersistentSimulation('s1',true);
     assert.equal(h.state.run.sampleIndex,0,'Saved history has no frame at the exact view time');
     assert.equal(h.state.run._resumeVirtualSecond,3.725);

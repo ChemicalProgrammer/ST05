@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Worker} from 'node:worker_threads';
-import {createNumericalPlayback} from '../src/simulation/NumericalPlayback.js';
+import {createNumericalPlayback,numericalPlaybackWorkerMain} from '../src/simulation/NumericalPlayback.js';
 import {createLinePlaybackSession} from '../src/simulation/LineSimulationEngine.js';
 
 function input(durationSeconds=60){
@@ -42,6 +42,21 @@ async function reach(controller,time){
   return {frame,chart};
 }
 const cleanFrame=frame=>{const copy=structuredClone(frame);delete copy.chartSamples;return copy;};
+
+test('the isolated worker uses one complete bounded work budget without timer gaps',async()=>{
+  const messages=[],work=[];
+  const session={time:0,tickSeconds:1/120,durationSeconds:86400,finished:false,
+    snapshot(){return {virtualSecond:this.time,equipment:[]};},
+    advanceTo(target,options){work.push({target,...options});this.time=3;return this.snapshot();},
+    drainChartSamples(){return [];}};
+  const scope={postMessage:message=>messages.push(message)};
+  numericalPlaybackWorkerMain(scope,()=>session);
+  await scope.onmessage({data:{type:'init',id:0,input:input()}});
+  await scope.onmessage({data:{type:'advance',id:1,target:86400,budgetMs:32}});
+  assert.equal(work.length,1,'A worker request must not insert main-thread yield timers');
+  assert.equal(work[0].budgetMs,32);assert(work[0].maxTicks>2048);
+  assert.equal(messages.at(-1).frame.virtualSecond,3,'Only the computed partial state is returned');
+});
 
 test('demand-driven worker and yielding fallback preserve the same exact physical state and chart samples',async()=>{
   const model=input(),local=createNumericalPlayback(model),worker=createNumericalPlayback(model,{createWorker:realWorkerFactory()});

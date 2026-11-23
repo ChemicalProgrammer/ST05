@@ -129,7 +129,7 @@
       state.run.eventPage=0;
       applyScenarioRunInputs(simulation.dynamicConfig);
       state.run.configuration=simulation.results?copyRunConfiguration(simulation.dynamicConfig||{}):null;
-      document.getElementById('run-playback-rate').value=String([1,5,10,50,100,200,500,1000,10000,1000000].includes(Number(simulation.playbackRate))?simulation.playbackRate:1);
+      restorePlaybackSpeed(document.getElementById('run-playback-rate'),simulation.playbackRate);
       state.run.result = simulation.results?.replay ? expandStoredReplay(simulation.results.replay,simulation.results) : null;
       if(state.run.result&&simulation.results.batch)state.run.result.batch=cloneJson(simulation.results.batch);
       state.run.representative=state.run.result;

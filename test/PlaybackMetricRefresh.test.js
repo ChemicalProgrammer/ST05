@@ -32,6 +32,8 @@ test('Playback numeric cards refresh within 500ms independently of recorded samp
     window:{setTimeout(fn,ms){callback=fn;delay=ms;return 123;},clearTimeout(){}},
     performance:{now:()=>now},
     document:{getElementById:element},
+    // Native quantity grouping is real; its DOM rendering is covered by PlaybackUnits.
+    renderPlaybackNativeCounts:(id,groups)=>{element(id).textContent=String(groups[0].value);},
     STTimeControls:{setOutput(node,seconds){node.seconds=seconds;}},
     formatNumber:value=>String(value),
     formatRatePerMinute:value=>value.toFixed(1)+' /min',
@@ -41,7 +43,7 @@ test('Playback numeric cards refresh within 500ms independently of recorded samp
     setPlaybackStatus:status=>{element('playback-status').textContent=status;},
     renderPlaybackFrame:()=>{draws++;}
   };
-  loadFunctions(context,['flowUnitLabels','playbackFlowUnit','setPlaybackMetricUnit','playbackElapsed','playbackDisplaySecond','playbackVisualSample','refreshPlaybackMetricCards','schedulePlaybackMetricTick','stopPlaybackTimer']);
+  loadFunctions(context,['flowUnitLabels','playbackFlowUnit','playbackZoneFlowUnit','playbackNativeCounts','setPlaybackMetricUnit','playbackElapsed','playbackDisplaySecond','playbackVisualSample','refreshPlaybackMetricCards','schedulePlaybackMetricTick','stopPlaybackTimer']);
   vm.runInContext('schedulePlaybackMetricTick()',context);
   assert.ok(delay<=500&&delay>0,'Numeric UI interval must not exceed 500 milliseconds');
   for(const elapsed of [250,500,750]){
@@ -94,6 +96,7 @@ test('Numerical Live, Fast and Summary cards distinguish completion from paused 
   const state={run:{result,sampleIndex:1,playing:false}};
   const context={state,
     document:{getElementById:element},
+    renderPlaybackNativeCounts:(id,groups)=>{element(id).textContent=String(groups[0].value);},
     playbackDisplaySecond:sample=>sample.virtualSecond,
     STTimeControls:{setOutput(node,seconds){node.seconds=seconds;}},
     formatNumber:value=>String(value),
@@ -102,7 +105,7 @@ test('Numerical Live, Fast and Summary cards distinguish completion from paused 
     sum:values=>values.reduce((a,b)=>a+Number(b||0),0),
     setPlaybackStatus:status=>{element('playback-status').textContent=status;}
   };
-  loadFunctions(context,['flowUnitLabels','playbackFlowUnit','setPlaybackMetricUnit','instantaneousOutputRatePerSecond','formatInstantaneousOutputRate','playbackVisualSample','refreshPlaybackMetricCards']);
+  loadFunctions(context,['flowUnitLabels','playbackFlowUnit','playbackZoneFlowUnit','playbackNativeCounts','setPlaybackMetricUnit','instantaneousOutputRatePerSecond','formatInstantaneousOutputRate','playbackVisualSample','refreshPlaybackMetricCards']);
   vm.runInContext('refreshPlaybackMetricCards()',context);
   assert.equal(element('playback-status').textContent,'Completed','Finished Fast calculation is not paused');
   assert.equal(element('metric-instant-rate').textContent,'120','Fast mode uses recorded consecutive samples');

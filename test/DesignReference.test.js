@@ -118,7 +118,7 @@ test('KPI, resultado y escenario tienen nombres y reglas distintas',()=>{
   assert.match(web,/include_\('ComponentStyles'\)/);
 });
 
-test('Las unidades tienen un slot fijo y las subsecciones muestran descripciones',()=>{
+test('Las unidades ajustan inputs y conservan reservas de output; las subsecciones muestran descripciones',()=>{
   const styles=fs.readFileSync('apps-script/ComponentStyles.html','utf8');
   const tokens=fs.readFileSync('apps-script/DesignTokens.html','utf8');
   const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
@@ -126,9 +126,9 @@ test('Las unidades tienen un slot fijo y las subsecciones muestran descripciones
   const real=fs.readFileSync('apps-script/RealDataPanel.html','utf8');
   const products=fs.readFileSync('apps-script/Products.html','utf8');
   assert.match(tokens,/--time-unit-gap:\s*2px/);
-  assert.match(tokens,/--time-unit-slot:\s*3\.25em/);
-  assert.match(styles,/\.time-value-control > select \{flex:0 0 var\(--time-unit-slot\)!important/);
-  assert.match(styles,/\.st-time-output,\.live-equipment-card \.st-time-output\[data-variant=metric\]/);
+  assert.match(tokens,/--time-unit-slot:\s*3\.25ch/);
+  assert.match(styles,/grid-template-columns:minmax\(0,1fr\) max-content/);
+  assert.match(styles,/\.live-equipment-card \.st-time-output\[data-variant=metric\]/);
   assert.match(ui,/\.subsection-heading-title/);
   assert.match(ui,/\.subsection-description/);
   assert.match(ui,/\.subsection-divider/);
@@ -150,15 +150,15 @@ test('El encabezado es compacto, el estado no revela frames y las eficiencias mu
   const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
   const style=fs.readFileSync('apps-script/ComponentStyles.html','utf8');
   const playback=fs.readFileSync('apps-script/ClientPlayback.html','utf8');
-  assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?align-items:stretch;flex-direction:column;flex-wrap:nowrap/);
-  assert.match(ui,/-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2/);
+  assert.match(ui,/\.st-subsection > \.st-subsection-header \{[\s\S]*?display:grid/);
+  assert.doesNotMatch(ui,/-webkit-line-clamp:2;line-clamp:2/);
   assert.match(ui,/\.fold-native > summary \.subsection-heading-copy \{[\s\S]*?flex-direction:column;flex-wrap:nowrap/);
   assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status \{[\s\S]*?margin:0;[\s\S]*?white-space:nowrap/);
   assert.match(ui,/\.fold-heading > div:has\(> h3 > \.fold-toggle\)/);
   assert.match(ui,/#simulation-playback \.fold-heading #simulation-playback-status/);
   assert.match(ui,/#simulation-playback #playback-performance \{display:none!important;\}/);
   assert.match(web,/id="playback-performance"[^>]*aria-hidden="true" hidden/);
-  assert.match(playback,/setPlaybackStatus\(state\.run\.playing\?'Playing':\(sample\.virtualSecond>0\?'Paused':'Ready'\)\)/);
+  assert.match(playback,/setPlaybackStatus\(state\.run\.playing\?'Playing':\(finished\?'Completed':\(sample\.virtualSecond>0\?'Paused':'Ready'\)\)\)/);
   assert.doesNotMatch(playback,/setPlaybackStatus\([^\n]*client\.s_frame/);
   assert.match(style,/#simulation-playback-efficiencies #basic-efficiencies > \.metric-card--featured/);
   assert.match(style,/border-top:4px solid var\(--accent\)!important/);
@@ -167,12 +167,15 @@ test('El encabezado es compacto, el estado no revela frames y las eficiencias mu
   assert.equal((cards.match(/metric-card--result/g)||[]).length,10);
 });
 
-test('La descripción usa una sola línea en escritorio y hasta dos en pantallas estrechas',()=>{
+test('La descripción usa las líneas necesarias y conserva la separación compartida',()=>{
   const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
-  assert.match(ui,/\.fold-heading > \.subsection-heading-copy > \.subsection-description,[\s\S]*?display:-webkit-box;min-width:0;max-width:100%;margin:0;[\s\S]*?white-space:normal/);
-  assert.match(ui,/overflow:hidden;overflow-wrap:anywhere;white-space:normal;text-overflow:ellipsis;[\s\S]*?-webkit-line-clamp:2/);
-  assert.doesNotMatch(ui,/@media\(max-width:1100px\)[\s\S]*?subsection-description/);
-  assert.match(ui,/\.fold-heading > \.subsection-heading-copy,[\s\S]*?align-items:stretch;flex-direction:column;flex-wrap:nowrap/);
+  assert.match(ui,/overflow:visible;overflow-wrap:anywhere;white-space:normal;text-overflow:clip/);
+  assert.match(ui,/row-gap:var\(--subsection-description-gap\)/);
+  assert.match(ui,/grid-column:1 \/ -1;grid-row:2/);
+  assert.match(ui,/padding-inline-start:var\(--subsection-text-inset\)/);
+  const catalog=fs.readFileSync('apps-script/DesignReference.html','utf8');
+  assert.match(catalog,/STSubsection.create\(\{title, description, tools\}\)/);
+  assert.match(catalog,/data-design-token="--subsection-description-gap"/);
 });
 
 test('El Header utiliza su clase de navegación reutilizable',()=>{

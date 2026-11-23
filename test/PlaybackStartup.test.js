@@ -212,10 +212,10 @@ test('invalidating and rerunning one hour as one day preserves metric nodes, sel
     }
     assert.equal(h.node('metric-output-unit').textContent,'botellas');
     assert.equal(h.node('metric-rate-unit').textContent,'bpm');
-    assert.equal(h.node('metric-buffer-unit').textContent,'unidades');
+    assert.equal(h.node('metric-buffer-unit').textContent,'botellas');
     h.w.STLanguage.setLanguage('en');
     assert.equal(h.node('metric-output-unit').textContent,'bottles');
-    assert.equal(h.node('metric-buffer-unit').textContent,'units');
+    assert.equal(h.node('metric-buffer-unit').textContent,'bottles');
     assert.equal(JSON.stringify(archived),before,'Invalidation leaves the previous history object unchanged');
     assert.deepEqual(h.errors,[]);
   }finally{h.close();}

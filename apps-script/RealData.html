@@ -350,6 +350,7 @@ window.STRealData=(function(){
     const r=current();data=r?M.build(r,context.simulation,source(),selection,context.caseRecord):null;
     for(const id of ['real-data-export-json','real-data-export-html'])document.getElementById(id).disabled=!data;
     for(const [id,html] of [['real-data-comparison',data?comparisonHtml(data):''],['real-data-calibration',data?calibrationHtml(data):'']])document.getElementById(id).innerHTML=html||'<p class="empty">Sin registro seleccionado.</p>';
+    STSubsection.init(comparison);
     showComparisonExplorer(comparison,selectedGroup);
   }
   function render(caseRecord,simulation,live){

@@ -336,6 +336,7 @@ async function openCase(caseId, initialView) {
             STTimeControls.setOutput(value,NaN); // Keep the selected time unit.
           }else{
             (value.querySelector('b[id]')||value).textContent='—';
+            value.querySelectorAll('.playback-count-pair > b').forEach(function(number){number.textContent='—';});
           }
         });
       var progress=document.getElementById('playback-progress');
@@ -343,6 +344,7 @@ async function openCase(caseId, initialView) {
       var playbackStatus=document.getElementById('playback-status');
       if(playbackStatus)playbackStatus.textContent=typeof window!=='undefined'&&window.STLanguage?.translate?.('Ready')||'Ready';
       if(typeof updateNumericalEquipmentVisibility==='function')updateNumericalEquipmentVisibility();
+      if(state.uiView==='results')window.STResults?.render?.(null,state.activeCase,simulation);
     }
     function markCaseDirty(event) {
       if (!state.activeCase) return;

@@ -63,17 +63,34 @@
   .workspace-tab { background: var(--surface-soft); border: var(--size-1) solid var(--line); color: var(--muted); margin: 0; white-space: nowrap; }
   .workspace-tab-active { background: var(--accent); box-shadow: 0 0 0 var(--size-3) var(--accent-soft); color: #fff; font-weight: var(--weight-bold); }
   .workspace-tab-comparison { background: var(--surface-soft); }
-  .comparison-vertical { display: grid; gap: var(--size-1); margin-top: var(--size-16); }
+  .comparison-vertical { display:grid;gap:var(--subsection-gap);margin-block-start:var(--subsection-gap);min-width:0; }
   .comparison-context { border: var(--size-1) solid var(--line); border-left: var(--state-border-width) solid var(--accent); border-radius: var(--size-8); padding: var(--size-12); }
   .comparison-context-paired { background: var(--success-soft); border-color: var(--success); border-left-color: var(--running); }
   .comparison-context-caution { background: var(--warning-soft); border-color: var(--warning); border-left-color: var(--starved); }
-  .comparison-context strong { color: var(--ink); display: block; font-size: var(--text-13); }
-  .comparison-context p { color: var(--muted); font-size: var(--text-12); margin: var(--size-5) 0 0; }
+  .comparison-context strong { color:var(--ink);display:block;font-size:var(--font-body);font-weight:var(--weight-semibold); }
+  .comparison-context p { color:var(--muted);font-size:var(--font-secondary);line-height:var(--leading-body);margin:var(--space-2) 0 0; }
   .comparison-section { border: var(--size-1) solid var(--line); border-radius: var(--size-8); margin-top: var(--size-16); overflow: hidden; }
-  .comparison-section h3 { background: var(--surface-soft); color: var(--ink); font-size: var(--text-13); margin: 0; padding: var(--size-10); }
+  .comparison-section:not(.fold-card) > h3 { background: var(--surface-soft); color: var(--ink); font-size: var(--text-13); margin: 0; padding: var(--size-10); }
   .comparison-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: var(--size-12); background: var(--surface); padding: var(--size-10); }
   .comparison-row span { background: var(--surface); padding: var(--size-6); }
   .comparison-changed { border-left: var(--state-border-width) solid var(--warning); background: var(--warning-soft); }
+  /* Comparison uses the same subsection surfaces and result cards as Results.
+     The parent grid owns spacing, so folded children never double the gutter. */
+  #comparison-panel .comparison-section.fold-card { margin:0;overflow:visible; }
+  #comparison-panel .comparison-details-content { display:grid;gap:var(--space-3); }
+  #comparison-panel .comparison-highlights { padding:0;margin-block-end:var(--space-4); }
+  #comparison-panel .comparison-kpi h4 { margin:0 0 var(--space-3);font-size:var(--font-secondary);font-weight:var(--weight-regular);color:var(--muted); }
+  #comparison-panel .comparison-kpi-value > .metric-value { font-size:var(--font-section);font-weight:var(--weight-semibold); }
+  #comparison-panel .comparison-kpi-value .metric-unit { overflow-wrap:normal;white-space:nowrap; }
+  #comparison-panel .comparison-kpi-delta { font-size:var(--font-secondary);font-weight:var(--weight-regular); }
+  #comparison-panel .comparison-empty { margin:0;color:var(--muted);font-size:var(--font-secondary); }
+  #comparison-panel .table-scroll { margin:0;min-width:0;border:0;box-shadow:none; }
+  #comparison-panel table { width:100%;font-size:var(--font-secondary); }
+  #comparison-panel .comparison-values-table { min-width:420px; }
+  #comparison-panel .comparison-values-table :is(td,th) { overflow-wrap:anywhere; }
+  #comparison-panel .comparison-values-table tbody th { font-weight:var(--weight-medium);text-align:start; }
+  #comparison-panel tr.comparison-changed > :is(td,th) { background:var(--warning-soft); }
+  #comparison-panel tr.comparison-changed > :first-child { box-shadow:inset var(--state-border-width) 0 var(--warning); }
   .scenario-tab { background: var(--surface-soft); border: var(--size-1) solid var(--line); color: var(--muted); font-size: var(--text-12); margin: 0; padding: var(--size-8) var(--size-11); }
   .scenario-tab-active { background: var(--selected); border-color: var(--accent); color: var(--selected-text); font-weight: var(--weight-bold); }
   .equipment-json-details { border-top: var(--size-1) solid var(--line); margin-top: var(--size-12); padding-top: var(--size-10); }

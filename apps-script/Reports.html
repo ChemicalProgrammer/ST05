@@ -245,6 +245,16 @@ window.STReports=(function(){
     return [['Line runtime','lineRunSeconds'],['Effective runtime','lineEffectiveRuntimeSeconds'],['Rate Loss (gross shortfall)','lineRateLossSeconds'],['Above-reference recovery','lineRateRecoverySeconds'],['Net rate balance (loss - recovery)','lineNetRateBalanceSeconds']].map(([label,key])=>[label,metric(key)==null?null:metric(key)/60]);
   }
   const rateLossImpactHelp="Los valores corresponden a la salida final de la línea. Las cantidades equivalentes se calculan con la referencia de cada formato activo. Efecto en eficiencia = 100 × cantidad equivalente / producción ideal de toda la duración simulada. La pérdida tiene signo negativo y la recuperación positivo; el balance conserva el signo resultante. Se expresa en puntos porcentuales (pp), no en porcentaje de cambio ni automáticamente en AU. La recuperación puede reflejar descarga de acumuladores y no garantiza producción adicional recuperable. Se excluyen las paradas completas. En la vista promedio se calcula cada ronda antes de promediar. Los resultados antiguos solo se convierten si se identifica una referencia constante; de lo contrario hay que repetir la simulación. Estos valores no son una sumatoria de pérdidas por equipo.";
+  function rateLossOutputUnit(result){
+    // Product-aware runs already report bottle equivalents. Native runs keep
+    // their recorded output unit: this changes labels, never quantities.
+    if(result?.products)return 'bottles';
+    const raw=result?.unitOfFlow||result?.summary?.lineRateImpactOutputUnit||result?.replay?.unitOfFlow||'';
+    const unit=String(window.STFlowUnits?.labels(raw)?.count||raw).trim().toLowerCase();
+    if(['bottle','bottles','botella','botellas'].includes(unit))return 'bottles';
+    if(['case','cases','box','boxes','caja','cajas'].includes(unit))return 'cases';
+    return 'units';
+  }
   function rateLossImpact(result){
     const specs=[['Rate Loss (gross)','lineRateLossSeconds','lineRateLossOutputEquivalents','lineRateLossEfficiencyPp',-1],['Above-reference recovery','lineRateRecoverySeconds','lineRateRecoveryOutputEquivalents','lineRateRecoveryEfficiencyPp',1],['Net rate balance','lineNetRateBalanceSeconds','lineNetRateBalanceOutputEquivalents','lineNetRateBalanceEfficiencyPp',-1]];
     const batch=result?.batch,meanView=result?.resultView?.mode!=='round';
@@ -273,14 +283,16 @@ window.STReports=(function(){
       const values=[0,1,2].map(i=>measurements.every(m=>Number.isFinite(m[i]))?measurements.reduce((sum,m)=>sum+m[i],0)/measurements.length:null);
       return [spec[0],...values];
     });
-    const bottles=Boolean(result?.products)||['BOTTLE','BOTTLES'].includes(String(result?.unitOfFlow||result?.summary?.lineRateImpactOutputUnit||'').toUpperCase());
+    const bottles=rateLossOutputUnit(result)==='bottles';
     return {headers:['Metric','Equivalent time (min)',bottles?'Bottle equivalents':'Output equivalents','Efficiency impact (pp)'],rows};
   }
   function rateLossHighlights(result){
-    const impact=rateLossImpact(result),gross=impact.rows[0],bottles=impact.headers[2]==='Bottle equivalents';
+    const impact=rateLossImpact(result),gross=impact.rows[0],unit=rateLossOutputUnit(result);
+    const count=unit==='bottles'?'botellas':unit==='cases'?'cajas':'unidades';
+    const label=unit==='bottles'?'Botellas':unit==='cases'?'Cajas':'Unidades';
     const lostPoints=Number.isFinite(gross[3])?(-gross[3]||0):null;
     return {cards:[
-      {label:bottles?'Botellas equivalentes no producidas por rate loss':'Unidades equivalentes no producidas por rate loss',value:gross[2],unit:bottles?' botellas':' unidades',digits:2,help:'Pérdida bruta de producción equivalente en la salida final. Se suman los déficits con flujo positivo respecto a la referencia de cada formato, antes de descontar la recuperación. No son rechazos ni una predicción de producción recuperable.'},
+      {label:label+' equivalentes no producidas por rate loss',value:gross[2],unit:' '+count,digits:2,help:'Pérdida bruta de producción equivalente en la salida final. Se suman los déficits con flujo positivo respecto a la referencia de cada formato, antes de descontar la recuperación. No son rechazos ni una predicción de producción recuperable.'},
       {label:'Producción ideal perdida por rate loss',value:lostPoints,unit:' %',digits:3,help:'100 × cantidad equivalente no producida / producción ideal de toda la duración simulada. La producción ideal considera la referencia y duración de cada formato. Es pérdida bruta; excluye paradas completas.'},
       {label:'Eficiencia perdida por rate loss',value:lostPoints,unit:' pp',digits:3,help:'Puntos porcentuales de eficiencia perdidos: 100 × cantidad equivalente no producida / producción ideal simulada. Ejemplo: perder 5 pp llevaría una eficiencia del 80 % al 75 %, manteniendo los demás componentes constantes. No es una reducción relativa del 5 % ni automáticamente una pérdida de AU.'}
     ],note:'Pérdida bruta de la línea, antes de descontar la recuperación por encima de la referencia. El porcentaje de producción ideal perdida y los puntos porcentuales de eficiencia tienen el mismo valor numérico porque comparten denominador; no se suman. Las paradas completas se contabilizan aparte. No se suman las pérdidas de equipos. El balance neto se muestra en el desglose inferior. — significa que falta una referencia válida o que este resultado debe recalcularse.'};

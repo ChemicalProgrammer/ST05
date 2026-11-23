@@ -52,7 +52,7 @@ function metricParts(h){
     const value=h.node(id),unit=h.node(id+'-unit');
     assert.equal(value?.tagName,'B',id+' keeps the numeric value in its own bold element');
     assert.equal(unit?.tagName,'SPAN',id+' has a separate unit label');
-    assert.ok(value.parentElement.matches('strong.playback-metric-value'));
+    assert.ok(value.closest('strong.playback-metric-value'));
     assert.equal(unit.parentElement,value.parentElement,'The unit and number share their result wrapper');
     assert.ok(unit.classList.contains('playback-metric-unit'));
     return [id,{value,unit,wrapper:value.parentElement}];
@@ -81,14 +81,14 @@ test('playback values and units survive repeated updates in the shipped metric m
       assert.equal(h.node('metric-output-unit').textContent,'bottles',
         'The recorded result unit takes precedence over the current case unit');
       for(const id of ['metric-instant-rate','metric-rate'])assert.equal(h.node(id+'-unit').textContent,'bpm');
-      for(const id of ['metric-buffer','metric-overflow'])assert.equal(h.node(id+'-unit').textContent,'units',
-        'Native zone item totals are not labeled as bottle equivalents');
+      for(const id of ['metric-buffer','metric-overflow'])assert.equal(h.node(id+'-unit').textContent,'bottles',
+        'A homogeneous bottle line identifies its native quantity');
     }
     assert.equal(JSON.stringify(h.w.state.run.result),before,'Presentation updates leave recorded quantities unchanged');
   }finally{h.close();}
 });
 
-test('case output uses cpm while mixed native inventory and overflow remain units',()=>{
+test('case output uses cpm while bottle and case inventory and overflow remain separate quantities',()=>{
   const h=harness('cases'),original=metricParts(h);
   try{
     h.w.state.activeCase.unitOfFlow='bottles';
@@ -107,10 +107,14 @@ test('case output uses cpm while mixed native inventory and overflow remain unit
       assert.equal(h.node('metric-instant-rate-unit').textContent,'cpm');
       assert.equal(h.node('metric-rate').textContent,format(480));
       assert.equal(h.node('metric-rate-unit').textContent,'cpm');
-      assert.equal(h.node('metric-buffer').textContent,format(1208));
-      assert.equal(h.node('metric-overflow').textContent,'5');
-      assert.equal(h.node('metric-buffer-unit').textContent,'units');
-      assert.equal(h.node('metric-overflow-unit').textContent,'units');
+      assert.equal(h.node('metric-buffer').textContent,format(1200));
+      assert.equal(h.node('metric-overflow').textContent,'2');
+      assert.equal(h.node('metric-buffer-unit').textContent,'bottles');
+      assert.equal(h.node('metric-overflow-unit').textContent,'bottles');
+      assert.equal(h.node('metric-buffer-native-1').textContent,'8');
+      assert.equal(h.node('metric-overflow-native-1').textContent,'3');
+      assert.equal(h.node('metric-buffer-native-1-unit').textContent,'cases');
+      assert.equal(h.node('metric-overflow-native-1-unit').textContent,'cases');
     }
     delete h.w.state.run.result.unitOfFlow;
     h.refresh(2);
@@ -130,15 +134,14 @@ test('Spanish localization translates dynamic unit labels without replacing nume
       h.refresh(index);
       if(localizedUnitText)for(const [id,textNode] of localizedUnitText){
         assert.equal(h.node(id+'-unit').firstChild,textNode,'An unchanged unit does not rewrite its translated text');
-        assert.equal(h.node(id+'-unit').textContent,id==='metric-output'?'botellas':
-          ['metric-buffer','metric-overflow'].includes(id)?'unidades':'bpm');
+        assert.equal(h.node(id+'-unit').textContent,['metric-output','metric-buffer','metric-overflow'].includes(id)?'botellas':'bpm');
       }
       await new Promise(resolve=>w.setTimeout(resolve,0));
       assert.equal(h.node('metric-output-unit').textContent,'botellas');
       assert.equal(h.node('metric-instant-rate-unit').textContent,'bpm');
       assert.equal(h.node('metric-rate-unit').textContent,'bpm');
-      assert.equal(h.node('metric-buffer-unit').textContent,'unidades');
-      assert.equal(h.node('metric-overflow-unit').textContent,'unidades');
+      assert.equal(h.node('metric-buffer-unit').textContent,'botellas');
+      assert.equal(h.node('metric-overflow-unit').textContent,'botellas');
       assert.equal(h.node('metric-output').textContent,format(h.samples[index].outputCount));
       assertSameMetricParts(h,original);
       localizedUnitText=new Map(metricIds.map(id=>[id,h.node(id+'-unit').firstChild]));
@@ -148,11 +151,11 @@ test('Spanish localization translates dynamic unit labels without replacing nume
     await new Promise(resolve=>w.setTimeout(resolve,0));
     assert.equal(h.node('metric-output-unit').textContent,'cajas');
     assert.equal(h.node('metric-rate-unit').textContent,'cpm');
-    assert.equal(h.node('metric-buffer-unit').textContent,'unidades');
+    assert.equal(h.node('metric-buffer-unit').textContent,'cajas');
     assertSameMetricParts(h,original);
     w.STLanguage.setLanguage('en');
     assert.equal(h.node('metric-output-unit').textContent,'cases');
-    assert.equal(h.node('metric-buffer-unit').textContent,'units');
+    assert.equal(h.node('metric-buffer-unit').textContent,'cases');
     assertSameMetricParts(h,original);
     w.STLanguage.setLanguage('es');
     w.state.run.result.unitOfFlow='units';
@@ -162,6 +165,72 @@ test('Spanish localization translates dynamic unit labels without replacing nume
     assert.equal(h.node('metric-instant-rate-unit').textContent,'unid/min');
     assert.equal(h.node('metric-rate-unit').textContent,'unid/min');
     assertSameMetricParts(h,original);
+  }finally{h.close();}
+});
+
+test('compact zone metadata resolves native counts and keeps mixed quantity nodes stable',()=>{
+  const h=harness('bottles');
+  try{
+    h.w.state.activeCase.equipment=[
+      {id:'bottle-conveyor',unitOfFlow:'units',processData:{flowUnits:{output:'BOTTLES'}}},
+      {id:'case-conveyor',unitOfFlow:'units',processData:{flowUnits:{output:'CASES'}}}
+    ];
+    h.w.state.run.result.zoneDefinitions={
+      a:{ownerEquipmentId:'bottle-conveyor'},b:{ownerEquipmentId:'case-conveyor'}
+    };
+    h.samples[1].buffers=[385,12];
+    h.samples[1].accumulationZones=[{id:'a',overflowUnits:27},{id:'b',overflowUnits:4}];
+    const before=JSON.stringify(h.w.state.run.result);h.refresh(1);
+    assert.equal(h.node('metric-buffer').textContent,'385');
+    assert.equal(h.node('metric-buffer-unit').textContent,'bottles');
+    assert.equal(h.node('metric-buffer-native-1').textContent,'12');
+    assert.equal(h.node('metric-buffer-native-1-unit').textContent,'cases');
+    assert.equal(h.node('metric-overflow').textContent,'27');
+    assert.equal(h.node('metric-overflow-native-1').textContent,'4');
+    const counts=[...h.w.document.querySelectorAll('.playback-count-pair')];
+    h.refresh(1);h.refresh(1);
+    assert.deepEqual([...h.w.document.querySelectorAll('.playback-count-pair')],counts);
+    assert.equal(JSON.stringify(h.w.state.run.result),before,'Native grouping never changes recorded quantities');
+  }finally{h.close();}
+});
+
+test('recorded native zone units take precedence over edited equipment units',()=>{
+  const h=harness('bottles');
+  try{
+    h.w.state.activeCase.equipment=[{id:'belt',unitOfFlow:'BOTTLES',processData:{flowUnits:{output:'BOTTLES'}}}];
+    h.w.state.run.result.equipmentMetrics={belt:{unitOfFlow:'cases'}};
+    h.samples[1].buffers=[12];
+    h.samples[1].accumulationZones=[{id:'belt-zone',ownerEquipmentId:'belt',overflowUnits:3}];
+    h.refresh(1);
+    assert.equal(h.node('metric-buffer').textContent,'12');
+    assert.equal(h.node('metric-buffer-unit').textContent,'cases');
+    h.samples[1].equipment=[{id:'belt',unitOfFlow:'bottles'}];h.refresh(1);
+    assert.equal(h.node('metric-buffer-unit').textContent,'bottles','The current calculated frame overrides the terminal metrics');
+    h.samples[1].accumulationZones[0].packageUnit='CASES';h.refresh(1);
+    assert.equal(h.node('metric-buffer-unit').textContent,'cases','Explicit zone packaging has the most specific unit');
+    assert.equal(h.node('metric-overflow').textContent,'3','Native presentation never changes measured quantities');
+  }finally{h.close();}
+});
+
+test('conveyor detail quantities retain their native units and translate without changing numbers',async()=>{
+  const h=harness(),w=h.w;
+  try{
+    const zone={id:'case-belt',ownerEquipmentId:'belt',name:'Case conveyor',packageUnit:'CASES',
+      physicalModelEnabled:true,inventoryUnits:12,capacityUnits:24,inTransitUnits:5,waitingUnits:7,
+      fillPercent:50,overflowUnits:3,state:'FLOWING',geometry:{}};
+    const panel=w.createAccumulationZonePanel(zone);w.document.body.append(panel);
+    const selectors=['.zone-inventory','.zone-transit','.zone-waiting','.zone-overflow'];
+    const expected=['12 / 24 cases (50%)','5 cases','7 cases','3 cases'];
+    selectors.forEach((sel,index)=>assert.equal(panel.querySelector(sel).textContent,expected[index]));
+    const labels=selectors.map(sel=>panel.querySelector(sel+' .metric-unit'));
+    w.eval(source('Language').replace(/^<script>/,'').replace(/<\/script>\s*$/,''));
+    w.STLanguage.setLanguage('es');
+    labels.forEach(label=>assert.equal(label.textContent,'cajas'));
+    zone.inventoryUnits=13;w.updateAccumulationZonePanel(panel,zone);
+    await new Promise(resolve=>w.setTimeout(resolve,0));
+    assert.equal(panel.querySelector('.zone-inventory').textContent,'13 / 24 cajas (50%)');
+    selectors.forEach((sel,index)=>assert.equal(panel.querySelector(sel+' .metric-unit'),labels[index]));
+    w.STLanguage.setLanguage('en');labels.forEach(label=>assert.equal(label.textContent,'cases'));
   }finally{h.close();}
 });
 

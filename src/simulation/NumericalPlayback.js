@@ -2,7 +2,8 @@ import { createLinePlaybackSession } from './LineSimulationEngine.js';
 
 // A demand-driven calculation cursor, independent of the compact saved replay.
 // There is no producer running ahead of the reader and no unbounded job queue.
-// One request owns at most 32 ms of work by default, in shorter yielding chunks.
+// One request owns at most 32 ms of work by default. Only the main-thread
+// fallback needs shorter yielding chunks; the isolated worker can use its budget.
 export function createNumericalPlayback(input, options = {}) {
   let modelInput=typeof structuredClone==='function'?structuredClone(input):JSON.parse(JSON.stringify(input));
   const createSession=options.createSession||createLinePlaybackSession;
@@ -142,7 +143,6 @@ export function createNumericalPlayback(input, options = {}) {
 // engine, not on UI, scenario planning or the optional Python runtime.
 export function numericalPlaybackWorkerMain(scope=self,createSession=createLinePlaybackSession){
   let session=null,busy=false;
-  const now=()=>typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
   const send=(type,id,frame)=>scope.postMessage({type,id,frame,time:session.time,
     finished:session.finished,tickSeconds:session.tickSeconds,durationSeconds:session.durationSeconds});
   scope.onmessage=async event=>{
@@ -161,14 +161,12 @@ export function numericalPlaybackWorkerMain(scope=self,createSession=createLineP
       const goal=target>=session.durationSeconds-1e-8?session.durationSeconds:
         Math.floor((target+1e-8)/session.tickSeconds)*session.tickSeconds;
       const budget=Number.isFinite(task.budgetMs)?Math.max(1,Math.min(50,task.budgetMs)):32;
-      const deadline=now()+budget;
       let frame=session.snapshot();
-      while(!session.finished&&session.time+1e-8<goal){
-        const previous=session.time;
-        frame=session.advanceTo(goal,{budgetMs:Math.min(8,Math.max(1,deadline-now())),maxTicks:2048});
-        if(session.time<=previous+1e-10||session.finished||session.time+1e-8>=goal||now()>=deadline)break;
-        await new Promise(resolve=>setTimeout(resolve,0));
-      }
+      // The worker has no DOM to keep responsive. Timer yields here merely
+      // discard its bounded work budget and can trigger nested-timer clamping.
+      // The engine still checks elapsed time every 16 physical ticks.
+      if(!session.finished&&session.time+1e-8<goal)
+        frame=session.advanceTo(goal,{budgetMs:budget,maxTicks:Number.MAX_SAFE_INTEGER});
       send('frame',task.id,{...frame,chartSamples:session.drainChartSamples?.()||[]});
     }catch(error){scope.postMessage({type:'error',id:task.id,message:error.message,code:error.code,details:error.details});}
     finally{busy=false;}

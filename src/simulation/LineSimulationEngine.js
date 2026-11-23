@@ -1,4 +1,4 @@
-import { planDiscretePackages, addDiscretePackets, advancePackagePositions } from './DiscretePackageEngine.js';
+import { planDiscretePackages, addDiscretePackets } from './DiscretePackageEngine.js';
 import { stopReliabilityProfile, selectReliabilityStop } from './StopReliability.js';
 import { applyProductProfile, productUnitFactor, productFlowUnit, productPackSize } from './ProductProfiles.js';
 import { plantCalendarSchedule, resolvePlannedStops } from './PlantCalendarSchedule.js';
@@ -589,34 +589,56 @@ function initializeInitialMaterialStates(runtime) {
 function advanceDiscreteConveyor(runtime,zone,stopped){
   zone.discreteItems??=[];
   const items=zone.discreteItems,tick=runtime.run.tickSeconds;
-  const previous=items.map(item=>item.x);
-  advancePackagePositions(items,zone.usableLengthMm,zone.productLengthMm,zone.accumulatedPitchMm,
-    stopped?0:zone.conveyorSpeedMmPerSecond,tick);
-  let queued=0;
-  for(const item of items){
-    const target=zone.usableLengthMm-zone.productLengthMm/2-queued*zone.accumulatedPitchMm;
-    if(item.x<target-1e-6)break;
-    queued++;
+  const half=zone.productLengthMm/2,end=zone.usableLengthMm-half;
+  const pitch=zone.accumulatedPitchMm,speed=zone.conveyorSpeedMmPerSecond;
+  const distance=(stopped?0:speed)*tick,endSecond=runtime.virtualSecond+tick;
+  const backup=zone.hasBackupSensor,prime=zone.hasPrimeSensor;
+  const backupPosition=zone.backupSensorPositionMm,primePosition=zone.primeSensorPositionMm;
+  const canPack=pitch+1e-6<zone.productPitchMm;
+  const stationary=zone.stationaryPacked;
+  if(stationary&&stationary.count===items.length&&stationary.first===items[0]
+    &&stationary.last===items.at(-1)&&stationary.end===end&&stationary.pitch===pitch
+    &&stationary.half===half&&stationary.productPitch===zone.productPitchMm
+    &&stationary.backup===backup&&stationary.backupPosition===backupPosition){
+    // A fully packed queue cannot move until a package is removed. No transit
+    // positions or sensor crossings change, but debounce/start timers still
+    // receive every physical tick. Format changes build new zone runtimes.
+    zone.waitingUnits=items.length;zone.physicalPrimeReady=items.length>=zone.primeTriggerWaitingUnits;
+    updatePrimeSensorSignal(runtime,zone);
+    updateBackupSensorSegment(runtime,zone,tick,stationary.occupied,endSecond);
+    return;
+  }
+  let limit=end,previousCenter,queued=0,beam=false,packed=false,unmoved=true;
+  // Packages remain ordered downstream-to-upstream. Fuse the position, queue
+  // and sensor passes without changing the integration step or crossing rules.
+  // Keeping the previous center in a local also avoids an array per belt/tick.
+  for(let index=0;index<items.length;index++){
+    const item=items[index],oldCenter=item.x;
+    item.x=Math.min(limit,oldCenter+distance);
+    if(item.x!==oldCenter)unmoved=false;
+    limit=item.x-pitch;
+    if(queued===index&&item.x>=end-index*pitch-1e-6)queued++;
+    item.units=1;item.initialUnits=1;item.entryDurationSeconds=0;
+    item.arrivesAtVirtualSecond=endSecond+(end-item.x)/speed;
+    if(backup&&oldCenter+half<backupPosition&&item.x+half>=backupPosition){
+      zone.backupPassedUnits++;zone.backupLastPassAtVirtualSecond=endSecond;
+    }
+    if(prime&&oldCenter+half<primePosition&&item.x+half>=primePosition){
+      zone.primePassedUnits++;zone.primeLastPassAtVirtualSecond=endSecond;
+    }
+    if(backup&&!beam&&Math.abs(item.x-backupPosition)<=half+1e-6)beam=true;
+    if(canPack&&!packed&&index>0&&previousCenter-item.x<=pitch+1e-6
+      &&backupPosition>=item.x&&backupPosition<=previousCenter)packed=true;
+    previousCenter=item.x;
   }
   zone.waitingUnits=queued;
   zone.transit=items.slice(queued);
-  for(const [index,item] of items.entries()){
-    item.units=1;item.initialUnits=1;item.entryDurationSeconds=0;
-    item.arrivesAtVirtualSecond=runtime.virtualSecond+tick+(zone.usableLengthMm-zone.productLengthMm/2-item.x)/zone.conveyorSpeedMmPerSecond;
-    for(const sensor of zone.transportPhotoeyes){
-      const position=zone[sensor.position];
-      if(previous[index]+zone.productLengthMm/2<position&&item.x+zone.productLengthMm/2>=position){
-        zone[sensor.units]++;zone[sensor.last]=runtime.virtualSecond+tick;
-      }
-    }
-  }
-  zone.physicalPrimeReady=items.length>=zone.primeTriggerWaitingUnits&&items.slice(0,zone.primeTriggerWaitingUnits).every((item,index)=>
-    item.x>=zone.usableLengthMm-zone.productLengthMm/2-index*zone.accumulatedPitchMm-1e-6);
+  zone.physicalPrimeReady=queued>=zone.primeTriggerWaitingUnits;
+  zone.stationaryPacked=unmoved&&items.length>0&&queued===items.length
+    ?{count:items.length,first:items[0],last:items.at(-1),end,pitch,half,
+      productPitch:zone.productPitchMm,backup,backupPosition,occupied:beam||packed}:null;
   updatePrimeSensorSignal(runtime,zone);
-  const beam=zone.hasBackupSensor&&items.some(item=>Math.abs(item.x-zone.backupSensorPositionMm)<=zone.productLengthMm/2+1e-6);
-  const packed=zone.accumulatedPitchMm+1e-6<zone.productPitchMm&&items.some((item,index)=>index>0&&
-    items[index-1].x-item.x<=zone.accumulatedPitchMm+1e-6&&zone.backupSensorPositionMm>=item.x&&zone.backupSensorPositionMm<=items[index-1].x);
-  updateBackupSensorSegment(runtime,zone,tick,beam||packed,runtime.virtualSecond+tick);
+  updateBackupSensorSegment(runtime,zone,tick,beam||packed,endSecond);
 }
 
 function advanceAccumulationZones(runtime) {
@@ -1565,6 +1587,9 @@ function getZoneInventory(zone) {
 }
 
 function getTransitUnits(zone) {
+  // Discrete packets always contain one whole package, so the exact integer
+  // count is available without summing every package again on every tick.
+  if(zone.discreteItems)return zone.transit.length;
   // Keep the original addition order; incremental inventory counters would
   // accumulate different floating-point errors over long replications.
   let total = 0;

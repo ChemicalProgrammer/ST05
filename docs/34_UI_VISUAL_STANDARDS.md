@@ -46,12 +46,39 @@ Prefiere `gap` en grillas y contenedores flexibles. Usa márgenes lógicos para 
 | Herramientas | `.fold-tools` | Botones/iconos alineados a la derecha |
 | Contenido | `.fold-content` | Contenedor con separación uniforme respecto al encabezado |
 
+### Constructor con parámetros
+
+La implementación vive en [`Subsection.html`](../apps-script/Subsection.html). Una lista de clases CSS por sí sola no construye un componente: el constructor controla la estructura, y los estilos/tokens compartidos controlan su apariencia.
+
+```js
+const bloque = STSubsection.create({
+  title: 'Equipment performance',
+  description: 'Review machine and conveyor performance.',
+  tools: [
+    { id: 'export-example', label: 'Export', icon: 'upload', onClick: exportResults }
+  ],
+  open: true,
+  className: 'comparison-section'
+});
+contenedor.append(bloque.section);
+bloque.body.append(tabla);
+```
+
+`title`, `description` y `tools` son los tres parámetros visuales. `description` y `tools` son opcionales. Las opciones `id`, `titleId`, `contentId`, `className`, `open`, `native` y `content` conservan la identidad, variante semántica y contenido de cada instancia. `native` es `true` por defecto (`details/summary`); `native:false` crea la variante con botón que usa el plegado compartido de `ClientCore`. La función devuelve `{section, body, header, title, description, tools}`.
+
+Los títulos/descripciones de tipo string se insertan con texto seguro, nunca como HTML. `tools` acepta una barra DOM existente o un array de nodos/descriptores `{id, label, icon, text, pressed, disabled, onClick}`. Cada botón mantiene su nombre accesible. `pressed` define el estado inicial y su callback controla los cambios posteriores. `content` acepta nodos, arrays o texto.
+
+`STSubsection.init(root)` adapta las subsecciones estáticas existentes al mismo contrato mediante `enhance(section)` y el mismo constructor interno de encabezados. Es idempotente y conserva IDs, valores, listeners, contenido y estado abierto/cerrado. En el arranque se adaptan las 27 subsecciones estáticas; las secciones dinámicas de Comparación/Resultados se crean directamente con `create()`. No hay un observador que recorra el DOM en cada cuadro de simulación. Para nuevos controles dinámicos usa `create()`; para incorporar un fragmento heredado, llama `init(fragmento)` explícitamente.
+
+Todos los encabezados adaptados usan una rejilla común: título y herramientas en la primera fila, descripción en la segunda fila completa. El grupo de herramientas puede envolver sus botones sin insertarse entre título y descripción. El título se alinea al final de su fila; `--subsection-description-gap` controla la separación de 4 px. El chevron y la sangría textual se derivan de `--subsection-marker-size` y `--subsection-text-inset`, tanto en la variante nativa como en la de botón. Cambiar estos tokens o la implementación central actualiza todas las instancias; los casos específicos no deben redefinir el margen.
+
 ### Regla única de espaciado y superficie de Subsecciones
 
 - **Lienzo exterior eliminado:** las secciones principales del workspace (`.workspace-content > section.card`) funcionan como contenedores de distribución transparentes, sin tarjeta, borde ni sombra propios. El fondo original `--surface` se traslada a la superficie de cada Subsección (`.fold-card` y `.fold-native`). **No cambies todavía** los colores de las tarjetas de datos, inputs o controles internos.
 - **Primera Subsección de una pantalla:** no suma margen superior propio. El workspace aporta el **mismo margen arriba, a la izquierda y a la derecha**, controlado **exclusivamente por `--workspace-gutter` en `apps-script/DesignTokens.html`** (24 px escritorio; 12 px en pantallas estrechas). `--page-padding` es un alias de compatibilidad, no una segunda fuente de configuración. El fondo alrededor de cada Subsección es `--page`.
 - **Entre Subsecciones consecutivas:** `--subsection-gap = var(--workspace-gutter)` (24 px escritorio, 12 px pantallas estrechas); el mismo valor que los márgenes exterior superior y laterales, sin sumar márgenes de cada bloque.
 - **Contenedores con `gap`:** Formats organiza `.product-subsection` dentro de un contenedor flex que ya usa `--subsection-gap`; por lo tanto, sus Subsecciones deben tener `margin:0` y no heredar márgenes de `.settings-section` ni del selector general de Subsecciones. En Conveyors, `#basic-run-options` se oculta con CSS y no debe dejar un margen fantasma delante de Equipment.
+- **Título a descripción:** `--subsection-description-gap = --space-1` (4 px). No depende de la altura de los iconos ni de que el grupo de herramientas envuelva.
 - **Interior de la Subsección:** `--subsection-padding = --space-4` (16 px) en los cuatro lados.
 - **Encabezado al contenido:** `--space-3` (12 px). Subsecciones colapsadas u ocultas no deben reservar espacio.
 - **Herramientas del encabezado:** por defecto todos los controles de `.fold-tools` y `.button-row` se mantienen **en una sola fila**, incluidos selector y botones de Registro. Solo cuando el espacio es insuficiente se permite dividir el grupo en otra fila; nunca deben aparecer columnas de herramientas por defecto.
@@ -59,7 +86,7 @@ Prefiere `gap` en grillas y contenedores flexibles. Usa márgenes lógicos para 
 - **Pantallas sin tarjeta externa**, como Simulation 2D: el contenedor debe aportar el inset superior equivalente; no debe compensarse duplicando `margin-top` en cada Subsección.
 - **Temas Classic y Elegant, Basic y Advance:** se aplica el mismo contrato. Ningún tema debe restaurar el lienzo exterior ni duplicar márgenes. Los cambios futuros de paleta deben separarse de la estructura del componente.
 
-Implementación central: [UiStandards.html](../apps-script/UiStandards.html), sección **«Subsección / Subsection · ritmo compartido de pantallas»**. La adaptación de `workspace-content` del tema Elegant vive en [ElegantStyles.html](../apps-script/ElegantStyles.html). Al agregar una nueva Subsección, reutiliza estas clases y **evita** márgenes superiores particulares salvo una excepción justificada y documentada.
+Implementación central: [UiStandards.html](../apps-script/UiStandards.html), sección **«Subsección / Subsection · ritmo compartido de pantallas»**. La adaptación de `workspace-content` del tema Elegant vive en [ElegantStyles.html](../apps-script/ElegantStyles.html). Al agregar una nueva Subsección, usa `STSubsection.create()`; conserva los tokens globales y documenta cualquier variante que requiera una diferencia de comportamiento.
 
 ## Catálogo de componentes reutilizables
 
@@ -67,9 +94,9 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 
 | Nombre oficial | Clase/módulo | Función y alcance |
 | --- | --- | --- |
-| **Subsección** | `.fold-card`, `.fold-heading`, `.fold-toggle`, `.fold-content`, `.fold-tools` | Contenedor plegable de información con una sola barra de herramientas |
+| **Subsección** | `STSubsection.create({title, description, tools})`, `STSubsection.init(root)` | Contenedor plegable de información con una sola barra de herramientas |
 | **Título de subsección** | `.subsection-heading-title` | Título seminegrita en color primario; se mantiene legible al plegar |
-| **Descripción de subsección** | `.subsection-description`, `.subsection-heading-copy` | Texto en una línea independiente, debajo del título. Se ajusta hasta dos líneas cuando el espacio es reducido; nunca comparte renglón con el título |
+| **Descripción de subsección** | `.subsection-description`, `.subsection-heading-copy` | Texto en una línea independiente, debajo del título. Se ajusta al ancho disponible sin ocultar líneas; nunca comparte renglón con el título |
 | **Separador interno de subsección** | `.subsection-fieldset`, `.subsection-divider` | Agrupa controles interiores con una línea fina y una leyenda seminegrita en color primario |
 | **Pestaña de navegación principal** | `.app-section-tab`, `#basic-navigation` | Botones de Equipo/Conveyors/Simulation/Results en el header, con `aria-current=page` para la vista activa |
 | **Pestañas de cuadro de diálogo** | `.settings-tabs [role=tab]` | Navegación interna de Settings y del selector de tema, con `aria-selected` |
@@ -133,8 +160,8 @@ El catálogo mantiene los nombres oficiales en la **tercera columna de todas las
 - **Protección de datos del editor:** al abrir un caso se restaura su nombre y se montan las tarjetas antes del cambio de presentación Equipment/Conveyors. Si durante una simulación o guardado las tarjetas de Equipment no están montadas, se conserva el modelo de máquinas/conveyors del caso (no se interpreta como eliminación), y las vistas previas usan una copia de ese modelo. Sólo se rechaza una lista **parcialmente** montada para evitar pérdida de equipos; Settings sigue pudiendo cerrarse sin perder el nombre original.
 - **Indicador global de errores:** `#header-errors` muestra un botón rojo sólido `#header-error-button` con contador y etiqueta accesible mientras existan errores activos. La prioridad visual se mantiene en modo claro y oscuro, incluso frente a estilos genéricos del encabezado. El botón continúa abriendo el detalle del error.
 - **Valor–unidad de entrada:** `.time-value-control` usa dos columnas: caja numérica flexible y unidad de ancho natural. El ancho exterior permanece constante; una unidad más larga reduce la caja y una más corta la amplía, conservando `--input-unit-gap` (8 px). Se mantienen el número escrito, el selector nativo, el foco y los nodos existentes. Un texto auxiliar oculto y excluido de accesibilidad mide la opción seleccionada mediante el propio layout, sin medir píxeles ni reservar el ancho de la opción más larga. `STTimeControls.syncInputs(root)` prepara controles nuevos dentro de un contenedor o el control recibido; se ejecuta al iniciar, cambiar de unidad o idioma y restaurar opciones de simulación. Las unidades fijas siguen su ancho natural sin JavaScript.
-- **Valor–unidad de salida:** se conserva `--time-unit-gap` (2 px) y `--time-unit-slot` (3.25 ch) en outputs generales. Los contadores de estados mantienen su reserva numérica por horizonte y su ancho de unidad específico. El ajuste de inputs no cambia las reservas ni las actualizaciones de las tarjetas.
-- **Subsección y descripción:** el título ocupa una línea independiente; la descripción comienza debajo, alineada al **texto del título después del chevron**, no al borde exterior del icono. En Simulation Playback, la **descripción, el estado y el porcentaje** comparten el segundo renglón cuando hay espacio suficiente; únicamente envuelven cuando falta ancho. En pantallas estrechas, la descripción puede ocupar hasta dos líneas. Las herramientas permanecen a la derecha y no alteran la jerarquía del título.
+- **Valor–unidad de salida:** se conserva `--time-unit-gap` (2 px) y `--time-unit-slot` (3.25 ch) en outputs generales. Los contadores de estados mantienen su reserva numérica por horizonte y su ancho de unidad específico. Los cambios deliberados de unidad animan el ajuste durante 180 ms; los contadores compactos conservan su reserva y usan una transición sutil. Las actualizaciones de cifras durante la reproducción no disparan animaciones. La preferencia de movimiento reducido desactiva esas transiciones. El menú común muestra abreviatura, nombre traducido y selección, con teclado y soporte de diálogos.
+- **Subsección y descripción:** el título ocupa una línea independiente; la descripción comienza debajo, alineada al **texto del título después del chevron**, no al borde exterior del icono. En Simulation Playback, la **descripción, el estado y el porcentaje** comparten el segundo renglón cuando hay espacio suficiente; únicamente envuelven cuando falta ancho. En pantallas estrechas, la descripción ocupa las líneas necesarias sin truncarse. Las herramientas permanecen a la derecha y no alteran la jerarquía del título.
 - **Equipment performance:** dos iconos reutilizables con `aria-pressed` muestran u ocultan **Machines** y **Conveyors** de forma independiente. Su estado no elimina equipos del caso, no cambia los resultados y se mantiene mientras se recorre una simulación. El filtrado de tarjetas reduce también el trabajo visual de equipos ocultos.
 - **Estados fluidos y muestras acotadas:** el motor conserva el límite de unas 1001 muestras completas para evitar archivos enormes, pero registra separadamente hasta **4000 cambios exactos de estado** (tiempo virtual, índice y estado). Las etiquetas de estado se reproducen según ese historial al ritmo ligero de **250 ms** aunque la muestra completa anterior siga vigente. No se inventan estados: son transiciones calculadas. Si se alcanza el límite, `detailCoverage.stateTransitionsOmitted` lo indica y el resto se visualiza con las muestras disponibles. `Visual refresh rate` regula el redibujo pesado; `Display sample interval` afecta las muestras completas (y su intervalo efectivo puede aumentar por el límite de 1001). Los resultados de simulaciones anteriores sin ese historial siguen mostrando estados según sus muestras. En esos casos se requiere recalcular para obtener las transiciones precisas.
 - **Simulation Playback:** en su encabezado sólo se muestran el estado de ejecución (Ready/Playing/Paused/Completed) y el porcentaje de avance; los frames, la frecuencia FPS y los tiempos de renderizado/cálculo no se muestran al usuario final. Durante la reproducción, una actualización ligera de los indicadores se ejecuta cada **250 ms** (más frecuente que el mínimo pedido de 500 ms), independiente de la actualización pesada de gráficas y equipos. El tiempo virtual y el porcentaje avanzan según el reloj de reproducción. Output, Runtime Losses, Effective Runtime y demás contadores muestran **únicamente los valores de muestras calculadas**, nunca unidades interpoladas o inventadas. La frecuencia y el contenido de muestreo del motor no cambian.
@@ -244,3 +271,39 @@ is enabled. Units appear in one column; parameter labels omit the duplicate unit
 suffix. Physical limits and DOE range validation are unchanged. Settings groups
 JSON fields and Include DOE checkboxes without a repeated title; Appearance uses
 adjacent label/control columns instead of opposite edges of the dialog.
+
+
+## Revisión de pendientes del 23 de noviembre de 2026
+
+Las peticiones de las 09:06 y 09:27 (America/Mexico_City) eran posteriores a `main` `13231d2818e94b7b6327eb66ee1a367aa67c3189` (08:45). Había avances en una copia de trabajo que todavía no estaban publicados. Esta revisión completa el constructor de Subsección, retira las excepciones locales de geometría y conecta tanto los encabezados estáticos como Products, Basic y Real Data generados dinámicamente al contrato común.
+
+- **Unidades:** inventario/derrame mezclado muestra cantidades separadas de botellas y cajas. La unidad registrada en el resultado tiene prioridad sobre una configuración editada después. El formateo conserva las cantidades.
+- **Menú y transición:** menú único de unidades, nombres traducidos, selección, teclado y soporte de diálogos; transición de 180 ms sólo al cambiar deliberadamente la unidad. Restaurar preferencias y actualizar números en vivo no dispara animaciones de ancho.
+- **Velocidades:** `PlaybackSpeedOptions.html` alimenta ambos selectores con la misma lista de 1× a 50 000×, incluidos 10 000×, 20 000× y 50 000×. La velocidad es una solicitud de reproducción y depende de la capacidad de cálculo del equipo.
+- **Resultados pendientes:** Advance conserva nueve KPI y tres tarjetas de rate loss; Basic conserva su selección de cinco KPI. Las cifras pendientes son `—`, las unidades seleccionadas y los nodos se conservan; se limpian datos anteriores y se deshabilitan las exportaciones hasta obtener resultados completos.
+- **Comparación:** usa Subsección, tarjetas y tablas compartidas; los valores y las unidades son nodos separados y las filas modificadas quedan identificadas.
+- **Rendimiento:** la programación del cálculo es independiente del límite de FPS. El worker aprovecha su presupuesto acotado sin esperas de temporizador innecesarias; el fallback del hilo principal conserva las pausas necesarias para responder. El motor evita recorridos repetidos de colas discretas inmóviles, conservando los pasos físicos, sensores y contadores.
+
+### Medición reproducible del cálculo
+
+Ejecutar `node scripts/benchmark-numerical-playback.mjs --seconds 3600 --baseline-root /ruta/a/la/base` con la base del commit anterior. El script usa `test/fixtures/ui-demo-case.json` y verifica igualdad de todos los campos del cuadro terminal.
+
+| Medida de esta ejecución | Resultado |
+| --- | --- |
+| Equipos del demo | 13 |
+| Horizonte configurado | 86 400 s |
+| Tramo medido | Primeros 3 600 s simulados |
+| Paso / cantidad de pasos | 1/120 s / 432 000 |
+| Tiempo de cálculo base | 29 464 ms |
+| Tiempo de cálculo actualizado | 7 692 ms |
+| Aceleración observada | 3.831× |
+| Producción en ambas versiones | 10 231 |
+| Cuadro terminal completo | Exactamente igual |
+
+SHA-256 del cuadro terminal: `43c007391619cc74fcd225b3b7a8faa96ee3d627337f449d8ef4039df08dd530`.
+
+Es una medición local en Node, sin DOM ni interfaz, de un tramo de una hora; no es una garantía de aceleración del navegador ni una medición del día completo. Adicionalmente se compararon cuadros y muestras de gráficas en 38 puntos de dos trayectorias de bloqueo, liberación y fallas con semilla contra la base. `ConveyorTickReference.test.js` conserva la referencia independiente.
+
+### Validación y límite visual
+
+Se verificaron 141 pruebas enfocadas de componentes, generación dinámica, estilos, unidades, resultados/comparación, velocidades y reproducción numérica. Se analizaron sintácticamente los 52 bloques de JavaScript, 26 hojas de estilo y el código de servidor generados. No se ejecutó la suite completa del repositorio. Las pruebas CSS verifican reglas ganadoras/estructura; no son mediciones de píxeles. Chromium no pudo crear una página porque el entorno denegó su socket de inicio, por lo que la revisión visual del despliegue de Apps Script queda pendiente.

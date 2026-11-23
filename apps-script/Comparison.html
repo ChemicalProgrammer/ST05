@@ -7,7 +7,8 @@ window.STInputComparison=(function(){
     add('Name',e.name);add('Type',e.type);add('Initial mode',e.initialMode||'AUTO');
     add('MTBF (min)',r.mtbfMinutes??p.equipment?.mtbfMinutes);add('MTTR (min)',r.mttrMinutes??p.equipment?.mttrMinutes);
     if(e.type!=='CONVEYOR'){
-      add('Speed (BPM)',e.nominalRatePerSecond,60);add('Maximum speed (BPM)',p.equipment?.maximumSpeedBpm);
+      var rate=window.STFlowUnits?.labels(e.unitOfFlow||p.flowUnits?.output).rate||'units/min';
+      add('Speed ('+rate+')',e.nominalRatePerSecond,60);add('Maximum speed ('+rate+')',p.equipment?.maximumSpeedBpm);
       add('Critical machine',e.characteristics?.isPacemaker??e.characteristics?.criticalMachine??(e.type==='PACEMAKER'||p.role==='CRITICAL_MACHINE'));
       add('Startup delay (s)',e.startupDelaySeconds??u.startupTimeSeconds);add('Acceleration ramp (s)',e.restartRampUpSeconds??d.rampUpTimeSeconds);add('Infeed pitch (mm)',d.infeedPitchMm);
     }else{
@@ -51,12 +52,15 @@ window.STInputComparison=(function(){
 })();
 
 window.STComparison=function(state,isFiniteNumber){
+    function subsection(title,open){
+      return STSubsection.create({title,open:Boolean(open),className:'comparison-section'});
+    }
     function renderCaseComparison() {
       var a = (state.activeCase.simulations || []).find(function(sim) { return sim.id === document.getElementById('case-compare-a').value; });
       var b = (state.activeCase.simulations || []).find(function(sim) { return sim.id === document.getElementById('case-compare-b').value; });
       var target = document.getElementById('case-comparison-content'); target.textContent = '';
       STReports.bindComparison(state.activeCase,a,b);
-      if (!a || !b || a.id === b.id) { target.textContent = __ST_TEXT__('comparison.select_two_different_simulations'); return; }
+      if (!a || !b || a.id === b.id) { const empty=document.createElement('p');empty.className='comparison-empty metric-card metric-card--status';empty.setAttribute('role','status');empty.textContent=__ST_TEXT__('comparison.select_two_different_simulations');target.append(empty);return; }
       STResults.compare(target,a,b);
       STResults.compareEquipmentOee(target,a,b);
       appendComparisonContext(target, a, b);
@@ -64,7 +68,7 @@ window.STComparison=function(state,isFiniteNumber){
       appendChangedInputs(target,a,b);
       appendComparisonSection(target,__ST_TEXT__('comparison.simulation_configuration'),STInputComparison.run(a.dynamicConfig),STInputComparison.run(b.dynamicConfig));
       if(basic)return;
-      var details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Additional result details';details.className='comparison-result-details';details.appendChild(summary);target.appendChild(details);target=details;
+      const additional=subsection('Additional result details',false);additional.section.classList.add('comparison-result-details');additional.body.classList.add('comparison-details-content');target.append(additional.section);target=additional.body;
       if(a.results?.batch||b.results?.batch){
         var note=document.createElement('p');note.className='notice';note.textContent=__ST_TEXT__('batch.compare_note');target.appendChild(note);
         appendComparisonSection(target,__ST_TEXT__('batch.title'),a.results?.batch?.statistics||{},b.results?.batch?.statistics||{});
@@ -84,18 +88,17 @@ window.STComparison=function(state,isFiniteNumber){
 
     function appendChangedInputs(target,a,b) {
       var comparison=STInputComparison.changes(a,b),changes=comparison.rows;
-      var section=document.createElement('section');section.className='comparison-section';
-      var title=document.createElement('h3');title.textContent=__ST_TEXT__('comparison.changed_inputs')+changes.length+__ST_TEXT__('comparison.changes')+comparison.affected+__ST_TEXT__('comparison.equipment_affected');section.appendChild(title);
-      if(!changes.length){var message=document.createElement('p');message.className='chart-note';message.textContent=__ST_TEXT__('comparison.no_equipment_input_differences_run_settings_are_listed_below');section.appendChild(message);}
+      const block=subsection(__ST_TEXT__('comparison.changed_inputs')+changes.length+__ST_TEXT__('comparison.changes')+comparison.affected+__ST_TEXT__('comparison.equipment_affected'),true),section=block.section;
+      if(!changes.length){var message=document.createElement('p');message.className='chart-note';message.textContent=__ST_TEXT__('comparison.no_equipment_input_differences_run_settings_are_listed_below');block.body.appendChild(message);}
       else {
         var scroll=document.createElement('div');scroll.className='table-scroll';var table=document.createElement('table');table.innerHTML='<thead><tr><th>Equipment</th><th>Parameter</th><th>Baseline</th><th>Proposed</th></tr></thead><tbody></tbody>';
-        changes.forEach(function(change){var tr=document.createElement('tr');change.forEach(function(v){var td=document.createElement('td');td.textContent=v;tr.appendChild(td);});table.querySelector('tbody').appendChild(tr);});scroll.appendChild(table);section.appendChild(scroll);
+        changes.forEach(function(change){var tr=document.createElement('tr');change.forEach(function(v){var td=document.createElement('td');td.textContent=v;tr.appendChild(td);});table.querySelector('tbody').appendChild(tr);});scroll.appendChild(table);block.body.appendChild(scroll);
       }
       target.appendChild(section);
     }
     function appendComparisonContext(target, left, right) {
       var context = document.createElement('section');
-      context.className = 'comparison-context';
+      context.className = 'comparison-context metric-card metric-card--status';
       var leftSeed = left.results?.seed;
       var rightSeed = right.results?.seed;
       var leftDuration = left.results?.durationSeconds;
@@ -138,19 +141,20 @@ window.STComparison=function(state,isFiniteNumber){
     }
 
     function appendComparisonSection(target, title, left, right) {
-      var section = document.createElement('details'); section.className = 'comparison-section';
-      var heading = document.createElement('summary'); heading.textContent = title; section.appendChild(heading);
+      const block=subsection(title,title===__ST_TEXT__('comparison.scenario_provenance')||title===__ST_TEXT__('comparison.simulation_configuration')),section=block.section;
       var flatLeft = flattenComparisonValues(left); var flatRight = flattenComparisonValues(right);
-      section.open = title === __ST_TEXT__('comparison.scenario_provenance') || title === __ST_TEXT__('comparison.simulation_configuration');
       var keys = Array.from(new Set(Object.keys(flatLeft).concat(Object.keys(flatRight)))).sort();
-      if (!keys.length) { section.appendChild(document.createTextNode(__ST_TEXT__('comparison.no_saved_values'))); target.appendChild(section); return; }
+      if (!keys.length) { const empty=document.createElement('p');empty.className='chart-note';empty.textContent=__ST_TEXT__('comparison.no_saved_values');block.body.append(empty);target.appendChild(section);return; }
+      const scroll=document.createElement('div'),table=document.createElement('table');scroll.className='table-scroll';table.className='comparison-values-table';
+      const head=table.createTHead().insertRow();['Parameter',__ST_TEXT__('view.baseline'),__ST_TEXT__('results.proposed')].forEach(text=>{const cell=document.createElement('th');cell.scope='col';cell.textContent=text;head.append(cell);});
+      const body=table.createTBody();
       keys.forEach(function(key) {
         var leftValue = flatLeft[key]; var rightValue = flatRight[key];
-        var row = document.createElement('div'); row.className = 'comparison-row' + (String(leftValue) !== String(rightValue) ? __ST_TEXT__('comparison.comparison_changed') : '');
-        row.innerHTML = '<strong></strong><span></span><span></span>';
-        row.children[0].textContent = key; row.children[1].textContent = formatComparisonValue(leftValue); row.children[2].textContent = formatComparisonValue(rightValue);
-        section.appendChild(row);
+        const row=body.insertRow();if(String(leftValue)!==String(rightValue))row.classList.add('comparison-changed');
+        const label=document.createElement('th');label.scope='row';label.textContent=key;row.append(label);
+        [leftValue,rightValue].forEach(value=>{const cell=row.insertCell();cell.textContent=formatComparisonValue(value);if(typeof value==='number')cell.className='numeric';});
       });
+      scroll.append(table);block.body.append(scroll);
       target.appendChild(section);
     }
 

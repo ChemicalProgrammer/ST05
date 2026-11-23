@@ -58,7 +58,9 @@ window.STLanguage=(function(){
     if(trimmed&&trimmed!==key&&!Object.prototype.hasOwnProperty.call(translations,trimmed))
       translations[trimmed]=translations[key].trim();
   });
-  Object.assign(translations,{"Internal occupancy model":"Modelo de ocupación interna",
+  Object.assign(translations,{"Speed (bpm)":"Velocidad (bpm)","Speed (cpm)":"Velocidad (cpm)",
+    "Maximum speed (cpm)":"Velocidad máxima (cpm)","Speed (units/min)":"Velocidad (unid/min)",
+    "Maximum speed (units/min)":"Velocidad máxima (unid/min)","Internal occupancy model":"Modelo de ocupación interna",
     "Storage capacity (variable fill)":"Capacidad de almacenamiento (ocupación variable)",
     "Physical positions (rotating pockets)":"Posiciones físicas (alojamientos rotativos)",
     "Time in state":"Tiempo en estado","Bottles at stop":"Botellas al detenerse",

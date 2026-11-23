@@ -92,6 +92,35 @@ button { --on-accent:#fff; }
   background-image:none!important;cursor:pointer;
 }
 .st-time-unit::-ms-expand,.time-value-control > select::-ms-expand {display:none;}
+.time-value-control > select:not(:disabled):hover,.time-value-control > select:not(:disabled)[aria-expanded=true],
+.st-time-output > select.st-time-unit:not(:disabled):hover,.st-time-output > select.st-time-unit:not(:disabled)[aria-expanded=true] {
+  color:var(--accent);border-radius:var(--radius-sm);
+  background:var(--accent-soft)!important;box-shadow:0 0 0 3px var(--accent-soft);
+}
+/* One accessible unit picker is shared by input and output controls. It is
+   placed in the top layer (or owning dialog), never clipped by a metric card. */
+.st-unit-menu {
+  position:fixed;inset:auto;z-index:calc(var(--z-toast) + 1);display:block;
+  box-sizing:border-box;margin:0;padding:var(--space-1);overflow:auto;
+  border:var(--border-width) solid var(--line-strong);border-radius:var(--radius-md);
+  background:var(--surface);color:var(--ink);box-shadow:var(--shadow-dialog);
+  font-family:var(--font-ui);font-size:var(--font-input);font-weight:var(--weight-regular);
+  line-height:var(--leading-tight);overscroll-behavior:contain;
+}
+.st-unit-menu::backdrop {background:transparent;pointer-events:none;}
+.st-unit-menu-option {
+  display:grid;grid-template-columns:minmax(3ch,max-content) minmax(0,1fr) 16px;
+  align-items:center;gap:var(--space-3);min-height:var(--control-height);
+  padding:var(--space-2);border:0;border-radius:var(--radius-sm);cursor:pointer;
+  color:var(--ink);background:transparent;user-select:none;
+}
+.st-unit-menu-option.is-active {background:var(--surface-hover);}
+.st-unit-menu-option[aria-selected=true] {background:var(--accent-soft);color:var(--accent);}
+.st-unit-menu-option[aria-selected=true].is-active {outline:1px solid var(--line-strong);outline-offset:-1px;}
+.st-unit-menu-option[aria-disabled=true] {color:var(--disabled);cursor:not-allowed;}
+.st-unit-menu-abbreviation {font-weight:var(--weight-semibold);white-space:nowrap;}
+.st-unit-menu-name {min-width:0;overflow-wrap:anywhere;}
+.st-unit-menu-check {text-align:center;font-weight:var(--weight-semibold);}
 /* Read-only numbers use the enclosing result/table scale. The unit remains a
    native select, while fixed text uses the identical metric-unit contract. */
 .st-time-output,.time-output-value {

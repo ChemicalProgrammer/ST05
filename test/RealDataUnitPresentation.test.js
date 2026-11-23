@@ -8,7 +8,7 @@ function harness(){
   const errors=[],virtualConsole=new VirtualConsole();
   virtualConsole.on('jsdomError',error=>errors.push(error));
   const dom=new JSDOM(read('RealDataPanel'),{runScripts:'outside-only',virtualConsole}),w=dom.window;
-  for(const name of ['AemComparison','RealDataModel','RealData'])
+  for(const name of ['Subsection','AemComparison','RealDataModel','RealData'])
     w.eval(read(name).replace(/^<script>/,'').replace(/<\/script>\s*$/,''));
   const model=w.STRealDataModel,record=model.normalize({...model.empty(),id:'observed',name:'Observed production',
     durationSeconds:7200,rateLossSeconds:300,aem:{scrapSeconds:60,reworkSeconds:0},

@@ -157,7 +157,11 @@
       if(!session||session.context!==numericalPlaybackContext()||!state.run.playing
         ||session.pending||session.timer!==null)return;
       var interval=playbackRefreshIntervalMs();
-      var delay=Math.max(0,interval-(performance.now()-(session.lastPaintAt??-Infinity)));
+      var target=session.ready?session.targetSecond:session.restoreSecond;
+      var behind=target-session.controller.time+1e-8>=(session.controller.tickSeconds||1/120);
+      // FPS limits painting, not the physical calculation. A cursor that has
+      // not reached its requested time immediately uses another bounded chunk.
+      var delay=behind?0:Math.max(0,interval-(performance.now()-(session.lastPaintAt??-Infinity)));
       session.timer=window.setTimeout(async function(){
         session.timer=null;
         if(session!==numericalPlaybackSession||!state.run.playing)return;
@@ -170,7 +174,7 @@
         session.lastWallAt=now;session.pending=true;
         try{
           var frame=await session.controller.advanceTo(session.targetSecond,
-            {budgetMs:Math.min(32,Math.max(8,playbackRefreshIntervalMs()*.6))});
+            {budgetMs:32});
           if(session!==numericalPlaybackSession||session.context!==numericalPlaybackContext())return;
           if(!state.run.playing){session.pendingFrame=frame;return;}
           if(!session.ready&&!numericalPlaybackRestoreReached(session,frame)){
@@ -183,7 +187,9 @@
           if(!session.ready){session.ready=true;session.lastWallAt=performance.now();
             session.targetSecond=frame.virtualSecond;}
           acceptNumericalPlaybackFrame(session,frame);
-          renderPlaybackFrame();session.lastPaintAt=performance.now();
+          if(session.controller.finished||performance.now()-(session.lastPaintAt??-Infinity)>=playbackRefreshIntervalMs()){
+            renderPlaybackFrame();session.lastPaintAt=performance.now();
+          }
           if(session.controller.finished){
             state.run.playing=false;state.run.active=false;syncRunControls();
             refreshPlaybackMetricCards(frame,frame.virtualSecond);setPlaybackStatus('Completed');
@@ -526,6 +532,49 @@
       if(label&&label._flowUnit!==unit){label.textContent=unit;label._flowUnit=unit;}
     }
 
+    function playbackZoneFlowUnit(zone,sample) {
+      var result=state.run.result||{},definition=result.zoneDefinitions?.[zone?.id]
+        ||result.accumulationZoneMetrics?.[zone?.id]||{};
+      var owner=zone?.ownerEquipmentId||definition.ownerEquipmentId;
+      var measured=(sample?.equipment||[]).find(function(item){return item.id===owner;});
+      var recorded=result.equipmentMetrics?.[owner];
+      var model=(state.activeCase?.equipment||[]).find(function(item){return item.id===owner;});
+      return flowUnitLabels(zone?.packageUnit||zone?.unitOfFlow||definition.packageUnit||definition.unitOfFlow
+        ||measured?.unitOfFlow||recorded?.unitOfFlow||model?.processData?.flowUnits?.output||model?.unitOfFlow||playbackFlowUnit()).count;
+    }
+
+    // Inventories remain in each zone's native unit. In a mixed bottle/case
+    // line, display separate quantities rather than adding unlike packages.
+    function playbackNativeCounts(sample,kind) {
+      var zones=sample.accumulationZones||[],totals=new Map();
+      var counts=kind==='inventory'?(sample.buffers?.length?sample.buffers:zones.map(function(zone){return zone.inventoryUnits||0;}))
+        :zones.map(function(zone){return zone.overflowUnits||0;});
+      counts.forEach(function(value,index){
+        var unit=playbackZoneFlowUnit(zones[index],sample);
+        totals.set(unit,(totals.get(unit)||0)+(Number(value)||0));
+      });
+      if(!totals.size)totals.set(flowUnitLabels(playbackFlowUnit()).count,0);
+      return Array.from(totals,function(entry){return {unit:entry[0],value:entry[1]};})
+        .sort(function(a,b){var order={bottles:0,cases:1};return (order[a.unit]??2)-(order[b.unit]??2)||a.unit.localeCompare(b.unit);});
+    }
+
+    function renderPlaybackNativeCounts(id,groups) {
+      var primary=document.getElementById(id),container=primary.closest('.playback-native-counts');
+      var pairs=Array.from(container.querySelectorAll('.playback-count-pair'));
+      groups.forEach(function(group,index){
+        var pair=pairs[index];
+        if(!pair){
+          pair=document.createElement('span');pair.className='metric-value playback-count-pair';
+          var number=document.createElement('b'),unit=document.createElement('span');
+          number.id=id+'-native-'+index;unit.id=number.id+'-unit';unit.className='playback-metric-unit';
+          pair.append(number,unit);container.append(pair);pairs.push(pair);
+        }
+        pair.hidden=false;var value=pair.querySelector('b');
+        value.textContent=formatNumber(group.value);setPlaybackMetricUnit(value.id,group.unit);
+      });
+      pairs.forEach(function(pair,index){pair.hidden=index>=groups.length;});
+    }
+
     // Update the ten playback cards and progress from actual recorded samples.
     // Only the virtual-time display interpolates from the playback clock.
     function refreshPlaybackMetricCards(sample,displaySecond){
@@ -565,13 +614,8 @@
       document.getElementById('metric-rate').textContent=sample.virtualSecond>0
         ?formatNumber(sample.outputCount/sample.virtualSecond*60):'—';
       setPlaybackMetricUnit('metric-rate',flowUnits.rate);
-      document.getElementById('metric-buffer').textContent=formatNumber(sum(sample.buffers));
-      // These two totals count native items across zones, which may contain
-      // both bottles and cases. They are not normalized bottle equivalents.
-      setPlaybackMetricUnit('metric-buffer','units');
-      document.getElementById('metric-overflow').textContent=formatNumber(
-        sum((sample.accumulationZones||[]).map(function(zone){return zone.overflowUnits||0;})));
-      setPlaybackMetricUnit('metric-overflow','units');
+      renderPlaybackNativeCounts('metric-buffer',playbackNativeCounts(sample,'inventory'));
+      renderPlaybackNativeCounts('metric-overflow',playbackNativeCounts(sample,'overflow'));
       STTimeControls.setOutput(document.getElementById('metric-backup-stop'),
         sum(sample.equipment.map(function(unit){return unit.backupStopSeconds||0;})),
         {unit:'min',label:'Change Back-up Stop unit'});
@@ -1267,7 +1311,8 @@
         ['Flow',formatNumber((unit.actualRatePerSecond||0)*60),flowUnit],
         ['Processed',formatNumber(unit.processedUnits??unit.outputCount),flowUnits.count]];
       if(conveyor){
-        rows.push(['On belt',Number.isFinite(zone?.inventoryUnits)?formatNumber(zone.inventoryUnits):'—','units'],
+        rows.push(['On belt',Number.isFinite(zone?.inventoryUnits)?formatNumber(zone.inventoryUnits):'—',
+          playbackZoneFlowUnit({...zone,ownerEquipmentId:zone?.ownerEquipmentId||model.id},{equipment:[unit]})],
           ['Back-up',zone?.backup?.controlActive?'Active':zone?.backup?.configured?'Clear':'—'],
           ['Own failures','N/A']);
       }else{
@@ -1384,7 +1429,14 @@
 
     function updateAccumulationZoneDetailsContent(details, zone) {
       details.querySelector('.accumulation-zone-summary-name').textContent = (zone.name || __ST_TEXT__('client.accumulation_zone')) + __ST_TEXT__('client.physical_accumulation');
-      details.querySelector('.accumulation-zone-summary-reading').textContent = formatNumber(zone.inventoryUnits) + ' / ' + formatNumber(zone.capacityUnits) + __ST_TEXT__('client.units_waiting') + formatNumber(zone.waitingUnits) + ' · ' + formatNumber(zone.fillPercent) + '%';
+      var reading=details.querySelector('.accumulation-zone-summary-reading');
+      setZoneNativeQuantity(reading,formatNumber(zone.inventoryUnits)+' / '+formatNumber(zone.capacityUnits),
+        playbackZoneFlowUnit(zone,playbackVisualSample()),' · ');
+      if(!reading._waitingLabel){
+        reading._waitingLabel=document.createElement('span');reading._waitingLabel.textContent='Waiting';
+        reading._waitingValue=document.createElement('span');reading.append(reading._waitingLabel,reading._waitingValue);
+      }
+      reading._waitingValue.textContent=' '+formatNumber(zone.waitingUnits)+' · '+formatNumber(zone.fillPercent)+'%';
       var panel = details.querySelector('.accumulation-zone');
       if (!panel) {
         panel = createAccumulationZonePanel(zone);
@@ -1444,14 +1496,29 @@
       if (label) label.title = tooltip;
     }
 
+    // Keep the native unit in a separate text node so changing languages can
+    // translate it without rebuilding the measured numbers on each frame.
+    function setZoneNativeQuantity(node,value,unit,suffix) {
+      if(!node._nativeQuantity){
+        var number=document.createElement('span'),label=document.createElement('span'),tail=document.createElement('span');
+        label.className='metric-unit';node.replaceChildren(number,' ',label,tail);
+        node._nativeQuantity={number:number,label:label,tail:tail};
+      }
+      var parts=node._nativeQuantity;
+      parts.number.textContent=value;
+      if(parts.unit!==unit){parts.label.textContent=unit;parts.unit=unit;}
+      parts.tail.textContent=suffix||'';
+    }
+
     function updateAccumulationZonePanel(panel, zone) {
       panel.className = 'accumulation-zone state-' + String(zone.state || 'EMPTY').toLowerCase().replace(/_/g, '-');
       var geometry = zone.geometry || {};
+      var unit=playbackZoneFlowUnit(zone,playbackVisualSample());
       panel.querySelector('strong').textContent = zone.name || __ST_TEXT__('client.accumulation_zone');
       panel.querySelector('.accumulation-zone-heading span').textContent = String(zone.state || 'EMPTY').replace(/_/g, ' ');
-      panel.querySelector('.zone-inventory').textContent = formatNumber(zone.inventoryUnits) + ' / ' + formatNumber(zone.capacityUnits) + ' (' + formatNumber(zone.fillPercent) + '%)';
-      panel.querySelector('.zone-transit').textContent = formatNumber(zone.inTransitUnits);
-      panel.querySelector('.zone-waiting').textContent = formatNumber(zone.waitingUnits);
+      setZoneNativeQuantity(panel.querySelector('.zone-inventory'),formatNumber(zone.inventoryUnits)+' / '+formatNumber(zone.capacityUnits),unit,' ('+formatNumber(zone.fillPercent)+'%)');
+      setZoneNativeQuantity(panel.querySelector('.zone-transit'),formatNumber(zone.inTransitUnits),unit);
+      setZoneNativeQuantity(panel.querySelector('.zone-waiting'),formatNumber(zone.waitingUnits),unit);
       panel.querySelector('.zone-prime').textContent = formatPrimeSensorReading(zone.prime);
       panel.querySelector('.zone-backup').textContent = formatBackupSensorReading(zone.backup);
       panel.querySelector('.zone-geometry').textContent = geometry.usableLengthMm && geometry.productPitchMm
@@ -1461,7 +1528,7 @@
         ? formatNumber(geometry.travelSeconds) + ' s'
         : '—';
       panel.querySelector('.zone-sensor-timing').textContent = formatSensorTiming(geometry);
-      panel.querySelector('.zone-overflow').textContent = zone.overflowUnits===null?'—':formatNumber(zone.overflowUnits);
+      setZoneNativeQuantity(panel.querySelector('.zone-overflow'),zone.overflowUnits===null?'—':formatNumber(zone.overflowUnits),unit);
       panel.querySelector('.zone-caption').textContent = zoneOriginLabel(zone.modelOrigin) + __ST_TEXT__('conveyor.capacity_formula') +
         formatNumber(zone.capacityUnits) + __ST_TEXT__('client.units_controls_upstream') + zone.upstreamControlEquipmentId +
         __ST_TEXT__('client.starts_downstream') + zone.downstreamControlEquipmentId;

@@ -1941,8 +1941,10 @@ window.STSimulation2D=(function(){
     const defaultLimit=config.durationSeconds>0?config.durationSeconds:3600;
     limitSeconds=stored?.limitSeconds>0&&Number.isFinite(stored.limitSeconds)?stored.limitSeconds:defaultLimit;
     el('limit').value=limitSeconds/60;
-    el('speed').value=String(stored?.speed??1);
-    if(!el('speed').value)el('speed').value='1';
+    var speedControl=el('speed'),savedSpeed=Number(stored?.speed)||1;
+    speedControl.value=String(savedSpeed);
+    if(!speedControl.value)speedControl.value=savedSpeed>Number(speedControl.options[speedControl.options.length-1].value)
+      ?speedControl.options[speedControl.options.length-1].value:'1';
     if(newView){lastMachineActions.clear();markPlaybackAction(null);endDrag();viewKey=nextView;viewports.forEach(view=>{view.initialized=false;});camera.fit=viewportCount===1;}
     reset();
     let restoredRun=false,resumedPresentation;

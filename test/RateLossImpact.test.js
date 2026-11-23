@@ -14,11 +14,14 @@ test('engine records equivalent output and percentage points without changing pr
  assert.equal(replicationView(b.result).summary.lineRateLossOutputEquivalents,null);
 });
 test('active-format conversion preserves different volume impacts even when net equivalent time is zero',()=>{
- const code=fs.readFileSync('src/simulation/LineSimulationEngine.js','utf8'),a=code.indexOf('function moveFlow('),b=code.indexOf('\nfunction addFlowToZone(',a),move=Function('currentProductRow',code.slice(a,b)+';return moveFlow;')(()=>({outputNative:0,outputBottleEquivalents:0}));
- const r={product:{},equipment:[{outputBottleFactor:1}],productRows:{},outputCount:0,lineRunSeconds:0,lineEffectiveRuntimeSeconds:0,lineRateShortfallSeconds:0,lineRateRecoverySeconds:0,lineRateShortfallOutputEquivalents:0,lineRateRecoveryOutputEquivalents:0,lineRateReferenceValid:true,run:{tickSeconds:1}};
- r.inputBottleEquivalents=0;r.productReferenceRate=10;move(r,0,5,false);r.productReferenceRate=20;move(r,0,30,false);
+ // Exercise the real intake helper as well as moveFlow. Extracting moveFlow
+ // alone stopped being valid when intake accounting was centralized.
+ const code=fs.readFileSync('src/simulation/LineSimulationEngine.js','utf8'),a=code.indexOf('function consumeFlow('),b=code.indexOf('\nfunction addFlowToZone(',a),move=Function('currentProductRow',code.slice(a,b)+';return moveFlow;')(()=>({outputNative:0,outputBottleEquivalents:0}));
+ const r={product:{},equipment:[{outputBottleFactor:1,nominalRatePerSecond:30}],productRows:{},sourceInputUnits:0,outputCount:0,lineRunSeconds:0,lineEffectiveRuntimeSeconds:0,lineRateShortfallSeconds:0,lineRateRecoverySeconds:0,lineRateShortfallOutputEquivalents:0,lineRateRecoveryOutputEquivalents:0,lineRateReferenceValid:true,run:{tickSeconds:1}};
+ r.inputBottleEquivalents=0;r.productReferenceRate=10;move(r,0,5,false,5,5);r.productReferenceRate=20;move(r,0,30,false,30,30);
  assert.equal(r.lineRateShortfallSeconds,.5);assert.equal(r.lineRateRecoverySeconds,.5);
  assert.equal(r.lineRateShortfallOutputEquivalents,5);assert.equal(r.lineRateRecoveryOutputEquivalents,10);
+ assert.equal(r.sourceInputUnits,35);assert.equal(r.outputCount,35,'The same two ticks retain their material balance');
  assert.notEqual(r.lineRateShortfallOutputEquivalents,r.lineRateShortfallSeconds*15,'whole-period mean reference would be wrong');
 });
 test('legacy constant-format result reproduces Case C conversions and renders signed points',()=>{
@@ -73,10 +76,40 @@ test('highlights preserve zero, unknown loss and native output units without inv
  const w=ui();try{
   const target=w.document.getElementById('target');
   let h=w.STReports.rateLossHighlights({summary:{lineRateLossOutputEquivalents:0,lineRateLossEfficiencyPp:0},unitOfFlow:'cases'});
-  assert.equal(h.cards[0].value,0);assert.equal(h.cards[0].unit,' unidades');assert.equal(h.cards[2].value,0);
+  assert.equal(h.cards[0].value,0);assert.equal(h.cards[0].unit,' cajas');assert.equal(h.cards[2].value,0);
   w.STResults.renderRateLossHighlights(target,{summary:{},unitOfFlow:'bottles'});
   assert([...target.querySelectorAll('strong')].every(c=>c.textContent.startsWith('—')));
   h=w.STReports.rateLossHighlights({engineId:'DES_SIMPY_EXPERIMENTAL',summary:{lineRateLossOutputEquivalents:200,lineRateLossEfficiencyPp:2}});
   assert.equal(h.cards[0].value,null);assert.equal(h.cards[2].value,null);
  }finally{w.close();}
+});
+
+test('rate-loss highlights name bottle and case aliases without converting saved quantities',()=>{
+ for(const sharedUnits of [false,true]){
+  const w=ui();try{
+   if(sharedUnits)w.eval(fs.readFileSync('apps-script/ClientUtils.html','utf8'));
+   const target=w.document.getElementById('target');
+   for(const [aliases,count,label] of [
+    [['bottle','BOTTLES','botella',' botellas '],'botellas','Botellas'],
+    [['case','CASES','box','boxes','caja',' cajas '],'cajas','Cajas']
+   ])for(const unitOfFlow of aliases){
+    const result={unitOfFlow,summary:{lineRateLossOutputEquivalents:12,lineRateLossEfficiencyPp:2}};
+    const before=JSON.stringify(result),data=w.STReports.rateLossHighlights(result);
+    assert.equal(data.cards[0].value,12,unitOfFlow+' retains its recorded quantity');
+    assert.equal(data.cards[0].unit,' '+count);
+    assert.equal(data.cards[0].label,label+' equivalentes no producidas por rate loss');
+    w.STResults.renderRateLossHighlights(target,result);
+    assert.equal(target.querySelector('.metric-number').textContent,'12');
+    assert.equal(target.querySelector('.metric-unit').textContent,count);
+    assert.match(w.STReports.rateLossHighlightsHtml(result),new RegExp('12 '+count));
+    assert.equal(JSON.stringify(result),before,'Unit presentation does not mutate results');
+   }
+   const native={summary:{lineRateImpactOutputUnit:'cases',lineRateLossOutputEquivalents:12}};
+   assert.equal(w.STReports.rateLossHighlights(native).cards[0].unit,' cajas');
+   assert.equal(w.STReports.rateLossHighlights({...native,unitOfFlow:'cases',products:{rows:[]}}).cards[0].unit,' botellas',
+    'Product-aware results retain their preexisting bottle-equivalent basis');
+   assert.equal(w.STReports.rateLossHighlights({summary:{lineRateLossOutputEquivalents:12}}).cards[0].unit,' unidades',
+    'Missing metadata must not invent bottles or cases');
+  }finally{w.close();}
+ }
 });

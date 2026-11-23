@@ -26,8 +26,8 @@
         </div>
         <div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><section class="fold-card design-reference-subsection"><div class="fold-heading"><div class="subsection-heading-copy"><h3 class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="design-ref-subsection-content">Ejemplo de Subsección</button></h3><p class="subsection-description">Una breve descripción opcional aparece debajo del título.</p></div><div class="fold-tools button-row"><button type="button" class="secondary icon-button design-reference-counter-button" aria-label="Añadir al ejemplo" title="Añadir al ejemplo">+</button></div></div><div id="design-ref-subsection-content" class="fold-content"><span class="chart-note">Contenido plegable</span> <output id="design-ref-counter" aria-live="polite">0</output></div></section></div>
-          <div class="design-reference-cell design-reference-explanation" role="cell">Contenedor plegable con título, barra de herramientas y contenido. Su encabezado permanece visible al contraerlo.</div>
-          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Subsección</strong><code>.fold-card · .fold-heading · .fold-content</code></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Componente con tres parámetros visuales: título, descripción opcional y herramientas (barra existente o array de botones). El constructor central conserva la misma estructura y separación en todas sus instancias; el encabezado sigue visible al contraerlo.</div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Subsección</strong><code>STSubsection.create({title, description, tools})</code></div>
         </div>
 
         <div class="design-reference-row" role="row">
@@ -57,7 +57,7 @@
         </div>
         <div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><label>Input <span class="time-value-control"><input type="number" value="5" step="any" aria-label="Cantidad demostrativa"><select aria-label="Unidad de entrada demostrativa"><option>s</option><option selected>min</option><option>h</option></select></span></label><label>Output <span id="design-ref-time-output"></span></label></div></div>
-          <div class="design-reference-cell design-reference-explanation" role="cell">El input conserva la cifra y el ancho total del control: la unidad ocupa el ancho de su texto y la caja numérica se ajusta al espacio restante, con 8 px de separación. El output convierte la cifra, con 2 px de separación y espacio reservado para mantener estables los resultados.</div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">El input conserva la cifra y el ancho total: la unidad ocupa su ancho de texto y la caja toma el espacio restante, con 8 px de separación. Cambiar unidad anima el ajuste durante 180 ms; el output convierte la cifra, con 2 px de separación. El menú comparte abreviatura, nombre y selección. Los contadores en vivo conservan su reserva y sólo hacen una transición sutil; se respeta movimiento reducido.</div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Valor–unidad</strong><code>.time-value-control · STTimeControls.output()</code></div>
         </div>
         <div class="design-reference-row" role="row">
@@ -207,6 +207,11 @@
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Separación entre subsecciones</strong><code>--subsection-gap</code></div>
         </div>
         <div class="design-reference-row" role="row">
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-space-stack" style="gap:var(--subsection-description-gap)"><span>Título</span><span>Descripción</span></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Separación única entre título y descripción, independiente de la altura y el ajuste de la barra de herramientas. Valor actual: <output data-design-token="--subsection-description-gap">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Separación título y descripción</strong><code>--subsection-description-gap</code></div>
+        </div>
+        <div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-space-box design-reference-space-box--padding"><span>Contenido interior</span></div></div>
           <div class="design-reference-cell design-reference-explanation" role="cell">Relleno interior entre el borde de una Subsección y sus elementos. Valor actual: <output data-design-token="--subsection-padding">—</output></div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Relleno de subsección</strong><code>--subsection-padding</code></div>
@@ -304,7 +309,6 @@
 .design-reference-control-name strong {color:var(--ink);font-size:var(--font-body);font-weight:var(--weight-semibold);}
 .design-reference-control-name code,.design-reference-body code {font-size:var(--font-caption);padding:1px 4px;border-radius:var(--radius-sm);background:var(--surface-soft);overflow-wrap:anywhere;}
 .design-reference-subsection {margin:0;width:100%;padding:var(--space-3);}
-.design-reference-subsection .fold-heading {gap:var(--space-2);}
 .design-reference-subsection .fold-heading h3 {min-width:0;}
 .design-reference-subsection .fold-content {font-size:var(--font-secondary);}
 .design-reference-standalone-title {margin:0;color:var(--accent);font-size:var(--font-card);font-weight:var(--weight-semibold);}

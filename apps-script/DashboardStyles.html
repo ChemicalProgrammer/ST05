@@ -1,5 +1,6 @@
 <style>
-#results-body.results-design-only > :not(#line-performance) { display:none; }
+/* Pending results keep their summary cards mounted with empty measurements. */
+#results-insight:empty,#results-table:empty,#results-reference:empty { display:none; }
 .result-kpis { display: grid; grid-template-columns: repeat(auto-fit,minmax(var(--size-150),1fr)); gap: var(--space-3); margin: var(--space-4) 0; }
 .result-kpi { border: var(--border-width) solid var(--line); border-radius: var(--radius-md); padding: var(--space-4); }
 .result-kpi > span { display: block; font-size: var(--font-secondary); color: var(--muted); }
@@ -39,10 +40,10 @@
 .analysis-checks { background:transparent; }
 .scenario-grid, .simulation-analysis-heading { overflow-wrap:anywhere; }
 
-#comparison-panel { border: 0; padding: var(--space-5) 0 0; }
-.comparison-section { margin-bottom: var(--space-3); } .comparison-row { overflow-wrap: anywhere; }
+#comparison-panel { border:0; padding:0; }
+.comparison-section:not(.fold-card) { margin-bottom: var(--space-3); } .comparison-row { overflow-wrap: anywhere; }
 .comparison-row span { min-width: 0; } .comparison-changed { border-left-width: var(--state-border-width); }
-.comparison-section > summary { padding: var(--space-3); background: var(--surface-soft); font-weight: var(--weight-medium); }
+.comparison-section:not(.fold-card) > summary { padding: var(--space-3); background: var(--surface-soft); font-weight: var(--weight-medium); }
 .equipment-card { border-radius: var(--radius-md); } .format-zone-setup { background: var(--surface-soft); }
 @media(max-width:1100px) { .live-equipment-card__row { grid-template-columns: repeat(2,minmax(0,1fr)); } .live-equipment-card.show-losses .live-equipment-stats { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media(max-width:600px) { .live-equipment-card__row { grid-template-columns: 1fr; } .result-kpis,.metrics-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .result-kpi { padding: var(--space-3); } .result-kpi > strong { font-size: var(--font-section); } .comparison-row { grid-template-columns: 1fr; } .equipment-header { flex-direction: column; align-items: flex-start; } }

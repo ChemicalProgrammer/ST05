@@ -10,6 +10,15 @@
       return isFiniteNumber(value) ? formatNumber(value) + ' s' : '—';
     }
 
+    // Both selectors use PlaybackSpeedOptions. Restore against the actual
+    // choices, including older saved speeds above the current maximum.
+    function restorePlaybackSpeed(select,value) {
+      var rate=Number(value)||1;
+      select.value=String(rate);
+      if(!select.value)select.value=rate>Number(select.options[select.options.length-1].value)
+        ?select.options[select.options.length-1].value:'1';
+    }
+
     function flowUnitLabels(unit) {
       var raw=String(unit??'').trim(),normalized=raw.toLowerCase();
       if(['bottle','bottles','botella','botellas'].includes(normalized))return {count:'bottles',rate:'bpm'};

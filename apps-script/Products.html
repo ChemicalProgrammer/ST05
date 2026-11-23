@@ -66,24 +66,22 @@ window.STProducts=(function(){
     var collapsedSections=new Set();
     // Crea un bloque plegable y devuelve su cuerpo y su barra de herramientas.
     function section(text){
-      var group=document.createElement('section'),heading=document.createElement('div'),title=document.createElement('h3'),toggle=document.createElement('button'),content=document.createElement('div'),tools=document.createElement('div');
-      group.className='settings-section product-subsection fold-card';heading.className='fold-heading';tools.className='fold-tools product-selector-row';
       var sectionKey=currentTab+':'+text;
-      content.className='fold-content';content.id=id('formats-subsection');content.hidden=collapsedSections.has(sectionKey);
-      toggle.type='button';toggle.className='fold-toggle';toggle.textContent=text;toggle.dataset.subsectionToggle='';toggle.setAttribute('aria-expanded',String(!content.hidden));toggle.setAttribute('aria-controls',content.id);
-      toggle.addEventListener('click',function(){if(content.hidden)collapsedSections.delete(sectionKey);else collapsedSections.add(sectionKey);});
-      title.classList.add('subsection-heading-title');
-      var titleWrap=document.createElement('div');titleWrap.className='subsection-heading-copy';
-      var description=document.createElement('p');description.className='subsection-description';
       var guidance={
         Products:'Define the product and its bottle dimensions for simulation.',
         Formats:'Associate a product with packaging dimensions and production units.',
         Machines:'Override machine operating rates and start-up behavior for the selected product or format.',
         Conveyors:'Override conveyor speeds, transported units, and bottle or case spacing.'
       };
-      description.textContent=guidance[text]||'Review the settings for '+text.toLowerCase()+'.';
-      title.append(toggle);titleWrap.append(title,description);heading.append(titleWrap,tools);group.append(heading,content);body.append(group);
-      return {content:content,tools:tools};
+      var group=STSubsection.create({title:text,description:guidance[text]||'Review the settings for '+text.toLowerCase()+'.',
+        native:false,open:!collapsedSections.has(sectionKey),contentId:id('formats-subsection'),
+        className:'settings-section product-subsection'});
+      group.tools.classList.add('product-selector-row');
+      group.title.querySelector('.fold-toggle').addEventListener('click',function(){
+        if(group.body.hidden)collapsedSections.delete(sectionKey);else collapsedSections.add(sectionKey);
+      });
+      body.append(group.section);
+      return {content:group.body,tools:group.tools};
     }
     function note(parent,text){var n=document.createElement('p');n.className='chart-note format-guidance';n.textContent=text;parent.append(n);return n;}
     function control(obj,key,label,options){

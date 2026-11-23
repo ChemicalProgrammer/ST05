@@ -28,8 +28,10 @@ window.STBasicMode=(function(){
     conveyorTabs=document.createElement('div');conveyorTabs.className='button-row basic-conveyor-tabs';
     ['inputs','results'].forEach(function(view){var b=button(view==='inputs'?'Inputs':'Results','',function(){conveyorView=view;refreshData();});b.dataset.conveyorView=view;conveyorTabs.appendChild(b);});heading.appendChild(conveyorTabs);
     conveyorSummary=document.createElement('section');conveyorSummary.id='basic-conveyor-summary';panel.appendChild(conveyorSummary);
-    runOptions=document.createElement('section');runOptions.id='basic-run-options';runOptions.classList.add('fold-card');runOptions.setAttribute('aria-labelledby','basic-run-options-title');var optionsTitle=node('h3',__ST_TEXT__('ui.simulation_settings'));optionsTitle.id='basic-run-options-title';var optionsHeading=node('div','','basic-options-heading fold-heading');var optionsToggle=button(optionsTitle.textContent);optionsToggle.classList.add('fold-toggle');optionsToggle.dataset.subsectionToggle='';optionsToggle.setAttribute('aria-expanded','true');optionsToggle.setAttribute('aria-controls','basic-efficiencies');optionsTitle.classList.add('subsection-heading-title');optionsTitle.replaceChildren(optionsToggle);var optionsCopy=node('div','','subsection-heading-copy');var optionsDescription=node('p','Review the current line efficiency and simulation settings.','subsection-description');optionsCopy.append(optionsTitle,optionsDescription);optionsHeading.append(optionsCopy);runOptions.append(optionsHeading);document.getElementById('equipment-section').before(runOptions);
-    efficiencies=document.createElement('div');efficiencies.id='basic-efficiencies';efficiencies.classList.add('fold-content');runOptions.append(efficiencies);
+    var optionsSection=STSubsection.create({id:'basic-run-options',titleId:'basic-run-options-title',contentId:'basic-efficiencies',
+      title:__ST_TEXT__('ui.simulation_settings'),description:'Review the current line efficiency and simulation settings.',native:false});
+    runOptions=optionsSection.section;optionsSection.header.classList.add('basic-options-heading');efficiencies=optionsSection.body;
+    document.getElementById('equipment-section').before(runOptions);
     inspector=document.getElementById('equipment-inspector');inspectorHome=inspector.parentNode;inspectorNext=inspector.nextSibling;
     window.addEventListener('st:inspector',function(){if(splitMounted){title.textContent=STEquipmentInspector.name();conveyorView='inputs';refreshData();}});
     sync(current);

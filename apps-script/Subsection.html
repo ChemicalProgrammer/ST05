@@ -1,0 +1,136 @@
+<script>
+/* Subsección: one constructor and header contract for static and dynamic UI.
+   Strings are text, never HTML. Existing nodes are moved, not cloned, so their
+   ids, focus, translations, input state and listeners remain attached. */
+window.STSubsection=(function(){
+  'use strict';
+  const controls=new WeakMap();
+  let sequence=0;
+  function element(tag,className){
+    const node=document.createElement(tag);
+    if(className)node.className=className;
+    return node;
+  }
+  function isNode(value){return Boolean(value&&typeof value.nodeType==='number');}
+  function append(target,value){
+    if(value==null)return;
+    if(Array.isArray(value)){value.forEach(item=>append(target,item));return;}
+    target.append(isNode(value)?value:document.createTextNode(String(value)));
+  }
+  function action(spec){
+    if(isNode(spec))return spec;
+    if(!spec||typeof spec.label!=='string')throw new TypeError('Subsection tools require a label or an existing node.');
+    const button=element('button','secondary icon-button');
+    button.type='button';button.setAttribute('aria-label',spec.label);button.title=spec.label;
+    if(spec.id)button.id=spec.id;
+    if(spec.icon){button.dataset.icon=spec.icon;window.STIcons?.button(button,spec.icon);}
+    else button.textContent=spec.text||spec.label;
+    if(typeof spec.pressed==='boolean')button.setAttribute('aria-pressed',String(spec.pressed));
+    button.disabled=Boolean(spec.disabled);
+    if(typeof spec.onClick==='function')button.addEventListener('click',spec.onClick);
+    return button;
+  }
+  function toolbar(value){
+    if(isNode(value)&&value.nodeType===1){
+      value.classList.add('fold-tools');
+      return value;
+    }
+    const bar=element('div','fold-tools button-row');
+    if(isNode(value)){bar.append(value);return bar;}
+    (value||[]).forEach(spec=>bar.append(action(spec)));
+    return bar;
+  }
+  function headerParts(section){
+    const native=section.tagName==='DETAILS';
+    const header=section.querySelector(native?':scope > summary':':scope > .fold-heading');
+    if(!header)return null;
+    let copy=header.querySelector(':scope > .subsection-heading-copy');
+    let title=copy?.querySelector(':scope > .subsection-native-title, :scope > h3, :scope > .subsection-heading-title');
+    if(!title)title=header.querySelector(native?'.subsection-native-title':'h3, .subsection-heading-title');
+    let description=header.querySelector('.subsection-playback-meta')||header.querySelector('.subsection-description');
+    const tools=[...header.children].find(child=>child!==copy&&(child.classList.contains('fold-tools')||child.classList.contains('button-row')));
+    if(!title&&native){
+      title=element('span','subsection-native-title');
+      [...header.childNodes].filter(node=>node!==copy&&node!==tools&&node!==description).forEach(node=>title.append(node));
+    }
+    if(!title)return null;
+    if(!copy){
+      const owner=title.parentElement;
+      copy=owner&&owner!==header&&header.contains(owner)?owner:element(native?'span':'div','subsection-heading-copy');
+    }
+    return {native,header,copy,title,description,tools};
+  }
+  function configure(section,parts){
+    const focused=section.contains(document.activeElement)?document.activeElement:null;
+    const {native,header,copy,title,description}=parts;
+    let tools=parts.tools;
+    section.classList.add('fold-card','st-subsection');
+    if(native)section.classList.add('fold-native');
+    header.classList.add('st-subsection-header');
+    copy.classList.add('subsection-heading-copy');
+    title.classList.add(native?'subsection-native-title':'subsection-heading-title');
+    if(title.parentElement!==copy)copy.append(title);
+    if(description&&description.parentElement!==copy)copy.append(description);
+    if(copy.parentElement!==header)header.prepend(copy);
+    // Older headers may have a direct select (for example Real Data). It is
+    // another tool, and keeps the original node, value and change listener.
+    const extraTools=[...header.children].filter(child=>child!==copy&&child!==tools);
+    if(extraTools.length){
+      if(!tools)tools=toolbar([]);
+      extraTools.forEach(child=>tools.append(child));
+    }
+    if(!tools)tools=toolbar([]);
+    tools.classList.add('fold-tools');
+    if(tools.parentElement!==header)header.append(tools);
+    const body=section.querySelector(':scope > .fold-content')||null;
+    const control={section,body,header,title,description,tools};
+    controls.set(section,control);
+    if(focused?.isConnected&&document.activeElement!==focused)focused.focus({preventScroll:true});
+    return control;
+  }
+  function enhance(section){
+    if(controls.has(section))return controls.get(section);
+    const parts=headerParts(section);
+    return parts?configure(section,parts):null;
+  }
+  function create(options){
+    const spec=options||{};
+    if(spec.title==null)throw new TypeError('Subsection title is required.');
+    const native=spec.native!==false;
+    const section=element(native?'details':'section',spec.className||'');
+    if(spec.id)section.id=spec.id;
+    const header=element(native?'summary':'div',native?'':'fold-heading');
+    const copy=element(native?'span':'div','subsection-heading-copy');
+    const title=element(native?'span':'h3',native?'subsection-native-title':'subsection-heading-title');
+    const body=element('div','fold-content');
+    const tools=toolbar(spec.tools);
+    let description=null;
+    if(spec.description!=null&&spec.description!==''){
+      description=isNode(spec.description)&&spec.description.nodeType===1?spec.description:element(native?'span':'p','subsection-description');
+      if(description!==spec.description)append(description,spec.description);
+      else if(!description.classList.contains('subsection-playback-meta'))description.classList.add('subsection-description');
+    }
+    if(native){section.open=spec.open!==false;append(title,spec.title);}
+    else{
+      const toggle=element('button','fold-toggle');toggle.type='button';toggle.dataset.subsectionToggle='';
+      body.id=spec.contentId||(spec.id?spec.id+'-content':'st-subsection-'+(++sequence)+'-content');
+      toggle.setAttribute('aria-controls',body.id);toggle.setAttribute('aria-expanded',String(spec.open!==false));
+      append(toggle,spec.title);title.append(toggle);body.hidden=spec.open===false;body.inert=body.hidden;
+    }
+    if(spec.titleId)title.id=spec.titleId;
+    if(title.id)section.setAttribute('aria-labelledby',title.id);
+    copy.append(title);if(description)copy.append(description);
+    header.append(copy,tools);
+    append(body,spec.content);section.append(header,body);
+    return configure(section,{native,header,copy,title,description,tools});
+  }
+  function init(root){
+    const scope=root||document;
+    if(scope.matches?.('.fold-card'))enhance(scope);
+    scope.querySelectorAll('.fold-card').forEach(enhance);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>init(),{once:true});
+  else init();
+  return Object.freeze({create,enhance,init});
+})();
+</script>

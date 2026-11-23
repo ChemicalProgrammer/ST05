@@ -394,7 +394,8 @@ html[data-ui-mode=basic][data-events-enabled=true] .live-controls-help { display
 html[data-visual-style=elegant] .subsection-title { color:var(--secondary-text); border-bottom-color:var(--elegant-border); }
 
 /* Subsección (Subsection): control reutilizable de bloque plegable.
-   API visual: .fold-card, .fold-heading, .fold-toggle, .fold-content, .fold-tools.
+   API: STSubsection.create({title, description, tools}); STSubsection.init(root).
+   Las clases son la apariencia interna del componente, no su constructor.
    El contenedor padre aporta el primer margen exterior; evita sumarlo dos veces. */
 .fold-card, html[data-ui-mode=basic] #basic-run-options.fold-card {
   margin:var(--space-4) 0; padding:var(--space-4);
@@ -1321,7 +1322,7 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
    the full following row, so a wide toolbar cannot shorten its text column.
    display:contents flattens only the copy wrapper, preserving the h3 and its
    accessible toggle, and leaves native summary elements untouched. */
-.fold-heading {row-gap:var(--space-1);}
+.fold-heading {row-gap:var(--subsection-description-gap);}
 .fold-heading > :is(.fold-tools,.button-row),
 .fold-heading .fold-tools > .button-row {
   display:flex;align-items:center;flex-wrap:wrap;
@@ -1334,16 +1335,18 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
 .fold-heading > div:has(> h3 > .fold-toggle) {
   display:contents;
 }
+/* El título termina al pie de la fila de herramientas: un botón alto no añade
+   espacio debajo del texto. Flex elimina la caja de línea del botón inline. */
 .fold-heading > .subsection-heading-copy > :is(h3,.subsection-heading-title),
 .fold-heading > div:has(> h3 > .fold-toggle) > h3 {
-  display:block;order:0;flex:1 1 auto;min-width:0;margin:0;
+  display:flex;align-self:flex-end;order:0;flex:1 1 auto;min-width:0;margin:0;
   white-space:normal;
 }
 .fold-heading > .subsection-heading-copy > .subsection-description,
 .fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description,
 .fold-heading > .subsection-heading-copy > .subsection-playback-meta {
   order:2;flex:1 0 100%;min-width:0;max-width:100%;
-  padding-inline-start:calc(.45em + var(--space-1) + var(--space-2));
+  padding-inline-start:var(--subsection-text-inset);
 }
 /* Natural wrapping uses the actual section width. Do not clamp explanatory
    text or give it a fixed character limit on large or narrow sections. */
@@ -1354,11 +1357,11 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
 }
 .fold-native > summary .subsection-heading-copy {
   display:flex;flex:1 1 auto;min-width:0;align-items:stretch;
-  flex-direction:column;flex-wrap:nowrap;gap:var(--space-1);
+  flex-direction:column;flex-wrap:nowrap;gap:var(--subsection-description-gap);
 }
 .fold-native > summary .subsection-native-title {display:block;}
-/* Numerical playback and the 2D layout use the same descriptive row. The
-   progress stays at its trailing edge and wraps only when both do not fit. */
+/* Progress follows the description in the same row, instead of sitting under
+   the toolbar. It wraps with that row only when the text no longer fits. */
 .fold-heading .subsection-playback-meta,
 #simulation-playback .subsection-playback-meta {
   display:flex;flex-wrap:wrap;align-items:baseline;
@@ -1367,14 +1370,14 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
 }
 .fold-heading .subsection-playback-meta > .subsection-description,
 #simulation-playback .fold-heading .subsection-playback-meta > .subsection-description {
-  display:block;flex:1 1 auto;min-width:0;max-width:100%;margin:0;
+  display:block;flex:0 1 auto;min-width:0;max-width:100%;margin:0;
   white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip;
 }
 .fold-heading .subsection-progress-status,
 #simulation-playback .fold-heading #simulation-playback-status {
   display:inline-flex;flex:0 0 auto;align-items:baseline;flex-wrap:nowrap;
   gap:var(--space-2);min-width:0;max-width:100%;margin:0;
-  margin-inline-start:auto;white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
+  margin-inline-start:0;white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
 }
 #simulation-playback #playback-performance {display:none!important;}
 #simulation-equipment .equipment-performance-filters {align-self:flex-start;}
@@ -1404,6 +1407,58 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
   grid-column:2!important;grid-row:2 / span 2!important;
 }
 
+
+/* The constructor gives native and button-driven headers the same layout.
+   Title text ends on the same first-row baseline even with taller tools;
+   description owns the next complete row and the same marker inset. */
+.st-subsection > .st-subsection-header {
+  display:grid;grid-template-columns:minmax(0,1fr) fit-content(65%);
+  column-gap:var(--space-3);row-gap:var(--subsection-description-gap);
+  align-items:end;
+}
+.st-subsection > .st-subsection-header > .subsection-heading-copy {display:contents;}
+.st-subsection > .st-subsection-header > .subsection-heading-copy > :is(h3,.subsection-native-title) {
+  grid-column:1;grid-row:1;align-self:end;min-width:0;margin:0;
+}
+.st-subsection > .st-subsection-header > .subsection-heading-copy > :is(.subsection-description,.subsection-playback-meta) {
+  grid-column:1 / -1;grid-row:2;align-self:start;
+  padding-inline-start:var(--subsection-text-inset);min-width:0;
+}
+.st-subsection > .st-subsection-header > .fold-tools {
+  grid-column:2;grid-row:1;justify-self:end;align-self:end;
+  flex-wrap:wrap;min-width:0;max-width:100%;
+}
+.st-subsection > .st-subsection-header:not(:has(> .fold-tools:not(:empty))) {
+  grid-template-columns:minmax(0,1fr);
+}
+.st-subsection > .st-subsection-header .fold-toggle::before {
+  width:var(--subsection-marker-size);height:var(--subsection-marker-size);
+}
+.st-subsection.fold-native > summary.st-subsection-header::before {content:none;display:none;}
+.st-subsection.fold-native > summary.st-subsection-header > .subsection-heading-copy {display:contents;}
+.st-subsection.fold-native > summary.st-subsection-header .subsection-native-title {
+  display:flex;align-items:center;align-self:flex-end;order:0;flex:1 1 auto;
+  min-width:0;margin:0;font-size:var(--font-card);line-height:var(--leading-tight);
+  gap:var(--space-2);
+}
+.st-subsection.fold-native > summary.st-subsection-header .subsection-native-title::before {
+  content:"";flex:none;width:var(--subsection-marker-size);height:var(--subsection-marker-size);
+  margin-inline-end:var(--space-1);border-inline-end:2px solid currentColor;border-block-end:2px solid currentColor;
+  transform:rotate(45deg);transition:transform var(--duration-normal) ease-in-out;
+}
+.st-subsection.fold-native:not([open]) > summary.st-subsection-header .subsection-native-title::before {transform:rotate(-45deg);}
+.st-subsection.fold-native > summary.st-subsection-header .subsection-description {
+  order:2;flex:1 0 100%;padding-inline-start:var(--subsection-text-inset);
+  min-width:0;max-width:100%;margin:0;
+}
+.st-subsection.fold-native > summary.st-subsection-header > .fold-tools {
+  display:flex;order:1;align-items:center;flex:0 1 auto;flex-wrap:wrap;
+  gap:var(--space-2);min-width:0;max-width:100%;margin:0 0 0 auto;padding:0;
+}
+.st-subsection > .st-subsection-header > .fold-tools:empty {display:none;}
+@media(prefers-reduced-motion:reduce){
+  .st-subsection.fold-native > summary.st-subsection-header .subsection-native-title::before {transition:none;}
+}
 
 </style>
 

@@ -328,9 +328,16 @@ async function openCase(caseId, initialView) {
       // Keep the heading and explain why equipment cards need a new run.
       document.getElementById('live-equipment')?.replaceChildren?.();
       // The metric cards remain mounted even when the old result is invalid.
-      // Remove stale values immediately after changing the equipment model.
+      // Clear only their numeric values. Replacing a whole <strong> destroys
+      // the nested metric IDs and units needed by the next streamed frame.
       document.querySelectorAll?.('#simulation-playback-metrics > article strong')
-        .forEach(function(value){value.textContent='—';});
+        .forEach(function(value){
+          if(value.querySelector('.st-time-output')){
+            STTimeControls.setOutput(value,NaN); // Keep the selected time unit.
+          }else{
+            (value.querySelector('b[id]')||value).textContent='—';
+          }
+        });
       var progress=document.getElementById('playback-progress');
       if(progress)progress.textContent='0%';
       var playbackStatus=document.getElementById('playback-status');

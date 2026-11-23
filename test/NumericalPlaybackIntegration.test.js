@@ -164,6 +164,36 @@ test('live chart samples use measured playback frames while Results retains save
   assert.deepEqual(saved,[{virtualSecond:0,equipment:[]},{virtualSecond:1210,equipment:[]}]);
 });
 
+test('Play paints the calculated initial state synchronously while the worker response is pending',async()=>{
+  let held=null;
+  const requested=[];
+  const h=playbackHarness({factory:input=>({
+    time:0,tickSeconds:1/120,durationSeconds:input.run.durationSeconds,finished:false,
+    advanceTo(target){
+      requested.push(target);
+      return new Promise((resolve,reject)=>{held={resolve,reject};});
+    },
+    close(){held?.reject(Object.assign(new Error('PLAYBACK_CLOSED'),{code:'PLAYBACK_CLOSED'}));held=null;}
+  })});
+  try{
+    const initial=h.state.run.result.samples[0];
+    h.context.startPlayback();
+    assert.equal(h.renders.length,1,'The first paint happens in the Play action, before a timer or worker response');
+    assert.equal(h.equipmentFrames[0],initial,'Equipment cards receive the real initial calculation snapshot');
+    assert.equal(h.element('metric-time').seconds,0);
+    assert.equal(h.element('metric-output').textContent,String(initial.outputCount));
+    assert.equal(h.delays[0],0,'Painting the initial state must not defer the first calculation by an FPS interval');
+    assert.deepEqual(requested,[],'No asynchronous worker request is needed for this first paint');
+    await h.tick(0);
+    assert.deepEqual(requested,[0]);
+    assert(held,'The worker request remains unresolved during this check');
+    assert.equal(h.context.numericalPlaybackSession.pending,true);
+    assert.equal(h.renders.length,1);
+    assert.equal(h.equipmentFrames[0],initial);
+    assert.equal(h.element('metric-time').seconds,0);
+  }finally{h.close();await h.settle();}
+});
+
 test('a day-long saved replay at 1 s and 20 FPS shows newly calculated values before its next saved sample',async()=>{
   const h=playbackHarness();
   try{
@@ -361,7 +391,11 @@ test('pause during saved-position reconstruction retains the restoration target 
   }});
   try{
     h.state.run._resumeVirtualSecond=3.725;
-    h.context.startPlayback();await h.settle();await h.tick(0);
+    h.element('metric-time').seconds=3.725;
+    h.context.startPlayback();
+    assert.equal(h.renders.length,0,'A sparse earlier frame must not repaint the saved position during startup');
+    assert.equal(h.element('metric-time').seconds,3.725,'The displayed saved time stays unchanged while restoring');
+    await h.settle();await h.tick(0);
     assert(held&&held.frame.virtualSecond<3.725,'The worker has only reconstructed part of the saved position');
     assert.equal(h.context.numericalPlaybackSession.ready,false);
     h.context.pausePlayback();const paused=h.context.playbackVisualSample();

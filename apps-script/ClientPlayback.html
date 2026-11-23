@@ -120,6 +120,12 @@
         }
       }
       playbackClock=null;
+      // Show the already calculated state immediately, while the playback
+      // worker initializes. A sparse saved frame must not replace a later
+      // paused position that is still being reconstructed.
+      if(session.frame&&(session.ready||numericalPlaybackRestoreReached(session,session.frame))){
+        renderPlaybackFrame();
+      }
       scheduleNumericalPlaybackStep();
       return true;
     }

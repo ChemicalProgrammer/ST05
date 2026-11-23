@@ -167,6 +167,45 @@ function matchingDeclarations(element,property){
     ||compareSpecificity(a.specificity,b.specificity)||a.order-b.order);
 }
 
+// Resolve the inherited longhands and custom properties used by KPI units.
+// This compares the final stylesheet contract; it is not a pixel measurement.
+const presentationCache=new WeakMap();
+function resolvedPresentationValue(element,property){
+  if(!element)return undefined;
+  let cache=presentationCache.get(element);
+  if(!cache){cache=new Map();presentationCache.set(element,cache);}
+  if(cache.has(property))return cache.get(property);
+  const declaration=matchingDeclarations(element,property).at(-1);
+  const value=!declaration||declaration.value==='inherit'?resolvedPresentationValue(element.parentElement,property)
+    :declaration.value.replace(/var\((--[\w-]+)(?:,\s*([^)]*))?\)/g,(_,name,fallback)=>
+      resolvedPresentationValue(element,name)??fallback??'');
+  cache.set(property,value);return value;
+}
+
+test('playback count and rate units share time-unit typography and spacing in the generated KPI markup',()=>{
+  const dom=new JSDOM(renderAppsScript().html,{runScripts:'outside-only',virtualConsole:new VirtualConsole()}),w=dom.window;
+  try{
+    w.eval(source('TimeControls').replace(/^<script>/,'').replace(/<\/script>\s*$/,''));
+    const timeCard=w.document.getElementById('metric-runtime-losses');
+    w.STTimeControls.setOutput(timeCard,.91*60,{unit:'min'});
+    const timeUnit=timeCard.querySelector('select'),timeValue=timeCard.querySelector('b');
+    assert.equal(resolvedPresentationValue(timeUnit,'font-size'),'1rem');
+    assert.equal(resolvedPresentationValue(timeUnit,'font-weight'),'600');
+    assert.equal(resolvedPresentationValue(timeUnit,'font-size'),resolvedPresentationValue(timeValue,'font-size'));
+    for(const id of ['metric-output','metric-instant-rate','metric-rate','metric-buffer','metric-overflow']){
+      const unit=w.document.getElementById(id+'-unit'),value=w.document.getElementById(id);
+      assert.ok(unit&&value,'The shipped KPI markup retains both '+id+' elements');
+      for(const property of ['font-size','font-weight','line-height','color','vertical-align'])
+        assert.equal(resolvedPresentationValue(unit,property),resolvedPresentationValue(timeUnit,property),
+          id+' must match the time unit for '+property);
+      assert.equal(resolvedPresentationValue(unit,'font-size'),resolvedPresentationValue(value.parentElement,'font-size'));
+      assert.equal(resolvedPresentationValue(unit.parentElement,'align-items'),'baseline');
+      assert.equal(resolvedPresentationValue(unit.parentElement,'gap'),resolvedPresentationValue(timeUnit.parentElement,'gap'));
+      assert.equal(resolvedPresentationValue(unit.parentElement,'gap'),'2px');
+    }
+  }finally{w.close();}
+});
+
 test('generated CSS gives metric numbers the summary weight and keeps generic inheritance out of them',()=>{
   const h=harness(),{w,host,card}=h;
   try{

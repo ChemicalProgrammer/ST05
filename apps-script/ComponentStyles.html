@@ -37,12 +37,9 @@ button { --on-accent:#fff; }
 /* Keep the number and its unit as separate, persistent nodes during playback.
    Count labels can be translated without rewriting or rounding the number. */
 #simulation-playback-metrics .metric-card--result > .playback-metric-value {
-  display:flex;align-items:baseline;gap:var(--space-1);white-space:nowrap;
+  display:flex;align-items:baseline;gap:var(--time-unit-gap);white-space:nowrap;
 }
 #simulation-playback-metrics .playback-metric-value > b {font:inherit;font-weight:var(--weight-semibold);}
-#simulation-playback-metrics .playback-metric-unit {
-  font-size:var(--font-secondary);font-weight:var(--weight-regular);color:var(--muted);
-}
 /* Inputs and general time outputs keep their stable unit slot. Equipment
    counters have a separate layout; generic sizing/weight must not reach them. */
 .time-value-control {gap:var(--time-unit-gap)!important;}
@@ -69,6 +66,9 @@ button { --on-accent:#fff; }
 }
 .st-time-output:not([data-variant=metric]) > b,
 .st-time-output:not([data-variant=metric]) > .st-time-unit {font-weight:inherit!important;}
+/* All result-card units follow the established time-unit typography. Compact
+   equipment-state counters below keep their separate, smaller unit style. */
+#simulation-playback-metrics .playback-metric-unit,
 .metric-card--result > strong .st-time-output select {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--muted);vertical-align:baseline!important;}
 /* One definition owns compact counters. The number's width is fixed for the
    run horizon, so variable decimals cannot wrap the neighbouring label.

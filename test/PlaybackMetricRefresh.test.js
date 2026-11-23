@@ -132,7 +132,7 @@ test('Live equipment telemetry is selected by displayed time without overwriting
    {virtualSecond:30,outputCount:240}];
  const state={run:{result:{samples:history},sampleIndex:0,playing:true,liveTelemetry:telemetry}};
  const before=JSON.stringify(state.run.result);
- const context={state,playbackDisplaySecond:()=>25};
+ const context={state,playbackClock:null,playbackDisplaySecond:()=>25};
  loadFunctions(context,['playbackVisualSample']);
  assert.equal(vm.runInContext('playbackVisualSample().outputCount',context),160,
    'The newest measured point at or before 25 seconds is 160 bottles');

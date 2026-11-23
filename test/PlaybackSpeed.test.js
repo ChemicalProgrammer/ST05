@@ -111,3 +111,81 @@ test('numerical playback throttles visual frames without changing the virtual sa
  assert.ok(rendered<callbacks,'visual rendering should skip intermediate playback callbacks');
  assert.ok(rendered>=2,'the first and final frames must be rendered');
 });
+
+
+test('Live sample replacement keeps virtual clock monotonic and updates the actual equipment frame',()=>{
+ const code=readClientSource();
+ const sample=(second,units)=>({virtualSecond:second,outputCount:units,
+   equipment:[{id:'blow',processedUnits:units}]});
+ const first=[sample(1200,6932),sample(2400,7200)];
+ const state={run:{result:{samples:first,provisional:true},sampleIndex:0,
+   playing:true,active:true,timer:null,_displayedVirtualSecond:1200}};
+ let now=0,rendered=[],jobs=[],nextJob=0;
+ const context={state,roundSession:{streaming:true},playbackClock:null,
+   playbackRenderStats:{lastPaintAt:-Infinity},playbackRefreshIntervalMs:()=>100,
+   performance:{now:()=>now},document:{getElementById:()=>({value:'1000'})},
+   window:{setTimeout(fn,ms){const id=++nextJob;jobs.push({id,fn,ms});return id;},
+     clearTimeout(id){jobs=jobs.filter(job=>job.id!==id);}},
+   renderPlaybackFrame(){rendered.push(state.run.sampleIndex);context.playbackRenderStats.lastPaintAt=now;},
+   syncRunControls(){},setPlaybackStatus(){},captureSimulationView(){},
+   autosave:{change(){}},finishRoundSession(){},
+   findSampleIndexAtOrBefore(samples,second){
+     let i=0;while(i+1<samples.length&&samples[i+1].virtualSecond<=second)i++;
+     return i;
+   }};
+ vm.createContext(context);
+ const names=['schedulePlaybackStep','playbackElapsed','playbackDisplaySecond','advancePlaybackToRecordedFrame'];
+ for(const name of names){
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   assert.ok(start>=0&&end>start,'Missing '+name);
+   vm.runInContext(code.slice(start,end),context);
+ }
+ vm.runInContext('schedulePlaybackStep()',context);
+ now=400;
+ const t400=vm.runInContext('playbackDisplaySecond(state.run.result.samples[0])',context);
+ // Reproduce a worker sending a new cloned partial result during playback.
+ state.run.result={...state.run.result,samples:[...first.map(item=>({...item})),sample(3000,7600)]};
+ now=700;
+ const t700=vm.runInContext('playbackDisplaySecond(state.run.result.samples[0])',context);
+ now=1200;
+ assert.equal(vm.runInContext('advancePlaybackToRecordedFrame()',context),true);
+ assert.equal(state.run.sampleIndex,1,'Cursor must reach measured frame instead of leaving all counters frozen');
+ const t1200=vm.runInContext('playbackDisplaySecond(state.run.result.samples[1])',context);
+ state.run.result={...state.run.result,samples:state.run.result.samples.map(item=>({...item}))};
+ now=1450;
+ const t1450=vm.runInContext('playbackDisplaySecond(state.run.result.samples[1])',context);
+ assert.deepEqual([t400,t700,t1200,t1450],[1600,1900,2400,2650],
+   'Virtual clock must not jump backward across streamed object replacements');
+ assert.equal(state.run.result.samples[state.run.sampleIndex].equipment[0].processedUnits,7200);
+ assert.ok(rendered.includes(1),'Recorded equipment frame must be repainted');
+});
+
+test('Paused numerical replay resumes the exact virtual offset with an advancing clock',()=>{
+ const code=readClientSource();
+ const samples=[{virtualSecond:0},{virtualSecond:1},{virtualSecond:2}];
+ const state={run:{result:{samples},sampleIndex:0,playing:true,timer:null}};
+ let now=100,delay=0;
+ const context={state,roundSession:null,playbackClock:null,playbackMetricTimer:null,
+   playbackRenderStats:{lastPaintAt:-Infinity},playbackRefreshIntervalMs:()=>100,
+   performance:{now:()=>now},document:{getElementById:()=>({value:'1'})},
+   window:{setTimeout(fn,ms){delay=ms;return 1;},clearTimeout(){}},
+   renderPlaybackFrame(){context.playbackRenderStats.lastPaintAt=now;},
+   syncRunControls(){},setPlaybackStatus(){},captureSimulationView(){},
+   autosave:{change(){}},finishRoundSession(){}};
+ vm.createContext(context);
+ for(const name of ['schedulePlaybackStep','playbackElapsed','stopPlaybackTimer']){
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   vm.runInContext(code.slice(start,end),context);
+ }
+ vm.runInContext('schedulePlaybackStep()',context);
+ assert.equal(delay,1000);
+ now=350;
+ vm.runInContext('stopPlaybackTimer(true)',context);
+ now=850;
+ assert.equal(vm.runInContext('playbackElapsed(state.run.result.samples[0])',context),.25);
+ state.run.playing=true;
+ vm.runInContext('schedulePlaybackStep()',context);
+ assert.equal(delay,750,'Resume should not restart the full sample delay');
+ now=1100;
+ assert.equal(vm.runInContext('playbackElapsed(state.run.result.samples[0])',context),.5);
+});

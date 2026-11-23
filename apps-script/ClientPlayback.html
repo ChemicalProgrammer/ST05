@@ -295,7 +295,8 @@
       var base=state.run.result?.samples?.[state.run.sampleIndex];
       if(!base)return null;
       var telemetry=state.run.liveTelemetry;
-      if(!Array.isArray(telemetry)||!telemetry.length||!state.run.playing)return base;
+      if(state.run.roundIndex>0||!Array.isArray(telemetry)||!telemetry.length
+         ||(!state.run.playing&&playbackClock?.started!==null))return base;
       var virtualSecond=playbackDisplaySecond(base),low=0,high=telemetry.length-1,last=-1;
       while(low<=high){
         var mid=(low+high)>>1;

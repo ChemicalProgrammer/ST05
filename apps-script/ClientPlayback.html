@@ -97,6 +97,16 @@
         ||now-playbackRenderStats.lastPaintAt>=playbackRefreshIntervalMs()
         ||playbackRenderStats.lastPaintAt===-Infinity){
         renderPlaybackFrame();
+      }else if(typeof refreshPlaybackMetricCards==='function'
+        &&playbackRenderStats.lastPaintedNumericSample!==frame
+        &&now-(playbackRenderStats.lastNumericPaintAt??-Infinity)>=50){
+        // Old cards updated as each recorded sample became available.
+        // Preserve that responsiveness without redrawing expensive charts.
+        refreshPlaybackMetricCards(frame);
+        if(state.uiView==='simulation'&&typeof refreshNumericalOverviewFromSample==='function')
+          refreshNumericalOverviewFromSample();
+        playbackRenderStats.lastPaintedNumericSample=frame;
+        playbackRenderStats.lastNumericPaintAt=now;
       }
       if (!next) {
         playbackClock=null;
@@ -418,6 +428,8 @@
         stats.windowFrames=0;stats.windowStartedAt=finishedAt;
       }
       stats.lastPaintAt=finishedAt;
+      stats.lastNumericPaintAt=finishedAt;
+      stats.lastPaintedNumericSample=sample;
       if(finishedAt-stats.lastReportAt>=1000){
         stats.lastReportAt=finishedAt;
         updatePlaybackPerformanceLabel();

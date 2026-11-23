@@ -1617,6 +1617,14 @@ window.STSimulation2D=(function(){
   }
   // Only display strings are localized; runState, model values and seed IDs stay canonical.
   function localize2D(value){return window.STLanguage?.translate(value)??value;}
+  function render2DEventsNote(){
+    const commands=schedule.commands||[],stops=schedule.stops||[];
+    el('events-note').textContent=scheduleError||
+      commands.length+' '+localize2D('equipment events')+' · '+
+      stops.filter(event=>!event.fromCalendar).length+' '+localize2D('line stops')+' · '+
+      stops.filter(event=>event.fromCalendar).length+' '+localize2D('calendar stops')+'.'+
+      (stops.some(event=>event.targetProductId)?' '+localize2D('Changeovers stop the line; 2D keeps the selected format.'):'');
+  }
   function status(){
     const sourceStatus=(defaultRun
       ?' · '+localize2D('Round')+' '+representative.round+' · '+localize2D('Seed')+' '+representative.seed
@@ -1926,11 +1934,7 @@ window.STSimulation2D=(function(){
     scheduleOptions.events.checked=savedOptions.events??config.eventsEnabled!==false;
     scheduleOptions.calendar.checked=savedOptions.calendar??Boolean(config.plantCalendar?.enabled);
     scheduleOptions.events.disabled=scheduleOptions.calendar.disabled=Boolean(scheduleError);
-    const commands=schedule.commands||[],stops=schedule.stops||[];
-    el('events-note').textContent=scheduleError||
-      commands.length+' '+localize2D('equipment events')+' · '+stops.filter(event=>!event.fromCalendar).length+' '+localize2D('line stops')+' · '+
-      stops.filter(event=>event.fromCalendar).length+' '+localize2D('calendar stops')+'.'+
-      (stops.some(event=>event.targetProductId)?' '+localize2D('Changeovers stop the line; 2D keeps the selected format.'):'');
+    render2DEventsNote();
     rebuildMachineControls();
     const defaultLimit=config.durationSeconds>0?config.durationSeconds:3600;
     limitSeconds=stored?.limitSeconds>0&&Number.isFinite(stored.limitSeconds)?stored.limitSeconds:defaultLimit;
@@ -1963,6 +1967,7 @@ window.STSimulation2D=(function(){
   }};
   // A language switch updates run-state text without restarting the 2D engine.
   window.addEventListener('st-language-change',function(){
+    render2DEventsNote();
     if(!model)return;
     measureTelemetry(model.line||[]);
     status();

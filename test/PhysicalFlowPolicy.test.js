@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {simulateLine} from '../src/simulation/LineSimulationEngine.js';
+import {simulateLine,simulateLineAsync} from '../src/simulation/LineSimulationEngine.js';
 import {advancePackagePositions} from '../src/simulation/DiscretePackageEngine.js';
 const script=name=>fs.readFileSync('apps-script/'+name+'.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 function equipment(capacity=30){
@@ -56,4 +56,68 @@ test('conveyor dimension samples draw two matching units with independent width 
  assert.equal(draws.length,2);assert(draws.every(d=>d[0]==='case'));assert.equal(dimensions[1][0],'Gap · 0 mm');
  assert(dimensions[2][3]<draws[0][2],'case center-to-center dimension is above the cases');
  assert(dimensions[0][3]>draws[0][2]+25&&dimensions[1][3]>dimensions[0][3],'width and gap stay below the cases');
+});
+
+
+test('Optional physical positions reach full 36-pocket occupancy without creating material',()=>{
+ const line=equipment(36);
+ line[0].nominalRatePerSecond=8;line[2].nominalRatePerSecond=10;
+ line[0].processData.equipment.residenceTimeSeconds=3;
+ line[2].processData.equipment.residenceTimeSeconds=0;
+ line[0].processData.equipment.occupancyMode='STORAGE';
+ const storage=run(line);
+ line[0].processData.equipment.occupancyMode='POSITIONS';
+ const positions=run(line);
+ const at=(result,time)=>result.samples.find(frame=>frame.virtualSecond===time).equipment[0];
+ assert.equal(at(storage,6).internalInventoryBottles,24,'A residence of three seconds retains 24 bottles at 480 bpm');
+ assert.equal(at(positions,6).internalInventoryBottles,36,'A 36-position rotating machine is fully occupied after startup');
+ assert.equal(at(positions,6).internalCapacityBottles,36);
+ assert(at(positions,10).outputCount>0,'Position mode must discharge completed bottles');
+ assert.equal(positions.summary.materialBalance.residualUnits,0);
+ assert.equal(storage.summary.materialBalance.residualUnits,0);
+ assert(positions.samples.every(frame=>frame.equipment[0].internalInventoryBottles<=36));
+});
+
+test('2D physical positions hold 36 bottles at full feed and preserve the storage model',()=>{
+ const host={};vm.runInNewContext(script('Simulation2DEngine'),{window:host});
+ const machine=(id,occupancyMode)=>({kind:'machine',id,rate:8,
+   capacityBottles:36,residenceSeconds:3,occupancyMode,
+   inputBottleFactor:1,bottlesPerUnit:1,batch:1,startDelay:0,
+   rampSeconds:0,primeRampSeconds:0,mode:'AUTO'});
+ const conveyor={kind:'belt',id:'belt',length:10000,speed:1000,
+   packageLength:50,pitch:100,packedGap:0,prime:null,backup:null,
+   blockDelay:.5,clearDelay:.5,responseDelay:0,residual:0};
+ const runMode=mode=>{
+   const line=host.STSimulation2DEngine.create([machine('source',mode),conveyor,machine('sink','STORAGE')],7);
+   line.configure({failures:false,events:false,calendar:false});
+   for(let tick=0;tick<120*12;tick++)line.step(1/120);
+   return line.line[0];
+ };
+ const storage=runMode('STORAGE'),positions=runMode('POSITIONS');
+ assert.equal(storage.resident.length,24);
+ assert.equal(positions.resident.length,36);
+ assert(positions.produced>0);
+ assert.equal(positions.positionDue.length,positions.resident.length);
+});
+
+test('Live telemetry is denser than saved history and uses measured equipment counters',async()=>{
+ const line=equipment(36);
+ line[0].nominalRatePerSecond=8;
+ line[0].processData.equipment.occupancyMode='POSITIONS';
+ const input={case:{id:'live-telemetry',unitOfFlow:'bottles',equipment:line},
+   run:{durationSeconds:10,tickSeconds:.25,sampleEverySeconds:1,seed:7,
+     reliabilityEnabled:false,machineResidenceEnabled:true,calculationMode:'LIVE'}};
+ const parts=[];
+ const response=await simulateLineAsync(input,{onPartial:partial=>parts.push(partial),
+   yieldBetweenChunks:false});
+ assert(response.ok,JSON.stringify(response.error));
+ const result=response.result,telemetry=result.liveTelemetry;
+ assert(telemetry.length>result.samples.length,'Live telemetry is separate from bounded replay history');
+ assert(telemetry.length<=5001);
+ assert(parts.length>0&&parts[0].liveTelemetry.length>0,'Initial Live frame reaches the UI');
+ assert(telemetry.every((frame,index)=>index===0||frame.virtualSecond>telemetry[index-1].virtualSecond));
+ assert(telemetry.every(frame=>frame.equipment[0].internalInventoryBottles<=36));
+ assert.equal(telemetry.at(-1).equipment[0].internalInventoryBottles,36);
+ assert(telemetry.at(-1).equipment[0].processedUnits>0);
+ assert.equal(result.summary.materialBalance.residualUnits,0);
 });

@@ -974,20 +974,20 @@ window.STSimulation2D=(function(){
     context.fillStyle=soft;
     context.fillRect(x+1,y+6*tableScale,cardWidth-2,59*tableScale);
     context.fillStyle=ink;context.textAlign='left';context.font='600 '+telemetryFont;
-    context.fillText('Production',labelX,y+21*tableScale);
+    context.fillText(localize2D('Production'),labelX,y+21*tableScale);
     context.font=telemetryFont;context.fillStyle=muted;
-    context.fillText(num(shiftHours)+' h per shift',labelX,y+41*tableScale);
-    context.fillText('Period',labelX,y+60*tableScale);
+    context.fillText(num(shiftHours)+' '+localize2D('h per shift'),labelX,y+41*tableScale);
+    context.fillText(localize2D('Period'),labelX,y+60*tableScale);
     context.textAlign='right';
-    context.fillText('Cases',casesX,y+60*tableScale);
-    context.fillText(cases?'Bottle eq.':'Bottles',bottlesX,y+60*tableScale);
+    context.fillText(window.STLanguage?.current()==='es'?'Cajas':'Cases',casesX,y+60*tableScale);
+    context.fillText(localize2D(cases?'Bottle eq.':'Bottles'),bottlesX,y+60*tableScale);
     function row(label,quantity,offset,index){
       const baseline=y+offset*tableScale;
       if(index%2===1){
         context.fillStyle=soft;context.fillRect(x+1,baseline-13*tableScale,cardWidth-2,20*tableScale);
       }
       context.fillStyle=muted;context.font=telemetryFont;context.textAlign='left';
-      drawText(context,label,labelX,baseline,70*tableScale);
+      drawText(context,localize2D(label),labelX,baseline,70*tableScale);
       context.fillStyle=ink;context.font='600 '+telemetryFont;context.textAlign='right';
       drawText(context,num(cases?quantity:0),casesX,baseline,60*tableScale);
       drawText(context,num(cases?(bottleFactor>0?quantity*bottleFactor:NaN):quantity),bottlesX,baseline,72*tableScale);
@@ -1108,11 +1108,11 @@ window.STSimulation2D=(function(){
         for(const row of [['Parameter','Value','Unit'],...card.rows]){
           row.forEach((value,column)=>{
             context.font=(column===1?'600 ':'')+telemetryFont;
-            columns[column]=Math.max(columns[column],Math.ceil(context.measureText(String(value??'')).width)+2*tableScale);
+            columns[column]=Math.max(columns[column],Math.ceil(context.measureText(localize2D(String(value??''))).width)+2*tableScale);
           });
         }
         context.font='600 '+telemetryFont;
-        const heading=context.measureText(card.title||'').width+
+        const heading=context.measureText(card.showSignal?(card.title||''):localize2D(card.title||'')).width+
           (card.verdict?context.measureText(card.verdict).width+28*tableScale:card.showSignal?22*tableScale:0);
         const content=columns.reduce((sum,width)=>sum+width,0)+parameterValueGap+telemetryColumnGap;
         columns[0]+=Math.max(0,heading-content);
@@ -1154,25 +1154,25 @@ window.STSimulation2D=(function(){
         // The title is ordinary text. The clickable verdict capsule is a
         // real accessible button in the control overlay at the right.
         context.fillStyle=ink;
-        text(title,parameterX,y+21*tableScale,width-2*telemetryPadding);
+        text(localize2D(title),parameterX,y+21*tableScale,width-2*telemetryPadding);
       }else if(title){
         context.fillStyle=ink;
-        text(title,parameterX,y+21*tableScale,width-2*telemetryPadding);
+        text(localize2D(title),parameterX,y+21*tableScale,width-2*telemetryPadding);
       }
       if(!rows.length)return;
       context.textAlign='left';context.fillStyle=muted;context.font=telemetryFont;
-      context.fillText('Parameter',parameterX,y+41*tableScale);
-      context.textAlign='right';context.fillText('Value',valueX,y+41*tableScale);
-      context.textAlign='left';context.fillText('Unit',unitX,y+41*tableScale);
+      context.fillText(localize2D('Parameter'),parameterX,y+41*tableScale);
+      context.textAlign='right';context.fillText(localize2D('Value'),valueX,y+41*tableScale);
+      context.textAlign='left';context.fillText(localize2D('Unit'),unitX,y+41*tableScale);
       rows.forEach(([label,value,unit],index)=>{
         const rowY=y+46*tableScale+index*telemetryRowHeight,baseline=rowY+13*tableScale;
         if(index%2===1){context.fillStyle=soft;context.fillRect(left+1,rowY,width-2,telemetryRowHeight);}
         context.font=telemetryFont;context.fillStyle=muted;
-        text(label,parameterX,baseline,parameterWidth);
+        text(localize2D(label),parameterX,baseline,parameterWidth);
         context.fillStyle=ink;context.font='600 '+telemetryFont;context.textAlign='right';
-        text(value,valueX,baseline,valueWidth);
+        text(localize2D(value),valueX,baseline,valueWidth);
         context.fillStyle=muted;context.font=telemetryFont;context.textAlign='left';
-        text(unit,unitX,baseline,unitWidth);
+        text(localize2D(unit),unitX,baseline,unitWidth);
       });
     }
     let cardLeft=left;
@@ -1574,7 +1574,7 @@ window.STSimulation2D=(function(){
             context.setLineDash([3,4]);
             context.beginPath();context.moveTo(mx,beltY);context.lineTo(mx,my+4);context.stroke();
             context.setLineDash([]);
-            context.fillText(label,mx,my);
+            context.fillText(localize2D(label),mx,my);
           }
           context.restore();
           drawConveyorDimensions(context,item,x,dimensionY,width,beltY,ink,accent,pointer);
@@ -1963,7 +1963,10 @@ window.STSimulation2D=(function(){
   }};
   // A language switch updates run-state text without restarting the 2D engine.
   window.addEventListener('st-language-change',function(){
-    if(model)status();
+    if(!model)return;
+    measureTelemetry(model.line||[]);
+    status();
+    draw();
   });
 })();
 </script>

@@ -4,6 +4,8 @@
 #basic-section-row,#basic-navigation,#basic-case-actions,#basic-conveyor-layout { display:none; }
 html[data-ui-mode=basic] .app-shell.case-open { padding-left:0; padding-right:0; }
 #case-sidebar { display:none !important; }
+/* Configuration and raw result JSON are advanced workspace tools. */
+html:not([data-ui-mode=advance]) :is(#simulation-json-section,.raw-viewer:has(> #simulation-json-preview)) { display:none!important; }
 html[data-ui-mode=basic] .app-shell.case-open.assistant-open { padding-right:0; }
 .topbar { height:auto; min-height:var(--header-height); flex-wrap:wrap; padding-top:var(--space-3); padding-bottom:var(--space-3); }
 #basic-section-row { display:flex; align-items:center; gap:var(--space-3); order:3; flex-basis:100%; min-width:0; }
@@ -82,7 +84,7 @@ html[data-equipment-layout=split] .basic-machine .equipment-grid:not(.reliabilit
 html[data-ui-mode=basic] .reliability-controls label:has(> .reliability-enabled) { display:none !important; }
 html[data-equipment-layout=split] .basic-machine .equipment-grid,
 html[data-equipment-layout=split] .basic-machine .reliability-controls { grid-template-columns:1fr; gap:var(--space-3); }
-html[data-equipment-layout=split] .basic-machine .reliability-controls { margin-top:var(--space-2); }
+html[data-equipment-layout=split] .basic-machine .reliability-controls { margin-block:var(--space-3) 0; }
 html[data-equipment-layout=split] .basic-card-data { display:grid; gap:var(--space-3); margin-top:var(--space-3); }
 html[data-equipment-layout=split] .basic-buffer { display:block; text-align:right; padding:var(--space-2); min-height:var(--control-height); box-sizing:border-box; border:var(--border-width) solid var(--line-strong); border-radius:var(--radius-sm); color:var(--accent); }
 html[data-equipment-layout=split] .basic-availability { color:var(--accent); }

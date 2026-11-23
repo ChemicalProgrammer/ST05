@@ -125,7 +125,7 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Indicador de progreso** | `progress` | Porcentaje de ronda, cálculo o importación |
 | **Estado vacío** | `.empty` | Lista sin datos |
 | **Botón/Icono** | `.icon-button` | Acción sin texto visible con `aria-label` y `title`. Igual estilo en Header, Subsecciones y herramientas |
-| **Filtro de visibilidad por equipo** | `.equipment-filter-toggle`, `aria-pressed` | Dos iconos independientes en Equipment performance: Machines y Conveyors; selección visual con semántica de checkbox, sin modificar la simulación |
+| **Filtro de visibilidad por equipo** | `.equipment-filter-toggle`, `aria-pressed` | Dos iconos independientes de máquinas y transportadores, compartidos por Equipment performance y el editor combinado. Ambos grupos pueden mostrarse u ocultarse sin modificar la simulación |
 | **Valor–unidad** | `STTimeControls.output()`, `STTimeControls.setOutput()`, `STTimeControls.syncInputs()`, `.time-value-control` | Input: conserva la cifra y el ancho total; la unidad ocupa su ancho natural y la caja numérica toma el resto, con `--input-unit-gap` (8 px). Output: convierte la cifra y conserva sus reservas de espacio, con `--time-unit-gap` (2 px) |
 | **Etiqueta de estado** | `.badge`, clases semánticas | RUNNING, PASS, FAIL y otros estados sin depender solamente del color |
 | **Tarjeta de resultado** | `.metric-card.metric-card--result` | Las **diez** tarjetas de Simulation Playback (Virtual time, Output, Effective Runtime, Runtime Losses y demás) y resultados secundarios. `STTimeControls.output()` hereda el tamaño del valor del contenedor |
@@ -138,7 +138,7 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Tabla de datos** | `.table-scroll`, `table` | Tabla con columnas optimizadas y scroll horizontal |
 | **Fila de caso** | `.case-row` | Vista de un caso en el catálogo |
 | **Tarjeta de configuración de equipo** | `.equipment-card` | Formulario/tarjeta de máquina o conveyor con borde superior de 4 px, consistente con el acento de los KPI |
-| **Casilla enmarcada** | `label.st-checkbox-card` | Control compartido en Simulation, 2D y Settings; fondo suave, borde, espaciado y foco comunes, con el label completo como área clicable |
+| **Casilla enmarcada** | `label.st-checkbox-card` | Control compartido en Simulation, 2D y Settings; checkbox y texto en una fila, fondo suave, borde, espaciado y foco comunes, con el label completo como área clicable |
 
 ### Cobertura de muestras
 El catálogo mantiene los nombres oficiales en la **tercera columna de todas las pestañas**. Incluye navegación real del Header, pestañas de diálogos, navegación entre simulaciones, variantes de botones, campos, menús, estado/progreso, tablas, gráficas y las familias de tarjetas. Los ejemplos interactivos están aislados: cambiar la pestaña o el color de un ejemplo no modifica el caso, su simulación, ni el selector de colores real. Los estilos viven en sus módulos propietarios; `DesignReference.html` incluye sólo la vista previa y su interacción.
@@ -394,7 +394,7 @@ the same Advance prompt sections for both.
 
 ### Completion of the final UI requests — 23 November 2026
 
-- **Simulation JSON** uses the same `STSubsection` header, description, toolbar
+- **Simulation JSON** is available only in Advance and uses the same `STSubsection` header, description, toolbar
   and collapsible body as Equipment. It starts collapsed. Edit/import/export
   remain in the subsection toolbar, independently of the disclosure button.
   The editor dialog contains no Import button. Both external import actions
@@ -473,3 +473,25 @@ del aviso cubren demos actuales, heredados y modificados por importación.
   El nivel se alinea a la izquierda y la etiqueta de origen a la derecha; el
   título ocupa la fila siguiente. El encabezado admite salto de línea y texto
   largo sin desbordar la tarjeta. Basic conserva su presentación simplificada.
+
+### Controles, filtros y ayuda · 23 nov 2026
+
+- **Casillas:** las reglas de cuadrícula para campos excluyen los labels con
+  checkbox. El componente enmarcado conserva `display:flex`, dirección de fila
+  y alineación vertical centrada en Settings, incluidos sus controles dinámicos.
+- **JSON de simulación:** las subsecciones de configuración y resultado JSON
+  sólo se muestran en Advance. La regla sigue vigente al alternar la vista de
+  equipos separados/combinados o mover los paneles.
+- **Máquina crítica:** es el primer control del formulario de equipo, antes de
+  velocidad y flujo de material. Ocupa una fila completa y comparte el mismo
+  espaciado de los demás campos. Conserva la selección exclusiva de una máquina.
+- **Equipos separados o juntos:** el selector contiene exactamente esas dos
+  opciones; los casos nuevos o con el valor heredado vacío usan separados.
+  La vista conjunta sustituye los filtros de texto por los iconos de máquinas
+  y transportadores, ambos activos inicialmente. Si se oculta el equipo
+  seleccionado, el inspector se cierra y devuelve sus campos a la tarjeta.
+  Para reordenar la línea completa se muestran ambos grupos.
+- **Opciones y FAQ:** se retira el acceso duplicado a Settings de Advance junto
+  con los botones, diálogo, respuestas y controlador FAQ. Queda un acceso
+  visible a Settings en la galería o en la cabecera del caso, según el contexto.
+  La ayuda por subsección se definirá en una revisión posterior.

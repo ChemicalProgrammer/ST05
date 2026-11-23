@@ -107,7 +107,7 @@ var ST_TEXT_RESOURCES = {
   "filter.conveyors":"Conveyors",
   "filter.all":"All",
   "filter.empty":"No equipment matches this filter.",
-  "filter.reorder":"Select All to reorder the complete line.",
+  "filter.reorder":"Show machines and conveyors to reorder the complete line.",
   "batch.compare_note":"Replication statistics are compared separately. The standard result comparison below uses round 1. Compare batch means only with matching duration, round count and seed lists.",
   "batch.evidence":"These proposals use round 1 as dynamic evidence. Replication averages are available in Results; proposed gains remain unverified.",
   "client.case_loaded_migration_pending":"Case loaded. Drive folder conversion could not finish; it will retry when you reopen or save the case.",

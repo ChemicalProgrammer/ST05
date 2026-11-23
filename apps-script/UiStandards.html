@@ -26,7 +26,7 @@ table :is(th,td),.markdown-table :is(th,td),#sheet-import-preview :is(th,td),.sc
 input[type=number],input[inputmode=numeric],input[inputmode=decimal] { text-align:right; font-variant-numeric:tabular-nums; }
 /* Fixed dimensions override field-grid rules which also match checkboxes. */
 input[type=checkbox] { width:var(--checkbox-size) !important; min-width:var(--checkbox-size) !important; max-width:var(--checkbox-size) !important; height:var(--checkbox-size) !important; min-height:var(--checkbox-size) !important; max-height:var(--checkbox-size) !important; padding:0 !important; margin:0; flex:0 0 var(--checkbox-size) !important; appearance:auto; accent-color:var(--accent); vertical-align:middle; }
-label:has(> input[type=checkbox]) { display:flex; align-items:center; gap:var(--space-2); }
+label:has(> input[type=checkbox]) { display:flex; flex-direction:row; flex-wrap:nowrap; align-items:center; gap:var(--space-2); }
 .workspace-content > section.card { padding:var(--panel-padding); }
 .workspace-content > section.card > .section-heading { margin:0 0 var(--section-gap); gap:var(--space-3); min-height:var(--control-height); }
 .workspace-content > section.card > .section-heading h2 { margin:0; }
@@ -40,7 +40,7 @@ label:has(> input[type=checkbox]) { display:flex; align-items:center; gap:var(--
 .accent-heading { line-height:var(--leading-body); }
 :is(#settings-dialog,#plant-calendar-dialog) .settings-simulation-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-3); align-items:start; }
 :is(#settings-dialog,#plant-calendar-dialog) .settings-simulation-grid > .settings-option-group { margin:0; min-width:0; }
-:is(#settings-dialog,#plant-calendar-dialog) .settings-simulation-grid label { display:grid; gap:var(--space-2); }
+:is(#settings-dialog,#plant-calendar-dialog) .settings-simulation-grid label:not(:has(> input[type=checkbox])) { display:grid; gap:var(--space-2); }
 :is(#settings-dialog,#plant-calendar-dialog) .settings-simulation-grid select { width:100%; }
 #message-dialog-message { white-space:pre-line; overflow-wrap:anywhere; }
 .dialog-heading > .icon-button { width:var(--control-height); height:var(--control-height); min-width:var(--control-height); padding:var(--space-2); margin:0; flex-shrink:0; }
@@ -339,7 +339,7 @@ html[data-events-enabled=false] .live-equipment-controls > button:not(.loss-togg
 .simulation-duration-grid input:not([type=checkbox]), .simulation-duration-grid select { width:100%; min-width:0; box-sizing:border-box; }
 #settings-page-simulation .settings-simulation-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-4); align-items:start; }
 #settings-page-simulation .settings-simulation-grid > label, #settings-page-simulation .settings-option-group { min-width:0; margin:0; }
-#settings-page-simulation .settings-simulation-grid label:not(.checkbox-label):not(.settings-reliability-toggle) { display:flex; flex-direction:column; gap:var(--space-2); }
+#settings-page-simulation .settings-simulation-grid label:not(.checkbox-label):not(.settings-reliability-toggle):not(.st-checkbox-card) { display:flex; flex-direction:column; gap:var(--space-2); }
 #settings-page-simulation .settings-simulation-grid select, #settings-page-simulation .settings-simulation-grid input:not([type=checkbox]) { width:100%; box-sizing:border-box; }
 #settings-page-simulation .recording-toggle-grid { margin-top:var(--space-4); }
 #settings-page-simulation .simulation-settings-groups > .settings-section { padding-block:var(--space-4); }
@@ -1315,10 +1315,10 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
   margin-inline-start:0;white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
 }
 #simulation-playback #playback-performance {display:none!important;}
-#simulation-equipment .equipment-filter-toggle[aria-pressed=true] {
+:is(#simulation-equipment,#equipment-section) .equipment-filter-toggle[aria-pressed=true] {
   background:var(--selected);color:var(--accent);border-color:var(--accent);
 }
-#simulation-equipment .equipment-filter-toggle[aria-pressed=false] {
+:is(#simulation-equipment,#equipment-section) .equipment-filter-toggle[aria-pressed=false] {
   background:var(--surface);color:var(--muted);border-color:var(--line-strong);
 }
 #live-equipment > .live-equipment-card[hidden] {display:none!important;}

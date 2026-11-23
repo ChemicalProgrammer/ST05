@@ -194,7 +194,7 @@ test('Basic mode builds a canonical subsection and preserves the efficiency body
   const h=harness(application);
   try{
     h.w.STPreferences={caseOptions:()=>({equipmentLayout:'combined',showRealData:true}),applyFontScale(){},applyJsonFields(){},applyPalette(){}};
-    h.w.STFaq={icon:()=>'<span>?</span>'};h.w.STIcons={decorate(){}};
+    h.w.STIcons={decorate(){}};
     h.w.STEquipmentInspector={release(){},hide(){},refreshTitle(){}};h.w.STEquipmentFilter={set(){}};
     h.w.STScenarios={audit:()=>[]};
     h.w.eval(source('STBasicMode'));

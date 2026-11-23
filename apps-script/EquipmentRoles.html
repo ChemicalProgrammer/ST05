@@ -17,13 +17,14 @@ window.STEquipmentRoles=(function(){
     var fields=card._fields,grid=fields.querySelector('.equipment-grid');
     var selected=equipment.type==='PACEMAKER'||equipment.processData?.role==='PACEMAKER'||equipment.characteristics?.isPacemaker===true;
     [['pacemaker','checkbox',__ST_TEXT__('equipment.pacemaker')],['maximum-speed','number',__ST_TEXT__('equipment.maximum_speed')],['recovery-time','number',__ST_TEXT__('equipment.recovery_time')],['residence-time','number','Residence time (s)']].forEach(function(spec){
-      var label=document.createElement('label'),input=document.createElement('input');label.className='machine-design-field'+(spec[0]==='pacemaker'?' equipment-critical-field':'');label.textContent=spec[2];label.title=spec[0]==='pacemaker'?__ST_TEXT__('equipment.pacemaker_help'):__ST_TEXT__('equipment.maximum_help');input.className='equipment-'+spec[0];input.type=spec[1];
+      var label=document.createElement('label'),input=document.createElement('input');label.className='machine-design-field'+(spec[0]==='pacemaker'?' equipment-critical-field checkbox-label':'');label.textContent=spec[2];label.title=spec[0]==='pacemaker'?__ST_TEXT__('equipment.pacemaker_help'):__ST_TEXT__('equipment.maximum_help');input.className='equipment-'+spec[0];input.type=spec[1];
       if(spec[1]==='number'){input.min=spec[0]==='residence-time'?'0':'0.000001';input.step='any';}
       if(spec[0]==='residence-time'){input.value=equipment.processData?.equipment?.residenceTimeSeconds??'';input.placeholder='0';label.title='Optional minimum time inside the machine. Capacity alone does not impose a residence time; nominal speed defines the processing cycle.';}
       if(spec[0]==='pacemaker'){input.checked=selected;input.addEventListener('change',function(){if(input.checked)document.querySelectorAll('.equipment-pacemaker').forEach(function(other){if(other!==input)other.checked=false;});});}
       if(spec[0]==='maximum-speed')input.value=equipment.processData?.equipment?.maximumSpeedBpm??'';
       if(spec[0]==='recovery-time'){input.value=equipment.processData?.equipment?.recoveryTimeSeconds??'';input.placeholder=__ST_TEXT__('equipment.recovery_default');label.title=__ST_TEXT__('equipment.recovery_help');}
-      label.appendChild(input);grid.appendChild(label);
+      if(spec[0]==='pacemaker'){label.prepend(input);grid.prepend(label);}
+      else{label.appendChild(input);grid.appendChild(label);}
     });
     var capacityLabel=document.createElement('label'),capacity=document.createElement('input');
     capacityLabel.className='machine-design-field';

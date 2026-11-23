@@ -2,23 +2,38 @@
 window.STEquipmentFilter=(function(){
   var current='all',split=false;
   function canReorder(){return current==='all'||split;}
+  function enabled(group){return current==='all'||current===group;}
   function apply(){
-    var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card')),visible=0;
+    var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card')),visible=0,selectionHidden=false;
     cards.forEach(function(card){
       var fields=card._fields||card,type=fields.querySelector('.equipment-type')?.value;
       STEquipmentInspector.refreshTitle(card);
-      var show=current==='all'||(current==='conveyors'?type==='CONVEYOR':type!=='CONVEYOR');
+      var show=enabled(type==='CONVEYOR'?'conveyors':'equipment');
       card.classList.toggle('hidden',!show);if(show)visible++;
       var handle=card.querySelector('.equipment-drag');handle.disabled=!canReorder();
       handle.title=(canReorder()?__ST_TEXT__('client.drag_to_reorder_use_arrow_up_or_down_on_this_handle'):__ST_TEXT__('filter.reorder'));
-      if(!show&&card.classList.contains('equipment-selected'))STEquipmentInspector.hide();
+      if(!show&&card.classList.contains('equipment-selected')){
+        STEquipmentInspector.release();STEquipmentInspector.hide();selectionHidden=true;
+      }
     });
     var empty=document.getElementById('equipment-filter-empty');empty.classList.toggle('hidden',!cards.length||visible>0);
-    document.querySelectorAll('[name="equipment-filter"]').forEach(function(input){input.checked=input.value===current;});
+    [['machines','equipment'],['conveyors','conveyors']].forEach(function(spec){
+      var button=document.getElementById('toggle-editor-'+spec[0]);if(!button)return;
+      var shown=enabled(spec[1]);button.setAttribute('aria-pressed',String(shown));
+      button.title=(shown?'Hide ':'Show ')+spec[0];
+    });
+    if(selectionHidden)window.dispatchEvent(new Event('st:inspector'));
   }
-  function set(value,separate){current=value;split=Boolean(separate);apply();}
+  function set(value,separate){current=['all','equipment','conveyors','none'].includes(value)?value:'all';split=Boolean(separate);apply();}
   document.addEventListener('DOMContentLoaded',function(){
-    document.querySelectorAll('[name="equipment-filter"]').forEach(function(input){input.addEventListener('change',function(){if(input.checked)set(input.value);});});
+    [['machines','equipment'],['conveyors','conveyors']].forEach(function(spec){
+      document.getElementById('toggle-editor-'+spec[0])?.addEventListener('click',function(){
+        if(split)return;
+        var machines=enabled('equipment'),conveyors=enabled('conveyors');
+        if(spec[1]==='equipment')machines=!machines;else conveyors=!conveyors;
+        set(machines?(conveyors?'all':'equipment'):(conveyors?'conveyors':'none'));
+      });
+    });
     document.addEventListener('change',function(event){if(event.target.matches('.equipment-type'))apply();});
   });
   return {apply:apply,set:set,canReorder:canReorder};

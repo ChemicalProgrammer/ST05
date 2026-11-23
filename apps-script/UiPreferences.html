@@ -94,13 +94,14 @@ window.STPreferences = (function() {
   function caseOptions() {
     var saved=caseProvider?.()?.metadata?.consoleOptions||{};
     // El guardado de casos es exclusivamente manual. Ignorar políticas heredadas.
-    return {equipmentLayout:['split','combined'].includes(saved.equipmentLayout)?saved.equipmentLayout:'',
+    return {equipmentLayout:saved.equipmentLayout==='combined'?'combined':'split',
       rateLossCategories:saved.rateLossCategories||{},showRealData:saved.showRealData!==false,
       seedPolicy:(saved.seedPolicy??read('seedPolicy'))==='FIXED'?'FIXED':'RANDOM'};
   }
   function setCaseOptions(value) {
     var record=caseProvider?.();if(!record)return false;
     record.metadata=record.metadata||{};
+    value=Object.assign({},value,{equipmentLayout:value.equipmentLayout==='combined'?'combined':'split'});
     var previous=record.metadata.consoleOptions;
     if(JSON.stringify(previous)===JSON.stringify(value))return true;
     record.metadata.consoleOptions=Object.assign({},value);

@@ -1,5 +1,6 @@
 import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {JSDOM,VirtualConsole} from 'jsdom';
 import postcss from 'postcss';
 import selectorParser from 'postcss-selector-parser';
@@ -44,7 +45,8 @@ function value(element,property,width=1440){
   let cache=matchingCache.get(element);
   if(!cache){cache=new Map();matchingCache.set(element,cache);}
   const key=[width,document.documentElement.dataset.uiMode,document.documentElement.dataset.visualStyle,
-    document.documentElement.dataset.headerView,document.documentElement.dataset.basicView].join(':');
+    document.documentElement.dataset.headerView,document.documentElement.dataset.basicView,
+    document.documentElement.dataset.equipmentLayout].join(':');
   if(!cache.has(key))cache.set(key,rules.map((rule,order)=>({...rule,order})).filter(rule=>{
     if(!applies(rule,width))return false;
     try{return element.matches(rule.selector);}catch{return false;}
@@ -278,4 +280,60 @@ test('numeric status and both conveyor verdicts use the same shared pill geometr
       assert.equal(value(pill,'color'),'var(--success)');
     }
   }finally{card.remove();verdict.remove();}
+});
+
+test('checkbox cards keep input and text in one horizontal row in static and dynamic Settings',()=>{
+  const source=fs.readFileSync('apps-script/Settings.html','utf8');
+  const prompts=source.slice(source.indexOf('  function renderPrompts('),source.indexOf('  function activeCase('));
+  const categories=source.slice(source.indexOf('  function renderRateLossSettings('),source.indexOf('  // Modo predeterminado'));
+  new Function('document',`
+    const el=id=>document.getElementById(id);
+    const promptDefinitions=[{id:'layout-check',label:'Agent prompt',defaultText:'Saved content'}];
+    const promptBudget=()=>{},promptVisibility=()=>{};
+    const STPreferences={caseOptions:()=>({})};
+    const STReports={rateLossCategories:[{id:'general',label:'General stops'}]};
+    ${prompts}${categories}
+    renderPrompts({});renderRateLossSettings();
+  `)(document);
+  const root=document.documentElement;
+  const saved=['data-ui-mode','data-visual-style'].map(name=>[name,root.getAttribute(name)]);
+  const cards=[...document.querySelectorAll('label.st-checkbox-card')];
+  assert.ok(cards.some(card=>card.closest('#settings-rate-loss-categories')));
+  assert.ok(cards.some(card=>card.closest('#gemini-prompt-editor')));
+  try{
+    for(const mode of ['basic','advance'])for(const style of ['classic','elegant']){
+      root.dataset.uiMode=mode;root.dataset.visualStyle=style;
+      for(const width of [360,1440])for(const card of cards){
+        const context=mode+'/'+style+'/'+width+' '+card.textContent.trim();
+        assert.equal(value(card,'display',width),'flex',context);
+        assert.equal(value(card,'flex-direction',width),'row',context);
+        assert.equal(value(card,'flex-wrap',width),'nowrap',context);
+        assert.equal(value(card,'align-items',width),'center',context);
+        assert.equal(value(card,'border',width),'var(--border-width) solid var(--line)',context);
+        assert.ok(card.querySelector(':scope > input[type=checkbox]'),context);
+      }
+    }
+  }finally{
+    for(const [name,original] of saved)if(original===null)root.removeAttribute(name);else root.setAttribute(name,original);
+    document.getElementById('settings-rate-loss-categories').replaceChildren();
+    document.getElementById('gemini-prompt-editor').replaceChildren();
+  }
+});
+
+test('active configuration and raw-result JSON sections are Advance-only in both equipment layouts',()=>{
+  const root=document.documentElement;
+  const saved=['data-ui-mode','data-visual-style','data-equipment-layout','data-basic-view'].map(name=>[name,root.getAttribute(name)]);
+  const sections=[document.getElementById('simulation-json-section'),document.getElementById('simulation-json-preview').closest('details')];
+  try{
+    for(const layout of ['split','combined'])for(const style of ['classic','elegant'])for(const view of ['equipment','conveyors']){
+      root.dataset.equipmentLayout=layout;root.dataset.visualStyle=style;root.dataset.basicView=view;
+      for(const mode of ['basic','advance']){
+        root.dataset.uiMode=mode;
+        for(const section of sections)for(const width of [360,1440]){
+          if(mode==='basic')assert.equal(value(section,'display',width),'none');
+          else assert.notEqual(value(section,'display',width),'none');
+        }
+      }
+    }
+  }finally{for(const [name,original] of saved)if(original===null)root.removeAttribute(name);else root.setAttribute(name,original);}
 });

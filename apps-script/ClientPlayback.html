@@ -87,7 +87,7 @@
       var rate=Number(document.getElementById('run-playback-rate').value||1);
       // When streaming replaces the sample object at the same virtual second,
       // retain the running clock instead of restarting its wall-time origin.
-      if(playbackClock&&playbackClock.frame?.virtualSecond===frame?.virtualSecond&&playbackClock.rate===rate){
+      if(playbackClock&&playbackClock.started!==null&&playbackClock.frame?.virtualSecond===frame?.virtualSecond&&playbackClock.rate===rate){
         playbackClock.frame=frame;
       }else playbackClock={frame,offset,rate,started:performance.now()};
       var now=performance.now();

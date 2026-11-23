@@ -29,8 +29,9 @@
 
     function startPlayback() {
       if (!state.run.result || state.run.playing) return;
-      state.run.active=true;syncRunControls();
+      state.run.active=true;
       state.run.playing = true;
+      syncRunControls();
       schedulePlaybackStep();
       if(state.run.playing)schedulePlaybackMetricTick();
     }
@@ -38,6 +39,7 @@
     function pausePlayback() {
       if(roundSession?.firstUpdating)roundSession.resumeAfterEdit=false;
       stopPlaybackTimer(true);
+      syncRunControls();
       // Preserve the precise displayed virtual time at the pause position.
       refreshPlaybackMetricCards();
       setPlaybackStatus('Paused');
@@ -228,11 +230,22 @@
         {unit:'min',label:'Change Back-up Stop unit'});
       document.getElementById('metric-line-oee').textContent=formatLineOeeAtSample(sample);
       if(state.uiView==='simulation')updateLiveEquipmentStateBadges(clockSecond);
-      setPlaybackStatus(state.run.playing?'Playing':(sample.virtualSecond>0?'Paused':'Ready'));
+      // Fast and Summary open on their terminal sample: these are completed
+      // calculations, not paused playbacks. Provisional Live chunks are not final.
+      var finished=!state.run.result.provisional&&Number.isFinite(duration)&&sample.virtualSecond>=duration-1e-8;
+      setPlaybackStatus(state.run.playing?'Playing':(finished?'Completed':(sample.virtualSecond>0?'Paused':'Ready')));
     }
 
+    var playbackControlSignature=null;
     function renderPlaybackFrame() {
-      syncRunControls();
+      // Locking every input/selector on every visual frame is expensive for
+      // multi-equipment Live playback. Only synchronize when the lock state,
+      // selected round or recording mode changes; form events sync directly.
+      var controlSignature=[Boolean(state.run.result),state.run.result?.detailCoverage?.recordingMode||'',
+        Boolean(state.run.active),Boolean(state.run.playing),state.run.roundIndex,
+        Boolean(roundSession?.pending),Boolean(roundSession?.firstUpdating),Boolean(roundSession?.dirty),
+        Boolean(window.STSimulation2D?.isRunning?.()),state.activeSimulationId].join('|');
+      if(controlSignature!==playbackControlSignature){playbackControlSignature=controlSignature;syncRunControls();}
       var progress=document.getElementById('playback-progress'),effective=document.getElementById('run-effective-progress');
       if(effective){
         var result=state.run.result,stop=result?.effectiveRuntimeStop,frame=result?.samples?.[state.run.sampleIndex];
@@ -318,6 +331,9 @@
     }
 
     function formatInstantaneousOutputRate() {
+      // Summary retains only endpoint samples: an all-run average is not an
+      // instantaneous rate. The cumulative average has its own metric card.
+      if (state.run.result?.detailCoverage?.recordingMode==='SUMMARY') return '—';
       if (!state.run.result || state.run.sampleIndex === 0) return '—';
       var current = state.run.result.samples[state.run.sampleIndex];
       var previous = state.run.result.samples[state.run.sampleIndex - 1];

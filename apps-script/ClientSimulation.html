@@ -747,6 +747,7 @@
         if(session.dirty||session.version!==version){document.getElementById('batch-status').textContent=__ST_TEXT__('batch.wait_for_events');return;}
         if(session.run.rounds===1&&!session.run.shiftSeconds)delete response.result.batch;
         persistRoundResult(session,response.result,'COMPLETE');session.first=response.result;toggle('batch-dialog',false);
+        if(session.run.calculationMode!=='LIVE')setStatus('Calculation complete. Results are ready; playback is optional.');
         if(firstResult)document.getElementById('rounds-warning').textContent=__ST_TEXT__('batch.events_recalculated');
       }).catch(function(error){
         if(!roundSessionActive(session)||generation!==session.generation)return;

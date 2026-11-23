@@ -31,6 +31,7 @@
       if (!state.run.result || state.run.playing) return;
       state.run.active=true;
       state.run.playing = true;
+      state.run._displayedVirtualSecond=state.run.result.samples?.[state.run.sampleIndex]?.virtualSecond||0;
       syncRunControls();
       schedulePlaybackStep();
       if(state.run.playing)schedulePlaybackMetricTick();
@@ -51,6 +52,7 @@
       if(roundSession?.firstUpdating)roundSession.resumeAfterEdit=false;
       stopPlaybackTimer();
       state.run.sampleIndex=0;
+      state.run._displayedVirtualSecond=0;
       renderPlaybackFrame();
       setPlaybackStatus('Stopped');
       if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
@@ -70,6 +72,7 @@
       state.run.roundIndex=0;
       if(state.run.representative)state.run.result=state.run.representative;
       state.run.sampleIndex = 0;
+      state.run._displayedVirtualSecond=0;
       syncPlaybackRounds();
       renderPlaybackFrame();
       setPlaybackStatus(__ST_TEXT__('client.reset'));
@@ -82,7 +85,11 @@
       var frame=samples[state.run.sampleIndex],next=samples[state.run.sampleIndex+1];
       var offset=playbackElapsed(frame);
       var rate=Number(document.getElementById('run-playback-rate').value||1);
-      playbackClock={frame,offset,rate,started:performance.now()};
+      // When streaming replaces the sample object at the same virtual second,
+      // retain the running clock instead of restarting its wall-time origin.
+      if(playbackClock&&playbackClock.frame?.virtualSecond===frame?.virtualSecond&&playbackClock.rate===rate){
+        playbackClock.frame=frame;
+      }else playbackClock={frame,offset,rate,started:performance.now()};
       var now=performance.now();
       var ending=!next&&!roundSession?.streaming;
       // Keep isolated scheduler tests and older embedded clients compatible.
@@ -114,7 +121,7 @@
     }
 
     function playbackElapsed(frame){
-      if(!frame||playbackClock?.frame!==frame)return 0;
+      if(!frame||!playbackClock||playbackClock.frame?.virtualSecond!==frame.virtualSecond)return 0;
       return playbackClock.offset+(playbackClock.started===null?0:(performance.now()-playbackClock.started)*playbackClock.rate/1000);
     }
 
@@ -136,6 +143,11 @@
       playbackMetricTimer=window.setTimeout(function(){
         playbackMetricTimer=null;
         if(!state.run.playing)return;
+        // A light tick also advances the sample cursor if the virtual clock
+        // crossed a real recording boundary while a heavy repaint was skipped.
+        if(typeof advancePlaybackToRecordedFrame==='function'&&advancePlaybackToRecordedFrame()){
+          schedulePlaybackMetricTick();return;
+        }
         refreshPlaybackMetricCards();
         // Equipment overview uses the same recorded frame as the KPI cards,
         // without waiting for a costly chart/card repaint.
@@ -144,16 +156,42 @@
       },PLAYBACK_METRIC_REFRESH_MS);
     }
 
+    // Catch up with recorded snapshots, not invented intermediate production.
+    // Heavy canvas rendering is still throttled separately from this cursor.
+    function advancePlaybackToRecordedFrame(){
+      var samples=state.run.result?.samples,frame=samples?.[state.run.sampleIndex];
+      if(!state.run.playing||!frame||!samples?.length||!playbackClock)return false;
+      var target=frame.virtualSecond+playbackElapsed(frame);
+      if(!Number.isFinite(target)||target<=frame.virtualSecond)return false;
+      var nextIndex=findSampleIndexAtOrBefore(samples,Math.min(target,samples[samples.length-1].virtualSecond));
+      if(nextIndex<=state.run.sampleIndex)return false;
+      state.run.sampleIndex=nextIndex;
+      if(state.run.timer!=null)window.clearTimeout(state.run.timer);
+      state.run.timer=null;playbackClock=null;
+      schedulePlaybackStep();
+      return true;
+    }
+
     // The virtual clock can advance smoothly; counters retain their last
     // recorded value until a genuine sample is reached (no synthetic bottles).
     function playbackDisplaySecond(sample){
       if(!sample)return 0;
       var next=state.run.result?.samples?.[state.run.sampleIndex+1];
-      if(!next||playbackClock?.frame!==sample)return sample.virtualSecond;
-      // A preserved paused clock has started===null and a nonzero offset.
-      if(!state.run.playing&&playbackClock.started!==null)return sample.virtualSecond;
-      return Math.min(next.virtualSecond,Math.max(sample.virtualSecond,
-        sample.virtualSecond+playbackElapsed(sample)));
+      var display=sample.virtualSecond;
+      if(next&&playbackClock?.frame?.virtualSecond===sample.virtualSecond
+          &&(state.run.playing||playbackClock.started===null)){
+        display=Math.min(next.virtualSecond,Math.max(sample.virtualSecond,
+          sample.virtualSecond+playbackElapsed(sample)));
+      }
+      if(state.run.playing){
+        // Avoid the backwards jumps seen when Live streaming swaps frames
+        // while the lightweight metric timer continues to paint the clock.
+        var previous=state.run._displayedVirtualSecond;
+        if(Number.isFinite(previous))
+          display=Math.max(display,Math.min(previous,next?.virtualSecond??sample.virtualSecond));
+        state.run._displayedVirtualSecond=display;
+      }
+      return display;
     }
 
     // The engine records exact state transitions separately from bounded

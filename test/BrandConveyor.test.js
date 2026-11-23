@@ -26,14 +26,15 @@ test('brand motion shares speed across welcome/About, excludes editing and pause
  }finally{w.close();}
 });
 
-async function interactiveHarness(isReduced=false){
+async function interactiveHarness(isReduced=false,surface='auth-panel'){
  const dom=new JSDOM(renderAppsScript().html,{runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,d=w.document;
  await new Promise(resolve=>w.addEventListener('load',resolve));
  let clock=100,id=0;const frames=new Map(),timers=new Map(),media={matches:isReduced,addEventListener(){}};
  w.matchMedia=()=>media;w.performance.now=()=>clock;
  w.requestAnimationFrame=callback=>{frames.set(++id,callback);return id;};w.cancelAnimationFrame=key=>frames.delete(key);
  w.setTimeout=(callback,delay)=>{timers.set(++id,{callback,due:clock+delay});return id;};w.clearTimeout=key=>timers.delete(key);
- const node=d.querySelector('#auth-panel .brand-conveyor'),svg=node.querySelector('svg');svg.getBoundingClientRect=()=>({left:0,top:0,width:208,height:48});
+ if(surface==='session-restore')d.documentElement.classList.add('restoring-session');
+ const node=d.querySelector('#'+surface+' .brand-conveyor'),svg=node.querySelector('svg');svg.getBoundingClientRect=()=>({left:0,top:0,width:208,height:48});
  const context=vm.createContext({});vm.runInContext(fs.readFileSync('apps-script/TextResources.gs','utf8'),context);
  w.eval(context.resolveTextResources_(fs.readFileSync('apps-script/BrandConveyorMotion.html','utf8')).replace(/<\/?script>/g,''));d.dispatchEvent(new w.Event('DOMContentLoaded'));
  const paths=()=>[...node.querySelectorAll('.brand-bottles path')],x=path=>Number(path.getAttribute('transform').match(/translate\(([-\d.]+)/)[1]);
@@ -46,6 +47,8 @@ async function interactiveHarness(isReduced=false){
 test('remembered session runs the welcome animation only on the restoring screen',async()=>{
  const h=await interactiveHarness();try{
   const loader=h.d.querySelector('#session-restore .brand-conveyor');
+  assert.equal(loader.closest('[inert],[aria-hidden="true"],[role="status"]'),null,'The animation is interactive and outside the connection status announcement');
+  assert(h.d.querySelector('#session-restore-title [role="status"]'),'The connection message remains announced');
   const bottle=loader.querySelector('.brand-bottles path'),start=bottle.getAttribute('transform');
   h.advance(300);assert.equal(bottle.getAttribute('transform'),start);
   const welcome=h.paths()[0];
@@ -53,11 +56,17 @@ test('remembered session runs the welcome animation only on the restoring screen
   const hiddenPosition=welcome.getAttribute('transform');
   h.advance(300);assert.notEqual(bottle.getAttribute('transform'),start);
   assert.equal(welcome.getAttribute('transform'),hiddenPosition);
+  loader.focus();assert.equal(h.d.activeElement,loader);
+  assert(h.key('+',h.d.body).defaultPrevented);assert.equal(h.w.STBrandConveyor.speed(),1.5);
+  h.key('ArrowLeft',h.d.body);assert.equal(h.w.STBrandConveyor.direction(),'left');
+  const hiddenCount=h.paths().length;assert(!h.key('Delete',h.node).defaultPrevented);
+  assert.equal(h.paths().length,hiddenCount,'A formerly focused hidden scene ignores bottle gestures');
  }finally{await h.close();}
 });
 
-test('interactive conveyor accumulates without overlap, releases and reverses without jumps',async()=>{
- const h=await interactiveHarness();try{
+for(const surface of ['auth-panel','session-restore']){
+test('interactive conveyor accumulates, releases and reverses without jumps on '+surface,async()=>{
+ const h=await interactiveHarness(false,surface);try{
   const held=h.paths()[4],origin=h.x(held);h.pointer('pointerdown',held);h.advance(7000);
   assert.equal(h.x(held),origin,'held bottle remains fixed while the belt runs');
   const positions=h.paths().map(h.x).sort((a,b)=>a-b);for(let i=1;i<positions.length;i++)assert(positions[i]-positions[i-1]>=15.999,'bottles do not overlap in the queue');
@@ -70,8 +79,8 @@ test('interactive conveyor accumulates without overlap, releases and reverses wi
  }finally{await h.close();}
 });
 
-test('bottle gestures distinguish domino, robot and removal, including cancellation',async()=>{
- const h=await interactiveHarness();try{
+test('bottle gestures distinguish domino, robot and removal, including cancellation on '+surface,async()=>{
+ const h=await interactiveHarness(false,surface);try{
   const clicked=h.paths()[4];h.pointer('pointerdown',clicked);h.pointer('pointerup');h.advance(500);
   assert(!clicked.getAttribute('transform').includes('rotate(0 '),'single click tilts the first bottle');
   assert(h.paths().filter(path=>!path.getAttribute('transform').includes('rotate(0 ')).length>=2,'domino propagates downstream');
@@ -91,6 +100,7 @@ test('bottle gestures distinguish domino, robot and removal, including cancellat
   h.key('Escape');assert.equal(h.paths().length,8);assert.deepEqual(h.paths().map(h.x),[-21,7,35,63,91,119,147,175]);
  }finally{await h.close();}
 });
+}
 
 test('interactive conveyor pauses when hidden and respects reduced motion and keyboard controls',async()=>{
  const h=await interactiveHarness();try{
@@ -100,7 +110,7 @@ test('interactive conveyor pauses when hidden and respects reduced motion and ke
   const positions=h.paths().map(h.x);h.advance(5000);assert.deepEqual(h.paths().map(h.x),positions);
   h.d.getElementById('app-info-dialog').open=true;h.w.STBrandConveyor.sync();assert.equal(h.frames.size,1,'one loop handles both instances');
  }finally{await h.close();}
- const reduced=await interactiveHarness(true);try{
+ const reduced=await interactiveHarness(true,'session-restore');try{
   assert.equal(reduced.frames.size,0);reduced.key('d');assert(reduced.paths().every(path=>path.getAttribute('transform').includes('rotate(0 ')));
   const bottle=reduced.paths()[4];reduced.pointer('pointerdown',bottle);reduced.pointer('pointermove',reduced.node,{x:100,y:-20});reduced.pointer('pointercancel');assert.equal(bottle.getAttribute('visibility'),'visible');
   reduced.key('r');assert.equal(reduced.paths().length,7,'keyboard robot removes without animated motion');reduced.key('Escape');assert.equal(reduced.paths().length,8);

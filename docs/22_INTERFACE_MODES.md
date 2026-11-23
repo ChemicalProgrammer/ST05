@@ -39,9 +39,9 @@ Basic uses the existing controls and persistence pipeline:
 - Explanatory notes and advisories are hidden. Blocking errors, save status,
   and import validation remain available so failed actions are visible.
 - Header utility buttons preserve access to Settings, closing the case,
-  and signing out. The Gemini button is aligned to the right of the section navigation,
-  outside the navigation itself, in every section. It opens the same resizable right
-  panel as Advance, while keeping the Basic conveyor inspector visible. The simulation toolbar stays available across the six
+  and signing out. Gemini and its Settings page are available only in Advance.
+  Basic retains the equipment inspector, including the shared right panel in
+  the combined equipment layout. The simulation toolbar stays available across the six
   Basic sections. Machine cards and the conveyor inspector start at the same
   distance below the import controls.
 
@@ -87,11 +87,11 @@ can also be removed. The engine and saved case format need no migration.
 The adapter moves the original field nodes; it does not clone inputs or
 maintain a second draft. Its styling is scoped under `data-ui-mode=basic`.
 
-Gemini returns actionable validated What-If scenarios in Advance. Basic requests descriptive improvements and hides scenario creation cards. Proposals bind exact stored before values at generation time; creation verifies the original fingerprint instead of replacing it with a newer server fingerprint.
+Gemini returns actionable validated What-If scenarios in Advance. Basic does not expose the assistant or its settings. Proposals bind exact stored before values at generation time; creation verifies the original fingerprint instead of replacing it with a newer server fingerprint.
 
 Basic shows only Speed, MTBF, MTTR, calculated Buffer post and Avail in machine cards. Simulation cards omit equipment command controls and use the space for the speed chart. The advanced run configuration is hidden entirely in Basic because its visible choices have moved into the Basic speed/shift/round groups. Playback Play/Pause/Reset remains available for the whole simulation. V-Graph labels and legends use larger Basic-only text.
 
-Gemini requests carry the effective browser mode. The server uses that valid mode for text-only Basic responses or actionable Advance proposals, falling back to the deployment default for older clients. Basic conveyor speed is an independent m/min input, stored as manual mm/s. Existing moving-gap and Back-up overrides are preserved.
+The current interface sends Gemini requests only in Advance. The server retains its mode handling for older clients. Basic conveyor speed is an independent m/min input, stored as manual mm/s. Existing moving-gap and Back-up overrides are preserved.
 
 ## Header and Basic conveyor controls
 
@@ -143,10 +143,10 @@ the full row on tablet layouts. Read-only Population, LBA and Overspeed fields u
 the same background, typography, padding and height as the worksheet's other outputs;
 manual mode restores the standard numeric input appearance and its retained value.
 
-The simulation selector and rename/clone/delete icon actions live beside Gemini in
-the header in both modes. Basic moves their entire group into its navigation row,
-so the selector and Gemini stay together when changing modes. Accessible names and
-button tooltips retain the action names.
+The simulation selector and rename/clone/delete icon actions live in the header in
+both modes, beside Gemini when Advance is active. Basic moves the simulation action
+group into its navigation row and hides Gemini. Accessible names and button tooltips
+retain the action names.
 
 
 ## 23 November 2026 — Simplification of Basic and Advance
@@ -166,7 +166,9 @@ These rules override earlier interface descriptions when they conflict:
 - **Real Data / Comparison:** only available in Advance. Basic navigation and
   workspace tabs do not offer these sections; mode switching while inside either
   section returns to Simulation without deleting observations or comparisons.
-- **Gemini:** Basic and Advance share the complete Advance prompt editor, generation
-  settings, personality, language, engineering criteria, search strategy and CAPEX
-  policies. Legacy Basic prompt overrides are retained for compatibility, but
-  are neither shown nor used as the active policy.
+- **Gemini:** the assistant, Settings tab, prompt editor, generation settings,
+  personality, language, engineering criteria, search strategy and CAPEX policies
+  are available only in Advance. Switching to Basic closes the chat and hides its
+  settings without clearing stored values or the equipment inspector. Legacy Basic
+  prompt overrides are retained for compatibility, but are neither shown nor used
+  as the active policy.

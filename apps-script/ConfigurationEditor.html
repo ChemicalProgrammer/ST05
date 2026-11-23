@@ -5,7 +5,7 @@ var STReliabilityControls = (function(){
     var group=document.createElement('section');group.className='equipment-grid reliability-controls';
     var controls={};
     [['enabled',__ST_TEXT__('reliability.enabled')],['mtbfMinutes',__ST_TEXT__('reliability.mtbf')],['mttrMinutes',__ST_TEXT__('reliability.mttr')]].forEach(function(spec){
-      var label=document.createElement('label'),input=document.createElement('input');label.textContent=spec[1];label.title=spec[1]+' — positive minutes when failures are enabled; disabling failures retains these values.';input.className='reliability-'+spec[0];input.type=spec[0]==='enabled'?'checkbox':'number';if(input.type==='number'){input.min='0';input.step='any';}label.appendChild(input);group.appendChild(label);controls[spec[0]]=input;
+      var label=document.createElement('label'),input=document.createElement('input');label.textContent=spec[1];label.title=spec[1]+' — positive minutes when failures are enabled; disabling failures retains these values.';input.className='reliability-'+spec[0];input.type=spec[0]==='enabled'?'checkbox':'number';if(input.type==='checkbox')label.className='checkbox-label st-checkbox-card';if(input.type==='number'){input.min='0';input.step='any';}label.appendChild(input);group.appendChild(label);controls[spec[0]]=input;
     });
     var modeLabel=document.createElement('label'),mode=document.createElement('select');
     modeLabel.textContent='Stop inputs';

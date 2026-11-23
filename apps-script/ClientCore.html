@@ -251,29 +251,6 @@
         if(selectPlaybackRound(Number(this.value),false)&&activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
       });
       document.getElementById('run-chart-window').addEventListener('change',function(){var simulation=activePersistentSimulation();if(simulation){simulation.dynamicConfig.chartWindow=this.value;autosave.change();}if(state.run.result)renderPlaybackFrame();});
-      // Temporary instrumentation switches: no simulation inputs are changed.
-      var diagnosticNames=['overview','states','efficiency','geometry','chart'];
-      var savedDiagnostics={};
-      try{savedDiagnostics=JSON.parse(STPreferences.read('numericCardVisibility')||'{}')||{};}
-      catch(error){savedDiagnostics={};}
-      function updateNumericDiagnostics(){
-        var flags={};
-        diagnosticNames.forEach(function(name){
-          flags[name]=document.getElementById('settings-numeric-show-'+name).checked;
-        });
-        window.STNumericCardDiagnostics=flags;
-        document.documentElement.dataset.numericChartEnabled=String(flags.chart);
-      }
-      diagnosticNames.forEach(function(name){
-        var input=document.getElementById('settings-numeric-show-'+name);
-        input.checked=savedDiagnostics[name]!==false;
-        input.addEventListener('change',function(){
-          updateNumericDiagnostics();
-          STPreferences.write('numericCardVisibility',JSON.stringify(window.STNumericCardDiagnostics));
-          if(state.run.result)renderPlaybackFrame();
-        });
-      });
-      updateNumericDiagnostics();
       document.getElementById('run-display-fps').addEventListener('change',function(){
         var simulation=activePersistentSimulation();
         if(simulation){

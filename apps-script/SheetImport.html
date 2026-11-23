@@ -7,7 +7,8 @@ window.STSheetImport=function(state,actions){
   function clear(){preview=null;plan=null;packingDraft=null;observationDraft=null;el('sheet-import-readiness')?.setAttribute('hidden','');el('sheet-import-preview').textContent='';el('sheet-import-ack').checked=false;el('sheet-import-apply').disabled=true;el('sheet-import-summary').textContent='';}
   function busy(value){el('sheet-import-read').disabled=value;el('sheet-import-read').setAttribute('aria-busy',String(value));el('sheet-import-url').disabled=value;el('sheet-import-tab').disabled=value;}
   function close(){sequence++;clear();snapshot=null;busy(false);el('sheet-import-dialog').close();if(lastFocus&&lastFocus.isConnected)lastFocus.focus();}
-  function node(tag,text){var n=document.createElement(tag);n.textContent=text;return n;}
+  function node(tag,text,className){var n=document.createElement(tag);n.textContent=text;if(className)n.className=className;return n;}
+  function detail(title){var d=node('details','');d.className='sheet-import-detail';d.append(node('summary',title));return d;}
   function updateRowIndicators(result,validation){
     plan.records.forEach(function(record){
       var section=el('sheet-import-preview').querySelector('[data-source-index="'+record.index+'"]');if(!section)return;
@@ -39,27 +40,31 @@ window.STSheetImport=function(state,actions){
     if(!preview.realData)return;
     var data=preview.realData,section=node('section','');section.className='settings-section';section.id='sheet-real-data';
     section.append(node('h3','Real Data observation'));
-    var label=node('label',''),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='sheet-real-enabled';toggle.checked=observationDraft.enabled;label.className='remember';label.append(toggle,document.createTextNode('Import production, line times and equipment observations into Real Data'));section.append(label);
-    section.append(node('p','Observation values are separate from configuration. Unknown values remain blank. Confirm the definitions before interpreting AU / UPDT differences.'));
+    var label=node('label',''),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='sheet-real-enabled';toggle.checked=observationDraft.enabled;label.className='remember st-checkbox-card';label.append(toggle,document.createTextNode('Import production, line times and equipment observations into Real Data'));section.append(label);
     var only=node('button','Import only Real Data');only.type='button';only.className='secondary';only.id='sheet-real-only';only.onclick=function(){plan.records.forEach(function(r){Object.keys(r.selected).forEach(function(k){r.selected[k]=false;});});Object.keys(plan.metadata).forEach(function(k){plan.metadata[k]=false;});packingDraft.enabled=false;observationDraft.enabled=true;render();};section.append(only);
     var destinationLabel=node('label','Observation destination'),destination=document.createElement('select');destination.id='sheet-real-destination';destination.add(new Option('Create a new observation',''));
     (snapshot.metadata?.realData?.records||[]).forEach(function(r){destination.add(new Option('Update '+r.name+(r.date?' · '+r.date:''),r.id));});destination.value=observationDraft.recordId;destination.onchange=function(){observationDraft.recordId=destination.value;el('sheet-import-ack').checked=false;refresh();};destinationLabel.append(destination);section.append(destinationLabel);
-    var scroll=node('div','');scroll.className='table-scroll';var table=node('table',''),head=node('tr','');['Source cell','Observation field','Value','Unit'].forEach(function(t){var th=node('th',t);th.scope='col';head.append(th);});var thead=node('thead','');thead.append(head);table.append(thead);var tbody=node('tbody','');data.fields.forEach(function(f){var row=node('tr','');[f.cell,f.label,f.value??'Unknown',f.unit].forEach(function(t){row.append(node('td',t));});tbody.append(row);});table.append(tbody);scroll.append(table);section.append(scroll);
-    data.record.equipment.forEach(function(e){var label=node('label',(e.observationRow?(data.sheetName||'Real Data')+'!A'+e.observationRow:'Z'+e.sourceRow)+' · '+e.name+' · downtime '+(e.downtimeSeconds==null?'unknown':e.downtimeSeconds/60+' min')+(data.schema==='st-real-sheet-simple-v1'?'':' · '+e.stopClass+' · exposure '+(e.exposureSeconds==null?'unknown':e.exposureSeconds/60+' min')+' · stops '+(e.failureCount??'unknown')));
+    var values=detail('Review observation values');
+    values.append(node('p','Observation values are separate from configuration. Unknown values remain blank. Confirm the definitions before interpreting AU / UPDT differences.'));
+    var scroll=node('div','');scroll.className='table-scroll';var table=node('table',''),head=node('tr','');['Source cell','Observation field','Value','Unit'].forEach(function(t){var th=node('th',t);th.scope='col';head.append(th);});var thead=node('thead','');thead.append(head);table.append(thead);var tbody=node('tbody','');data.fields.forEach(function(f){var row=node('tr','');[f.cell,f.label,f.value??'Unknown',f.unit].forEach(function(t){row.append(node('td',t));});tbody.append(row);});table.append(tbody);scroll.append(table);values.append(scroll);section.append(values);
+    data.record.equipment.forEach(function(e){
+      var sourceLabel=(e.observationRow?(data.sheetName||'Real Data')+'!A'+e.observationRow:'Z'+e.sourceRow)+' · '+e.name,label=node('label',sourceLabel);
       var select=document.createElement('select');select.dataset.observationRow=e.sourceRow;
       [['','Select equipment'],['skip','Skip observation'],['new','Use equipment added from this row']].concat(snapshot.equipment.map(function(u){return [u.id,u.name+' ('+u.id+')'];})).forEach(function(o){select.add(new Option(o[1],o[0]));});
       select.value=observationDraft.targets[e.sourceRow]||'';select.onchange=function(){observationDraft.targets[e.sourceRow]=select.value;el('sheet-import-ack').checked=false;refresh();};label.append(select);section.append(label);
       var breakdown=(data.equipmentFields||[]).filter(function(field){return Number.isFinite(e[field.key]);}).map(function(field){return field.label+': '+(field.unit==='%'?e[field.key]+'%':e[field.key]/60+' min');});
-      if(breakdown.length)section.append(node('p',breakdown.join(' · ')));
-      if(e.notes)section.append(node('p','AD'+e.sourceRow+' · '+e.notes));
+      var sourceDetails=node('div','','sheet-observation-source');sourceDetails.append(node('h4',sourceLabel),node('p','downtime '+(e.downtimeSeconds==null?'unknown':e.downtimeSeconds/60+' min')+(data.schema==='st-real-sheet-simple-v1'?'':' · '+e.stopClass+' · exposure '+(e.exposureSeconds==null?'unknown':e.exposureSeconds/60+' min')+' · stops '+(e.failureCount??'unknown'))));
+      if(breakdown.length)sourceDetails.append(node('p',breakdown.join(' · ')));
+      if(e.notes)sourceDetails.append(node('p','AD'+e.sourceRow+' · '+e.notes));
+      values.append(sourceDetails);
     });
-    data.errors.forEach(function(e){section.append(node('p',e.cell+': '+e.message,'sheet-packing-field-error'));});
+    data.errors.forEach(function(e){var error=node('p',e.cell+': '+e.message,'sheet-packing-field-error');error.setAttribute('role','alert');section.append(error);});
     toggle.onchange=function(){observationDraft.enabled=toggle.checked;el('sheet-import-ack').checked=false;refresh();};host.append(section);
   }
   function packingPanel(host,result){
     if(packingDraft.catalog){
       var source=preview.materialCatalog,section=node('section',''),label=node('label',''),checkbox=document.createElement('input');
-      section.className='settings-section';label.className='remember';checkbox.type='checkbox';checkbox.checked=packingDraft.enabled;
+      section.className='settings-section';label.className='remember st-checkbox-card';checkbox.type='checkbox';checkbox.checked=packingDraft.enabled;
       var catalog=source.catalog;
       label.append(checkbox,document.createTextNode('Import Products & Formats ('+catalog.products.length+' products, '+catalog.formats.length+' formats)'));
       section.append(label);
@@ -72,14 +77,13 @@ window.STSheetImport=function(state,actions){
         });
         section.append(details);
       }
-      source.errors.forEach(function(error){section.append(node('p',error,'sheet-packing-field-error'));});
+      source.errors.forEach(function(message){var error=node('p',message,'sheet-packing-field-error');error.setAttribute('role','alert');section.append(error);});
       checkbox.onchange=function(){packingDraft.enabled=checkbox.checked;el('sheet-import-ack').checked=false;refresh();};
       host.append(section);return;
     }
     var section=document.createElement('section');section.className='settings-section sheet-packing-proposal';section.id='sheet-packing-proposal';
     var heading=node('div','');heading.className='editor-subheading compact-heading';heading.append(node('h3','Product and packing format'));section.append(heading);
-    var label=node('label',''),enabled=document.createElement('input');enabled.type='checkbox';enabled.id='sheet-packing-enabled';enabled.checked=packingDraft.enabled;label.className='remember';label.append(enabled,document.createTextNode('Create product and format from the selected line'));section.append(label);
-    section.append(node('p','A Case Packer marks the bottle → case conversion. Review line order, package lengths and the source speed basis. Applying selects this format as the initial format and uses the ST engine; it does not prefill the conveyors.'));
+    var label=node('label',''),enabled=document.createElement('input');enabled.type='checkbox';enabled.id='sheet-packing-enabled';enabled.checked=packingDraft.enabled;label.className='remember st-checkbox-card';label.append(enabled,document.createTextNode('Create product and format from the selected line'));section.append(label);
     var fields=document.createElement('fieldset');fields.className='field-grid sheet-packing-fields';fields.id='sheet-packing-fields';fields.disabled=!packingDraft.enabled;var legend=node('legend','Packing proposal');legend.className='sr-only';fields.append(legend);
     function changed(){el('sheet-import-ack').checked=false;refresh();}
     function input(key,text,numeric,options){var label=node('label',text),control=document.createElement('input');control.id='sheet-packing-'+key;control.setAttribute('aria-label',text);control.type=numeric?'number':'text';control.value=packingDraft[key]??'';if(numeric){control.min=options?.min||'0.000001';control.step=options?.step||'any';if(options?.max)control.max=options.max;}else control.maxLength=120;control.oninput=function(){packingDraft[key]=numeric?(control.value===''?undefined:Number(control.value)):control.value;changed();};label.append(control);fields.append(label);return control;}
@@ -94,16 +98,21 @@ window.STSheetImport=function(state,actions){
     volumeControl.oninput=function(){packingDraft.volumeMl=volumeControl.value===''?undefined:Number(volumeControl.value)*volumeUnits[packingDraft.volumeUnit];changed();};
     select('volumeUnit','Volume unit',Object.keys(volumeUnits).map(unit=>[unit,unit])).onchange=function(event){if(!event.target.value){event.target.value=packingDraft.volumeUnit;return;}packingDraft.volumeUnit=event.target.value;renderVolume();changed();};
     select('sourceRateBasis','Source machine speeds',[['','Confirm speed units'],['BOTTLES','Bottle equivalents/min (worksheet bpm)'],['NATIVE','Native output/min (bottles or cases)']]);
-    section.append(fields);var note=node('p','Optional lengths: blanks retain each conveyor’s defaults. Width and height are not inferred. Machine speeds inherit the installed defaults. Conveyor lengths, sensors, manual belt speeds and MTBF/MTTR remain installation settings. Existing product/format overrides are retained on reload; review them if the measurements change.');note.className='chart-note';section.append(note);
+    section.append(fields);
+    var information=detail('Product and format details');
+    information.append(node('p','A Case Packer marks the bottle → case conversion. Review line order, package lengths and the source speed basis. Applying selects this format as the initial format and uses the ST engine; it does not prefill the conveyors.'));
+    information.append(node('p','Optional lengths: blanks retain each conveyor’s defaults. Width and height are not inferred. Machine speeds inherit the installed defaults. Conveyor lengths, sensors, manual belt speeds and MTBF/MTTR remain installation settings. Existing product/format overrides are retained on reload; review them if the measurements change.'));
+    section.append(information);
     var review=node('div','');review.id='sheet-packing-review';section.append(review);host.append(section);
     enabled.onchange=function(){packingDraft.enabled=enabled.checked;fields.disabled=!enabled.checked;changed();};
   }
   function updatePackingReview(result){
-    var host=el('sheet-packing-review');if(!host)return;host.replaceChildren();host.hidden=!packingDraft.enabled;if(host.hidden)return;
-    (result.packingWarnings||[]).forEach(text=>{var note=node('p',text);note.className='chart-note';host.append(note);});
+    var host=el('sheet-packing-review');if(!host)return;var expanded=host.querySelector('.sheet-import-detail')?.open||false;host.replaceChildren();host.hidden=!packingDraft.enabled;if(host.hidden)return;
+    (result.packingWarnings||[]).forEach(text=>{var note=node('p',text,'sheet-import-warning');note.setAttribute('role','status');host.append(note);});
     if(!result.packingRows?.length)return;
-    var scroll=node('div','');scroll.className='table-scroll';var table=node('table',''),caption=node('caption','Proposed flow and nominal machine speeds');table.append(caption);var head=node('thead',''),headers=node('tr','');['Equipment','Input','Output','Native output/min'].forEach((text,index)=>{var th=node('th',text);th.scope='col';if(index===3)th.className='numeric';headers.append(th);});head.append(headers);table.append(head);var body=node('tbody','');result.packingRows.forEach(e=>{var row=node('tr','');[e.name,e.input.toLowerCase(),e.output.toLowerCase(),e.ratePerMinute==null?'—':Number(e.ratePerMinute.toPrecision(10)).toLocaleString()].forEach((text,index)=>{var td=node('td',text);if(index===3)td.className='numeric';row.append(td);});body.append(row);});table.append(body);scroll.append(table);host.append(scroll);
-    var note=node('p','Machine rates are expressed in output units. For example, 300 bottles/min ÷ 12 bottles/case = 25 cases/min. Physical belt speeds in m/min are not divided.');note.className='chart-note';host.append(note);
+    var review=detail('Review flow and machine speeds');review.open=expanded;
+    var scroll=node('div','');scroll.className='table-scroll';var table=node('table',''),caption=node('caption','Proposed flow and nominal machine speeds');table.append(caption);var head=node('thead',''),headers=node('tr','');['Equipment','Input','Output','Native output/min'].forEach((text,index)=>{var th=node('th',text);th.scope='col';if(index===3)th.className='numeric';headers.append(th);});head.append(headers);table.append(head);var body=node('tbody','');result.packingRows.forEach(e=>{var row=node('tr','');[e.name,e.input.toLowerCase(),e.output.toLowerCase(),e.ratePerMinute==null?'—':Number(e.ratePerMinute.toPrecision(10)).toLocaleString()].forEach((text,index)=>{var td=node('td',text);if(index===3)td.className='numeric';row.append(td);});body.append(row);});table.append(body);scroll.append(table);review.append(scroll);
+    review.append(node('p','Machine rates are expressed in output units. For example, 300 bottles/min ÷ 12 bottles/case = 25 cases/min. Physical belt speeds in m/min are not divided.'));host.append(review);
   }
   function applyReadiness(result){
     var area=el('sheet-import-readiness');
@@ -115,7 +124,7 @@ window.STSheetImport=function(state,actions){
     }
     area.hidden=false;
     var pending=result.packingIssues||[],first=pending[0],focusId=first?'sheet-packing-'+first.field:'sheet-import-error';
-    var message=result.errors.length?(first?'Complete "'+(el(focusId)?.getAttribute('aria-label')||first.field)+'" in Product and packing format.':result.errors[0]):!result.hasChanges?'No changes selected. Select the fields you want to import.':!el('sheet-import-ack').checked?'Check "I reviewed the mapping, assumptions and warnings" to enable Apply.':'Ready to apply the selected changes.';
+    var message=result.errors.length?(first?'Complete "'+(el(focusId)?.getAttribute('aria-label')||first.field)+'" in Product and packing format.':result.errors[0]):!result.hasChanges?'No changes selected. Select the fields you want to import.':!el('sheet-import-ack').checked?'Confirm the review to enable Apply.':'Ready to apply the selected changes.';
     if(result.errors.length>1)message+=' '+(result.errors.length-1)+' additional requirement(s) remain.';
     el('sheet-import-readiness-text').textContent=message;area.dataset.status=result.errors.length?'error':!result.hasChanges?'idle':'ready';
     var jump=el('sheet-import-review-pending');jump.hidden=!result.errors.length;jump.onclick=function(){var target=el(focusId);if(!target)return;if(!target.matches('input,select,button'))target.tabIndex=-1;target.scrollIntoView?.({block:'center',behavior:'smooth'});target.focus({preventScroll:true});};
@@ -141,15 +150,15 @@ window.STSheetImport=function(state,actions){
   function choice(body,label,before,after,selected,disabled,changed,callback,field,issues){
     var row=document.createElement('tr');if(changed)row.className='sheet-field-changed';
     var cell=document.createElement('td'),input=document.createElement('input');input.type='checkbox';input.checked=selected;input.disabled=disabled;input.setAttribute('aria-label',__ST_TEXT__('sheetimport.import')+label);input.dataset.field=field?.id||'';input.onchange=function(){el('sheet-import-ack').checked=false;callback(input.checked);refresh();};cell.appendChild(input);row.appendChild(cell);
-    [label,merge.display(before,field),merge.display(after,field),disabled?__ST_TEXT__('sheetimport.unavailable'):!changed?__ST_TEXT__('sheetimport.unchanged'):after==null?__ST_TEXT__('sheetimport.clear_to_na_optional'):__ST_TEXT__('sheetimport.changed')].forEach(function(text){row.appendChild(node('td',text));});if(issues&&issues.length){var detail=node('p',issues.map(function(e){return (e.severity==='info'?'Info · ':'')+e.cell+': '+e.message;}).join(' '));detail.className='chart-note';row.lastChild.appendChild(detail);}body.appendChild(row);
+    [label,merge.display(before,field),merge.display(after,field),disabled?__ST_TEXT__('sheetimport.unavailable'):!changed?__ST_TEXT__('sheetimport.unchanged'):after==null?__ST_TEXT__('sheetimport.clear_to_na_optional'):__ST_TEXT__('sheetimport.changed')].forEach(function(text){row.appendChild(node('td',text));});if(issues&&issues.length){var detail=node('p',issues.map(function(e){return (e.severity==='info'?'Info · ':'')+e.cell+': '+e.message;}).join(' '));detail.className='sheet-field-issues';row.lastChild.appendChild(detail);}body.appendChild(row);
   }
   function render(){
     var data=preview,host=el('sheet-import-preview');host.textContent='';el('sheet-import-ack').checked=false;
     host.appendChild(node('h3',data.equipment.length+__ST_TEXT__('sheetimport.source_equipment')+data.source.sheetName));
-    host.appendChild(node('p',__ST_TEXT__('sheetimport.choose_what_to_apply_to_this_simulation_existing_equipment_keeps_its_id_and')));
+    host.appendChild(node('p',__ST_TEXT__('sheetimport.choose_what_to_apply_to_this_simulation_existing_equipment_keeps_its_id_and'),'subsection-description'));
     var toolbar=document.createElement('div');toolbar.className='button-row';
     [[__ST_TEXT__('sheetimport.select_differences'),function(){plan.records.forEach(function(r){merge.defaults(data,r,snapshot.equipment);});if(packingDraft.catalog)packingDraft.enabled=true;merge.metadataFields.forEach(function(f,i){plan.metadata[f[0]]=!merge.metadataErrors(data,i).length&&merge.metadataValue(data.metadata,f[0])!=null&&!merge.equal(merge.metadataValue(snapshot.sourceImport?.metadata,f[0]),merge.metadataValue(data.metadata,f[0]));});render();}],[__ST_TEXT__('sheetimport.deselect_all_fields'),function(){plan.records.forEach(function(r){Object.keys(r.selected).forEach(function(k){r.selected[k]=false;});});Object.keys(plan.metadata).forEach(function(k){plan.metadata[k]=false;});packingDraft.enabled=false;if(observationDraft)observationDraft.enabled=false;render();}]].forEach(function(item){var b=node('button',item[0]);b.type='button';b.className='secondary';b.onclick=item[1];toolbar.appendChild(b);});host.appendChild(toolbar);
-    var meta=document.createElement('details');meta.open=!snapshot.equipment.length;meta.appendChild(node('summary',__ST_TEXT__('sheetimport.case_format_information_select_metadata_to_update')));
+    var meta=document.createElement('details');meta.open=merge.metadataFields.some(function(f,i){return merge.metadataErrors(data,i).length;});meta.appendChild(node('summary',__ST_TEXT__('sheetimport.case_format_information_select_metadata_to_update')));
     var mt=header();merge.metadataFields.forEach(function(f,i){var before=merge.metadataValue(snapshot.sourceImport?.metadata,f[0]),after=merge.metadataValue(data.metadata,f[0]);choice(mt.body,merge.metadataCell(data.source,i)+' · '+f[1],before,after,plan.metadata[f[0]],Boolean(merge.metadataErrors(data,i).length),!merge.equal(before,after),function(v){plan.metadata[f[0]]=v;},null,merge.metadataErrors(data,i));});meta.appendChild(mt.table);host.appendChild(meta);packingPanel(host,merge.build(data,plan,snapshot.equipment,snapshot.sourceImport));observationPanel(host);
     plan.records.forEach(function(record){
       var unit=data.equipment[record.index],current=snapshot.equipment.find(function(e){return e.id===record.target;}),section=document.createElement('details');section.className='sheet-equipment-choice';section.dataset.sourceIndex=record.index;
@@ -168,8 +177,11 @@ window.STSheetImport=function(state,actions){
       var table=header();merge.fieldsFor(data).forEach(function(f){var before=current?f.read(current):null,after=merge.incomingValue(data,record,f),errors=merge.errorsFor(data,f.col,record.row);choice(table.body,f.col+record.row+' · '+(record.rateDivisor&&['maxSpeed','nominalSpeed'].includes(f.id)?f.label.replace(/bpm/ig,'cases/min')+' · source ÷ '+record.rateDivisor:f.label),before,after,record.target!=='skip'&&record.selected[f.id],record.target==='skip'||errors.length>0,!merge.equal(before,after),function(v){record.selected[f.id]=v;},f,errors.concat(merge.errorsFor({errors:data.warnings||[]},f.col,record.row)));});
       var scroll=document.createElement('div');scroll.className='table-scroll';scroll.appendChild(table.table);section.appendChild(scroll);host.appendChild(section);
     });
-    [[__ST_TEXT__('sheetimport.source_errors_affected_fields_are_unavailable'),data.errors||[]],[__ST_TEXT__('sheetimport.source_warnings'),(data.warnings||[]).filter(issue=>issue.severity!=='info')],['Source information',(data.warnings||[]).filter(issue=>issue.severity==='info')]].forEach(function(group){if(!group[1].length)return;var d=document.createElement('details');d.appendChild(node('summary',group[0]+' ('+group[1].length+')'));var list=document.createElement('ul');group[1].forEach(function(item){list.appendChild(node('li',item.cell+': '+item.message));});d.appendChild(list);host.appendChild(d);});
-    var detail=document.createElement('details');detail.appendChild(node('summary',__ST_TEXT__('sheetimport.mapping_and_model_assumptions')));var list=document.createElement('ul');data.notes.forEach(function(text){list.appendChild(node('li',text));});detail.appendChild(list);host.appendChild(detail);
+    [[__ST_TEXT__('sheetimport.source_errors_affected_fields_are_unavailable'),data.errors||[],true],[__ST_TEXT__('sheetimport.source_warnings'),(data.warnings||[]).filter(issue=>issue.severity!=='info'),false]].forEach(function(group){if(!group[1].length)return;var d=document.createElement('details');d.open=group[2];d.appendChild(node('summary',group[0]+' ('+group[1].length+')'));var list=document.createElement('ul');group[1].forEach(function(item){list.appendChild(node('li',item.cell+': '+item.message));});d.appendChild(list);host.appendChild(d);});
+    var information=detail('Import details'),notes=data.notes||[],sourceInfo=(data.warnings||[]).filter(issue=>issue.severity==='info');
+    if(sourceInfo.length){information.append(node('h4','Source information'));var sourceList=node('ul','');sourceInfo.forEach(function(item){sourceList.append(node('li',item.cell+': '+item.message));});information.append(sourceList);}
+    if(notes.length){information.append(node('h4',__ST_TEXT__('sheetimport.mapping_and_model_assumptions')));var list=node('ul','');notes.forEach(function(text){list.appendChild(node('li',text));});information.appendChild(list);}
+    if(sourceInfo.length||notes.length)host.appendChild(information);
     var corrections=document.createElement('div');corrections.id='sheet-import-corrections';host.appendChild(corrections);
     var review=document.createElement('details');review.id='sheet-import-model-review';host.appendChild(review);
     refresh();

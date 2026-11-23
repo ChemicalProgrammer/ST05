@@ -45,7 +45,7 @@ window.STShell = function(state,actions) {
     if(pin.nextElementSibling!==pinHost)pinHost.before(pin);
     var geminiToggle=document.getElementById('toggle-gemini'),geminiHost=document.getElementById(active?'header-case-actions':'cases-top-actions');
     if(geminiToggle.parentElement!==geminiHost){if(active)geminiHost.appendChild(geminiToggle);else geminiHost.prepend(geminiToggle);}
-    geminiToggle.classList.toggle('hidden',!state.bootstrap);
+    geminiToggle.classList.toggle('hidden',!['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase()));
     actions.assistant();
     document.getElementById('workspace-tabs').classList.toggle('hidden',!active);
     document.getElementById('home-cases').setAttribute('aria-current',view==='cases'?'page':'false');
@@ -71,6 +71,7 @@ window.STShell = function(state,actions) {
     if(view==='results') STResults.render(state.run.representative||state.run.result,state.activeCase,(state.activeCase.simulations||[]).find(function(s){return s.id===state.activeSimulationId;}));
     STIcons.decorate(document);
     window.STBasicMode?.sync(state);
+    STSettings.syncMode();
     var motionView=view+':'+(document.documentElement.dataset.headerView||'');
     if(motionView!==lastMotionView){lastMotionView=motionView;STMotion.reveal(document.getElementById(({simulation:'run',editor:'editor',products:'products',results:'results',realdata:'realdata',whatif:'whatif',comparison:'comparison',cases:'cases'}[view]||'run')+'-panel'));}
     var engineNotice=document.getElementById('simulation-engine-notice'),simulation=(state.activeCase?.simulations||[]).find(function(s){return s.id===state.activeSimulationId;});

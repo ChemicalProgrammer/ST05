@@ -30,7 +30,7 @@
     <?!= include_('BrandConveyorStyles'); ?>
   </head>
   <body>
-    <div id="session-restore" class="auth-shell" role="status"><div class="session-restore-content"><h1><?= __ST_TEXT__('auth.restoring') ?></h1><span aria-hidden="true" inert><?!= include_('BrandConveyor'); ?></span></div></div>
+    <div id="session-restore" class="auth-shell" aria-labelledby="session-restore-title"><div class="session-restore-content"><h1 id="session-restore-title"><span role="status"><?= __ST_TEXT__('auth.restoring') ?></span></h1><?!= include_('BrandConveyor'); ?></div></div>
     <section id="auth-panel" class="auth-shell" aria-labelledby="auth-title">
       <div class="auth-card">
         <div class="brand"><span class="brand-mark" aria-hidden="true"><?!= include_('FlowPilotIcon'); ?></span><span><?= __ST_TEXT__('view.flow_pilot') ?></span><?!= include_('BrandConveyor'); ?></div>
@@ -38,7 +38,7 @@
         <h1 id="auth-title"><?= __ST_TEXT__('view.welcome_to_your_workspace') ?></h1>
         <p><?= __ST_TEXT__('view.explore_your_cases_test_possibilities_and_build_confidence_in_your_next_dec') ?></p>
         <form id="sign-in-form">
-          <label class="remember"><input type="checkbox" id="remember-session"><?= __ST_TEXT__('view.keep_me_signed_in_on_this_browser') ?></label>
+          <label class="remember st-checkbox-card"><input type="checkbox" id="remember-session"><?= __ST_TEXT__('view.keep_me_signed_in_on_this_browser') ?></label>
           <button id="sign-in-button" type="submit"><?= __ST_TEXT__('view.continue_with_google') ?></button>
         </form>
         <p id="auth-status" data-error-notice="auth" data-error-title="Sign-in error" role="status" aria-live="polite"></p>
@@ -130,13 +130,13 @@
         <div id="equipment-section" class="fold-card" aria-labelledby="equipment-subsection-title">
         <div class="fold-heading">
           <div class="subsection-heading-copy"><h3 class="subsection-heading-title"><button id="equipment-subsection-title" class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="equipment-section-content">Equipment</button></h3><p class="subsection-description">Configure machines and conveyors, their order, properties, and data exchange.</p></div>
-          <div class="fold-tools button-row"><details class="export-menu import-menu"><summary class="icon-button" data-icon="download" aria-label="Import" title="Import"></summary><div><button id="open-sheet-import" class="ghost" type="button"><?= __ST_TEXT__('view.import_sheet') ?></button><button id="open-json-import" class="ghost" type="button"><?= __ST_TEXT__('json.import') ?></button></div></details><details class="export-menu"><summary class="icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-equipment-json" class="ghost" type="button">JSON</button><button id="export-equipment-sheet" class="ghost" type="button">Spreadsheet</button></div></details><button id="add-equipment" data-icon="plus" class="secondary icon-button" type="button" aria-label="<?= __ST_TEXT__('sheetimport.add_equipment') ?>" title="<?= __ST_TEXT__('sheetimport.add_equipment') ?>"></button></div>
-        </div>
-        <div id="equipment-section-content" class="fold-content">
-        <div class="equipment-filters" role="group" aria-label="<?= __ST_TEXT__('filter.label') ?>">
+          <div class="fold-tools button-row"><div class="equipment-filters" role="group" aria-label="<?= __ST_TEXT__('filter.label') ?>">
           <button id="toggle-editor-machines" class="secondary icon-button equipment-filter-toggle" type="button" data-icon="machine" aria-pressed="true" aria-label="Show machines" title="Hide machines"></button>
           <button id="toggle-editor-conveyors" class="secondary icon-button equipment-filter-toggle" type="button" data-icon="conveyor" aria-pressed="true" aria-label="Show conveyors" title="Hide conveyors"></button>
+        </div><details class="export-menu import-menu"><summary class="icon-button" data-icon="download" aria-label="Import" title="Import"></summary><div><button id="open-sheet-import" class="ghost" type="button"><?= __ST_TEXT__('view.import_sheet') ?></button><button id="open-json-import" class="ghost" type="button"><?= __ST_TEXT__('json.import') ?></button></div></details><details class="export-menu"><summary class="icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-equipment-json" class="ghost" type="button">JSON</button><button id="export-equipment-sheet" class="ghost" type="button">Spreadsheet</button></div></details><button id="add-equipment" data-icon="plus" class="secondary icon-button" type="button" aria-label="<?= __ST_TEXT__('sheetimport.add_equipment') ?>" title="<?= __ST_TEXT__('sheetimport.add_equipment') ?>"></button></div>
         </div>
+        <div id="equipment-section-content" class="fold-content">
+
         <p id="equipment-filter-empty" class="empty hidden" role="status"><?= __ST_TEXT__('filter.empty') ?></p>
         <div id="equipment-list" class="equipment-list"></div>
         </div>
@@ -184,8 +184,8 @@
           <div id="simulation2d-events-content" class="fold-content">
             <div class="simulation2d-options" role="group" aria-label="Schedule included in the 2D run">
               <span>Include in 2D run</span>
-              <label class="simulation2d-source"><input id="simulation2d-use-events" type="checkbox"> Equipment events and line stops</label>
-              <label class="simulation2d-source"><input id="simulation2d-use-calendar" type="checkbox"> Plant calendar</label>
+              <label class="simulation2d-source st-checkbox-card"><input id="simulation2d-use-events" type="checkbox"> Equipment events and line stops</label>
+              <label class="simulation2d-source st-checkbox-card"><input id="simulation2d-use-calendar" type="checkbox"> Plant calendar</label>
             </div>
             <p id="simulation2d-events-note" class="chart-note"></p>
             <div id="simulation2d-event-editor"></div>
@@ -276,7 +276,7 @@
               <button id="add-control-event" type="button" class="secondary icon-button" data-icon="plus" aria-label="<?= __ST_TEXT__('view.add_event') ?>" title="<?= __ST_TEXT__('view.add_event') ?>"></button>
             </div>
           </div>
-          <div id="simulation-event-content" class="fold-content"><div id="event-time-tools" class="event-time-tools"></div><div class="event-selection-toolbar button-row"><label class="checkbox-label"><input id="select-all-control-events" type="checkbox">Select all events</label><button id="delete-selected-control-events" type="button" class="ghost icon-button" data-icon="trash" aria-label="Delete selected events" title="Delete selected events" disabled></button><button id="delete-all-control-events" type="button" class="ghost icon-button" data-icon="trashAll" aria-label="Delete all events" title="Delete all events" disabled></button><span id="control-event-selection-status" class="chart-note" role="status" aria-live="polite"></span></div><p class="chart-note event-selection-hint">Click a row to select it. Ctrl/Cmd adds or removes rows; Shift selects a range. Checkboxes also allow multiple selection.</p><div id="control-events" class="control-events"></div><div id="planned-line-events" class="table-scroll"></div></div></section>
+          <div id="simulation-event-content" class="fold-content"><div id="event-time-tools" class="event-time-tools"></div><div class="event-selection-toolbar button-row"><label class="checkbox-label st-checkbox-card st-checkbox-card--compact"><input id="select-all-control-events" type="checkbox">Select all events</label><button id="delete-selected-control-events" type="button" class="ghost icon-button" data-icon="trash" aria-label="Delete selected events" title="Delete selected events" disabled></button><button id="delete-all-control-events" type="button" class="ghost icon-button" data-icon="trashAll" aria-label="Delete all events" title="Delete all events" disabled></button><span id="control-event-selection-status" class="chart-note" role="status" aria-live="polite"></span></div><p class="chart-note event-selection-hint">Click a row to select it. Ctrl/Cmd adds or removes rows; Shift selects a range. Checkboxes also allow multiple selection.</p><div id="control-events" class="control-events"></div><div id="planned-line-events" class="table-scroll"></div></div></section>
         </div>
 
         <section id="simulation-playback" class="fold-card">
@@ -475,7 +475,7 @@
         <p id="gemini-activity" class="gemini-activity hidden" role="status" aria-live="polite"></p>
         <p id="gemini-notice" class="gemini-notice"><?= __ST_TEXT__('view.ask_about_the_saved_case_equipment_and_simulation_results') ?></p>
         <div id="gemini-messages" class="gemini-messages" role="log" aria-label="<?= __ST_TEXT__('view.case_conversation') ?>" aria-live="polite"><ol id="gemini-progress" class="gemini-progress hidden" role="status" aria-live="polite"></ol></div>
-        <form id="gemini-form" class="gemini-composer"><label id="gemini-scope-control" class="gemini-scope-control"><input id="gemini-scope" type="checkbox" checked aria-describedby="gemini-notice"><span><?= __ST_TEXT__('assistant.case_context') ?></span></label><label class="sr-only" for="gemini-question"><?= __ST_TEXT__('view.question_for_gemini') ?></label><textarea id="gemini-question" rows="3" maxlength="6000" placeholder="<?= __ST_TEXT__('view.ask_about_this_case') ?>" required></textarea><div class="gemini-actions"><button id="clear-gemini" type="button" class="secondary icon-button" data-icon="trash" aria-label="<?= __ST_TEXT__('view.clear_case_conversation') ?>" title="<?= __ST_TEXT__('view.clear_case_conversation') ?>"></button><details id="gemini-export-menu" class="export-menu"><summary id="export-gemini" class="icon-button" data-icon="upload" aria-label="Export chat history" title="Export chat history"></summary><div><button type="button" class="ghost" data-chat-export="pdf">PDF</button><button type="button" class="ghost" data-chat-export="copy">Copy as TXT</button><button type="button" class="ghost" data-chat-export="txt">Download TXT</button><button type="button" class="ghost" data-chat-export="json">JSON</button></div></details><button id="send-gemini" type="submit" data-icon="send"><?= __ST_TEXT__('view.send') ?></button></div><p id="gemini-error" data-error-notice="message" data-error-title="Gemini error" class="chart-note" role="alert"></p><p id="gemini-history-note" class="chart-note"><?= __ST_TEXT__('assistant.history_saved') ?></p></form>
+        <form id="gemini-form" class="gemini-composer"><label id="gemini-scope-control" class="gemini-scope-control st-checkbox-card st-checkbox-card--compact"><input id="gemini-scope" type="checkbox" checked aria-describedby="gemini-notice"><span><?= __ST_TEXT__('assistant.case_context') ?></span></label><label class="sr-only" for="gemini-question"><?= __ST_TEXT__('view.question_for_gemini') ?></label><textarea id="gemini-question" rows="3" maxlength="6000" placeholder="<?= __ST_TEXT__('view.ask_about_this_case') ?>" required></textarea><div class="gemini-actions"><button id="clear-gemini" type="button" class="secondary icon-button" data-icon="trash" aria-label="<?= __ST_TEXT__('view.clear_case_conversation') ?>" title="<?= __ST_TEXT__('view.clear_case_conversation') ?>"></button><details id="gemini-export-menu" class="export-menu"><summary id="export-gemini" class="icon-button" data-icon="upload" aria-label="Export chat history" title="Export chat history"></summary><div><button type="button" class="ghost" data-chat-export="pdf">PDF</button><button type="button" class="ghost" data-chat-export="copy">Copy as TXT</button><button type="button" class="ghost" data-chat-export="txt">Download TXT</button><button type="button" class="ghost" data-chat-export="json">JSON</button></div></details><button id="send-gemini" type="submit" data-icon="send"><?= __ST_TEXT__('view.send') ?></button></div><p id="gemini-error" data-error-notice="message" data-error-title="Gemini error" class="chart-note" role="alert"></p><p id="gemini-history-note" class="chart-note"><?= __ST_TEXT__('assistant.history_saved') ?></p></form>
         </div>
       </aside>
     </main>
@@ -537,17 +537,7 @@
   </div>
 </section>
 <section class="settings-section"><h3>Recording and charts</h3><div class="settings-simulation-grid"><label>Chart sample interval<span class="time-value-control"><input id="run-sample-interval" type="number" min="0.001" step="any" value="5"><select id="run-sample-interval-unit" aria-label="Chart sample interval time unit" title="Change sample interval unit"><option value="SECONDS">s</option><option value="MINUTES">min</option><option value="HOURS">h</option><option value="DAYS">d</option><option value="WEEKS">wk</option></select></span></label><label>Visual refresh rate<select id="run-display-fps" aria-label="Numerical playback visual refresh rate"><option value="5">5 FPS · Low CPU</option><option value="10" selected>10 FPS · Balanced</option><option value="20">20 FPS · Smooth</option><option value="30">30 FPS · High</option></select></label><label>Card chart window<select id="run-chart-window"><option value="AUTO">Auto</option><option value="60">Last 1 min</option><option value="300">Last 5 min</option><option value="900">Last 15 min</option><option value="3600">Last 1 hour</option><option value="SHIFT">Last shift</option><option value="86400">Last 24 hours</option><option value="FULL">Full simulation</option></select></label></div><p class="chart-note">Chart sampling uses simulated time. Live values update from the current calculated state; FPS sets the maximum screen refresh rate. Saved history may be summarized.</p><div class="settings-simulation-grid simulation-toggle-grid recording-toggle-grid"><label class="checkbox-label st-checkbox-card"><input id="run-track-shifts" type="checkbox"><span>Show shift accounting</span></label></div></section>
-<section class="settings-section" id="settings-numeric-diagnostics" aria-labelledby="settings-numeric-diagnostics-title">
-  <h3 id="settings-numeric-diagnostics-title">Numerical cards · Performance diagnostics</h3>
-  <p class="chart-note">Temporary display switches to isolate slow sections. They affect rendering only, not calculated results or saved inputs.</p>
-  <div class="settings-numeric-diagnostics-grid">
-    <label class="checkbox-label st-checkbox-card"><input id="settings-numeric-show-overview" type="checkbox" checked> Overview</label>
-    <label class="checkbox-label st-checkbox-card"><input id="settings-numeric-show-states" type="checkbox" checked> States</label>
-    <label class="checkbox-label st-checkbox-card"><input id="settings-numeric-show-efficiency" type="checkbox" checked> Equipment efficiency</label>
-    <label class="checkbox-label st-checkbox-card"><input id="settings-numeric-show-geometry" type="checkbox" checked> Conveyor geometry</label>
-    <label class="checkbox-label st-checkbox-card"><input id="settings-numeric-show-chart" type="checkbox" checked> Speed trend charts</label>
-  </div>
-</section>
+
 <section id="settings-realdata-section" class="settings-section"><h3>Sections</h3><div class="settings-simulation-grid simulation-toggle-grid"><label class="checkbox-label st-checkbox-card"><input id="settings-show-real-data" type="checkbox" checked><span>Show Real data</span></label></div><p class="chart-note">Show or hide the Real data section for this case. Stored observations are retained.</p></section>
 <section class="settings-section"><h3>Reported rate loss</h3><p class="chart-note">Select which losses are included in the reported indicator and the plant comparison.</p><div id="settings-rate-loss-categories" class="settings-simulation-grid simulation-toggle-grid"></div></section>
 </div>
@@ -572,11 +562,11 @@
     <dialog id="sheet-import-dialog" aria-labelledby="sheet-import-title">
       <header class="dialog-heading"><h2 id="sheet-import-title"><?= __ST_TEXT__('view.import_equipment_from_google_sheets') ?></h2><button id="sheet-import-close" class="ghost icon-button" data-icon="x" aria-label="<?= __ST_TEXT__('view.close_import') ?>" title="<?= __ST_TEXT__('view.close_import') ?>"></button></header>
       <div class="dialog-body">
-        <p><?= __ST_TEXT__('view.read_c1_c7_and_equipment_rows_a10_w_na_and_n_a_mean_not_applicable_import_u') ?></p>
+        <p class="subsection-description"><?= __ST_TEXT__('view.read_c1_c7_and_equipment_rows_a10_w_na_and_n_a_mean_not_applicable_import_u') ?></p>
         <form id="sheet-import-form"><label><?= __ST_TEXT__('view.google_sheets_url_or_id') ?><input id="sheet-import-url" required autocomplete="off" placeholder="<?= __ST_TEXT__('view.https_docs_google_com_spreadsheets_d') ?>"></label><label><?= __ST_TEXT__('view.worksheet_name_optional') ?><input id="sheet-import-tab" autocomplete="off" placeholder="<?= __ST_TEXT__('view.uses_the_url_tab_or_the_first_worksheet') ?>"></label><button id="sheet-import-read" data-icon="refresh" type="submit"><?= __ST_TEXT__('view.preview_import') ?></button></form>
         <p id="sheet-import-error" data-error-notice="message" data-error-title="Sheet import error" role="alert"></p><div id="sheet-import-preview" aria-live="polite"></div>
       </div>
-      <footer class="dialog-actions"><span id="sheet-import-summary" role="status"></span><label class="remember"><input id="sheet-import-ack" type="checkbox"><?= __ST_TEXT__('view.i_reviewed_the_mapping_assumptions_and_warnings') ?></label><button id="sheet-import-cancel" class="ghost" type="button"><?= __ST_TEXT__('view.cancel') ?></button><button id="sheet-import-apply" data-icon="check" type="button" disabled><?= __ST_TEXT__('view.apply_selected_changes') ?></button></footer>
+      <footer class="dialog-actions"><span id="sheet-import-summary" role="status"></span><label class="remember st-checkbox-card st-checkbox-card--compact"><input id="sheet-import-ack" type="checkbox"><?= __ST_TEXT__('view.i_reviewed_the_mapping_assumptions_and_warnings') ?></label><button id="sheet-import-cancel" class="ghost" type="button"><?= __ST_TEXT__('view.cancel') ?></button><button id="sheet-import-apply" data-icon="check" type="button" disabled><?= __ST_TEXT__('view.apply_selected_changes') ?></button></footer>
     </dialog>
 
     <dialog id="command-dialog" aria-label="<?= __ST_TEXT__('view.command_palette') ?>"><input id="command-search" class="command-search" type="search" placeholder="<?= __ST_TEXT__('view.search_commands') ?>" aria-label="<?= __ST_TEXT__('view.search_commands_2') ?>"><div id="command-list" class="command-list"></div></dialog>

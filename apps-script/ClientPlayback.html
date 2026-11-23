@@ -477,7 +477,7 @@
     // no production is interpolated between recording boundaries.
     function refreshNumericalOverviewFromSample(){
       var result=state.run.result,sample=playbackVisualSample();
-      if(!sample?.equipment||window.STNumericCardDiagnostics?.overview===false)return;
+      if(!sample?.equipment)return;
       var models=state.activeCase?.equipment||[];
       document.querySelectorAll('#live-equipment .live-equipment-card:not([hidden])').forEach(function(card){
         if(card._liveVisible===false||card.querySelector('.live-equipment-2d-summary')?.hidden)return;
@@ -819,8 +819,7 @@
           if(!unit||unit.id!==card.dataset.equipmentId)return;
           var model=state.activeCase.equipment[index];
           var chartModel=updateLiveEquipmentCard(card,unit,model,index,sample);
-          if(window.STNumericCardDiagnostics?.chart!==false)
-            drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,chartModel);
+          drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'),index,chartModel);
         });
       },{rootMargin:'300px 0px',threshold:0});
       return liveEquipmentObserver;
@@ -886,8 +885,7 @@
         }
         if(card.hidden||observer&&!card._liveVisible) return;
         var chartModel=updateLiveEquipmentCard(card, unit, model, index, sample);
-        if(window.STNumericCardDiagnostics?.chart!==false)
-          drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'), index, chartModel);
+        drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'), index, chartModel);
       });
       Array.prototype.forEach.call(target.querySelectorAll('.live-equipment-card'), function(card) {
         if (!displayedEquipmentIds[card.getAttribute('data-equipment-id')]){
@@ -1152,22 +1150,19 @@
       }) : null;
       if(zone)zone=Object.assign({},state.run.result?.zoneDefinitions?.[zone.id],zone);
       var belt=conveyorCardRates(zone,model,availabilityState);
-      var flags=window.STNumericCardDiagnostics||{};
-      card.querySelector('.live-equipment-2d-summary').hidden=flags.overview===false;
-      card.querySelector('.live-equipment-state-details').hidden=flags.states===false;
-      card.querySelector('.numeric-equipment-chart-side').hidden=flags.chart===false;
-      card.querySelector('.live-equipment-performance-group').hidden=isConveyor||flags.efficiency===false;
-      card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor||flags.geometry===false;
+      card.querySelector('.live-equipment-2d-summary').hidden=false;
+      card.querySelector('.live-equipment-state-details').hidden=false;
+      card.querySelector('.numeric-equipment-chart-side').hidden=false;
+      card.querySelector('.live-equipment-performance-group').hidden=isConveyor;
+      card.querySelector('.live-equipment-geometry-group').hidden=!isConveyor;
       var conveyorVerdict=card._numericConveyorVerdict
         ||card.querySelector('.numeric-conveyor-verdict');
-      if(conveyorVerdict)conveyorVerdict.hidden=!isConveyor||flags.geometry===false;
-      if(flags.overview!==false){
-        updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
-        card._lastOverviewSample=sample;
-      }else card._lastOverviewSample=null;
-      if(isConveyor&&flags.geometry!==false)updateNumericalConveyorGeometry(card,model,zone);
+      if(conveyorVerdict)conveyorVerdict.hidden=!isConveyor;
+      updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
+      card._lastOverviewSample=sample;
+      if(isConveyor)updateNumericalConveyorGeometry(card,model,zone);
       var efficiencyCard=card.querySelector('.live-equipment-efficiency');
-      efficiencyCard.hidden=isConveyor||flags.efficiency===false;
+      efficiencyCard.hidden=isConveyor;
       if(!efficiencyCard.hidden){
         // Collapsed view: Availability, Operational efficiency and Throughput.
         Array.prototype.forEach.call(efficiencyCard.children,function(metric,index){
@@ -1202,10 +1197,7 @@
       rate.textContent=belt?formatNumber(belt.speedMmPerSecond*0.06)+' m/min de banda · '+formatRatePerMinute(unit.actualRatePerSecond??0,equipmentFlowUnit)+' de flujo':formatRatePerMinute(machineRate,equipmentFlowUnit);
       rate.title=belt?'Velocidad de banda y flujo de producto procesado. La banda puede moverse aunque reciba menos producto o esté vacía.':'';
 
-      // The legacy extra-details group is intentionally hidden; all currently
-      // presented state durations and production metrics live in the three
-      // visible sections. Avoid updating an invisible DOM subtree per frame.
-      if(flags.states!==false){
+      // State durations remain available in every numerical equipment card.
       var stateDetails=card.querySelector('.live-equipment-state-grid');
       var durations=unit.stateSeconds||{},lookup={};
       Object.keys(durations).forEach(function(key){lookup[key.toUpperCase()]=Number(durations[key])||0;});
@@ -1227,7 +1219,6 @@
         ['Back-up stop',seconds(['BACKUP_STOP'],unit.backupStopSeconds)]
       ];
       updateNumerical2DRows(stateDetails,rows,'states',card);
-      }
       // The duplicate legacy loss counters are hidden permanently.
       // Their durations remain available in the States group and raw samples.
       card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatRatePerMinute(belt.capacityPerSecond,equipmentFlowUnit)+' a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond,equipmentFlowUnit) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatRatePerMinute(model.processData.equipment.maximumSpeedBpm/60,equipmentFlowUnit) : '');

@@ -850,7 +850,6 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
   margin:0!important; padding:var(--space-1) 0!important; min-height:var(--control-height);
 }
 #simulation-event-content #event-time-tools:empty {display:none;}
-#simulation-event-content .event-selection-toolbar .checkbox-label {display:inline-flex;align-items:center;gap:var(--space-2);margin:0;}
 #simulation-event-content .event-selection-toolbar .icon-button {flex:0 0 auto;margin:0;}
 #simulation-event-content .event-selection-hint {margin:var(--space-1) 0!important;}
 #simulation-event-content #control-events:empty,
@@ -1115,11 +1114,6 @@ dialog[open] .table-scroll {max-inline-size:100%;min-inline-size:0;scrollbar-gut
 }
 @media(max-width:440px){
   #simulation-duration-content .simulation-duration-grid {grid-template-columns:minmax(0,1fr);}
-}
-/* Performance diagnostics do not interfere with simulation data. */
-#settings-numeric-diagnostics .settings-numeric-diagnostics-grid {
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-  gap:var(--space-1) var(--space-2);min-width:0;
 }
 .live-equipment-card .numeric-equipment-chart-side[hidden],
 .live-equipment-card .live-equipment-detail-grid > section[hidden] {display:none!important;}

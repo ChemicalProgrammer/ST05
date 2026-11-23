@@ -139,6 +139,7 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Fila de caso** | `.case-row` | Vista de un caso en el catálogo |
 | **Tarjeta de configuración de equipo** | `.equipment-card` | Formulario/tarjeta de máquina o conveyor con borde superior de 4 px, consistente con el acento de los KPI |
 | **Casilla enmarcada** | `label.st-checkbox-card` | Control compartido en Simulation, 2D y Settings; checkbox y texto en una fila, fondo suave, borde, espaciado y foco comunes, con el label completo como área clicable |
+| **Casilla enmarcada compacta** | `.st-checkbox-card--compact` | Variante del mismo control para barras de herramientas y confirmaciones; ancho según contenido y menor padding, con el mismo borde, alineación y foco |
 
 ### Cobertura de muestras
 El catálogo mantiene los nombres oficiales en la **tercera columna de todas las pestañas**. Incluye navegación real del Header, pestañas de diálogos, navegación entre simulaciones, variantes de botones, campos, menús, estado/progreso, tablas, gráficas y las familias de tarjetas. Los ejemplos interactivos están aislados: cambiar la pestaña o el color de un ejemplo no modifica el caso, su simulación, ni el selector de colores real. Los estilos viven en sus módulos propietarios; `DesignReference.html` incluye sólo la vista previa y su interacción.
@@ -354,9 +355,9 @@ persistence is disabled, and the existing Save icon continues to perform manual
 case saving. The unsaved-changes warning is preserved.
 
 **Real Data** and **Comparison** are available exclusively in Advance.
-**Settings > Gemini** exposes the same full Advance personality, engineering
-policies and generation controls in both Basic and Advance; the backend uses
-the same Advance prompt sections for both.
+**Settings > Gemini** and the assistant are available only in Advance, with the
+full personality, engineering policies and generation controls. Switching to
+Basic hides these surfaces and preserves their configuration and history.
 
 
 ### Visual cleanup, responsive controls and shared Equipment layout (23 Nov 2026)
@@ -495,3 +496,39 @@ del aviso cubren demos actuales, heredados y modificados por importación.
   con los botones, diálogo, respuestas y controlador FAQ. Queda un acceso
   visible a Settings en la galería o en la cabecera del caso, según el contexto.
   La ayuda por subsección se definirá en una revisión posterior.
+
+### Barra de equipos, controles reutilizables e importación · 23 nov 2026
+
+- **Filtros de equipos:** los iconos de máquinas y transportadores se integran
+  en la barra de herramientas, junto a importar, exportar y agregar. Conservan
+  sus selecciones independientes en la vista conjunta y se ocultan en separados.
+- **Gemini:** asistente y pestaña de Settings exclusivos de Advance. El cambio
+  a Basic cierra el chat sin borrar configuración ni historial; el inspector de
+  equipos sigue funcionando en el panel compartido de la vista conjunta.
+- **Casillas reutilizables:** configuración, máquina crítica, fallas, calendario,
+  opciones 2D, escenarios, generación de eventos, importación, exportación e inicio
+  de sesión usan el componente
+  enmarcado. La variante compacta se aplica a barras y confirmaciones. Ambas
+  mantienen el checkbox primero, texto alineado, foco visible y estado deshabilitado
+  común. La selección dentro de tablas y las entradas manual/calculado conservan
+  sus controles compactos integrados en la fila o el campo.
+- **Tarjetas numéricas:** se elimina la sección de diagnóstico de desempeño de
+  Settings y su lógica temporal de ocultación. Las preferencias antiguas no
+  ocultan resumen, estados ni gráficas; eficiencia y geometría se muestran según
+  el tipo de equipo.
+- **Conexión al workspace:** la animación reutiliza los gestos y teclas de la
+  bienvenida, incluido retener/soltar, arrastrar, dominó y recolección con el robot.
+  Las escenas ocultas no reciben interacciones; se conserva movimiento reducido.
+- **Importar hoja:** una instrucción breve presenta el flujo. Metadatos,
+  observaciones detalladas, explicaciones de producto/formato y notas de origen
+  se organizan en desplegables. Los campos requeridos, el mapeo y los requisitos
+  para Aplicar siguen visibles; los errores de origen se despliegan automáticamente.
+
+Verificación: 59 pruebas focalizadas de controles, configuración, reproducción,
+traducciones, transiciones de Gemini y animación. El smoke integrado en Basic y
+Advance comprueba filtros, inspector y una ejecución con 19 tarjetas por modo,
+incluyendo preferencias antiguas de diagnóstico desactivadas. La revisión de
+importación comprueba desplegables, requisitos y aplicación. Se analizaron los
+51 bloques de script generados, 25 estilos y 19 archivos de servidor. Estas
+comprobaciones de DOM, eventos y estilos no equivalen a una revisión visual en
+un navegador real.

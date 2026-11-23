@@ -56,7 +56,7 @@ window.STBrandConveyor=(function(){
       if(scene.clickTimer&&scene.clickItem===item){clearTimeout(scene.clickTimer);scene.clickTimer=0;scene.clickItem=null;collect(scene,item);}else{clearTimeout(scene.clickTimer);scene.clickItem=item;scene.clickTimer=setTimeout(function(){scene.clickTimer=0;scene.clickItem=null;if(running(scene))domino(scene,item);},280);}
     });
     ['pointercancel','lostpointercapture'].forEach(function(type){scene.node.addEventListener(type,function(event){if(scene.active?.id===event.pointerId)release(scene);});});
-    scene.node.addEventListener('dblclick',function(event){event.preventDefault();var item=scene.items.find(function(value){return value.path===event.target;});if(item)collect(scene,item);});
+    scene.node.addEventListener('dblclick',function(event){if(!running(scene))return;event.preventDefault();var item=scene.items.find(function(value){return value.path===event.target;});if(item)collect(scene,item);});
   }
   function sync(){scenes.forEach(function(scene){var node=scene.node,reversed=node.dataset.direction&&node.dataset.direction!==direction;node.dataset.direction=direction;
     var label=__ST_TEXT__('brand.motion_keys')+' · '+speed+'× '+(direction==='left'?'←':'→');node.removeAttribute('title');node.setAttribute('aria-label',__ST_TEXT__('brand.motion_label')+' · '+label);
@@ -67,10 +67,12 @@ window.STBrandConveyor=(function(){
     });if(!running(scene))reset(scene);
   });if(!scenes.some(running)||reduced?.matches){cancelAnimationFrame(frame);frame=0;}last=0;schedule();}
   function key(event){if(event.defaultPrevented||event.ctrlKey||event.metaKey||event.altKey||event.target.closest?.('input,textarea,select,[contenteditable]:not([contenteditable=false])'))return;
-    var welcome=document.getElementById('auth-panel'),about=document.getElementById('app-info-dialog');if(!(welcome&&visible(welcome))&&!about?.open)return;var modal=document.querySelector('dialog[open]');if(modal&&modal!==about)return;
+    // Welcome, session restoration and About share the same active-scene rules.
+    // Hidden instances must never receive keyboard gestures after a view change.
+    if(!scenes.some(running))return;var modal=document.querySelector('dialog[open]');if(modal&&modal.id!=='app-info-dialog')return;
     if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();direction=event.key==='ArrowLeft'?'left':'right';sync();return;}
     var change=['+','='].includes(event.key)?1:['-','_'].includes(event.key)?-1:0;if(change){event.preventDefault();speed=steps[Math.max(0,Math.min(steps.length-1,steps.indexOf(speed)+change))];sync();return;}
-    var scene=scenes.find(function(value){return value.node===event.target.closest?.('.brand-conveyor');});if(!scene)return;var item=choose(scene);
+    var scene=scenes.find(function(value){return running(value)&&value.node===event.target.closest?.('.brand-conveyor');});if(!scene)return;var item=choose(scene);
     if(event.key===' '){event.preventDefault();if(event.repeat)return;if(scene.active)release(scene);else if(item){item.mode='held';scene.active={item:item,id:null};scene.node.dataset.holding='';}}
     else if(event.key==='Delete'){event.preventDefault();item=scene.active?.item||item;release(scene);remove(scene,item);render(scene);}
     else if(event.key.toLowerCase()==='r'){event.preventDefault();if(item)collect(scene,item);}

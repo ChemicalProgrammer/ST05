@@ -66,8 +66,10 @@ test('Real Data and Comparison are Advance-only in navigation and workspace tabs
   assert.match(simulation,/if\(window\.STBasicMode\?\.isBasic\(\)\)return false/);
 });
 
-test('Gemini uses the same full Advance prompt settings in both UI modes',()=>{
+test('Gemini keeps the full Advance prompt settings behind the Advance-only settings page',()=>{
   const settings=read('Settings.html'),service=read('GeminiService.gs');
+  assert.ok(settings.includes("function advanced(){return document.documentElement.dataset.uiMode==='advance';}"));
+  assert.ok(settings.includes("tab.classList.toggle('hidden',!allowed)"));
   assert.match(settings,/el\('gemini-generation-section'\)\.classList\.remove\('hidden'\)/);
   assert.match(settings,/\['basic','basicCapex'\]\.includes\(def\.id\)/);
   assert.match(service,/return !\['basic','basicCapex'\]\.includes\(def\.id\)/);

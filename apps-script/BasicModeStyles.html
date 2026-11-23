@@ -6,6 +6,8 @@ html[data-ui-mode=basic] .app-shell.case-open { padding-left:0; padding-right:0;
 #case-sidebar { display:none !important; }
 /* Configuration and raw result JSON are advanced workspace tools. */
 html:not([data-ui-mode=advance]) :is(#simulation-json-section,.raw-viewer:has(> #simulation-json-preview)) { display:none!important; }
+/* The shared side panel still hosts the equipment inspector in both modes. */
+html:not([data-ui-mode=advance]) :is(#toggle-gemini,#gemini-chat-view,#settings-tab-gemini,#settings-page-gemini) { display:none!important; }
 html[data-ui-mode=basic] .app-shell.case-open.assistant-open { padding-right:0; }
 .topbar { height:auto; min-height:var(--header-height); flex-wrap:wrap; padding-top:var(--space-3); padding-bottom:var(--space-3); }
 #basic-section-row { display:flex; align-items:center; gap:var(--space-3); order:3; flex-basis:100%; min-width:0; }
@@ -57,7 +59,7 @@ html[data-equipment-layout=split] .basic-machine .equipment-header { gap:var(--s
 html[data-equipment-layout=split] .basic-machine .equipment-header strong { overflow-wrap:anywhere; min-width:0; }
 html[data-equipment-layout=split] .basic-machine .equipment-grid { gap:var(--space-2); align-items:start; }
 html[data-equipment-layout=split] .equipment-grid label { min-width:0; }
-html[data-equipment-layout=split] .basic-machine .equipment-grid label { grid-template-rows:minmax(var(--size-28),auto) var(--control-height); gap:var(--space-1); align-items:end; }
+html[data-equipment-layout=split] .basic-machine .equipment-grid label:not(.st-checkbox-card) { grid-template-rows:minmax(var(--size-28),auto) var(--control-height); gap:var(--space-1); align-items:end; }
 html[data-equipment-layout=split] .equipment-grid input:not([type=checkbox]),
 html[data-equipment-layout=split] .equipment-grid select { height:var(--control-height); box-sizing:border-box; }
 html[data-equipment-layout=split] #equipment-inspector label { padding-right:0; }

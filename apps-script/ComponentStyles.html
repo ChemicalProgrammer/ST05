@@ -304,11 +304,13 @@ label.st-checkbox-card {
   border:var(--border-width) solid var(--line);border-radius:var(--radius-md);
   background:var(--surface-soft);color:var(--ink);
   font-size:var(--font-secondary);font-weight:var(--weight-medium);line-height:var(--leading-body);
-  cursor:pointer;
+  white-space:normal;cursor:pointer;
 }
 label.st-checkbox-card > input[type=checkbox] {
-  flex:0 0 auto;margin:0;
+  flex:0 0 auto;order:-1;margin:0;
 }
+label.st-checkbox-card.st-checkbox-card--compact { width:auto;max-width:100%;padding:var(--space-1) var(--space-2); }
+label.st-checkbox-card:has(> input:disabled) { color:var(--disabled);cursor:not-allowed; }
 label.st-checkbox-card:focus-within {
   outline:var(--focus-width) solid var(--accent);outline-offset:1px;
 }

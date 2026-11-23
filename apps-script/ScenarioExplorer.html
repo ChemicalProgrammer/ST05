@@ -124,14 +124,27 @@ window.STScenarioExplorer=(function(){
     var edits=el('details','','scenario-edit-details');edits.open=true;edits.append(el('summary',project.changes.length+' model variables · select and enter targets or DOE levels'));var list=parameterTable(edits,['Use','Equipment','Parameter','Current',project.catalog?'Target':'Proposed','Unit','Feasible limit'],'scenario-changes','Adjustable parameters');body.appendChild(edits);
     project.changes.forEach(function(original){
       var change=Object.assign({},original);
+      var model=source.equipment.find(e=>e.id===change.equipmentId),rule=STScenarios.fields[change.path];
+      if(!model)change.disabledReason='This equipment is no longer part of the current simulation.';
+      else if(!rule)change.disabledReason='This scenario parameter is no longer supported.';
       var info=STWhatIf.changeInfo(change,source.equipment),row=el('tr','','scenario-change'),check=document.createElement('input');check.type='checkbox';check.checked=!change.catalogOnly&&!change.disabledReason;check.disabled=!!change.disabledReason;
       var scale=change.path==='nominalRatePerSecond'?60:change.path==='processData.geometry.lactMm'||change.path==='processData.geometry.lpPrimeMm'?.001:change.path.endsWith('conveyorSpeedMmPerSecond')?.06:1;
       var unit=scale===60?'BPM':scale===.001?'m':scale===.06?'m/min':change.unit||STScenarios.fields[change.path]?.[2]||'';
       check.setAttribute('aria-label','Use '+info.equipment+' · '+info.parameter);var choice=el('td'),parameter=el('td',info.parameter.replace(/\s*\([^)]*\)\s*$/,''));choice.append(check);row.append(choice,el('td',info.equipment),parameter,el('td',change.before==null?'—':String(Number((change.before*scale).toPrecision(8))),'scenario-number'),el('td',String(Number((change.after*scale).toPrecision(8))),'scenario-number'),el('td',unit));
-      var limitLabel=el('label',change.after>=change.before?'Max':'Min'),limit=document.createElement('input');limit.type='number';limit.step='any';limit.min='0';limit.setAttribute('aria-label',info.equipment+' · '+info.parameter+' · '+limitLabel.textContent+' ('+unit+')');limitLabel.className='scenario-limit';limitLabel.append(limit);var limitCell=el('td');limitCell.append(limitLabel);row.append(limitCell);
+      var limitLabel=el('label',change.after>=change.before?'Max':'Min'),limit=document.createElement('input');limit.type='number';limit.step='any';limit.min='0';limit.disabled=!!change.disabledReason;limit.setAttribute('aria-label',info.equipment+' · '+info.parameter+' · '+limitLabel.textContent+' ('+unit+')');limitLabel.className='scenario-limit';limitLabel.append(limit);var limitCell=el('td');limitCell.append(limitLabel);row.append(limitCell);
       if(change.disabledReason)parameter.append(el('p',change.disabledReason,'scenario-unavailable'));
       if(project.catalog){
-        var target=document.createElement('input');target.type='number';target.step='any';target.className='scenario-target';target.value=Number.isFinite(change.after)?Number((change.after*scale).toPrecision(8)):'';target.disabled=!!change.disabledReason;target.min=STScenarios.fields[change.path][0]*scale;target.max=(change.path==='nominalRatePerSecond'?Math.min(STScenarios.fields[change.path][1],Number(change.replacementMaximumBpm??source.equipment.find(e=>e.id===change.equipmentId).processData?.equipment?.maximumSpeedBpm)/60):STScenarios.fields[change.path][1])*scale;target.setAttribute('aria-label',info.equipment+' · '+info.parameter+' · Target ('+unit+')');row.children[4].replaceChildren(target);
+        var target=document.createElement('input');target.type='number';target.step='any';target.className='scenario-target';target.value=Number.isFinite(change.after)?Number((change.after*scale).toPrecision(8)):'';target.disabled=!!change.disabledReason;
+        if(rule){
+          target.min=rule[0]*scale;
+          var maximum=rule[1];
+          if(change.path==='nominalRatePerSecond'){
+            var installedMaximum=Number(change.replacementMaximumBpm??model?.processData?.equipment?.maximumSpeedBpm)/60;
+            maximum=installedMaximum>0?Math.min(maximum,installedMaximum):undefined;
+          }
+          if(Number.isFinite(maximum))target.max=maximum*scale;
+        }
+        target.setAttribute('aria-label',info.equipment+' · '+info.parameter+' · Target ('+unit+')');row.children[4].replaceChildren(target);
         target.oninput=function(){change.after=target.value===''?null:Number(target.value)/scale;limitLabel.firstChild.textContent=change.after>=change.before?'Max':'Min';check.checked=!change.disabledReason;check.onchange();};
       }
       list.append(row);rows.push({change:change,check:check,limit:limit,scale:scale,row:row});check.onchange=limit.oninput=function(){if(activeHost)return;searchVariables=[];rows.forEach(r=>{if(r.doe)r.doe.use.checked=false;});last=null;generation++;clearTimeout(timer);status.textContent='Changes updated. Run Find best scenario to evaluate.';save.disabled=true;host.querySelector('.scenario-audit-warnings')?.remove();record('NOT_EVALUATED',{reason:'Selections or limits changed; previous estimate invalidated.'});refreshFactors();};
@@ -578,10 +591,25 @@ window.STScenarioExplorer=(function(){
     equipment.onchange=field.onchange=interventionBaseline;interventionBaseline();
     var add=button('Add intervention target',function(){if(activeHost)return;if(simulation.dynamicConfig?.reliabilityEnabled===false&&field.value!=='nominalRatePerSecond'){notice.textContent='Enable MTBF / MTTR failures in Settings → Simulation before adding reliability targets.';return;}try{var unit=simulation.equipment.find(e=>e.id===equipment.value),before=field.value.split('.').reduce((v,k)=>v?.[k],unit),change={equipmentId:equipment.value,path:field.value,before:before??null,after:Number(targetValue.value)/(field.value==='nominalRatePerSecond'?60:1),unit:field.value==='nominalRatePerSecond'?'units/s':'min',...(field.value==='nominalRatePerSecond'?{replacementMaximumBpm:Number(replacementMax.value)}:{}),external:true,interventionType:tierSelect.value,justification:justification.value.trim()};STScenarios.apply(simulation,[change]);var option={tier:STScenarios.interventions[tierSelect.value].tier,changes:[change]};simulation.whatIf=simulation.whatIf||{};simulation.whatIf.externalOptions=(simulation.whatIf.externalOptions||[]).map(p=>({tier:p.tier,changes:p.tier===option.tier?p.changes.filter(c=>c.equipmentId!==change.equipmentId||c.path!==change.path):p.changes})).filter(p=>p.changes.length).concat([option]);pool=pool.map(p=>({tier:p.tier,changes:p.tier===option.tier?p.changes.filter(c=>c.equipmentId!==change.equipmentId||c.path!==change.path):p.changes}));pool.push(option);changed(simulation);notice.textContent='Target saved as a hypothesis. Run Find best scenario in its CAPEX category.';rebuild();}catch(error){notice.textContent='Cannot add target: '+error.message;}});add.classList.add('scenario-add-intervention');
     interventions.append(equipment,field,tierSelect,targetValue,replacementMax,justification,add,notice);
-    var editorStore=el('div','','scenario-target-editor-store');editorStore.hidden=true;editorStore.append(interventions);container.append(editorStore,combined);
+    var editorStore=el('div','','scenario-target-editor-store');editorStore.hidden=true;editorStore.append(interventions);
+    var staleTargetsNotice=el('p','Saved demo targets no longer match this simulation. Current targets are shown.','chart-note scenario-stale-targets');staleTargetsNotice.hidden=true;
+    container.append(editorStore,staleTargetsNotice,combined);
     function rebuild(){
       combined.replaceChildren();combined.className='scenario-tier-grid';
       var basic=document.documentElement.dataset.uiMode==='basic';
+      // Linked demos retain their original equipment and baseline. Reuse their
+      // targets only while they still apply to this simulation's current inputs.
+      var demoChangesByTier={},outdatedDemo=false;
+      ['ZERO','MEDIUM','HIGH'].forEach(function(tier){
+        var linked=(caseProvider?.()?.simulations||[]).find(s=>s.scenario?.origin==='DEMO'&&s.scenario.sourceSimulationId===simulation.id&&s.scenario.tier===tier);
+        if(!linked?.scenario.changes)return;
+        try{
+          if(!linked.scenario.changes.every(c=>categoryAllows(c,tier)))throw Error('SCENARIO_INVALID_CATEGORY');
+          STScenarios.apply(simulation,linked.scenario.changes);
+          demoChangesByTier[tier]=linked.scenario.changes;
+        }catch(_){outdatedDemo=true;}
+      });
+      staleTargetsNotice.hidden=!outdatedDemo;
       if(!interventions.closest('dialog[open]'))editorStore.append(interventions);
       if(basic){
         var current=el('article','','analysis-recommendation scenario-current'),values=simulation.results?.summary?metric(simulation.results):{},metrics=el('div','','scenario-basic-metrics');
@@ -592,8 +620,8 @@ window.STScenarioExplorer=(function(){
       }
       (basic?['ZERO','MEDIUM','HIGH']:['ZERO','MEDIUM','HIGH','ALL']).forEach(function(tier){
         var seen=new Set(),changes=pool.filter(p=>p.tier===tier||tier==='ALL').sort((a,b)=>tier==='ALL'?['ZERO','MEDIUM','HIGH'].indexOf(b.tier)-['ZERO','MEDIUM','HIGH'].indexOf(a.tier):0).flatMap(p=>p.changes).filter(function(c){var key=c.equipmentId+':'+c.path;if(seen.has(key))return false;seen.add(key);return true;});
-        var demo=(caseProvider?.()?.simulations||[]).find(s=>s.scenario?.origin==='DEMO'&&s.scenario.sourceSimulationId===simulation.id&&s.scenario.tier===tier);if(demo?.scenario.changes)changes=demo.scenario.changes;
-        var categoryChanges={};['ZERO','MEDIUM','HIGH'].forEach(t=>{categoryChanges[t]=pool.filter(p=>p.tier===t).flatMap(p=>p.changes);var linked=(caseProvider?.()?.simulations||[]).find(s=>s.scenario?.origin==='DEMO'&&s.scenario.sourceSimulationId===simulation.id&&s.scenario.tier===t);if(linked?.scenario.changes)categoryChanges[t]=linked.scenario.changes;});
+        if(demoChangesByTier[tier])changes=demoChangesByTier[tier];
+        var categoryChanges={};['ZERO','MEDIUM','HIGH'].forEach(t=>{categoryChanges[t]=demoChangesByTier[t]||pool.filter(p=>p.tier===t).flatMap(p=>p.changes);});
         var hasIncludedTargets=tier==='HIGH'?(categoryChanges.ZERO.length||categoryChanges.MEDIUM.length):tier==='MEDIUM'?categoryChanges.ZERO.length:0;
         var project={catalog:true,searchDerivedDOE:true,title:tier==='ALL'?'All CAPEX · combined search':'Line-wide '+STScenarioText[tier],description:tier==='ALL'?'Explore Zero, Medium and High measures together. Only the validated selection is saved.':STScenarios.definitions[tier].scope+' '+STScenarios.definitions[tier].costBasis,searchScope:tier,kind:'CUSTOM',tier:tier==='ALL'?'HIGH':tier,basis:'STATIC',sourceSimulationId:simulation.id,sourceSignature:STScenarios.signature(simulation),categoryChanges:categoryChanges,changes:changes,explore:true};var card=STWhatIf.card(project,create,simulation.equipment,simulation);if(!changes.length&&!hasIncludedTargets)card.append(el('p','No configured targets in this category. Review Configuration or add a documented intervention target.','chart-note'));card._scenarioTargetEditor=interventions;combined.append(card);
       });

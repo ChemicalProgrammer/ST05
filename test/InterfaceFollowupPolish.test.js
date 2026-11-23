@@ -39,7 +39,6 @@ test('2D machine and conveyor icons share STIcons and verdict follows geometry h
   assert.ok(src.includes('window.STIcons.equipment(kind)'));
   assert.ok(src.includes('new Path2D(data)'));
   assert.ok(src.includes('telemetryIconPaths.set(kind,path)'));
-  assert.ok(src.includes('analysisButton.style.maxWidth=Math.max(28,Math.min(72,tableWidth*.38))'));
   assert.ok(src.includes("button.className='simulation2d-analysis-action st-status-pill'"));
   assert.ok(!src.includes('#simulation2d-legend'));
   assert.ok(!web.includes('id="simulation2d-legend"'));

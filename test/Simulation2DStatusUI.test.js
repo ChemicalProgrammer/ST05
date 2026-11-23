@@ -5,7 +5,57 @@ import vm from 'node:vm';
 
 const read=path=>fs.readFileSync(path,'utf8');
 
-test('2D status pills retain shared pixel metrics at every zoom',()=>{
+function telemetryHarness(){
+  const source=read('apps-script/Simulation2D.html');
+  const constants=source.slice(source.indexOf('  const tableScale='),source.indexOf('  const machineHeight='));
+  const pills=source.slice(source.indexOf('  function statusPillColors('),source.indexOf('  const telemetryIconPaths='));
+  const telemetry=source.slice(source.indexOf('  function drawTelemetry('),source.indexOf('  function productWidth('));
+  const position=source.slice(source.indexOf('      const analysisButton=analysisButtons.get(item.id);'),
+    source.indexOf('      const controls=machineControls.get(item.id);'));
+  const button={style:{}};
+  const api=vm.runInNewContext(constants+pills+telemetry+`
+    const item={id:'belt',kind:'belt'},index=0,origin=20,telemetryY=100,screenWidth=10000,h=10000;
+    const items=[{center:600,telemetryWidth:conveyorGroupWidth,telemetryOffset:7}];
+    function positionAnalysis(factor){${position}}
+    ({drawTelemetry,positionAnalysis,tableScale,telemetryRowHeight,telemetryPadding,
+      telemetryColumns,telemetryWidths,
+      left:origin+items[0].center-items[0].telemetryWidth/2,y:telemetryY+items[0].telemetryOffset})`,{
+    localize2D:String,analysisButtons:new Map([['belt',button]]),drawTelemetryIcon(){},
+    strokeBox(context,left,top,width,height){context.box(left,top,width,height);},
+    telemetryData:()=>[
+      {column:0,title:'A long equipment name',showSignal:true,rows:[['State','Accumulating',''],['Speed','120','bpm']]},
+      {column:1,title:'States',rows:[]},
+      {column:3,title:'Conveyor Geometry',verdict:'FAIL',rows:[]}
+    ]
+  });
+  return {...api,button};
+}
+
+function recordingContext(zoom){
+  let transform={scale:zoom,x:0,y:0};
+  const stack=[],pills=[],tables=[],text=[];
+  const context={font:'12px system-ui',textAlign:'left',textBaseline:'alphabetic',
+    save(){stack.push({...transform,font:this.font,textAlign:this.textAlign,textBaseline:this.textBaseline});},
+    restore(){const {font,textAlign,textBaseline,...saved}=stack.pop();Object.assign(this,{font,textAlign,textBaseline});transform=saved;},
+    translate(x,y){transform.x+=x*transform.scale;transform.y+=y*transform.scale;},
+    scale(x){transform.scale*=x;},beginPath(){},fill(){},arc(){},fillRect(){},
+    measureText(value){return {width:String(value).length*parseFloat(this.font.match(/([\d.]+)px/)[1])*.55};},
+    rect(x,y,width,height){return {left:transform.x+x*transform.scale,top:transform.y+y*transform.scale,
+      width:width*transform.scale,height:height*transform.scale};},
+    roundRect(x,y,width,height){pills.push(this.rect(x,y,width,height));},
+    box(x,y,width,height){tables.push(this.rect(x,y,width,height));},
+    fillText(value,x,y,maxWidth){
+      const width=Math.min(this.measureText(value).width,maxWidth??Infinity)*transform.scale;
+      text.push({value,left:transform.x+x*transform.scale-(this.textAlign==='right'?width:this.textAlign==='center'?width/2:0),
+        width,fontSize:parseFloat(this.font.match(/([\d.]+)px/)[1])*transform.scale});
+    }
+  };
+  return {context,pills,tables,text};
+}
+
+const near=(actual,expected,message)=>assert.ok(Math.abs(actual-expected)<1e-8,message||`${actual} != ${expected}`);
+
+test('2D labels above equipment retain shared screen pixel metrics at every zoom',()=>{
   const source=read('apps-script/Simulation2D.html');
   const start=source.indexOf('  function statusPillColors('),end=source.indexOf('  const telemetryIconPaths=',start);
   const {drawScreenStatusPill,drawSignal}=vm.runInNewContext(source.slice(start,end)
@@ -27,6 +77,63 @@ test('2D status pills retain shared pixel metrics at every zoom',()=>{
   }
 });
 
+test('Table header and State pills keep their size relative to rows at every zoom',()=>{
+  const harness=telemetryHarness(),signal={state:'Accumulating',lamp:'blocked'};
+  let previous;
+  for(const zoom of [.1,1,6]){
+    const recorded=recordingContext(zoom);
+    harness.drawTelemetry(recorded.context,{kind:'belt'},harness.left,harness.y,signal,'ink','border','surface','muted','soft',{});
+    const {pills,tables,text}=recorded;
+    assert.equal(pills.length,2,'Both table status locations are exercised');
+    const table=tables[0],rowHeight=harness.telemetryRowHeight*zoom;
+    for(const pill of pills){
+      near(pill.height/rowHeight,16/18,'A status pill fits within one table row');
+      assert.ok(pill.left>=table.left&&pill.left+pill.width<=table.left+table.width);
+    }
+    const stateRowTop=(harness.y+46*harness.tableScale)*zoom;
+    assert.ok(pills[1].top>=stateRowTop&&pills[1].top+pills[1].height<=stateRowTop+rowHeight,
+      'State pill cannot extend into an adjacent row');
+    const heading=text.find(entry=>entry.value==='A long equipment name');
+    assert.ok(heading.left+heading.width<pills[0].left,'The equipment name has room before its badge');
+    const labels=text.filter(entry=>entry.value==='ACCUMULATING');
+    assert.equal(labels.length,2);
+    for(const label of labels)near(label.fontSize/rowHeight,11/18);
+    const dimensions=pills.map(pill=>({width:pill.width/zoom,height:pill.height/zoom}));
+    if(previous)dimensions.forEach((pill,index)=>{
+      near(pill.width,previous[index].width);near(pill.height,previous[index].height);
+    });
+    previous=dimensions;
+  }
+});
+
+test('Geometry PASS/FAIL scales with its table and stays clear of the title',()=>{
+  const source=read('apps-script/Simulation2D.html'),harness=telemetryHarness();
+  const baseHeight=Number(source.match(/\.simulation2d-analysis-action\s*\{\s*--status-pill-height:([\d.]+)px/)[1]);
+  for(const zoom of [.1,1,6]){
+    harness.positionAnalysis(zoom);
+    const {style}=harness.button,recorded=recordingContext(zoom);
+    harness.drawTelemetry(recorded.context,{kind:'belt'},harness.left,harness.y,
+      {state:'Accumulating',lamp:'blocked'},'ink','border','surface','muted','soft',{});
+    const table=recorded.tables[2],heading=recorded.text.find(entry=>entry.value==='Conveyor Geometry');
+    // Evaluate the CSS transform against the widest possible button, including
+    // its percentage translations and right-center origin, not just its scale.
+    const width=parseFloat(style.maxWidth),height=baseHeight;
+    const transform=style.transform.match(/^translate\(([-\d.]+)%,([-\d.]+)%\) scale\(([^)]+)\)$/);
+    assert.ok(transform);assert.equal(style.transformOrigin,'right center');
+    const scale=Number(transform[3]),translateX=Number(transform[1])*width/100,translateY=Number(transform[2])*height/100;
+    const point=(x,y)=>({x:parseFloat(style.left)+width+translateX+(x-width)*scale,
+      y:parseFloat(style.top)+height/2+translateY+(y-height/2)*scale});
+    const topLeft=point(0,0),bottomRight=point(width,height);
+    near(bottomRight.x,table.left+table.width-harness.telemetryPadding*zoom,'Right edge stays anchored inside the table');
+    near((topLeft.y+bottomRight.y)/2,table.top+19*harness.tableScale*zoom,'Badge stays centered on the heading');
+    near((bottomRight.y-topLeft.y)/(harness.telemetryRowHeight*zoom),16/18);
+    assert.ok(topLeft.y>=table.top&&bottomRight.y<=table.top+30*harness.tableScale*zoom,
+      'Evaluation remains in the heading, above the column labels');
+    assert.ok(heading.left+heading.width<topLeft.x,'Even the maximum-width badge leaves the geometry title clear');
+    assert.equal(harness.button.hidden,false);
+  }
+});
+
 test('2D equipment uses numeric-style status pills in the first table and above the machine',()=>{
   const src=read('apps-script/Simulation2D.html');
   assert.ok(src.includes('function drawTelemetryIcon(context,x,y,belt,ink)'));
@@ -36,7 +143,7 @@ test('2D equipment uses numeric-style status pills in the first table and above 
   assert.ok(src.includes('drawSignal(context,sx,top-14,signal,colors,factor)'));
   assert.ok(src.includes('drawScreenStatusPill(context,signal.state,signal.lamp,colors,'));
   assert.ok(src.includes("if(showSignal&&label==='State')"));
-  assert.ok(src.includes('drawScreenStatusPill(context,value,signal.lamp,colors,'));
+  assert.ok(src.includes('drawTableStatusPill(context,value,signal.lamp,colors,'));
   assert.ok(src.includes('colors.badgeMetrics'));
   assert.ok(src.includes("style.getPropertyValue('--status-pill-'+name)"));
   assert.ok(src.includes('context.scale(1/factor,1/factor)'));
@@ -45,12 +152,10 @@ test('2D equipment uses numeric-style status pills in the first table and above 
     assert.ok(src.includes("color('"+token+"'"),'Use shared numeric badge token '+token);
 });
 
-test('Conveyor geometry title and evaluation keep a compact zoom-independent badge',()=>{
+test('Conveyor geometry evaluation retains the shared pill styling and analysis action',()=>{
   const src=read('apps-script/Simulation2D.html');
   assert.ok(src.includes("{column:3,title:'Conveyor Geometry',rows:conveyorGeometryRows(item),verdict:"));
   assert.ok(src.includes('card(data.column,cardLeft,data.title,data.rows,data.showSignal,data.verdict)'));
-  assert.ok(src.includes("analysisButton.style.transform='translate(-100%,-50%)'"));
-  assert.ok(!src.includes("analysisButton.style.transform='translate(-100%,-50%) scale("));
   assert.ok(src.includes('tableLeft>=screenWidth||cx<=0'));
   assert.ok(!src.includes('cx-analysisButton.offsetWidth*factor>=screenWidth'));
   assert.ok(src.includes("button.className='simulation2d-analysis-action st-status-pill'"));
@@ -59,7 +164,6 @@ test('Conveyor geometry title and evaluation keep a compact zoom-independent bad
   assert.ok(ui.includes('font-size:var(--status-pill-font-size)'));
   assert.ok(ui.includes('height:var(--status-pill-height)'));
   assert.ok(ui.includes('width:var(--status-pill-dot-size)'));
-  assert.ok(src.includes('analysisButton.style.maxWidth=Math.max(28,Math.min(72,tableWidth*.38))'));
   assert.ok(src.includes('window.STIcons.equipment(kind)'));
   assert.ok(src.includes('telemetryIconPaths.set(kind,path)'));
   assert.ok(!src.includes('#simulation2d-legend'));

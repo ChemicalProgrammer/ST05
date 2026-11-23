@@ -29,7 +29,9 @@
       var target = document.getElementById('case-data-note');
       var metadata = state.activeCase && state.activeCase.metadata ? state.activeCase.metadata : {};
       var source=activePersistentSimulation()?.sourceImport;
-      var note = source?.source ? __ST_TEXT__('client.imported_from')+source.source.sheetName+' · '+source.source.readAt+__ST_TEXT__('client.mtbf_drives_random_failure_intervals_mttr_is_a_fixed_repair_duration_review') : typeof metadata.dataNote === 'string' ? metadata.dataNote : '';
+      // Keep demo provenance in the case metadata without displaying its banner.
+      var isDemo = Boolean(metadata.demoRevision) || /^(?:PUBLIC_)?(?:DEMONSTRATION|DEMO)_ONLY$/.test(metadata.dataClassification || '');
+      var note = source?.source ? __ST_TEXT__('client.imported_from')+source.source.sheetName+' · '+source.source.readAt+__ST_TEXT__('client.mtbf_drives_random_failure_intervals_mttr_is_a_fixed_repair_duration_review') : !isDemo && typeof metadata.dataNote === 'string' ? metadata.dataNote : '';
       target.textContent = note;
       toggle('case-data-note', Boolean(note));
     }

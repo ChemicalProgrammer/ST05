@@ -329,7 +329,8 @@ El menú Valor–unidad ahora muestra exclusivamente las abreviaturas con selecc
   cápsula gigante. Los estados siguen dependiendo del motor, no del tema visual.
 - **Conveyor Geometry** mantiene su título y el botón PASS/FAIL de evaluación
   conserva su acción de abrir el análisis. La etiqueta usa los mismos tokens
-  semánticos, una altura de 20 px y **no** se escala junto con el zoom.
+  semánticos y dimensiones fijas dentro de la tabla; se escala junto con ella
+  al aplicar zoom al canvas.
 - La primera Subsección de **Products & Formats** toma el espacio superior del
   `--workspace-gutter` del workspace; el cuerpo del editor no suma un segundo
   padding superior.
@@ -375,8 +376,8 @@ the same Advance prompt sections for both.
 - **Simulation 2D:** the first telemetry-card glyph is rendered from the same
   cached `STIcons.equipment()` SVG path as numerical cards, via `Path2D`
   when supported. Status pills use shared semantic tokens; the conveyor
-  geometry verdict is a single compact 20px-high control anchored within its
-  header row, without inheriting the zoom scale. The bottom legend and
+  geometry verdict is a single compact control anchored within its
+  header row and scaled with the table. The bottom legend and
   navigation instructions have been removed without changing canvas controls.
 - **Results:** explanatory prose under the summary KPIs and rate-loss cards is
   not shown between controls. Its numerical meaning remains available via
@@ -418,9 +419,11 @@ the same Advance prompt sections for both.
 - **Status and conveyor verdict** reuse `.st-status-pill` and `--status-pill-*`
   metrics. The default height is 20 px, type is 11 px, with 7 px horizontal
   padding and a 4 px dot/gap. Numerical and 2D verdicts share soft semantic
-  backgrounds. Canvas pills read these tokens and compensate the zoom so
-  their on-screen dimensions stay stable. The component catalog uses the same
-  class instead of a separate badge example.
+  backgrounds. Labels above equipment compensate the canvas zoom so their
+  on-screen dimensions stay stable. Status pills and the geometry verdict
+  inside telemetry tables use fixed dimensions relative to their rows and
+  scale with the tables. The component catalog uses the same class instead of
+  a separate badge example.
 - **Case activation** restores and captures loss-panel state only inside
   `#live-equipment`; the independent component-catalog cards are excluded.
 
@@ -432,3 +435,19 @@ run. All 52 generated script blocks, 26 stylesheets and server code parsed.
 A real-browser visual check was unavailable: Chromium is absent and its
 standard download was blocked by the executor. DOM/CSS checks do not claim
 pixel verification or deployment to Apps Script.
+
+### Aviso del demo y etiquetas de tablas 2D · 23 nov 2026
+
+- El aviso de datos sintéticos del demo no se muestra en el editor. La regla
+  incluye las clasificaciones de demo actuales y heredadas, además de los
+  demos modificados mediante importación de datos. Los metadatos
+  originales del caso se conservan para guardar y exportar.
+- En las tablas 2D, el estado de cabecera, la fila State y el botón PASS/FAIL
+  mantienen sus dimensiones respecto de las filas. El zoom escala la tabla y
+  sus etiquetas en conjunto, incluido el espacio reservado en la cabecera.
+  Las etiquetas sobre los equipos mantienen su tamaño fijo en pantalla.
+
+Verificación: 33 pruebas focalizadas de contratos del caso, presentación y
+tablas 2D. La geometría de las etiquetas se comprueba con factores de zoom
+0.1, 1 y 6, incluida la posición final del botón PASS/FAIL. Las comprobaciones
+del aviso cubren demos actuales, heredados y modificados por importación.

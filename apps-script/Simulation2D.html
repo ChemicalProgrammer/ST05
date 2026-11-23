@@ -93,8 +93,9 @@
 .simulation2d-viewport-zoom:hover,.simulation2d-viewport-zoom:focus-within { opacity:1; }
 .simulation2d-viewport-zoom input[type=range] { width:90px; min-width:40px; max-width:100%; margin:0; padding:0; accent-color:var(--accent); }
 .simulation2d-viewport-zoom output { min-width:5ch; margin:0; padding:0; text-align:right; color:var(--muted); font-size:var(--font-secondary); font-variant-numeric:tabular-nums; }
-/* Evaluation uses the shared st-status-pill; only canvas positioning lives here. */
+/* Table evaluation keeps the shared pill colors, with a compact table-row height. */
 .simulation2d-analysis-action {
+  --status-pill-height:16px;
   position:absolute;z-index:2;pointer-events:auto;max-width:72px;
   transform:translateY(-50%);transform-origin:left center;
   overflow:hidden;text-overflow:ellipsis;text-decoration:none;
@@ -928,7 +929,7 @@ window.STSimulation2D=(function(){
     return colors.badges?.[lamp]||colors.badges?.muted||{background:'#e8edf2',foreground:'#596779'};
   }
   // Dibujar la misma etiqueta con un punto y colores suaves en las tarjetas
-  // y sobre el equipo. La segunda llamada usa escala inversa del zoom 2D.
+  // y sobre el equipo; cada contexto controla su propia escala.
   function drawStatusPill(context,state,lamp,colors,x,y,options={}){
     const label=localize2D(state||'Stopped').toLocaleUpperCase();
     const palette=statusPillColors(lamp,colors);
@@ -963,6 +964,16 @@ window.STSimulation2D=(function(){
   }
   function drawSignal(context,x,y,signal,colors,zoomFactor){
     drawScreenStatusPill(context,signal.state,signal.lamp,colors,x,y,zoomFactor,150);
+  }
+  // Dentro de las tablas, la etiqueta conserva proporción con las filas.
+  // Solo las etiquetas sobre los equipos compensan el zoom de la cámara.
+  function drawTableStatusPill(context,state,lamp,colors,x,y,maxWidth,align='center'){
+    context.save();
+    context.translate(x,y);context.scale(tableScale,tableScale);
+    drawStatusPill(context,state,lamp,colors,0,0,{
+      height:16,maxWidth:maxWidth/tableScale,align
+    });
+    context.restore();
   }
   // Pictograma ligero sobre canvas: máquinas y bandas tienen símbolos distintos.
   // El canvas reutiliza el path del mismo STIcons.equipment() que las tarjetas
@@ -1175,7 +1186,7 @@ window.STSimulation2D=(function(){
     telemetryGroupWidth=telemetryPairWidth+telemetryWidths[2]+telemetryGap;
     conveyorGroupWidth=telemetryPairWidth+telemetryWidths[3]+telemetryGap;
   }
-  function drawTelemetry(context,item,left,y,signal,ink,border,surface,muted,soft,colors,screenFactor=1){
+  function drawTelemetry(context,item,left,y,signal,ink,border,surface,muted,soft,colors){
     function text(value,x,baseline,maxWidth){
       if(Number.isFinite(maxWidth)&&maxWidth>0)context.fillText(value,x,baseline,maxWidth);
       else context.fillText(value,x,baseline);
@@ -1202,18 +1213,17 @@ window.STSimulation2D=(function(){
         context.textAlign='left';
         // Igual que la cabecera numérica: nombre a la izquierda y una
         // etiqueta de estado suave alineada a la derecha.
-        const pillMaxWidth=Math.min(width*.45,110/Math.max(.01,screenFactor));
-        drawScreenStatusPill(context,signal.state,signal.lamp,colors,
-          left+width-telemetryPadding,y+19*tableScale,screenFactor,
-          Math.min(110,width*.45*screenFactor),'right');
+        const pillMaxWidth=Math.min(width*.45,110*tableScale);
+        drawTableStatusPill(context,signal.state,signal.lamp,colors,
+          left+width-telemetryPadding,y+19*tableScale,pillMaxWidth,'right');
         context.fillStyle=ink;context.textAlign='left';context.font='600 '+telemetryFont;
         text(title,glyphX+16*tableScale,y+21*tableScale,
           Math.max(8*tableScale,width-2*telemetryPadding-16*tableScale-pillMaxWidth-4*tableScale));
       }else if(verdict){
         // La única etiqueta PASS/FAIL pertenece a la cabecera de Geometría;
-        // dejarle una reserva fija en pantalla evita cubrir el título.
+        // reservar su ancho dentro de la tabla evita cubrir el título.
         context.fillStyle=ink;
-        const reserved=Math.min(width*.45,(76/Math.max(.01,screenFactor)));
+        const reserved=Math.min(width*.45,76*tableScale);
         text(localize2D(title),parameterX,y+21*tableScale,
           Math.max(12*tableScale,width-2*telemetryPadding-reserved));
       }else if(title){
@@ -1234,9 +1244,8 @@ window.STSimulation2D=(function(){
         if(showSignal&&label==='State'){
           // Etiqueta de la primera tabla con el mismo fondo suave, punto y
           // color de texto que .live-state en la simulación numérica.
-          drawScreenStatusPill(context,value,signal.lamp,colors,
-            valueX-valueWidth/2,baseline-4*tableScale,screenFactor,
-            Math.min(110,valueWidth*screenFactor));
+          drawTableStatusPill(context,value,signal.lamp,colors,
+            valueX-valueWidth/2,baseline-4*tableScale,Math.min(110*tableScale,valueWidth));
         }else{
           context.fillStyle=ink;
           text(localize2D(value),valueX,baseline,valueWidth);
@@ -1599,11 +1608,11 @@ window.STSimulation2D=(function(){
         const tableLeft=left*factor,tableWidth=telemetryWidths[3]*factor;
         const cx=tableLeft+tableWidth-telemetryPadding*factor;
         const cy=(telemetryY+items[index].telemetryOffset+19*tableScale)*factor;
-        // Una etiqueta única, anclada a la fila del encabezado, sin escala CSS
-        // por zoom y sin competir con las filas de valores.
-        analysisButton.style.maxWidth=Math.max(28,Math.min(72,tableWidth*.38))+'px';
+        // El botón comparte la escala de la tabla y permanece anclado al
+        // extremo derecho de su encabezado al acercar o alejar la cámara.
+        analysisButton.style.maxWidth=Math.min(72,telemetryWidths[3]*.38/tableScale)+'px';
         analysisButton.style.left=cx+'px';analysisButton.style.top=cy+'px';
-        analysisButton.style.transform='translate(-100%,-50%)';
+        analysisButton.style.transform='translate(-100%,-50%) scale('+(tableScale*factor)+')';
         analysisButton.style.transformOrigin='right center';
         analysisButton.hidden=tableLeft>=screenWidth||cx<=0||cy<0||cy>h;
       }
@@ -1699,7 +1708,7 @@ window.STSimulation2D=(function(){
       const left=origin+center-telemetryWidth/2;
       if(left+telemetryWidth<0||left>w)continue;
       const signal=item.kind==='belt'?beltSignal(item):machineSignal(item);
-      drawTelemetry(context,item,left,telemetryY+telemetryOffset,signal,ink,border,surface,muted,soft,colors,factor);
+      drawTelemetry(context,item,left,telemetryY+telemetryOffset,signal,ink,border,surface,muted,soft,colors);
     }
     if(transfer){
       drawPalletInfeed(context,line,items,origin,y,{belt:beltColor,caseColor:appearance.cases||defaultLayoutColors.cases,caseAccent:appearance.caseLabel||defaultLayoutColors.caseLabel,caseMarkShape:appearance.caseLabelShape,surface,accent},transfer);

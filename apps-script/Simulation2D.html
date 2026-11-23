@@ -104,8 +104,8 @@
 .simulation2d-progress-status { display:flex; flex-wrap:wrap; gap:var(--space-2); }
 .simulation2d-time-input { display:flex; align-items:center; gap:var(--space-2); }
 #simulation2d-limit { width:100%; min-width:0; }
-.simulation2d-setting-toggles { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); gap:var(--space-3); margin:var(--space-4) 0 0; padding:var(--space-3) 0 0; border:0; border-top:1px solid var(--line); }
-.simulation2d-setting-toggles legend { padding:0 var(--space-2) 0 0; font-size:var(--font-secondary); color:var(--muted); }
+/* Options share the Settings content flow, without an internal divider. */
+.simulation2d-setting-toggles { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); gap:var(--space-3); margin:var(--space-3) 0 0; padding:0; min-width:0; border:0; }
 .simulation2d-setting-toggles label { display:flex; align-items:center; gap:var(--space-2); margin:0; font-size:var(--font-secondary); }
 .simulation2d-setting-toggles input { width:auto; margin:0; flex:0 0 auto; }
 .simulation2d-viewport-zoom { position:absolute; z-index:2; right:var(--space-2); bottom:var(--space-2); display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); border:0; background:transparent; opacity:.45; transition:opacity .18s ease; max-width:calc(100% - 2 * var(--space-2)); box-sizing:border-box; cursor:default; }

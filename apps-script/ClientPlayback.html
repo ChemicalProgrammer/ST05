@@ -1,5 +1,6 @@
     var playbackClock;
     var playbackMetricTimer=null;
+    var playbackStateTimelineCache={result:null,length:-1,byEquipment:[]};
     // Refresh only numeric playback indicators four times per second.
     // This is presentation-only; source samples and simulation clock stay unchanged.
     var PLAYBACK_METRIC_REFRESH_MS=250;
@@ -150,6 +151,41 @@
         sample.virtualSecond+playbackElapsed(sample)));
     }
 
+    // The engine records exact state transitions separately from bounded
+    // numerical samples. Display these states at the 250-ms clock cadence.
+    // No production, OEE or rate is extrapolated from the transition stream.
+    function updateLiveEquipmentStateBadges(virtualSecond){
+      var result=state.run.result,changes=result?.stateTransitions;
+      if(!Array.isArray(changes)||!changes.length)return;
+      if(playbackStateTimelineCache.result!==result||playbackStateTimelineCache.length!==changes.length){
+        var byEquipment=[];
+        changes.forEach(function(entry){
+          if(!Array.isArray(entry)||entry.length<3)return;
+          var index=entry[1];if(!Number.isInteger(index)||index<0)return;
+          (byEquipment[index]||(byEquipment[index]=[])).push(entry);
+        });
+        playbackStateTimelineCache={result:result,length:changes.length,byEquipment:byEquipment};
+      }
+      var time=Math.max(0,Number(virtualSecond)||0);
+      document.querySelectorAll('#live-equipment .live-equipment-card:not([hidden])').forEach(function(card){
+        var index=Number(card.dataset.equipmentIndex),timeline=playbackStateTimelineCache.byEquipment[index];
+        if(!timeline?.length)return;
+        var low=0,high=timeline.length-1,last=-1;
+        while(low<=high){
+          var mid=(low+high)>>1;
+          if(timeline[mid][0]<=time+1e-8){last=mid;low=mid+1;}else high=mid-1;
+        }
+        if(last<0)return;
+        var next=timeline[last][2],previous=card.dataset.displayedAvailabilityState;
+        if(!next||next===previous)return;
+        if(previous)card.classList.remove('state-'+previous.toLowerCase().replace(/_/g,'-'));
+        card.classList.add('state-'+next.toLowerCase().replace(/_/g,'-'));
+        card.dataset.displayedAvailabilityState=next;
+        var badge=card.querySelector('.live-state');
+        if(badge)badge.textContent=next.replace(/_/g,' ');
+      });
+    }
+
     // Update the ten playback cards and progress from actual recorded samples.
     // Only the virtual-time display interpolates from the playback clock.
     function refreshPlaybackMetricCards(sample,displaySecond){
@@ -191,6 +227,7 @@
         sum(sample.equipment.map(function(unit){return unit.backupStopSeconds||0;})),
         {unit:'min',label:'Change Back-up Stop unit'});
       document.getElementById('metric-line-oee').textContent=formatLineOeeAtSample(sample);
+      if(state.uiView==='simulation')updateLiveEquipmentStateBadges(clockSecond);
       setPlaybackStatus(state.run.playing?'Playing':(sample.virtualSecond>0?'Paused':'Ready'));
     }
 
@@ -214,7 +251,10 @@
       var scrollAnchor = state.uiView==='simulation'?captureLiveEquipmentScrollAnchor():null;
       var sample=state.run.result.samples[state.run.sampleIndex];
       refreshPlaybackMetricCards(sample);
-      if (state.uiView === 'simulation') renderLiveEquipment(sample);
+      if (state.uiView === 'simulation'){
+        renderLiveEquipment(sample);
+        updateLiveEquipmentStateBadges(playbackDisplaySecond(sample));
+      }
       drawSimulationChart();
       drawEquipmentSpeedChart();
       restoreLiveEquipmentScrollAnchor(scrollAnchor);
@@ -365,6 +405,7 @@
         var wasHidden=card.hidden;card.hidden=!equipmentPerformanceVisible(model);
         if(wasHidden&&!card.hidden)card._liveVisible=true;
         displayedEquipmentIds[equipmentId] = true;
+        card.dataset.equipmentIndex=String(index);
         var isNew=card.parentNode!==target;
         if (isNew || card.previousElementSibling !== previousElement) {
           target.insertBefore(card, previousElement.nextElementSibling);
@@ -608,6 +649,7 @@
       card.querySelector('.live-equipment-identity strong').textContent = model.name || unit.id;
       card.querySelector('.live-equipment-identity strong').title=__ST_TEXT__('client.equipment_unit_label')+': '+(window.STBasicMode?.unitLabel(model.unitOfFlow)||model.unitOfFlow||'units')+' · '+__ST_TEXT__('client.equipment_unit_help');
       card.querySelector('.live-state').textContent = availabilityState.replace(/_/g,' ');
+      card.dataset.displayedAvailabilityState=availabilityState;
       card.querySelector('.critical-label').textContent = model.processData?.role === 'PACEMAKER' ? __ST_TEXT__('client.critical_pacemaker') : model.processData?.role === 'CRITICAL_MACHINE' ? __ST_TEXT__('client.critical_equipment') : '';
       var reliability=model.noiseProfile?.reliability;
       var enabledReliability=state.run.configuration?.reliabilityEnabled!==false

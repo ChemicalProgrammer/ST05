@@ -302,7 +302,7 @@
         entries.forEach(function(entry){
           var card=entry.target;
           card._liveVisible=entry.isIntersecting;
-          if(!entry.isIntersecting||state.uiView!=='simulation')return;
+          if(card.hidden||!entry.isIntersecting||state.uiView!=='simulation')return;
           var result=state.run.result,sample=result?.samples?.[state.run.sampleIndex];
           if(!sample||!state.activeCase)return;
           var index=state.activeCase.equipment.findIndex(function(item){
@@ -320,6 +320,33 @@
       return liveEquipmentObserver;
     }
 
+    // Presentation-only group filter; pressed state stays in the two toolbar
+    // buttons and never removes machines from case equipment or simulation data.
+    function equipmentPerformanceVisible(model){
+      var conveyor=model?.type==='CONVEYOR'||model?.processData?.role==='CONVEYOR';
+      var button=document.getElementById(conveyor?'toggle-performance-conveyors':'toggle-performance-machines');
+      return button?.getAttribute('aria-pressed')!=='false';
+    }
+    function setEquipmentPerformanceFilter(group,enabled){
+      if(!['machines','conveyors'].includes(group))return;
+      var button=document.getElementById('toggle-performance-'+group);
+      if(!button)return;
+      button.setAttribute('aria-pressed',String(enabled));
+      button.title=(enabled?'Hide ':'Show ')+group;
+      var all=document.getElementById('live-equipment');
+      all.querySelectorAll('.live-equipment-card').forEach(function(card){
+        if(card.dataset.equipmentGroup!==group)return;
+        card.hidden=!enabled;
+        if(enabled)card._liveVisible=true;
+      });
+      var machines=document.getElementById('toggle-performance-machines').getAttribute('aria-pressed')==='true';
+      var conveyors=document.getElementById('toggle-performance-conveyors').getAttribute('aria-pressed')==='true';
+      document.getElementById('performance-filter-empty').classList.toggle('hidden',machines||conveyors);
+      if(enabled&&state.run.result?.samples?.length){
+        renderLiveEquipment(state.run.result.samples[state.run.sampleIndex]);
+      }
+    }
+
     function renderLiveEquipment(sample) {
       var target = document.getElementById('live-equipment');
       target.setAttribute('role', 'list');
@@ -334,6 +361,9 @@
         var model = state.activeCase.equipment[index] || {};
         var equipmentId = unit.id || ('unit-' + index);
         var card = cardsByEquipmentId[equipmentId] || createLiveEquipmentCard(equipmentId);
+        card.dataset.equipmentGroup=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR'?'conveyors':'machines';
+        var wasHidden=card.hidden;card.hidden=!equipmentPerformanceVisible(model);
+        if(wasHidden&&!card.hidden)card._liveVisible=true;
         displayedEquipmentIds[equipmentId] = true;
         var isNew=card.parentNode!==target;
         if (isNew || card.previousElementSibling !== previousElement) {
@@ -345,7 +375,7 @@
           card._liveVisible=true; // Initial content is populated once.
           observer.observe(card);
         }
-        if(observer&&!card._liveVisible) return;
+        if(card.hidden||observer&&!card._liveVisible) return;
         var chartModel=updateLiveEquipmentCard(card, unit, model, index, sample);
         if(window.STNumericCardDiagnostics?.chart!==false)
           drawEquipmentSpeedSparkline(card.querySelector('.equipment-speed-sparkline'), index, chartModel);

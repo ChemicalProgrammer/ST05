@@ -11,7 +11,7 @@ window.STSimulation2DEngine=(function(){
       ? {...definition,items:[],backupBlocked:false,backupElapsed:0,primeSeen:false,backupBeam:false,primeBeam:false,produced:0,state:'Empty',
         durations:{empty:0,flowing:0,accumulating:0},recentOutput:[],ratePerMinute:0}
       : {...definition,input:0,remaining:null,ready:false,started:0,produced:0,backupSince:null,residual:0,state:'Waiting',
-        resident:[],residenceClock:0,intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
+        resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
         awaitPrime:definitions[index-1]?.kind==='belt'&&definitions[index-1].prime!=null,
         randomState:(Math.trunc(seed)+Math.imul(index+1,2654435761))>>>0,
         durations:{starting:0,running:0,starving:0,acceleration:0,deceleration:0,blocked:0,backupStop:0,failure:0,paused:0,stopped:0,emergencyStop:0,plannedStop:0},
@@ -119,11 +119,16 @@ window.STSimulation2DEngine=(function(){
         if(downstream.resident.length>=Math.floor(downstream.capacityBottles/downstream.inputBottleFactor)||
           downstream.failureRemaining>0||downstream.started<downstream.startDelay||downstream.backupSince!==null)return false;
         downstream.resident.push(downstream.residenceClock+downstream.residenceSeconds);
+        if(downstream.occupancyMode==='POSITIONS')downstream.positionDue.push(downstream.positionClock+
+          Math.floor(downstream.capacityBottles/downstream.inputBottleFactor));
       }else if(downstream){
         if(downstream.input>=downstream.batch||downstream.ready||downstream.remaining!==null||downstream.backupSince!==null)return false;
         downstream.input++;
       }
-      if(machine.capacityBottles!=null)machine.resident.splice(0,machine.batch);
+      if(machine.capacityBottles!=null){
+        machine.resident.splice(0,machine.batch);
+        if(machine.occupancyMode==='POSITIONS')machine.positionDue.splice(0,machine.batch);
+      }
       machine.ready=false;
       machine.input=0;
       machine.produced++;
@@ -230,11 +235,13 @@ window.STSimulation2DEngine=(function(){
       machine.residenceClock+=seconds;
       const capacity=Math.floor(machine.capacityBottles/machine.inputBottleFactor);
       const work=seconds*factor*machine.rate;
-      const ready=machine.resident[machine.batch-1]<=machine.residenceClock+epsilon;
+      if(machine.occupancyMode==='POSITIONS')machine.positionClock+=work*machine.batch;
+      const ready=machine.resident[machine.batch-1]<=machine.residenceClock+epsilon
+        &&(machine.occupancyMode!=='POSITIONS'||machine.positionDue[machine.batch-1]<=machine.positionClock+epsilon);
       machine.outletCredit=machine.resident.length>=machine.batch?machine.outletCredit+work:0;
       const beforeOutput=machine.produced;let admitted=0;
       let blocked=false;
-      if((!stopping||machine.residual>0)&&machine.outletCredit+epsilon>=1&&machine.resident[machine.batch-1]<=machine.residenceClock+epsilon){
+      if((!stopping||machine.residual>0)&&machine.outletCredit+epsilon>=1&&ready){
         if(discharge(machine,downstream)){
           machine.outletCredit=Math.max(0,machine.outletCredit-1);
           if(stopping)machine.residual--;
@@ -249,7 +256,9 @@ window.STSimulation2DEngine=(function(){
             if(!first||first.x+upstream.packageLength/2<upstream.length-epsilon)break;
             upstream.items.shift();upstream.produced++;upstream.recentOutput.push(time);
           }
-          machine.resident.push(machine.residenceClock+machine.residenceSeconds);admitted++;
+          machine.resident.push(machine.residenceClock+machine.residenceSeconds);
+          if(machine.occupancyMode==='POSITIONS')machine.positionDue.push(machine.positionClock+capacity);
+          admitted++;
           machine.intakeCredit=Math.max(0,machine.intakeCredit-1);
         }
         machine.intakeCredit=Math.min(1,machine.intakeCredit);

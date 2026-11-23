@@ -123,3 +123,33 @@ test('Numerical card frames avoid repeated input locking when the playback state
   assert.match(source,/if\(controlSignature!==playbackControlSignature\)\{[\s\S]*?syncRunControls\(\);[\s\S]*?playbackBoundExportResult=state\.run\.result;/);
   assert.match(source,/else if\(state\.run\.result!==playbackBoundExportResult&&!state\.run\.result\?\.provisional\)/);
 });
+
+
+test('Live equipment telemetry is selected by displayed time without overwriting recorded history',()=>{
+ const history=[{virtualSecond:0,outputCount:0},{virtualSecond:60,outputCount:480}];
+ const telemetry=[{virtualSecond:0,outputCount:0},
+   {virtualSecond:10,outputCount:80},{virtualSecond:20,outputCount:160},
+   {virtualSecond:30,outputCount:240}];
+ const state={run:{result:{samples:history},sampleIndex:0,playing:true,liveTelemetry:telemetry}};
+ const before=JSON.stringify(state.run.result);
+ const context={state,playbackDisplaySecond:()=>25};
+ loadFunctions(context,['playbackVisualSample']);
+ assert.equal(vm.runInContext('playbackVisualSample().outputCount',context),160,
+   'The newest measured point at or before 25 seconds is 160 bottles');
+ context.playbackDisplaySecond=()=>35;
+ assert.equal(vm.runInContext('playbackVisualSample().outputCount',context),240);
+ state.run.playing=false;
+ assert.equal(vm.runInContext('playbackVisualSample().outputCount',context),0,
+   'Saved replay is the fallback outside running Live visualization');
+ assert.equal(JSON.stringify(state.run.result),before,'Live telemetry never mutates the recorded samples');
+});
+
+test('Lightweight Live playback targets at least eight refresh opportunities per second',()=>{
+ const code=fs.readFileSync('apps-script/ClientPlayback.html','utf8');
+ assert.match(code,/PLAYBACK_METRIC_REFRESH_MS=125/);
+ assert.match(code,/function playbackVisualSample\(/);
+ assert.match(code,/refreshNumericalOverviewFromSample\(\)/);
+ const batch=fs.readFileSync('apps-script/ClientSimulation.html','utf8');
+ assert.match(batch,/state\.run\.liveTelemetry=stored\.concat\(partial\.liveTelemetry\)\.slice\(-5001\)/);
+ assert.match(batch,/delete result\.liveTelemetry/,'Transient telemetry is not persisted with the case');
+});

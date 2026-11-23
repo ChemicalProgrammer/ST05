@@ -40,6 +40,7 @@ window.STLanguage=(function(){
     if(trimmed&&trimmed!==key&&!Object.prototype.hasOwnProperty.call(translations,trimmed))
       translations[trimmed]=translations[key].trim();
   });
+  Object.assign(translations,{"Bottles at stop":"Botellas al detenerse"});
   var englishOfSpanish={"Registro":"Record","Datos reales":"Real data","Ajuste calibrado de rate loss":"Calibrated rate-loss adjustment","Comparación de parámetros":"Parameter comparison","Gráficas":"Charts","Exportar gráficas":"Export charts","Equipo":"Equipment","Equipo actual":"Current equipment","Velocidad de banda":"Belt speed","Paradas":"Stops","Tiempo efectivo":"Effective time","Eficiencia simulada":"Simulated efficiency","Sección":"Section","Subsección":"Subsection","Configuración":"Settings","Análisis":"Analysis","Cálculos":"Calculations","Resultado":"Result","Iniciar":"Start","Detener":"Stop","Actualizar":"Refresh","Guardar":"Save","Aplicar":"Apply","Opciones":"Options","No disponible":"Not available","Sin resultados":"No results","Tiempo de ejecución":"Runtime","Pérdida de velocidad":"Rate loss"};
   var language=window.STPreferences?.read('language')==='es'?'es':'en';
   var originals=new WeakMap(),attributes=new WeakMap(),observer=null,applying=false;

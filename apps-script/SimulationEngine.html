@@ -1588,7 +1588,7 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
   return {
     ...model,
     nominalRatePerSecond: machineOperatingRatePerSecond(model),
-    residence: isConveyorEquipment(model)||(!residenceEnabled&&model.processData?.equipment?.internalCapacityBottles==null)?null:{clock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1},
+    residence: isConveyorEquipment(model)||(!residenceEnabled&&model.processData?.equipment?.internalCapacityBottles==null)?null:{clock:0,positionClock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1},
     mode: model.initialMode,
     availabilityState: model.initialMode,
     actualRatePerSecond: 0,
@@ -2387,7 +2387,14 @@ function processEquipmentFlow(runtime, index) {
   let entries;
   if(residence){
     residence.clock+=tickSeconds;
-    while(residence.head<residence.queue.length&&residence.queue[residence.head].due<=residence.clock+1e-8){
+    // Position mode: move finite physical pockets with the machine's actual
+    // attainable rate; a pocket cannot discharge before a full revolution.
+    if(equipment.processData?.equipment?.occupancyMode==='POSITIONS')
+      residence.positionClock+=Math.max(0,Math.min(requestedFlow,downstreamSpace));
+    while(residence.head<residence.queue.length
+      &&residence.queue[residence.head].due<=residence.clock+1e-8
+      &&(residence.queue[residence.head].positionDue===undefined
+        ||residence.queue[residence.head].positionDue<=residence.positionClock+1e-8)){
       residence.ready+=residence.queue[residence.head++].amount;
     }
     if(residence.head>=1024){residence.queue.splice(0,residence.head);residence.head=0;}
@@ -2434,7 +2441,9 @@ function processEquipmentFlow(runtime, index) {
       if(admission>0){
         admitted=admission;
         residence.inventory+=admission;
-        residence.queue.push({amount:admission,due:residence.clock+residenceSeconds});
+        residence.queue.push({amount:admission,due:residence.clock+residenceSeconds,
+          positionDue:equipment.processData?.equipment?.occupancyMode==='POSITIONS'
+            ?residence.positionClock+capacity:undefined});
         consumeFlow(runtime,index,admission);
       }
     }
@@ -3339,7 +3348,7 @@ function configureProductFactors(runtime){
 function switchRuntimeProduct(runtime,id){
   const product=runtime.run.productCatalog.find(p=>p.id===id);
   const removed=materialInventory(runtime);
-  for(const e of runtime.equipment)if(e.residence)e.residence={clock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1};
+  for(const e of runtime.equipment)if(e.residence)e.residence={clock:0,positionClock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1};
   runtime.clearoutBottleEquivalents+=removed;currentProductRow(runtime).clearoutBottleEquivalents+=removed;
   runtime.productTimeline.at(-1).endSeconds=runtime.virtualSecond;
   const models=applyProductProfile(runtime.baseEquipment,product);

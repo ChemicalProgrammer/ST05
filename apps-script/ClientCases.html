@@ -23,10 +23,9 @@
     function saveGeminiHistory(options){if(!autosave.pending())whatIfOnlySave=true;queueCaseSave();return options?.draftOnly||!automaticSaving()?Promise.resolve():autosave.flush();}
     window.addEventListener('st-whatif-change',function(event){if(state.activeCase?.simulations?.includes(event.detail.simulation)){if(!autosave.pending())whatIfOnlySave=true;queueCaseSave();}});
     window.addEventListener('beforeunload',function(event){if(autosave.pending()||STSettings.pending()){event.preventDefault();event.returnValue='';}});
-    window.addEventListener('online',function(){if(automaticSaving()&&autosave.pending())autosave.retry().catch(function(){});});
-    function automaticSaving(){return ['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||document.documentElement.dataset.uiMode).toUpperCase())&&STPreferences.caseOptions().autosaveEnabled;}
+    function automaticSaving(){return false;} // Legacy callsites use explicit manual-only policy.
     function syncSaveButton(){var b=document.getElementById('save-case');if(!b)return;b.classList.toggle('hidden',!state.activeCase||automaticSaving());b.disabled=state.saving||(!state.isDirty&&!window.STSimulation2D?.hasState?.());b.classList.toggle('has-changes',state.isDirty);}
-    function configureSaving(){var seconds=STPreferences.caseOptions().autosaveSeconds;autosave.configure({enabled:automaticSaving(),intervalMs:Math.max(1,Math.min(3600,seconds||10))*1000});syncSaveButton();}
+    function configureSaving(){autosave.configure({enabled:false,intervalMs:10000});syncSaveButton();}
     window.addEventListener('st-save-policy-change',configureSaving);
     function prepareCaseDraft(){try{STProducts.validateForSave();}catch(error){return Promise.reject(error);}state.lastInputError=null;
       if(state.activeCase&&!syncPersistentSimulation()){

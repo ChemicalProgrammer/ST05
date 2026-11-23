@@ -136,7 +136,7 @@ test('Gemini RPC classifies startup errors instead of returning the generic mess
  const result=h.ctx.askGemini(request);assert.equal(result.ok,false);assert.equal(result.error.code,'GEMINI_START_FAILED');assert(!JSON.stringify(result).includes('private internal'));assert.equal(h.calls.length,0);assert.equal(result.geminiVersion,'gemini-20261005-1');
 });
 
-test('Gemini prompt sections are independently editable and selected by interface mode',()=>{
+test('Gemini uses the complete Advance personality in both interface modes',()=>{
  for(const mode of ['ADVANCE','BASIC']){
   const h=setup();
   h.ctx.ST_GEMINI_PERSONALITY='CUSTOM_PERSONALITY';h.ctx.ST_GEMINI_LANGUAGE_POLICY='CUSTOM_LANGUAGE';
@@ -144,7 +144,7 @@ test('Gemini prompt sections are independently editable and selected by interfac
   h.ctx.askGemini_({...request,uiMode:mode,question:'¿Cómo puedo mejorar la línea?'},user);
   const policy=JSON.parse(h.calls[0].options.payload).systemInstruction.parts[0].text;
   assert(policy.includes('CUSTOM_PERSONALITY'));assert(policy.includes('CUSTOM_LANGUAGE'));assert(policy.includes('Preserve seed and baseline'));
-  assert.equal(policy.includes('ADVANCE_CARDS'),mode==='ADVANCE');assert.equal(policy.includes('BASIC_TEXT'),mode==='BASIC');assert(policy.includes('JSON_FORMAT'));
+  assert(policy.includes('ADVANCE_CARDS'));assert(!policy.includes('BASIC_TEXT'));assert(policy.includes('JSON_FORMAT'));
  }
 });
 test('Gemini language instructions cover readable scenario fields while preserving schema identifiers',()=>{
@@ -199,16 +199,17 @@ test('Gemini keeps proposal rationales when text is omitted, blank or generic',(
 });
 
 
-test('Gemini account prompts keep disabled text, use source defaults and respect mode boundaries',()=>{
+test('Gemini account prompts preserve advanced settings in Basic and Advance',()=>{
  const h=setup();h.ctx.saveGeminiPrompts_(h.ctx.normalizeGeminiPrompts_({personality:{enabled:true,text:'PERSONAL_ACCOUNT_TONE'},zeroCapex:{enabled:true,text:'ZERO_ACCOUNT_CRITERIA'},mediumCapex:{enabled:false,text:'RETAINED_MEDIUM_CRITERIA'},engineering:{enabled:false,text:'RETAINED_ENGINEERING'},basic:{enabled:false,text:'RETAINED_BASIC'}}));
  h.ctx.ST_GEMINI_HIGH_CAPEX_POLICY='HIGH_SOURCE_DEFAULT';
  const config=h.ctx.getGeminiClientConfig_();assert.equal(config.prompts.length,11);assert.equal(config.promptOverrides.mediumCapex.text,'RETAINED_MEDIUM_CRITERIA');assert(!JSON.stringify(config).includes('private-test-key'));
  for(const uiMode of ['ADVANCE','BASIC']){
   h.ctx.askGemini_({...request,uiMode},user);const policy=JSON.parse(h.calls.at(-1).options.payload).systemInstruction.parts[0].text;
   assert(policy.includes('PERSONAL_ACCOUNT_TONE'));
-  if(uiMode==='ADVANCE'){for(const text of ['ZERO_ACCOUNT_CRITERIA','HIGH_SOURCE_DEFAULT'])assert(policy.includes(text));}else{assert(policy.includes(h.ctx.ST_GEMINI_BASIC_CAPEX_POLICY));assert(!policy.includes('ZERO_ACCOUNT_CRITERIA'));}
+  for(const text of ['ZERO_ACCOUNT_CRITERIA','HIGH_SOURCE_DEFAULT'])assert(policy.includes(text));
+  assert(!policy.includes('In Basic mode, explain requested improvements'));
   for(const text of ['RETAINED_MEDIUM_CRITERIA','RETAINED_ENGINEERING','RETAINED_BASIC'])assert(!policy.includes(text));
-  if(uiMode==='BASIC')assert(policy.includes('In both interfaces, a requested CAPEX scenario'));
+  assert(!policy.includes('In both interfaces, a requested CAPEX scenario'));
  }
  const other=setup();assert(!other.ctx.geminiPolicy_(false).includes('PERSONAL_ACCOUNT_TONE'));
  h.ctx.saveGeminiPrompts_({});assert.deepEqual(JSON.parse(JSON.stringify(h.ctx.getGeminiPrompts_())),{});assert(h.ctx.geminiPolicy_(false).includes(h.ctx.ST_GEMINI_PERSONALITY));

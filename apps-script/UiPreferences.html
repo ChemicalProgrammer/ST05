@@ -93,9 +93,9 @@ window.STPreferences = (function() {
   apply();
   function caseOptions() {
     var saved=caseProvider?.()?.metadata?.consoleOptions||{};
-    var seconds=Number(saved.autosaveSeconds??read('autosaveSeconds')??10);
-    return {equipmentLayout:['split','combined'].includes(saved.equipmentLayout)?saved.equipmentLayout:'',rateLossCategories:saved.rateLossCategories||{},showRealData:saved.showRealData!==false,autosaveEnabled:typeof saved.autosaveEnabled==='boolean'?saved.autosaveEnabled:read('autosaveEnabled')==='yes',
-      autosaveSeconds:Number.isInteger(seconds)&&seconds>=1&&seconds<=3600?seconds:10,
+    // El guardado de casos es exclusivamente manual. Ignorar políticas heredadas.
+    return {equipmentLayout:['split','combined'].includes(saved.equipmentLayout)?saved.equipmentLayout:'',
+      rateLossCategories:saved.rateLossCategories||{},showRealData:saved.showRealData!==false,
       seedPolicy:(saved.seedPolicy??read('seedPolicy'))==='FIXED'?'FIXED':'RANDOM'};
   }
   function setCaseOptions(value) {
@@ -114,20 +114,9 @@ window.STPreferences = (function() {
     if(!record.metadata.consoleOptions)record.metadata.consoleOptions=caseOptions();
     if(typeof record.metadata.includeDOE!=='boolean')record.metadata.includeDOE=read('scenarioDoe')==='yes';
   }
-  function applyJsonFields(mode) {
-    mode=mode==='basic'?'basic':'advance';
-    var record=caseProvider?.(),stored=read('jsonFields.'+mode),visible=mode==='advance'&&(typeof record?.metadata?.showJsonFields==='boolean'?record.metadata.showJsonFields:stored===null?true:stored==='yes');
-    document.documentElement.dataset.showJson=String(visible);
-    var checkbox=document.getElementById('settings-json-fields');if(checkbox){checkbox.checked=visible;checkbox.disabled=!record||mode!=='advance';checkbox.closest('label').hidden=!record||mode!=='advance';}
-  }
   document.addEventListener('DOMContentLoaded', function() {
     applyFontScale();
     document.getElementById('settings-font-scale')?.addEventListener('change',function(event){setFontScale(event.target.value);window.dispatchEvent(new Event('resize'));});
-    applyJsonFields(document.documentElement.dataset.uiMode);
-    document.getElementById('settings-json-fields')?.addEventListener('change',function(event){
-      var mode=document.documentElement.dataset.uiMode==='advance'?'advance':'basic';
-      var record=caseProvider?.();if(!record||mode!=='advance'){applyJsonFields(mode);return;}record.metadata=record.metadata||{};record.metadata.showJsonFields=event.target.checked;caseChanged?.();applyJsonFields(mode);
-    });
     var palette=document.getElementById('accent-palette');
     if(palette)colors.forEach(function(color){
       var button=document.createElement('button'),entry=STThemeResources.palettes[color];
@@ -150,7 +139,7 @@ window.STPreferences = (function() {
     setTheme(theme);setAccent(STThemeResources.defaultAccent);
     window.STLanguage?.setLanguage('en');
   }
-  return {reset:reset,caseOptions:caseOptions,setCaseOptions:setCaseOptions,initializeCaseOptions:initializeCaseOptions, connectCase:function(provider,changed){caseProvider=provider;caseChanged=changed;},read: read, write: write, setTheme: setTheme,setAccent:setAccent,automaticThemeAt:automaticThemeAt,setFontScale:setFontScale,applyFontScale:applyFontScale, applyJsonFields:applyJsonFields,applyPalette:applyPalette,resolveInterfaceMode:resolveInterfaceMode };
+  return {reset:reset,caseOptions:caseOptions,setCaseOptions:setCaseOptions,initializeCaseOptions:initializeCaseOptions, connectCase:function(provider,changed){caseProvider=provider;caseChanged=changed;},read: read, write: write, setTheme: setTheme,setAccent:setAccent,automaticThemeAt:automaticThemeAt,setFontScale:setFontScale,applyFontScale:applyFontScale, applyPalette:applyPalette,resolveInterfaceMode:resolveInterfaceMode };
 })();
 </script>
 

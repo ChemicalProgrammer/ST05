@@ -333,3 +333,25 @@ El menú Valor–unidad ahora muestra exclusivamente las abreviaturas con selecc
 - La primera Subsección de **Products & Formats** toma el espacio superior del
   `--workspace-gutter` del workspace; el cuerpo del editor no suma un segundo
   padding superior.
+
+
+### Basic/Advance consolidation — 23 November 2026
+
+The Equipment ID and initial mode selectors are no longer part of the editor.
+A stable internal equipment ID is still required for references and saved results;
+new edits use the standard `AUTO` initial mode. Critical machine is selectable
+on machine cards in both modes, never on conveyors.
+
+The Equipment and Conveyor **Additional options** dialog, the equipment-specific
+JSON help dialog, examples and editable JSON textareas have been removed from
+the UI source. Only non-visual internal parameter state remains to preserve
+saved cases and imported equipment. General case-level export remains available.
+
+The **Show JSON fields** and **Autosave** settings were removed. Automatic case
+persistence is disabled, and the existing Save icon continues to perform manual
+case saving. The unsaved-changes warning is preserved.
+
+**Real Data** and **Comparison** are available exclusively in Advance.
+**Settings > Gemini** exposes the same full Advance personality, engineering
+policies and generation controls in both Basic and Advance; the backend uses
+the same Advance prompt sections for both.

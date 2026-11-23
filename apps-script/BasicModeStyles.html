@@ -26,7 +26,6 @@ html[data-ui-mode=basic] #batch-dialog .dialog-body > p:first-child,
 html[data-ui-mode=basic] #sheet-import-dialog .dialog-body > p:first-child,
 html[data-ui-mode=basic] .settings-section > p:not(.gemini-ai-policy-note):not(.format-guidance),
 html[data-ui-mode=basic] .parameter-help,
-html[data-ui-mode=basic] .json-example,
 html[data-ui-mode=basic] #editor-meta,
 html[data-ui-mode=basic] #run-case-meta,
 html[data-ui-mode=basic] #status:not(.error),
@@ -35,9 +34,7 @@ html[data-equipment-layout=split] #basic-conveyor-layout { display:block; }
 html[data-equipment-layout=split] #basic-conveyor-panel { display:none; }
 html[data-equipment-layout=split] .basic-machine { cursor:default; padding:var(--space-4); }
 html[data-equipment-layout=split] .basic-machine .equipment-fields { display:block; }
-html[data-equipment-layout=split] .equipment-json-details { display:none !important; }
 html[data-equipment-layout=split] .basic-machine .equipment-grid { display:grid; }
-html[data-equipment-layout=split] .basic-machine .equipment-json-details { margin-top:var(--space-3); }
 html[data-equipment-layout=split][data-basic-view=conveyors] #basic-conveyor-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); gap:var(--section-gap); align-items:start; }
 html[data-equipment-layout=split][data-basic-view=conveyors] #basic-conveyor-panel { display:flex; flex-direction:column; min-width:0; border:var(--border-width) solid var(--line); border-radius:var(--radius-md); padding:var(--space-3); background:var(--surface); position:sticky; top:var(--space-4); }
 html[data-equipment-layout=split] #basic-conveyor-panel { container-type:inline-size; }
@@ -48,7 +45,6 @@ html[data-ui-mode=basic][data-basic-view=vgraph] #line-performance > :not(#vgrap
 html[data-ui-mode=basic][data-basic-view=vgraph] #line-performance { margin-top:0; border-top:0; }
 html[data-ui-mode=basic] .equipment-speed-chart-heading p,
 html[data-ui-mode=basic] .simulation-analysis-heading p { display:none; }
-html[data-equipment-layout=split] label:has(> .equipment-mode) { display:none !important; }
 html[data-equipment-layout=split][data-basic-view=conveyors] { scrollbar-gutter:stable; }
 html[data-equipment-layout=split] #equipment-list .equipment-header .button-row { flex-wrap:nowrap; gap:var(--space-1); }
 html[data-equipment-layout=split] #equipment-list .equipment-header .icon-button { width:var(--size-28); height:var(--size-28); min-height:var(--size-28); padding:var(--space-1); }
@@ -67,7 +63,6 @@ html[data-equipment-layout=split] .basic-machine .equipment-grid label { grid-te
 html[data-equipment-layout=split] .equipment-grid input:not([type=checkbox]),
 html[data-equipment-layout=split] .equipment-grid select { height:var(--control-height); box-sizing:border-box; }
 html[data-equipment-layout=split] #equipment-inspector label { padding-right:0; }
-html[data-equipment-layout=split] label:has(> .equipment-id) { display:none !important; }
 @media(max-width:760px){
   html[data-ui-mode=basic] #editor-panel > .section-heading { flex-wrap:wrap; }
   html[data-equipment-layout=split][data-basic-view=conveyors] #basic-conveyor-layout { grid-template-columns:1fr; }
@@ -87,7 +82,7 @@ html[data-ui-mode=basic] { --vgraph-height:440px; }
 html[data-equipment-layout=split] .equipment-grid input,
 html[data-ui-mode=basic] .reliability-controls input { width:100%; min-width:0; }
 html[data-equipment-layout=split][data-basic-view=equipment] #equipment-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--size-220)),1fr)); align-items:start; }
-html[data-equipment-layout=split] .basic-machine .equipment-grid:not(.reliability-controls) > label:not(:has(> .equipment-rate, > .equipment-material-flow, > .equipment-internal-capacity)),
+html[data-equipment-layout=split] .basic-machine .equipment-grid:not(.reliability-controls) > label:not(:has(> .equipment-rate, > .equipment-material-flow, > .equipment-internal-capacity, > .equipment-pacemaker)),
 html[data-ui-mode=basic] .reliability-controls label:has(> .reliability-enabled) { display:none !important; }
 html[data-equipment-layout=split] .basic-machine .equipment-grid,
 html[data-equipment-layout=split] .basic-machine .reliability-controls { grid-template-columns:1fr; gap:var(--space-3); }
@@ -163,8 +158,7 @@ html[data-equipment-layout=split] .basic-worksheet-group input.calculated-value 
 html[data-equipment-layout=split] .basic-worksheet-group input.calculated-value::-webkit-inner-spin-button,
 html[data-equipment-layout=split] .basic-worksheet-group input.calculated-value::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 html[data-equipment-layout=split] #basic-conveyor-panel .format-zone-heading,
-html[data-equipment-layout=split] #basic-conveyor-panel .format-zone-setup > .format-zone-grid,
-html[data-equipment-layout=split] #basic-conveyor-panel .equipment-json-details { display:none !important; }
+html[data-equipment-layout=split] #basic-conveyor-panel .format-zone-setup > .format-zone-grid { display:none !important; }
 html[data-equipment-layout=split] .basic-conveyor-result-column .basic-metric {
  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,9rem);
 }
@@ -221,6 +215,5 @@ html[data-ui-mode=advance][data-header-view=vgraph] #results-body > :not(#line-p
 html[data-ui-mode=advance][data-header-view=vgraph] #line-performance > :not(#vgraph-profile) { display:none; }
 html[data-ui-mode=advance][data-header-view=results] #line-performance { display:none; }
 
-html[data-equipment-layout=split] .equipment-options-button { display:none !important; }
 </style>
 

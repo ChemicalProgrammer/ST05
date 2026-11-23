@@ -52,7 +52,13 @@ window.STSettings = (function() {
   function activeCase(){return caseProvider?.();}
   function applyCaseCharts(){var colors=activeCase()?.metadata?.chartColors||[],style=document.documentElement.style;for(var i=0;i<13;i++){var name='--series-'+i,value=/^#[0-9a-f]{6}$/i.test(colors[i]||'')?colors[i]:'';if(value){if(style.getPropertyValue(name)!==value)style.setProperty(name,value);}else if(style.getPropertyValue(name))style.removeProperty(name);}var graph=activeCase()?.metadata?.vgraphColors||{};['current','recommended'].forEach(function(key){var value=graph[key];if(/^#[0-9a-f]{6}$/i.test(value||''))style.setProperty('--vgraph-'+key,value);else style.removeProperty('--vgraph-'+key);});}
   var colorTarget,colorHue=0,colorSaturation=0,colorValue=1;
-  function promptVisibility(){var basic=document.documentElement.dataset.uiMode==='basic';el('gemini-generation-section').classList.toggle('hidden',basic);promptDefinitions.forEach(function(def){el('gemini-prompt-'+def.id)?.classList.toggle('hidden',basic?!['personality','basicCapex','language'].includes(def.id):def.id==='basicCapex');});}
+  function promptVisibility(){
+    // Ambos modos muestran exactamente las opciones de personalidad de Advance.
+    el('gemini-generation-section').classList.remove('hidden');
+    promptDefinitions.forEach(function(def){
+      el('gemini-prompt-'+def.id)?.classList.toggle('hidden',['basic','basicCapex'].includes(def.id));
+    });
+  }
   function updateColorMap(){el('series-color-hue').value=String(Math.round(colorHue)%360);el('series-color-map').style.backgroundColor='hsl('+colorHue+',100%,50%)';el('series-color-marker').style.left=(colorSaturation*100)+'%';el('series-color-marker').style.top=((1-colorValue)*100)+'%';el('series-color-map').setAttribute('aria-valuenow',String(Math.round(colorSaturation*100)));el('series-color-map').setAttribute('aria-valuetext',el('series-color-hex').value+', brightness '+Math.round(colorValue*100)+'%');}
   function setColorDraft(hex,fromMap){hex=hex.toUpperCase();el('series-color-hex').value=hex;var rgb=['r','g','b'].map(function(channel,index){var value=parseInt(hex.slice(1+index*2,3+index*2),16);el('series-color-'+channel).value=value;return value/255;});el('series-color-preview').style.backgroundColor=hex;if(!fromMap){var max=Math.max(...rgb),min=Math.min(...rgb),delta=max-min;colorValue=max;colorSaturation=max?delta/max:0;if(delta){var hue=max===rgb[0]?(rgb[1]-rgb[2])/delta:max===rgb[1]?(rgb[2]-rgb[0])/delta+2:(rgb[0]-rgb[1])/delta+4;colorHue=((hue*60)%360+360)%360;}}updateColorMap();}
   function mapColorDraft(){var chroma=colorValue*colorSaturation,x=chroma*(1-Math.abs((colorHue/60)%2-1)),m=colorValue-chroma,sector=Math.floor(colorHue/60),rgb=[[chroma,x,0],[x,chroma,0],[0,chroma,x],[0,x,chroma],[x,0,chroma],[chroma,0,x]][sector%6];setColorDraft('#'+rgb.map(function(value){return Math.round((value+m)*255).toString(16).padStart(2,'0');}).join(''),true);}
@@ -69,7 +75,7 @@ window.STSettings = (function() {
   }
   function colorButton(container,labelText,variable,key,kind){var row=document.createElement('tr'),name=document.createElement('td'),cell=document.createElement('td'),value=document.createElement('div'),code=document.createElement('span'),button=document.createElement('button');name.className='settings-color-name';name.textContent=labelText;button.type='button';button.className='series-color-button';var hex=getComputedStyle(document.documentElement).getPropertyValue(variable).trim();button.style.backgroundColor=hex;button.setAttribute('aria-label',labelText+' color');button.title=labelText+' color';code.textContent=hex.toUpperCase();code.className='settings-color-hex';value.className='settings-color-value';button.onclick=function(){openSeriesColor(variable,key,labelText,kind);};value.append(button,code);cell.append(value);row.append(name,cell);container.append(row);}
   function colorColumns(container,label){return [0,1].map(function(){var table=document.createElement('table');table.className='settings-color-table';var head=document.createElement('thead'),row=document.createElement('tr');[label,'Color / HEX'].forEach(function(text){var th=document.createElement('th');th.scope='col';th.textContent=text;row.append(th);});head.append(row);var body=document.createElement('tbody');table.append(head,body);container.append(table);return body;});}
-  function renderCaseCharts(){var record=activeCase();applyCaseCharts();el('settings-case-note').classList.toggle('hidden',!!record);el('settings-case-options-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-chart-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-chart-colors').replaceChildren();STPreferences.applyJsonFields(document.documentElement.dataset.uiMode);if(!record)return;var equipmentList=record.equipment||[],columns=colorColumns(el('settings-chart-colors'),'Equipment'),split=Math.ceil(equipmentList.length/2);equipmentList.forEach(function(equipment,index){colorButton(columns[index<split?0:1],(index+1)+'. '+equipment.name,'--series-'+(index%13),index%13,'chartColors');});}
+  function renderCaseCharts(){var record=activeCase();applyCaseCharts();el('settings-case-note').classList.toggle('hidden',!!record);el('settings-chart-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-chart-colors').replaceChildren();if(!record)return;var equipmentList=record.equipment||[],columns=colorColumns(el('settings-chart-colors'),'Equipment'),split=Math.ceil(equipmentList.length/2);equipmentList.forEach(function(equipment,index){colorButton(columns[index<split?0:1],(index+1)+'. '+equipment.name,'--series-'+(index%13),index%13,'chartColors');});}
   function refresh(){modelControls();el('settings-unsaved').dataset.state=failure?'error':sending?'saving':version>savedVersion?'pending':'saved';el('settings-factory-reset').disabled=!!activeCase()||sending||resetting;el('settings-unsaved').textContent=failure?__ST_TEXT__('autosave.error'):sending?__ST_TEXT__('autosave.saving'):version>savedVersion?__ST_TEXT__('autosave.pending'):__ST_TEXT__('autosave.saved');el('settings-retry').classList.toggle('hidden',!failure);}
   function open(){var dialog=el('settings-dialog');if(dialog.open)return;lastFocus=document.activeElement;
     // Sync the existing case name whenever settings opens, even if the editor failed to render.
@@ -100,7 +106,7 @@ window.STSettings = (function() {
     return (catalog.products?.length||0)>1||(catalog.formats?.length||0)>1||
       (Array.isArray(legacy)&&legacy.length>1)?'multiple':'single';
   }
-  function resetModeSelector(preserveUnlock){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-save-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-autosave').checked=options.autosaveEnabled;el('settings-autosave-seconds').value=String(options.autosaveSeconds);el('settings-autosave-seconds').disabled=!el('settings-autosave').checked;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
+  function resetModeSelector(preserveUnlock){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-realdata-section').classList.toggle('hidden',document.documentElement.dataset.uiMode==='basic');el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
     el('settings-product-format-mode').value=productFormatMode(record);el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');if(preserveUnlock!==true){modeCount=0;modeStarted=0;el('settings-interface-section').classList.add('hidden');}el('settings-interface-mode').value=document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC';}
   async function changeMode(){
     if(modeChanging)return;
@@ -111,11 +117,7 @@ window.STSettings = (function() {
       if(removing||resetting||!await flush()){picker.value=previous;return;}
       if(activeCase()){
         if(!el('case-editor-form').checkValidity())throw Error(__ST_TEXT__('settings.complete_fields'));
-        var options=STPreferences.caseOptions(),seconds=Number(el('settings-autosave-seconds').value);
-        if(!el('settings-save-section').classList.contains('hidden')){
-          if(!Number.isInteger(seconds)||seconds<1||seconds>3600)throw Error('Choose a save interval between 1 and 3600 seconds.');
-          options.autosaveEnabled=el('settings-autosave').checked;options.autosaveSeconds=seconds;
-        }
+        var options=STPreferences.caseOptions();
         options.seedPolicy=el('settings-seed-policy').value;STPreferences.setCaseOptions(options);
         if(flushCase)await flushCase();
       }
@@ -160,11 +162,7 @@ window.STSettings = (function() {
     var settingsFlushed=await flush();
     if(!settingsFlushed)el('settings-error').textContent=el('settings-error').textContent||'Settings could not be saved. Changes remain pending.';
     if(activeCase()) {
-      var options=STPreferences.caseOptions(),seconds=Number(el('settings-autosave-seconds').value);
-      if(!el('settings-save-section').classList.contains('hidden')) {
-        if(!Number.isInteger(seconds)||seconds<1||seconds>3600){el('settings-error').textContent='Choose a save interval between 1 and 3600 seconds.';return;}
-        options.autosaveEnabled=el('settings-autosave').checked;options.autosaveSeconds=seconds;
-      }
+      var options=STPreferences.caseOptions();
       options.seedPolicy=el('settings-seed-policy').value;
       STPreferences.setCaseOptions(options);
     }
@@ -267,7 +265,6 @@ window.STSettings = (function() {
       if(series!=='current'&&series!=='recommended')return;
       openSeriesColor('--vgraph-'+series,series,series==='current'?'Current':'Recommended','vgraphColors');
     });
-    el('settings-autosave').onchange=function(){el('settings-autosave-seconds').disabled=!this.checked;};
     el('settings-close').onclick=close;el('settings-cancel').onclick=close;el('settings-retry').onclick=write;
     el('gemini-delete-key').onclick=deleteKey;
     el('gemini-refresh-models').onclick=function(){loadModels(true);};

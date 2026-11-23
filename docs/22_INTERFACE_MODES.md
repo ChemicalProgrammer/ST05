@@ -147,3 +147,26 @@ The simulation selector and rename/clone/delete icon actions live beside Gemini 
 the header in both modes. Basic moves their entire group into its navigation row,
 so the selector and Gemini stay together when changing modes. Accessible names and
 button tooltips retain the action names.
+
+
+## 23 November 2026 — Simplification of Basic and Advance
+
+These rules override earlier interface descriptions when they conflict:
+
+- **Equipment in both modes:** ID is an internal stable identifier, not an
+  editable or visible field. Every newly saved equipment has `initialMode=AUTO`;
+  its initial operating-mode dropdown is no longer exposed. **Critical machine**
+  remains selectable in both Basic and Advance (at most one; not a conveyor).
+- **Equipment/Conveyors:** the Additional options modal and equipment-specific
+  JSON examples/editor/import/export dialogs were removed, not just hidden. The
+  engine's internal characteristics, reliability and processData structures remain
+  available for imported and previously saved cases.
+- **Settings:** no Show JSON fields or case autosave toggle/interval. Case changes
+  require the manual **Save** action; the dirty-state controller and export remain.
+- **Real Data / Comparison:** only available in Advance. Basic navigation and
+  workspace tabs do not offer these sections; mode switching while inside either
+  section returns to Simulation without deleting observations or comparisons.
+- **Gemini:** Basic and Advance share the complete Advance prompt editor, generation
+  settings, personality, language, engineering criteria, search strategy and CAPEX
+  policies. Legacy Basic prompt overrides are retained for compatibility, but
+  are neither shown nor used as the active policy.

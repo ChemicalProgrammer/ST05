@@ -501,7 +501,6 @@
         </div>
       </aside>
     </main>
-    <dialog id="json-help-dialog" aria-labelledby="json-help-title"><header class="dialog-heading"><h2 id="json-help-title"></h2><button id="json-help-close" type="button" class="ghost icon-button" data-icon="x" aria-label="<?= __ST_TEXT__('inspector.close') ?>"></button></header><div class="dialog-body"><p><?= __ST_TEXT__('inspector.example_note') ?></p><textarea id="json-help-code" readonly spellcheck="false" aria-label="<?= __ST_TEXT__('inspector.example') ?>"></textarea><dl id="json-help-fields"></dl></div><footer class="dialog-actions"><span id="json-copy-status" role="status"></span><button id="json-help-copy" type="button" data-icon="copy"><?= __ST_TEXT__('inspector.copy') ?></button></footer></dialog>
     <dialog id="app-info-dialog" aria-labelledby="app-info-title">
       <header class="dialog-heading"><h2 id="app-info-title"><?= __ST_TEXT__('info.title') ?></h2><button id="app-info-close" type="button" class="ghost icon-button" data-icon="x" aria-label="<?= __ST_TEXT__('inspector.close') ?>"></button></header>
       <div class="dialog-body app-info-body">
@@ -537,8 +536,6 @@
             </select>
           </label>
           <label>Equipment layout<select id="settings-equipment-layout"><option value="">Default for interface mode</option><option value="split">Separate Equipment and Conveyors tabs</option><option value="combined">Single Equipment tab</option></select></label></section>
-          <section id="settings-save-section" class="settings-section"><h3>Case saving</h3><label class="scenario-scope"><input id="settings-autosave" type="checkbox"> Autosave</label><label>Save interval (seconds)<input id="settings-autosave-seconds" type="number" min="1" max="3600" step="1" value="10"></label><p>Save pending case changes after the selected interval. Basic always uses the Save icon. Autosave settings are saved in this case.</p></section>
-          <section id="settings-case-options-section" class="settings-section settings-case-options"><label class="remember" hidden><input id="settings-json-fields" type="checkbox"><?= __ST_TEXT__('settings.show_json_fields') ?></label></section>
           <section id="settings-chart-section" class="settings-section"><div class="settings-section-heading"><h3>Chart Series Colors</h3><button id="settings-chart-reset" type="button" class="ghost">Reset colors</button></div><p>Equipment appears in line order. Colors repeat after 13 items; the first color also applies to line output.</p><div id="settings-chart-colors" class="settings-color-columns"></div></section>
         </div>
         <div id="settings-page-appearance" class="hidden" role="tabpanel" aria-labelledby="settings-tab-appearance">
@@ -573,7 +570,7 @@
     <label class="checkbox-label"><input id="settings-numeric-show-chart" type="checkbox" checked> Speed trend charts</label>
   </div>
 </section>
-<section class="settings-section"><h3>Sections</h3><div class="settings-simulation-grid simulation-toggle-grid"><label class="checkbox-label"><input id="settings-show-real-data" type="checkbox" checked><span>Show Real data</span></label></div><p class="chart-note">Show or hide the Real data section for this case. Stored observations are retained.</p></section>
+<section id="settings-realdata-section" class="settings-section"><h3>Sections</h3><div class="settings-simulation-grid simulation-toggle-grid"><label class="checkbox-label"><input id="settings-show-real-data" type="checkbox" checked><span>Show Real data</span></label></div><p class="chart-note">Show or hide the Real data section for this case. Stored observations are retained.</p></section>
 <section class="settings-section"><h3>Reported rate loss</h3><p class="chart-note">Select which losses are included in the reported indicator and the plant comparison.</p><div id="settings-rate-loss-categories" class="settings-simulation-grid simulation-toggle-grid"></div></section>
 </div>
           <p id="settings-basic-simulation-note" class="chart-note hidden">Set events, chart window and recording here. Duration and playback speed are configured in Simulation.</p>
@@ -661,7 +658,6 @@
     <?!= include_('EquipmentDrag'); ?>
     <?!= include_('EquipmentFilter'); ?>
     <?!= include_('EquipmentInspector'); ?>
-    <?!= include_('EquipmentOptions'); ?>
     <?!= include_('SheetImportMerge'); ?>
     <?!= include_('SheetImportCorrections'); ?>
     <?!= include_('SheetImport'); ?>

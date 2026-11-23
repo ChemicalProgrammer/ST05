@@ -59,18 +59,22 @@ window.STBasicMode=(function(){
     if(!separate&&state.basicView==='conveyors')state.basicView='equipment';
     root.dataset.uiMode=enabled?'basic':'advance';root.dataset.equipmentLayout=separate?'split':'combined';
     STPreferences.applyFontScale();
-    STPreferences.applyJsonFields(root.dataset.uiMode);
     STPreferences.applyPalette(root.dataset.uiMode);
     if(headerActions.parentNode!==sectionRow)sectionRow.appendChild(headerActions);
     mountEquipmentLayout(separate);
     var active=Boolean(state.activeCase),view=state.uiView;
     var section=view==='editor'?(state.basicView==='conveyors'?'conveyors':'equipment'):view==='results'?(state.basicView==='results'?'results':'vgraph'):view==='products'?'products':view==='whatif'?'whatif':'simulation';
     if(view==='simulation2d')section='simulation2d';if(view==='comparison')section='comparison';if(view==='realdata')section='realdata';
+    if(enabled&&(view==='realdata'||view==='comparison')){
+      // Views-only advanced must never be restored into Basic from a saved tab.
+      state.uiView='simulation';state.basicView='simulation';
+      view='simulation';section='simulation';
+    }
     if(!enabled&&view==='results')section=state.basicView==='vgraph'?'vgraph':'results';
     document.getElementById('editor-title').textContent=section==='conveyors'?__ST_TEXT__('filter.conveyors'):__ST_TEXT__('filter.equipment');
     document.getElementById('equipment-subsection-title').textContent=section==='conveyors'?__ST_TEXT__('filter.conveyors'):__ST_TEXT__('filter.equipment');
-    nav.querySelector('[data-basic-view=realdata]').classList.toggle('hidden',!STPreferences.caseOptions().showRealData);
-    nav.querySelector('[data-basic-view=comparison]').classList.toggle('hidden',(state.activeCase?.simulations||[]).length<2);
+    nav.querySelector('[data-basic-view=realdata]').classList.toggle('hidden',enabled||!STPreferences.caseOptions().showRealData);
+    nav.querySelector('[data-basic-view=comparison]').classList.toggle('hidden',enabled||(state.activeCase?.simulations||[]).length<2);
     nav.querySelector('[data-basic-view=conveyors]').classList.toggle('hidden',!separate);
     root.dataset.headerView=active?section:'cases';root.dataset.basicView=active?section:'cases';sectionRow.classList.toggle('hidden',!active);nav.classList.toggle('hidden',!active);tools.classList.toggle('hidden',!active);
     nav.querySelector('[data-basic-view=results]').classList.toggle('hidden',!state.run.result?.summary);

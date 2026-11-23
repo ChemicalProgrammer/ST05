@@ -59,7 +59,7 @@ function getGeminiPrompts_() {
 }
 function geminiPolicy_(basicMode, general) {
   var overrides=getGeminiPrompts_();
-  return geminiPromptDefinitions_().filter(function(def){if(general)return ['personality','language'].includes(def.id);return basicMode?!['advance','zeroCapex','mediumCapex','highCapex'].includes(def.id):!['basic','basicCapex'].includes(def.id);}).map(function(def){var value=overrides[def.id];return value?(value.enabled?value.text:''):def.defaultText;}).filter(Boolean).join('\n\n');
+  return geminiPromptDefinitions_().filter(function(def){if(general)return ['personality','language'].includes(def.id);return !['basic','basicCapex'].includes(def.id);}).map(function(def){var value=overrides[def.id];return value?(value.enabled?value.text:''):def.defaultText;}).filter(Boolean).join('\n\n');
 }
 
 // Generation settings are per Google user; defaults preserve the model policy.

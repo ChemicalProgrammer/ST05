@@ -45,7 +45,15 @@
 /* STTimeControls.output inherits its parent card's value style, including nested b. */
 .metric-card--result > strong .st-time-output,
 .metric-card--result > strong .st-time-output b {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:inherit;}
-.metric-card--result > strong .st-time-output select {font-size:.75em!important;line-height:inherit!important;color:var(--muted);vertical-align:baseline;}
+/* Value & Unit share one typographic scale and baseline in every reusable time control. */
+.time-value-control > input[type=number],
+.time-value-control > select {font-size:inherit!important;line-height:inherit!important;font-weight:inherit!important;}
+.st-time-output > b,
+.st-time-output > .st-time-unit {
+  font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;
+  vertical-align:baseline!important;
+}
+.metric-card--result > strong .st-time-output select {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--muted);vertical-align:baseline!important;}
 @media(hover:hover) and (pointer:fine) {
   :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
        #simulation-playback-metrics > article,#results-kpis .result-kpi,

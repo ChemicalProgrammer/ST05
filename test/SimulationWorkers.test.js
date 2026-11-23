@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {Worker} from 'node:worker_threads';
 import {simulateBatch} from '../src/simulation/SimulationBatch.js';
-import {simulateLineAsync} from '../src/simulation/LineSimulationEngine.js';
+import {createLinePlaybackSession,simulateLineAsync} from '../src/simulation/LineSimulationEngine.js';
 import {createSimulationWorkerPool,simulationWorkerCapacity} from '../src/simulation/SimulationWorkers.js';
 function data(){const ctx=vm.createContext({});vm.runInContext(fs.readFileSync('apps-script/DemoCaseFactory.gs','utf8'),ctx);return {case:JSON.parse(JSON.stringify(ctx.createDemoCaseRequest_())),run:{durationSeconds:30,tickSeconds:.25,sampleEverySeconds:1,seed:4294967294,rounds:5,commands:[]}};}
 function browser({blocked=false}={}){
@@ -19,6 +19,38 @@ function browser({blocked=false}={}){
  return {engine:window.SimulatorEngine,maxActive:()=>maxActive,close(){handlers.pagehide?.();all.forEach(w=>w.terminate());}};
 }
 const plain=value=>JSON.parse(JSON.stringify(value));
+test('generated browser bundle executes numerical playback and a single LIVE round in real workers',async t=>{
+ const h=browser();let cursor;
+ try{
+  const machine=(id,rate)=>({id,name:id,type:'CUSTOM',initialMode:'AUTO',nominalRatePerSecond:rate,
+   processData:{equipment:{internalCapacityBottles:36,residenceTimeSeconds:0},flowUnits:{input:'BOTTLES',output:'BOTTLES'}}});
+  const conveyor={id:'belt',name:'Belt',type:'CONVEYOR',initialMode:'AUTO',nominalRatePerSecond:10,
+   processData:{flowUnits:{input:'BOTTLES',output:'BOTTLES'},accumulation:{speedMode:'MANUAL',usableLengthMm:1000,
+    productLengthMm:20,movingGapMm:10,accumulatedGapMm:0,conveyorSpeedMmPerSecond:10000,
+    primeSensorPositionMm:900,backupSensorPositionMm:100,backupRestartPositionMm:200,
+    upstreamStopResponseSeconds:0,bottlesDischargedAtStop:0,downstreamRampUpSeconds:0,blockedTimeDelaySeconds:.5,clearTimeDelaySeconds:.5}}};
+  const input={case:{id:'bundle-numerical-playback',unitOfFlow:'bottles',equipment:[machine('source',8),conveyor,machine('sink',10)]},
+   run:{durationSeconds:10,tickSeconds:.25,sampleEverySeconds:1,displayRefreshFps:20,seed:7,
+    reliabilityEnabled:false,machineResidenceEnabled:true,calculationMode:'LIVE',rounds:1,commands:[]}};
+  assert.equal(typeof h.engine.createPlayback,'function');
+  cursor=h.engine.createPlayback(input);const reference=createLinePlaybackSession(input),trace=[];let frame;
+  for(const target of [0,.5,1,2]){
+   let requests=0;do{
+    frame=await cursor.advanceTo(target);assert(++requests<100,'the generated worker must make physical progress');
+   }while(!cursor.finished&&cursor.time+1e-8<target);
+   let expected;do{expected=reference.advanceTo(target,{budgetMs:8});}while(!reference.finished&&reference.time+1e-8<target);
+   const actual=plain(frame);delete actual.chartSamples;
+   assert.deepEqual(actual,plain(expected),'generated worker frame must match source at '+target);
+   assert.equal(cursor.backend,'worker','the bundle must not silently fall back to the main thread');
+   trace.push({time:cursor.time,output:frame.outputCount});
+  }
+  assert.equal(cursor.time,2);assert(frame.outputCount>0);assert.equal(h.maxActive(),1);
+  const response=await h.engine.simulateBatch(input,{onFirstProgress(){}});
+  assert(response.ok);assert.equal(h.maxActive(),2,'a single LIVE round must use another worker');
+  assert.equal(h.engine.concurrency('ST_CURRENT'),6,'reserve capacity for playback and the interface on an eight-core device');
+  t.diagnostic(JSON.stringify({backend:cursor.backend,trace,peakWorkers:h.maxActive(),batchConcurrency:h.engine.concurrency('ST_CURRENT')}));
+ }finally{cursor?.close();h.close();}
+});
 test('real worker threads preserve ordered seeds, events, statistics and metrics without later replays',async()=>{
  const h=browser();try{
   const input=data();input.run.commands=[{atVirtualSecond:5,equipmentId:input.case.equipment[0].id,action:'STOP'},{atVirtualSecond:12,equipmentId:input.case.equipment[0].id,action:'RUN'}];

@@ -11,7 +11,7 @@ test('1000x skips samples and 1x resumes from the paused virtual time without ch
  const context={state,playbackClock:null,playbackMetricTimer:null,roundSession:null,captureSimulationView(){captured++;},autosave:{change(){saveChanges++;}},performance:{now:()=>now},document:{getElementById:()=>({value:'1000'})},window:{setTimeout:(fn,ms)=>{callback=fn;delay=ms;return 1;},clearTimeout(){}},renderPlaybackFrame(){},syncRunControls(){},setPlaybackStatus(){},finishRoundSession(){finished++;}};
  vm.createContext(context);
  for(const name of ['findSampleIndexAtOrBefore','schedulePlaybackStep','playbackElapsed','stopPlaybackTimer']){
-  const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+  const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    }',start+10)+6;
   vm.runInContext(code.slice(start,end),context);
  }
  vm.runInContext('schedulePlaybackStep()',context);assert.equal(delay,35);
@@ -48,7 +48,7 @@ test('completing a batch keeps the final playback frame and saves that view',()=
    saveActiveCase(){}};
  vm.createContext(context);
  for(const name of ['findSampleIndexAtOrBefore','persistRoundResult']){
-  const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+  const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    }',start+10)+6;
   vm.runInContext(code.slice(start,end),context);
  }
  vm.runInContext("persistRoundResult(session,result,'COMPLETE')",context);
@@ -69,7 +69,7 @@ test('starting a new run clears the previous round and replay before calculation
  const context={state,activePersistentSimulation:()=>tab,cancelRoundSession(){},stopPlaybackTimer(){},
    document:{getElementById:()=>preview},toggle(id,visible){assert.equal(id,'simulation-results');assert.equal(visible,false);}};
  vm.createContext(context);
- const start=code.indexOf('    function invalidateActiveResult('),end=code.indexOf('\n    function ',start+10);
+ const start=code.indexOf('    function invalidateActiveResult('),end=code.indexOf('\n    }',start+10)+6;
  vm.runInContext(code.slice(start,end)+'\ninvalidateActiveResult();',context);
  assert.equal(tab.results,null);
  assert.equal(state.run.result,null);
@@ -97,7 +97,7 @@ test('numerical playback throttles visual frames without changing the virtual sa
  };
  vm.createContext(context);
  for(const name of ['findSampleIndexAtOrBefore','schedulePlaybackStep','playbackElapsed']){
-   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    }',start+10)+6;
    assert.ok(start>=0&&end>start,'missing '+name);
    vm.runInContext(code.slice(start,end),context);
  }
@@ -136,7 +136,7 @@ test('Live sample replacement keeps virtual clock monotonic and updates the actu
  vm.createContext(context);
  const names=['schedulePlaybackStep','playbackElapsed','playbackDisplaySecond','advancePlaybackToRecordedFrame'];
  for(const name of names){
-   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    }',start+10)+6;
    assert.ok(start>=0&&end>start,'Missing '+name);
    vm.runInContext(code.slice(start,end),context);
  }
@@ -174,7 +174,7 @@ test('Paused numerical replay resumes the exact virtual offset with an advancing
    autosave:{change(){}},finishRoundSession(){}};
  vm.createContext(context);
  for(const name of ['schedulePlaybackStep','playbackElapsed','stopPlaybackTimer']){
-   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    }',start+10)+6;
    vm.runInContext(code.slice(start,end),context);
  }
  vm.runInContext('schedulePlaybackStep()',context);
@@ -209,7 +209,7 @@ test('Recorded numeric samples refresh between expensive chart frames during hig
  state.uiView='simulation';
  vm.createContext(context);
  for(const name of ['findSampleIndexAtOrBefore','schedulePlaybackStep','playbackElapsed']){
-   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    }',start+10)+6;
    assert.ok(start>=0&&end>start);
    vm.runInContext(code.slice(start,end),context);
  }

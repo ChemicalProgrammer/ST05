@@ -30,6 +30,116 @@ export function simulateLine(input) {
   return { ok: true, result: createResult(runtime) };
 }
 
+// Playback owns an incremental copy of the same physical runtime as a complete
+// run. It follows the viewer's requested time instead of replaying the sparse
+// archive. Full frames do not accumulate; chart points and the measured-rate
+// window are separately bounded, independently of the configured horizon.
+export function createLinePlaybackSession(input) {
+  const validation=validateSimulationInput(input);
+  if(!validation.ok)throw Object.assign(new Error(validation.error.message),validation.error);
+  const runtime=createRuntime(JSON.parse(JSON.stringify(input)));
+  runtime.playbackOnly=true;
+  runtime.captureEvents=false;
+  runtime.captureStateTransitions=false;
+  runtime.events.length=0;
+  runtime.playbackChartInterval=Math.ceil((runtime.run.sampleEverySeconds||runtime.run.tickSeconds)/runtime.run.tickSeconds)*runtime.run.tickSeconds;
+  runtime.nextPlaybackChartAt=0;
+  runtime.playbackChartSamples=[];
+  runtime.playbackRateCapacity=Math.max(2,Math.ceil(1/runtime.run.tickSeconds)+1);
+  runtime.playbackRateWindow=new Array(runtime.playbackRateCapacity);
+  runtime.playbackRateIndex=0;
+  runtime.playbackRateLength=0;
+  applyDueCommands(runtime);
+  updatePlantCalendar(runtime,false);
+  initializeInitialMaterialStates(runtime);
+  recordPlaybackObservation(runtime);
+  let frame;
+  const finished=()=>runtime.virtualSecond+1e-8>=runtime.run.durationSeconds||effectiveRuntimeTargetReached(runtime);
+  function snapshot(){
+    if(frame?.virtualSecond===runtime.virtualSecond)return frame;
+    const next=createSample(runtime,true);
+    const rates=playbackMeasuredRates(runtime);
+    next.instantaneousOutputRatePerSecond=rates.output;
+    // Whole packages appear as 0/120 per-second impulses at a 120-Hz tick.
+    // Display the measured count delta over the last physical second, using
+    // the same window regardless of worker chunks or display FPS.
+    next.equipment.forEach((unit,index)=>{
+      Object.assign(unit,rates.equipment[index]);
+      // Tick impulses are not extrema of the measured one-second flow curve.
+      // Omitting them lets charts scale from the actual measured points.
+      delete unit.minRatePerSecond;delete unit.maxRatePerSecond;
+    });
+    const reference=resolveLineOeeReference(runtime.equipment)?.nominalRatePerSecond;
+    const ideal=runtime.product?runtime.idealBottleOutput:(reference||0)*runtime.virtualSecond;
+    next.lineOeePercent=ideal>0?round(100*clampUnit(runtime.outputCount/ideal)):null;
+    next.lineOeePacemakerRatePerSecond=reference??null;
+    frame=next;
+    return frame;
+  }
+  snapshot();
+  return {
+    get time(){return runtime.virtualSecond;},
+    get finished(){return finished();},
+    get tickSeconds(){return runtime.run.tickSeconds;},
+    get durationSeconds(){return runtime.run.durationSeconds;},
+    // Exposed as coverage metadata, not as a mutable history array.
+    get retainedSampleCount(){return runtime.samples.length;},
+    get retainedChartSampleCount(){return runtime.playbackChartSamples.length;},
+    get chartIntervalSeconds(){return runtime.playbackChartInterval;},
+    drainChartSamples(){const samples=runtime.playbackChartSamples;runtime.playbackChartSamples=[];return samples;},
+    snapshot,
+    advanceTo(targetVirtualSecond,options={}){
+      if(!Number.isFinite(targetVirtualSecond)||targetVirtualSecond<0)
+        throw Object.assign(new Error('Playback time must be a finite, non-negative number.'),{code:'INVALID_PLAYBACK_TIME'});
+      // A complete run includes its final whole physical tick. Retain that
+      // convention at a non-aligned horizon; intermediate requests never
+      // advance beyond their requested instant.
+      const finalTick=Math.ceil((runtime.run.durationSeconds-1e-8)/runtime.run.tickSeconds);
+      const targetTick=targetVirtualSecond+1e-8>=runtime.run.durationSeconds?finalTick:
+        Math.floor((targetVirtualSecond+1e-8)/runtime.run.tickSeconds);
+      const target=Math.min(finalTick,targetTick)*runtime.run.tickSeconds;
+      if(target+1e-8<runtime.virtualSecond)
+        throw Object.assign(new Error('Create a new playback session to seek backwards.'),{code:'PLAYBACK_REWIND_REQUIRED'});
+      if(!finished()&&target>runtime.virtualSecond+1e-8){
+        const budgetMs=Number.isFinite(options.budgetMs)?Math.max(0,options.budgetMs):8;
+        const maxTicks=Number.isFinite(options.maxTicks)?Math.max(1,Math.floor(options.maxTicks)):2048;
+        if(budgetMs>0)executeTicks(runtime,target,{deadline:simulationClockNow()+budgetMs,maxTicks});
+      }
+      return snapshot();
+    }
+  };
+}
+
+function playbackMeasuredRates(runtime){
+  const firstIndex=(runtime.playbackRateIndex-runtime.playbackRateLength+runtime.playbackRateCapacity)%runtime.playbackRateCapacity;
+  const first=runtime.playbackRateWindow[firstIndex];
+  const elapsed=first?runtime.virtualSecond-first.virtualSecond:0;
+  return {
+    output:elapsed>0?round((runtime.outputCount-first.outputCount)/elapsed):0,
+    equipment:runtime.equipment.map((unit,index)=>{
+      const rate=elapsed>0?round((unit.outputCount-first.equipment[index])/elapsed):0;
+      return {actualRatePerSecond:rate,meanRatePerSecond:rate};
+    })
+  };
+}
+
+function recordPlaybackObservation(runtime){
+  runtime.playbackRateWindow[runtime.playbackRateIndex]={virtualSecond:runtime.virtualSecond,
+    outputCount:runtime.outputCount,equipment:runtime.equipment.map(unit=>unit.outputCount)};
+  runtime.playbackRateIndex=(runtime.playbackRateIndex+1)%runtime.playbackRateCapacity;
+  runtime.playbackRateLength=Math.min(runtime.playbackRateCapacity,runtime.playbackRateLength+1);
+  if(runtime.virtualSecond+1e-8<runtime.nextPlaybackChartAt)return;
+  const rates=playbackMeasuredRates(runtime);
+  runtime.playbackChartSamples.push({virtualSecond:runtime.virtualSecond,outputCount:round(runtime.outputCount),
+    equipment:runtime.equipment.map((unit,index)=>({id:unit.id,...rates.equipment[index]}))});
+  if(runtime.playbackChartSamples.length>601)runtime.playbackChartSamples.shift();
+  runtime.nextPlaybackChartAt=(Math.floor((runtime.virtualSecond+1e-8)/runtime.playbackChartInterval)+1)*runtime.playbackChartInterval;
+}
+
+function simulationClockNow(){
+  return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
+}
+
 // Same tick operations as a single run, yielding between chunks for UI cancellation.
 export async function simulateLineAsync(input, options = {}) {
   const validation = validateSimulationInput(input);
@@ -72,8 +182,12 @@ export async function simulateLineAsync(input, options = {}) {
   while (runtime.virtualSecond < input.run.durationSeconds && !effectiveRuntimeTargetReached(runtime)) {
     if (options.cancelled?.()) throw new Error('BATCH_CANCELLED');
     const chunkTicks=options.onPartial&&runtime.virtualSecond===0?32:input.run.calculationMode==='FAST'||input.run.calculationMode==='SUMMARY'?5000:1000;
-    const until = Math.min(runtime.virtualSecond + input.run.tickSeconds * chunkTicks, nextShift, input.run.durationSeconds);
-    executeTicks(runtime, until);
+    const until = Math.min(runtime.virtualSecond + runtime.run.tickSeconds * chunkTicks, nextShift, input.run.durationSeconds);
+    // Worker jobs may run their full chunk. The main-thread fallback must
+    // return control after a short wall-time budget, including residence runs
+    // whose effective physical tick is much smaller than the requested tick.
+    executeTicks(runtime,until,options.yieldBetweenChunks===false?undefined:
+      {deadline:simulationClockNow()+8,maxTicks:chunkTicks});
     if (runtime.virtualSecond >= nextShift || runtime.virtualSecond >= input.run.durationSeconds || effectiveRuntimeTargetReached(runtime)) {
       const summary = createSummary(runtime);
       const duration = Math.min(shiftSeconds, runtime.virtualSecond - shifts.length * shiftSeconds);
@@ -387,7 +501,8 @@ function effectiveRuntimeTargetReached(runtime) {
     runtime.lineRunSeconds-runtime.lineRateShortfallSeconds+1e-8 >= runtime.run.effectiveRuntimeTargetSeconds;
 }
 
-function executeTicks(runtime, until = runtime.run.durationSeconds) {
+function executeTicks(runtime, until = runtime.run.durationSeconds, limits) {
+  const startedAtTick=runtime.tickCount||0;
   while (runtime.virtualSecond < until-1e-8 && !effectiveRuntimeTargetReached(runtime)) {
     applyDueCommands(runtime);
     updatePlantCalendar(runtime);
@@ -404,16 +519,21 @@ function executeTicks(runtime, until = runtime.run.durationSeconds) {
     }
     runtime.equipment.forEach((item) => {
       item.stateSeconds[item.availabilityState] = (item.stateSeconds[item.availabilityState] || 0) + runtime.run.tickSeconds;
-      if(!runtime.summaryOnly){const rate=item.actualRatePerSecond||0;item.historySum=(item.historySum||0)+rate;item.historyMin=Math.min(item.historyMin??rate,rate);item.historyMax=Math.max(item.historyMax??rate,rate);}
+      if(!runtime.summaryOnly&&!runtime.playbackOnly){const rate=item.actualRatePerSecond||0;item.historySum=(item.historySum||0)+rate;item.historyMin=Math.min(item.historyMin??rate,rate);item.historyMax=Math.max(item.historyMax??rate,rate);}
     });
-    if(!runtime.summaryOnly)runtime.historyTicks++;
+    if(!runtime.summaryOnly&&!runtime.playbackOnly)runtime.historyTicks++;
     advanceEquipmentControlTimers(runtime);
     runtime.tickCount=(runtime.tickCount||0)+1;
     runtime.virtualSecond=runtime.tickCount*runtime.run.tickSeconds;
+    if(runtime.playbackOnly)recordPlaybackObservation(runtime);
     recordStateTransitions(runtime);
     addSampleIfDue(runtime);
     if(runtime.liveTelemetry&&runtime.virtualSecond+1e-8>=runtime.nextLiveTelemetryAt)
       recordLiveTelemetry(runtime);
+    if(limits){
+      const completed=(runtime.tickCount||0)-startedAtTick;
+      if(completed>=limits.maxTicks||completed%16===0&&simulationClockNow()>=limits.deadline)break;
+    }
   }
 }
 
@@ -1507,7 +1627,7 @@ function recordLiveTelemetry(runtime) {
 }
 
 function addSampleIfDue(runtime) {
-  if(runtime.summaryOnly)return;
+  if(runtime.summaryOnly||runtime.playbackOnly)return;
   const live=runtime.run.calculationMode==='LIVE';
   const firstProduction=live&&!runtime.recordedFirstProduction&&runtime.equipment[0]?.outputCount>0;
   if(firstProduction)runtime.recordedFirstProduction=true;
@@ -1518,19 +1638,29 @@ function addSampleIfDue(runtime) {
 
 function addSample(runtime) {
   if(runtime.summaryOnly)return;
-  const visibleZones = runtime.zones.filter((zone) => zone.visible);
   runtime.nextSampleAt=(Math.floor((runtime.virtualSecond+1e-8)/runtime.sampleInterval)+1)*runtime.sampleInterval;
-  runtime.samples.push({
+  runtime.samples.push(createSample(runtime));
+  resetSampleRateWindow(runtime);
+}
+
+function resetSampleRateWindow(runtime){
+  runtime.historyTicks=0;runtime.equipment.forEach(item=>{item.historySum=0;item.historyMin=undefined;item.historyMax=undefined;});
+}
+
+function createSample(runtime,complete=false) {
+  const visibleZones = runtime.zones.filter((zone) => zone.visible);
+  return {
     virtualSecond: runtime.virtualSecond,
     productId:runtime.product?.id,
     effectiveRuntimeSeconds:runtime.lineRateReferenceValid?round(runtime.lineRunSeconds-runtime.lineRateShortfallSeconds):null,
     runtimeLossSeconds:runtime.lineRateReferenceValid?round(runtime.lineRateShortfallSeconds):null,
     outputCount: round(runtime.outputCount),
     buffers: visibleZones.map((zone) => round(getZoneInventory(zone))),
-    accumulationZones: visibleZones.map(zone=>createRecordedZoneSample(runtime,zone)),
+    accumulationZones: visibleZones.map(zone=>createRecordedZoneSample(runtime,zone,!complete)),
     equipment: runtime.equipment.map((item) => {
       const effectiveness = createEquipmentEffectiveness(item, runtime.virtualSecond);
       return {
+        ...(complete?createEquipmentMetrics(item,runtime.virtualSecond):{}),
         id: item.id,
         mode: item.mode,
         availabilityState: item.availabilityState,
@@ -1563,13 +1693,12 @@ function addSample(runtime) {
         oeePercent: round(effectiveness.oee * 100)
       };
     })
-  });
-  runtime.historyTicks=0;runtime.equipment.forEach(item=>{item.historySum=0;item.historyMin=undefined;item.historyMax=undefined;});
+  };
 }
 
 function recordingCoverage(runtime){return {omittedEvents:runtime.omittedEvents,requestedSampleSeconds:runtime.run.sampleEverySeconds||runtime.run.tickSeconds,effectiveSampleSeconds:runtime.sampleInterval,maximumSamples:1001,aggregated:runtime.sampleInterval>(runtime.run.sampleEverySeconds||runtime.run.tickSeconds),recordingMode:runtime.run.calculationMode==='SUMMARY'?'SUMMARY':'BOUNDED',exactReplay:false,stateTransitionsRecorded:runtime.stateTransitions.length,stateTransitionsOmitted:runtime.omittedStateTransitions};}
 
-function createRecordedZoneSample(runtime,zone){
+function createRecordedZoneSample(runtime,zone,compact=true){
   const frame=createZoneSample(zone);
   if(zone.physicalModelEnabled){
     frame.beltRunning=isTransportAvailable(getEquipment(runtime,zone.ownerEquipmentId));
@@ -1585,7 +1714,7 @@ function createRecordedZoneSample(runtime,zone){
     }
     if(runtime.product)frame.packageUnit=productFlowUnit(getEquipment(runtime,zone.ownerEquipmentId));
   }
-  if(runtime.run.historyFormat==='COMPACT'&&!runtime.product){
+  if(compact&&runtime.run.historyFormat==='COMPACT'&&!runtime.product){
     const definition=runtime.zoneDefinitions[zone.id]||(runtime.zoneDefinitions[zone.id]={});
     for(const key of ['name','ownerEquipmentId','upstreamControlEquipmentId','downstreamControlEquipmentId','physicalModelEnabled','modelOrigin','geometrySources','formatAssumptions','geometry']){if(!definition[key])definition[key]=frame[key];delete frame[key];}
   }
@@ -1688,7 +1817,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: '0.20.0',
+    engineVersion: '0.20.1',
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
     detailCoverage:recordingCoverage(runtime),

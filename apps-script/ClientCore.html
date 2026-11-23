@@ -32,7 +32,7 @@
     var runGeneration=0;
     // Shared read-only execution lock for numerical and 2D engines.
     window.STNumericalSimulationBusy=function(){return runControlsLocked();};
-    var charts = STCharts(state,formatNumber);
+    var charts = STCharts(state,formatNumber,playbackChartView);
     var drawSimulationChart = charts.drawSimulationChart, drawEquipmentSpeedChart = charts.drawEquipmentSpeedChart, drawEquipmentSpeedSparkline = charts.drawEquipmentSpeedSparkline;
     var renderCaseComparison = STComparison(state,isFiniteNumber).render;
     var assistant = STAssistant(state, {flush:flushForServer, saveChat:saveGeminiHistory, applyScenario:applyChatScenario});

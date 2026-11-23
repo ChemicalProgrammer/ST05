@@ -1,5 +1,7 @@
     var playbackClock;
     var playbackMetricTimer=null;
+    var numericalPlaybackSession=null;
+    var numericalPlaybackEpoch=0;
     var playbackStateTimelineCache={result:null,length:-1,byEquipment:[]};
     // Refresh only numeric playback indicators four times per second.
     // This is presentation-only; source samples and simulation clock stay unchanged.
@@ -27,12 +29,181 @@
       updatePlaybackPerformanceLabel();
     }
 
+    // Live values are reconstructed on demand by the same physical engine.
+    // The saved, compact chart history is never the clock for these values.
+    function numericalPlaybackContext(){
+      return [state.activeCase?.id,state.activeSimulationId,state.run.roundIndex||0,
+        state.run.result?.seed].join('|');
+    }
+
+    function numericalPlaybackFrame(){
+      var session=numericalPlaybackSession;
+      return session&&state.run.result&&session.context===numericalPlaybackContext()
+        ?session.frame:null;
+    }
+
+    function playbackChartView(){
+      var session=numericalPlaybackSession,frame=numericalPlaybackFrame();
+      if(!session||!frame)return {samples:state.run.result?.samples||[],index:state.run.sampleIndex};
+      var archive=state.run.result?.samples||[];
+      if(session.chartView?.frame===frame&&session.chartView.archive===archive)
+        return session.chartView;
+      var first=session.history[0]?.virtualSecond??frame.virtualSecond;
+      var samples=archive.filter(function(sample){return sample.virtualSecond<first-1e-8
+        &&sample.virtualSecond<=frame.virtualSecond;}).concat(session.history.filter(function(sample){
+          return sample.virtualSecond<=frame.virtualSecond+1e-8;
+        }));
+      if(!samples.length||samples.at(-1).virtualSecond<frame.virtualSecond-1e-8)samples.push(frame);
+      else if(Math.abs(samples.at(-1).virtualSecond-frame.virtualSecond)<1e-8)samples[samples.length-1]=frame;
+      session.chartView={samples:samples,index:samples.length-1,frame:frame,archive:archive};
+      return session.chartView;
+    }
+
+    function disposeNumericalPlayback(){
+      var session=numericalPlaybackSession;
+      numericalPlaybackSession=null;numericalPlaybackEpoch++;
+      if(!session)return;
+      if(session.timer!==null)window.clearTimeout(session.timer);
+      session.controller.close();
+    }
+
+    function numericalPlaybackInput(){
+      var result=state.run.result,simulation=activePersistentSimulation(),recorded;
+      try{recorded=JSON.parse(result.inputSignature||'null');}catch(_){}
+      var configuration=cloneJson(recorded?.run||state.run.configuration||simulation?.dynamicConfig||simulation?.run||{});
+      var run=Object.assign({durationSeconds:result.effectiveRuntimeStop?.limitSeconds||result.durationSeconds,
+        tickSeconds:.25,sampleEverySeconds:1,seed:result.seed,commands:[]},configuration);
+      run.seed=result.seed??run.seed;run.rounds=1;
+      var sampleInput=document.getElementById('run-sample-interval');
+      var sampleUnit=document.getElementById('run-sample-interval-unit');
+      if(sampleInput&&sampleUnit){
+        var interval=STTimeControls.inputSeconds(sampleInput.value,sampleUnit.value);
+        if(interval>0)run.sampleEverySeconds=interval;
+      }
+      // A signature already contains the exact calendar execution input.
+      if(!recorded?.run)run=prepareCalendarRun(run);
+      return {case:{id:state.activeCase.id,unitOfFlow:recorded?.unitOfFlow||state.activeCase.unitOfFlow,
+        equipment:cloneJson(recorded?.equipment||state.activeCase.equipment)},run:run};
+    }
+
+    function numericalPlaybackRestoreReached(session,frame){
+      var tick=session.controller.tickSeconds||1/120;
+      var target=Math.floor((session.restoreSecond+1e-8)/tick)*tick;
+      return session.controller.finished||frame.virtualSecond+1e-6>=target;
+    }
+
+    function startNumericalPlayback(){
+      if(typeof window.SimulatorEngine?.createPlayback!=='function'
+        ||state.run.result?.engineId==='DES_SIMPY_EXPERIMENTAL')return false;
+      var context=numericalPlaybackContext(),session=numericalPlaybackSession;
+      if(!session||session.context!==context){
+        var base=state.run.result?.samples?.[state.run.sampleIndex];
+        var resume=Number.isFinite(state.run._resumeVirtualSecond)
+          ?state.run._resumeVirtualSecond:base?.virtualSecond||0;
+        disposeNumericalPlayback();
+        var input=numericalPlaybackInput();
+        session={context:context,epoch:numericalPlaybackEpoch,
+          controller:window.SimulatorEngine.createPlayback(input),
+          frame:base||null,history:[],chartView:null,pending:false,pendingFrame:null,
+          timer:null,ready:false,restoreSecond:resume,targetSecond:resume,lastWallAt:performance.now()};
+        numericalPlaybackSession=session;
+      }else{
+        session.lastWallAt=performance.now();
+        session.targetSecond=Math.max(session.controller.time,
+          session.ready?(session.frame?.virtualSecond??0):session.restoreSecond);
+        if(session.pendingFrame){
+          var pending=session.pendingFrame;session.pendingFrame=null;
+          if(session.ready||numericalPlaybackRestoreReached(session,pending)){
+            session.ready=true;acceptNumericalPlaybackFrame(session,pending);
+            session.targetSecond=Math.max(session.targetSecond,pending.virtualSecond);
+          }else retainNumericalPlaybackCharts(session,pending);
+        }
+      }
+      playbackClock=null;
+      scheduleNumericalPlaybackStep();
+      return true;
+    }
+
+    function retainNumericalPlaybackCharts(session,frame){
+      var samples=frame.chartSamples||[];
+      delete frame.chartSamples;
+      var previous=session.history.at(-1)?.virtualSecond??-Infinity;
+      samples.forEach(function(sample){
+        if(sample.virtualSecond>previous+1e-8&&sample.virtualSecond<=frame.virtualSecond+1e-8){
+          session.history.push(sample);previous=sample.virtualSecond;
+        }
+      });
+      if(session.history.length>601)session.history.splice(0,session.history.length-601);
+      session.chartView=null;
+    }
+
+    function acceptNumericalPlaybackFrame(session,frame){
+      retainNumericalPlaybackCharts(session,frame);
+      session.frame=frame;session.chartView=null;
+      session.targetSecond=Math.max(session.targetSecond,frame.virtualSecond);
+      state.run._displayedVirtualSecond=frame.virtualSecond;
+      state.run._resumeVirtualSecond=frame.virtualSecond;
+      state.run.sampleIndex=findSampleIndexAtOrBefore(state.run.result.samples,frame.virtualSecond);
+    }
+
+    function scheduleNumericalPlaybackStep(){
+      var session=numericalPlaybackSession;
+      if(!session||session.context!==numericalPlaybackContext()||!state.run.playing
+        ||session.pending||session.timer!==null)return;
+      var interval=playbackRefreshIntervalMs();
+      var delay=Math.max(0,interval-(performance.now()-(session.lastPaintAt??-Infinity)));
+      session.timer=window.setTimeout(async function(){
+        session.timer=null;
+        if(session!==numericalPlaybackSession||!state.run.playing)return;
+        var now=performance.now();
+        if(session.ready){
+          var rate=Math.max(1,Number(document.getElementById('run-playback-rate').value)||1);
+          session.targetSecond=Math.min(session.controller.durationSeconds,
+            session.targetSecond+Math.max(0,now-session.lastWallAt)*rate/1000);
+        }
+        session.lastWallAt=now;session.pending=true;
+        try{
+          var frame=await session.controller.advanceTo(session.targetSecond,
+            {budgetMs:Math.min(32,Math.max(8,playbackRefreshIntervalMs()*.6))});
+          if(session!==numericalPlaybackSession||session.context!==numericalPlaybackContext())return;
+          if(!state.run.playing){session.pendingFrame=frame;return;}
+          if(!session.ready&&!numericalPlaybackRestoreReached(session,frame)){
+            // Restore the exact paused/saved position without moving the visible
+            // clock backwards while the worker reconstructs its physical state.
+            retainNumericalPlaybackCharts(session,frame);
+            setPlaybackStatus(window.STLanguage?.translate?.('Preparing playback')||'Preparing playback');
+            return;
+          }
+          if(!session.ready){session.ready=true;session.lastWallAt=performance.now();
+            session.targetSecond=frame.virtualSecond;}
+          acceptNumericalPlaybackFrame(session,frame);
+          renderPlaybackFrame();session.lastPaintAt=performance.now();
+          if(session.controller.finished){
+            state.run.playing=false;state.run.active=false;syncRunControls();
+            refreshPlaybackMetricCards(frame,frame.virtualSecond);setPlaybackStatus('Completed');
+            captureSimulationView();autosave.change();finishRoundSession();
+          }
+        }catch(error){
+          if(session!==numericalPlaybackSession||error.code==='PLAYBACK_CLOSED')return;
+          state.run.playing=false;state.run.active=false;disposeNumericalPlayback();
+          syncRunControls();showError(error);
+        }finally{
+          session.pending=false;
+          if(session===numericalPlaybackSession&&state.run.playing)scheduleNumericalPlaybackStep();
+        }
+      },delay);
+    }
+
     function startPlayback() {
       if (!state.run.result || state.run.playing) return;
       state.run.active=true;
       state.run.playing = true;
       state.run._displayedVirtualSecond=state.run.result.samples?.[state.run.sampleIndex]?.virtualSecond||0;
       syncRunControls();
+      if(typeof startNumericalPlayback==='function'){
+        try{if(startNumericalPlayback())return;}
+        catch(error){state.run.playing=false;state.run.active=false;syncRunControls();showError(error);return;}
+      }
       schedulePlaybackStep();
       if(state.run.playing)schedulePlaybackMetricTick();
     }
@@ -53,6 +224,7 @@
       stopPlaybackTimer();
       state.run.sampleIndex=0;
       state.run._displayedVirtualSecond=0;
+      state.run._resumeVirtualSecond=0;
       renderPlaybackFrame();
       setPlaybackStatus('Stopped');
       if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
@@ -73,6 +245,7 @@
       if(state.run.representative)state.run.result=state.run.representative;
       state.run.sampleIndex = 0;
       state.run._displayedVirtualSecond=0;
+      state.run._resumeVirtualSecond=0;
       syncPlaybackRounds();
       renderPlaybackFrame();
       setPlaybackStatus(__ST_TEXT__('client.reset'));
@@ -136,6 +309,11 @@
     }
 
     function stopPlaybackTimer(preservePosition) {
+      if(typeof numericalPlaybackSession!=='undefined'&&numericalPlaybackSession){
+        var numerical=numericalPlaybackSession;
+        if(numerical.timer!==null){window.clearTimeout(numerical.timer);numerical.timer=null;}
+        if(!preservePosition)disposeNumericalPlayback();
+      }
       if(playbackMetricTimer!==null){window.clearTimeout(playbackMetricTimer);playbackMetricTimer=null;}
       if(preservePosition&&playbackClock){
         playbackClock.offset=playbackElapsed(playbackClock.frame);
@@ -185,6 +363,9 @@
     // The virtual clock can advance smoothly; counters retain their last
     // recorded value until a genuine sample is reached (no synthetic bottles).
     function playbackDisplaySecond(sample){
+      if(typeof numericalPlaybackFrame==='function'){
+        var calculated=numericalPlaybackFrame();if(calculated)return calculated.virtualSecond;
+      }
       if(!sample)return 0;
       var next=state.run.result?.samples?.[state.run.sampleIndex+1];
       var display=sample.virtualSecond;
@@ -208,6 +389,12 @@
     // numerical samples. Display these states at the 250-ms clock cadence.
     // No production, OEE or rate is extrapolated from the transition stream.
     function updateLiveEquipmentStateBadges(virtualSecond){
+      if(typeof numericalPlaybackFrame==='function'&&numericalPlaybackFrame()){
+        // The current physical snapshot already supplies each badge. A sampled
+        // or truncated historical transition list must not overwrite that state.
+        document.querySelectorAll('#live-equipment .numeric-state-elapsed').forEach(function(label){label.hidden=true;});
+        return;
+      }
       var result=state.run.result,changes=result?.stateTransitions;
       if(!Array.isArray(changes)||!changes.length){
         document.querySelectorAll('#live-equipment .numeric-state-elapsed').forEach(function(label){
@@ -292,6 +479,9 @@
     // currently displayed virtual time. Telemetry is in-memory only, never
     // copied into a saved case or used to estimate missing physical values.
     function playbackVisualSample(){
+      if(typeof numericalPlaybackFrame==='function'){
+        var calculated=numericalPlaybackFrame();if(calculated)return calculated;
+      }
       var base=state.run.result?.samples?.[state.run.sampleIndex];
       if(!base)return null;
       var telemetry=state.run.liveTelemetry;
@@ -363,8 +553,8 @@
     function updateNumericalEquipmentVisibility() {
       var current=Array.isArray(state.activeCase?.equipment)?state.activeCase.equipment:[];
       var result=state.run?.result,samples=result?.samples;
-      var sample=Array.isArray(samples)&&samples.length
-        ?(samples[state.run.sampleIndex]||samples[0]):null;
+      var sample=typeof numericalPlaybackFrame==='function'&&numericalPlaybackFrame()
+        ||(Array.isArray(samples)&&samples.length?(samples[state.run.sampleIndex]||samples[0]):null);
       var units=sample?.equipment;
       var matches=Array.isArray(units)&&units.length===current.length
         &&units.length>0&&units.every(function(unit,index){
@@ -414,7 +604,7 @@
       }
       var progress=document.getElementById('playback-progress'),effective=document.getElementById('run-effective-progress');
       if(effective){
-        var result=state.run.result,stop=result?.effectiveRuntimeStop,frame=result?.samples?.[state.run.sampleIndex];
+        var result=state.run.result,stop=result?.effectiveRuntimeStop,frame=playbackVisualSample();
         effective.hidden=!stop;
         if(stop){
           var finished=!result.provisional&&(!frame||frame.virtualSecond>=result.durationSeconds);
@@ -428,7 +618,7 @@
       }
       var renderStart=performance.now();
       var scrollAnchor = state.uiView==='simulation'?captureLiveEquipmentScrollAnchor():null;
-      var sample=state.run.result.samples[state.run.sampleIndex];
+      var sample=playbackVisualSample()||state.run.result.samples[state.run.sampleIndex];
       refreshPlaybackMetricCards(playbackVisualSample()||sample,playbackDisplaySecond(sample));
       if (state.uiView === 'simulation'){
         renderLiveEquipment(sample);
@@ -516,6 +706,7 @@
 
     function formatLineOeeAtSample(sample) {
       if(state.run.result?.engineId==='DES_SIMPY_EXPERIMENTAL')return '—';
+      if(Number.isFinite(sample?.lineOeePercent))return formatPercent(sample.lineOeePercent/100);
       var pacemakerRate = state.run.result?.summary?.lineOeePacemakerRatePerSecond;
       if (!(sample.virtualSecond > 0) || !isFiniteNumber(pacemakerRate) || pacemakerRate <= 0) return '—';
       return formatPercent(Math.min(1, sample.outputCount / (pacemakerRate * sample.virtualSecond)));
@@ -531,7 +722,7 @@
           var card=entry.target;
           card._liveVisible=entry.isIntersecting;
           if(card.hidden||!entry.isIntersecting||state.uiView!=='simulation')return;
-          var result=state.run.result,sample=result?.samples?.[state.run.sampleIndex];
+          var result=state.run.result,sample=playbackVisualSample();
           if(!sample||!state.activeCase)return;
           var index=state.activeCase.equipment.findIndex(function(item){
             return item.id===card.dataset.equipmentId;
@@ -571,7 +762,7 @@
       var conveyors=document.getElementById('toggle-performance-conveyors').getAttribute('aria-pressed')==='true';
       document.getElementById('performance-filter-empty').classList.toggle('hidden',machines||conveyors);
       if(enabled&&state.run.result?.samples?.length){
-        renderLiveEquipment(state.run.result.samples[state.run.sampleIndex]);
+        renderLiveEquipment(playbackVisualSample());
       }
     }
 
@@ -1300,7 +1491,7 @@ function summarizeGeometrySources(sources, assumptions) {
 
     function updateLiveEquipmentControl(button) {
       if(state.run.result?.engineId==='DES_SIMPY_EXPERIMENTAL'&&state.activeCase.equipment.find(function(e){return e.id===button.closest('.live-equipment-card')?.dataset.equipmentId;})?.type==='CONVEYOR'){button.disabled=true;button.title='Conveyor controls are not supported by the experimental SimPy engine.';return;}
-      var sample = state.run.result && state.run.result.samples[state.run.sampleIndex];
+      var sample = playbackVisualSample();
       var isAtRunEnd = !sample || sample.virtualSecond >= state.run.result.durationSeconds;
       if(state.run.result?.batch&&state.run.roundIndex!==0){button.disabled=true;button.title=__ST_TEXT__('batch.later_controls');return;}
       button.disabled = !document.getElementById('run-events-enabled').checked||state.run.result?.detailCoverage?.recordingMode==='SUMMARY'||isAtRunEnd||Boolean(roundSession?.firstUpdating);
@@ -1312,7 +1503,7 @@ function summarizeGeometrySources(sources, assumptions) {
     async function applyLiveScenarioControl(equipmentId, action) {
       if (!document.getElementById('run-events-enabled').checked||!state.run.result||roundSession?.firstUpdating) return;
       if(state.run.result.batch&&state.run.roundIndex!==0)return setStatus(__ST_TEXT__('batch.later_controls'));
-      var sample = state.run.result.samples[state.run.sampleIndex];
+      var sample = playbackVisualSample();
       if (!sample || sample.virtualSecond >= state.run.result.durationSeconds) {
         return setStatus(__ST_TEXT__('client.reset_playback_to_an_earlier_virtual_time_before_applying_a_scenario_contro'));
       }
@@ -1332,6 +1523,7 @@ function summarizeGeometrySources(sources, assumptions) {
       var run = createStoredRunConfiguration();
       if(!run)return;
       run.commands=run.commands.concat(commands);
+      state.run.configuration=copyRunConfiguration(run);
       if(!roundSession&&(run.rounds>1||run.shiftSeconds))roundSession={caseId:state.activeCase.id,simulationId:state.activeSimulationId,caseModel:cloneJson(state.activeCase),run:cloneJson(run),generation:0,version:0,cancelled:false,dirty:false,finishing:false};
       if(roundSession&&roundSessionActive(roundSession)){
         var session=roundSession;session.run=cloneJson(run);session.version++;session.dirty=run.rounds>1;session.finishing=false;session.firstUpdating=true;session.resumeAfterEdit=wasPlaying;
@@ -1343,7 +1535,7 @@ function summarizeGeometrySources(sources, assumptions) {
           var first=await SimulatorEngine.simulateLineAsync({case:cloneJson(session.caseModel),run:prepareCalendarRun(run)},{detail:true,cancelled:function(){return !roundSessionActive(session);}});
           if(!roundSessionActive(session))return;
           if(!first.ok){showError(first.error);return;}
-          session.first=first.result;state.run.sampleIndex=findSampleIndexAtOrBefore(first.result.samples,sample.virtualSecond);persistRoundResult(session,first.result,run.rounds>1?'STALE':'PENDING');
+          session.first=first.result;state.run.sampleIndex=findSampleIndexAtOrBefore(first.result.samples,sample.virtualSecond);state.run._resumeVirtualSecond=sample.virtualSecond;persistRoundResult(session,first.result,run.rounds>1?'STALE':'PENDING');
           if(run.rounds<=1)computeRoundSession(session,first.result);
           wasPlaying=session.resumeAfterEdit;
         }catch(error){if(error.message!=='BATCH_CANCELLED')showError(error);return;}

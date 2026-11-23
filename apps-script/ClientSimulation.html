@@ -109,6 +109,7 @@
       cancelRoundSession();stopPlaybackTimer();
       state.run.sampleIndex = 0;
       state.run.liveTelemetry=[];
+      state.run._resumeVirtualSecond=0;
       state.activeSimulationId = simulation.id;
       state.workspaceView = 'simulation';
       state.uiView = 'simulation';
@@ -142,6 +143,7 @@
       var initialRound=view?.roundIndex??((state.run.representative?.batch?.representativeRound||1)-1);
       if(state.run.result?.samples.length){
         state.run.sampleIndex=playbackRoundFrame(state.run.result.samples,state.run.playbackPositions.times[0]);
+        state.run._resumeVirtualSecond=state.run.playbackPositions.times[0]??state.run.result.samples[state.run.sampleIndex].virtualSecond;
         if(initialRound>0&&playbackReplay(state.run.representative.batch,initialRound))selectPlaybackRound(initialRound,false);
       }
       syncPlaybackRounds();
@@ -209,7 +211,7 @@
     function captureSimulationView() {
       var simulation=activePersistentSimulation(),result=state.run.result;
       if(!simulation?.results||!result||result.provisional)return;
-      var sample=result.samples?.[state.run.sampleIndex];if(!sample)return;
+      var sample=typeof playbackVisualSample==='function'?playbackVisualSample():result.samples?.[state.run.sampleIndex];if(!sample)return;
       // Keep the displayed frame and preceding frame exact even when history is sampled.
       var positions=playbackRoundPositions();
       positions[state.run.roundIndex]=sample.virtualSecond;
@@ -649,7 +651,7 @@
         syncPlaybackRounds();
         return false;
       }
-      var positions=playbackRoundPositions(),previous=state.run.result?.samples?.[state.run.sampleIndex];
+      var positions=playbackRoundPositions(),previous=playbackVisualSample();
       if(previous)positions[state.run.roundIndex]=previous.virtualSecond;
       stopPlaybackTimer();
       state.run.active=false;
@@ -663,6 +665,7 @@
           shifts:row.shifts??replay.shifts,events:replay.events||[],batch:batch};
       }
       state.run.sampleIndex=autoplay?0:playbackRoundFrame(state.run.result.samples,positions[index]);
+      state.run._resumeVirtualSecond=autoplay?0:(positions[index]??state.run.result.samples[state.run.sampleIndex]?.virtualSecond??0);
       document.getElementById('playback-round').value=String(index);
       renderResultJsonPreview(state.run.result);
       renderPlaybackFrame();
@@ -685,12 +688,13 @@
     }
     function persistRoundResult(session,result,status){
       if(!roundSessionActive(session))return;
-      var previousFrame=state.run.result?.samples?.[state.run.sampleIndex];
+      var previousFrame=typeof playbackVisualSample==='function'?playbackVisualSample():state.run.result?.samples?.[state.run.sampleIndex];
       result.replicationStatus={state:status,rounds:session.run.rounds,baseSeed:session.run.seed};
       state.run.result=result;state.run.representative=result;state.run.roundIndex=0;
       state.run.sampleIndex=status==='COMPLETE'&&session.run.calculationMode!=='LIVE'
         ?Math.max(0,result.samples.length-1)
         :findSampleIndexAtOrBefore(result.samples,previousFrame?.virtualSecond??0);
+      if(previousFrame&&session.run.calculationMode==='LIVE')state.run._resumeVirtualSecond=previousFrame.virtualSecond;
       syncPlaybackRounds();toggle('simulation-results',true);
       renderResultJsonPreview(result);shell.sync();renderPlaybackFrame();
       var tab=activePersistentSimulation();if(tab){tab.dynamicConfig=cloneJson(session.run);tab.run=cloneJson(session.run);tab.results=createStoredSimulationResult(result,session.run);captureSimulationView();state.isDirty=true;saveActiveCase();}
@@ -921,6 +925,7 @@
 
     async function calculateSimulation(run, resumeAtVirtualSecond) {
       var generation=runGeneration;
+      state.run.configuration=copyRunConfiguration(run);
       var input = {
         case: JSON.parse(JSON.stringify(state.activeCase)),
         run: run
@@ -940,6 +945,7 @@
       state.run.result = response.result;
       state.run.representative=response.result;state.run.roundIndex=0;syncPlaybackRounds();
       state.run.sampleIndex = findSampleIndexAtOrBefore(response.result.samples, resumeAtVirtualSecond);
+      state.run._resumeVirtualSecond=resumeAtVirtualSecond;
       toggle('simulation-results', true);
       renderResultJsonPreview(response.result);
       shell.sync();

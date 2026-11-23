@@ -661,7 +661,7 @@ var ST_TEXT_RESOURCES = {
   "view.random_seed": "Random seed",
   "view.playback_speed_virtual_real": "Playback speed (virtual / real)",
   "view.model_assumptions_timing": "Model assumptions & timing",
-  "view.at_1_one_virtual_second_takes_one_real_second_the_engine_integrates_at_0_25": "At 1×, one virtual second takes one real second. The engine integrates at 0.25 s; the display interval only controls replay detail and result size. Every conveyor uses SimuLine physical geometry by default: L_act, L_p, package pitch, speed factor, runout, sensor delays, and insurance derive capacity, travel, normal photoeye pulses, Prime / Back-up control, recovery, and design audits. Abstract buffers are not used.",
+  "view.at_1_one_virtual_second_takes_one_real_second_the_engine_integrates_at_0_25": "At 1×, one simulated second corresponds to one real second when calculation keeps pace. The engine defines the physical integration step; chart sampling controls chart points independently of live values. Every conveyor uses SimuLine physical geometry by default: L_act, L_p, package pitch, speed factor, runout, sensor delays, and insurance derive capacity, travel, normal photoeye pulses, Prime / Back-up control, recovery, and design audits. Abstract buffers are not used.",
   "view.equipment_control_events": "Equipment control events",
   "view.schedule_a_pause_planned_stop_emergency_stop_reset_run_manual_or_automatic_": "Schedule a pause, planned stop, emergency stop, reset, run, manual, or automatic mode change in virtual time.",
   "view.add_event": "Add event",

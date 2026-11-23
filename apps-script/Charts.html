@@ -1,5 +1,5 @@
 <script>
-window.STCharts=function(state,formatNumber){
+window.STCharts=function(state,formatNumber,playbackView){
   var rollingCache=null;
   var markerCache={result:null,events:null,calendar:null,count:-1,calendarCount:-1,byEquipment:new Map()};
   function numeric(name){return parseFloat(token(name));}
@@ -179,14 +179,20 @@ window.STCharts=function(state,formatNumber){
 
     function getRollingSpeedSamples() {
       var result=state.run.result;
-      var all=result?.samples;
+      // Live playback supplies a bounded, measured chart window independently
+      // of the compact history retained for the full Results view.
+      var visible=state.uiView!=='results'&&typeof playbackView==='function'
+        ?playbackView():null;
+      var all=visible?.samples||result?.samples;
       if(!all?.length)return [];
-      var endIndex=state.uiView==='results'?all.length-1:Math.min(state.run.sampleIndex,all.length-1);
+      var endIndex=state.uiView==='results'?all.length-1:
+        Math.min(visible?.index??state.run.sampleIndex,all.length-1);
       if(endIndex<0)return [];
       var endTime=all[endIndex].virtualSecond;
       var windowSeconds=STRunOptions.windowSeconds(endTime,(state.run.configuration?.shiftHours||8)*3600);
       if(rollingCache&&rollingCache.samples===all&&rollingCache.length===all.length
-        &&rollingCache.index===endIndex&&rollingCache.window===windowSeconds)return rollingCache.recent;
+        &&rollingCache.index===endIndex&&rollingCache.window===windowSeconds
+        &&rollingCache.first===all[0]&&rollingCache.last===all[endIndex])return rollingCache.recent;
       var startTime=Math.max(0,endTime-windowSeconds);
       // Indexed times are sorted. Binary search prevents a full filter per
       // sparkline, and all cards reuse one selection for this playback frame.
@@ -198,7 +204,8 @@ window.STCharts=function(state,formatNumber){
       }
       var recent=all.slice(low,endIndex+1);
       if(recent.length<2&&endIndex>0)recent=all.slice(endIndex-1,endIndex+1);
-      rollingCache={samples:all,length:all.length,index:endIndex,window:windowSeconds,recent:recent};
+      rollingCache={samples:all,length:all.length,index:endIndex,window:windowSeconds,
+        first:all[0],last:all[endIndex],recent:recent};
       return recent;
     }
     function getEquipmentEventMarkers(equipmentId){

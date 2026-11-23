@@ -17,6 +17,7 @@ const sourceFiles = [
   'src/simulation/LineSimulationEngine.js',
   'src/simulation/SimulationBatch.js',
   'src/simulation/SimulationWorkers.js',
+  'src/simulation/NumericalPlayback.js',
   'src/simulation/SimPyBrowserEngine.js',
   'src/analysis/LinePerformanceAnalysis.js',
   'src/analysis/ScenarioPlanner.js',
@@ -64,7 +65,8 @@ self.onmessage=async function(event){
 self.postMessage({type:'ready'});
 }
 
-let workerPool,workerSource,workersUnavailable=false;
+let workerPool,workerSource,playbackWorkerSource,workersUnavailable=false;
+const playbackControllers=new Set();
 const simPyRuntime=createSimPyBrowserEngine(window,${JSON.stringify(pythonFiles).replace(/</g,'\\u003c')});
 function selectedEngine(input){
   const id=input.run.engineId||CURRENT_ENGINE_ID;
@@ -80,16 +82,34 @@ function effectiveRuntimeUnsupported(){
 function canUseSimulationWorkers(){
   return !workersUnavailable&&typeof window.Worker==='function'&&!!window.Blob&&!!window.URL?.createObjectURL;
 }
+function browserSimulationWorkerCapacity(){
+  // Leave room for both the interface and its demand-driven playback cursor.
+  return Math.max(1,simulationWorkerCapacity(window.navigator)-1);
+}
+function createBrowserPlayback(input){
+  if(selectedEngine(input)!==CURRENT_ENGINE_ID)
+    throw Object.assign(new Error('Live numerical playback requires the current engine.'),{code:'PLAYBACK_ENGINE_UNSUPPORTED'});
+  const controller=createNumericalPlayback(input,{
+    createWorker:()=>{
+      if(!canUseSimulationWorkers())return null;
+      playbackWorkerSource=playbackWorkerSource||["'use strict';\\n",engineRuntime.toString().split('/* WORKER_MODEL_START */')[1].split('/* WORKER_MODEL_END */')[0],'('+numericalPlaybackWorkerMain.toString()+')();'].join('');
+      const url=window.URL.createObjectURL(new window.Blob([playbackWorkerSource],{type:'text/javascript'}));
+      try{return new window.Worker(url);}finally{window.URL.revokeObjectURL(url);}
+    },
+    onClose:()=>playbackControllers.delete(controller)
+  });
+  playbackControllers.add(controller);
+  return controller;
+}
 async function calculateBrowserBatch(input,options={}){
   if(input.run.effectiveRuntimeTargetSeconds!==undefined&&selectedEngine(input)===SIMPY_ENGINE_ID)return effectiveRuntimeUnsupported();
   if(selectedEngine(input)===SIMPY_ENGINE_ID)return simulateBatch(input,{...options,runRound:simPyRuntime.run,workerFirstRound:true,concurrency:options.parallel===false?1:simPyRuntime.size,laterSummaryOnly:options.laterSummaryOnly!==false});
   let published=false;
   const onFirstRound=options.onFirstRound?result=>{if(!published){published=true;options.onFirstRound(result);}}:undefined;
   const settings={...options,onFirstRound,laterSummaryOnly:options.laterSummaryOnly!==false};
-  const count=input.run.rounds||1;
-  if((count<2&&!options.summaryOnly&&(!input.run.calculationMode||input.run.calculationMode==='LIVE'))||options.parallel===false||!canUseSimulationWorkers())return simulateBatch(input,settings);
+  if(options.parallel===false||!canUseSimulationWorkers())return simulateBatch(input,settings);
   if(!workerPool){
-    const size=simulationWorkerCapacity(window.navigator);
+    const size=browserSimulationWorkerCapacity();
     workerSource=workerSource||["'use strict';\\n",engineRuntime.toString().split('/* WORKER_MODEL_START */')[1].split('/* WORKER_MODEL_END */')[0],'('+simulationWorkerMain.toString()+')();'].join('');
     workerPool=createSimulationWorkerPool(()=>{
       const url=window.URL.createObjectURL(new window.Blob([workerSource],{type:'text/javascript'}));
@@ -109,7 +129,7 @@ async function calculateBrowserBatch(input,options={}){
 function simulationInputSignature(input){
   function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().filter(key=>value[key]!==undefined).map(key=>[key,canonical(value[key])]));return value;}
   const run={...input.run};if(run.reliabilityEnabled!==false)delete run.reliabilityEnabled;
-  return JSON.stringify(canonical({version:'ST_CURRENT:0.20.0/DES:0.5.0/cache:29',unitOfFlow:input.case.unitOfFlow||'units',equipment:input.case.equipment,run:{durationSeconds:300,tickSeconds:.25,sampleEverySeconds:5,seed:1,commands:[],rounds:1,engineId:CURRENT_ENGINE_ID,...run}}));
+  return JSON.stringify(canonical({version:'ST_CURRENT:0.20.1/DES:0.5.0/cache:30',unitOfFlow:input.case.unitOfFlow||'units',equipment:input.case.equipment,run:{durationSeconds:300,tickSeconds:.25,sampleEverySeconds:5,seed:1,commands:[],rounds:1,engineId:CURRENT_ENGINE_ID,...run}}));
 }
 async function simulateBrowserBatch(input,options={}){
   const signature=simulationInputSignature(input);
@@ -117,15 +137,16 @@ async function simulateBrowserBatch(input,options={}){
   if(response.ok)response.result.inputSignature=signature;
   return response;
 }
-window.addEventListener?.('pagehide',()=>{workerPool?.close();workerPool=null;});
+window.addEventListener?.('pagehide',()=>{workerPool?.close();workerPool=null;for(const controller of playbackControllers)controller.close();});
 window.SimulatorEngine = {
   advancePackagePositions,
   simulateLine: function(input){if(selectedEngine(input)===SIMPY_ENGINE_ID)return {ok:false,error:{code:'ASYNC_ENGINE_REQUIRED',message:'SimPy requires simulateLineAsync.'}};return simulateLine(input);},
   simulateBatch: simulateBrowserBatch,
   replicationView:replicationView,
   inputSignature: simulationInputSignature,
-  concurrency: function(engineId){return engineId===SIMPY_ENGINE_ID?simPyRuntime.size:canUseSimulationWorkers()?simulationWorkerCapacity(window.navigator):1;},
+  concurrency: function(engineId){return engineId===SIMPY_ENGINE_ID?simPyRuntime.size:canUseSimulationWorkers()?browserSimulationWorkerCapacity():1;},
   simulateLineAsync: simulateSelectedLine,
+  createPlayback: createBrowserPlayback,
   validateSimulationInput: validateSimulationInput,
   plantCalendarSchedule: plantCalendarSchedule,
   resolvePlannedStops:resolvePlannedStops,

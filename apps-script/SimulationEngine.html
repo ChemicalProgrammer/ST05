@@ -2923,6 +2923,9 @@ function recordLiveTelemetry(runtime) {
     }))
   };
   frame.buffers=frame.accumulationZones.map(zone=>zone.inventoryUnits);
+  const previous=runtime.liveTelemetry.at(-1);
+  frame.instantaneousOutputRatePerSecond=previous&&frame.virtualSecond>previous.virtualSecond
+    ?(frame.outputCount-previous.outputCount)/(frame.virtualSecond-previous.virtualSecond):0;
   runtime.liveTelemetry.push(frame);
   runtime.nextLiveTelemetryAt=runtime.virtualSecond+runtime.liveTelemetryInterval;
 }

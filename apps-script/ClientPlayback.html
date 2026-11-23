@@ -3,7 +3,7 @@
     var playbackStateTimelineCache={result:null,length:-1,byEquipment:[]};
     // Refresh only numeric playback indicators four times per second.
     // This is presentation-only; source samples and simulation clock stay unchanged.
-    var PLAYBACK_METRIC_REFRESH_MS=250;
+    var PLAYBACK_METRIC_REFRESH_MS=125;
     // The simulation clock retains its existing timing; only rendering is
     // rate-limited. Measurements are per-frame and never saved in case data.
     var playbackRenderStats={lastPaintAt:-Infinity,totalMs:0,frames:0,lastReportAt:0,
@@ -262,11 +262,11 @@
       });
     }
 
-    // Refresh only the currently displayed Overview rows at the light 250ms
+    // Refresh only the currently displayed Overview rows at the light 125ms
     // cadence. All counts, rates and inventories come from the real sample;
     // no production is interpolated between recording boundaries.
     function refreshNumericalOverviewFromSample(){
-      var result=state.run.result,sample=result?.samples?.[state.run.sampleIndex];
+      var result=state.run.result,sample=playbackVisualSample();
       if(!sample?.equipment||window.STNumericCardDiagnostics?.overview===false)return;
       var models=state.activeCase?.equipment||[];
       document.querySelectorAll('#live-equipment .live-equipment-card:not([hidden])').forEach(function(card){
@@ -288,12 +288,31 @@
       });
     }
 
+    // Locate the most recent *calculated* lightweight telemetry point at the
+    // currently displayed virtual time. Telemetry is in-memory only, never
+    // copied into a saved case or used to estimate missing physical values.
+    function playbackVisualSample(){
+      var base=state.run.result?.samples?.[state.run.sampleIndex];
+      if(!base)return null;
+      var telemetry=state.run.liveTelemetry;
+      if(!Array.isArray(telemetry)||!telemetry.length||!state.run.playing)return base;
+      var virtualSecond=playbackDisplaySecond(base),low=0,high=telemetry.length-1,last=-1;
+      while(low<=high){
+        var mid=(low+high)>>1;
+        if(telemetry[mid].virtualSecond<=virtualSecond+1e-8){last=mid;low=mid+1;}
+        else high=mid-1;
+      }
+      var measured=last<0?null:telemetry[last];
+      return measured&&measured.virtualSecond+1e-8>=base.virtualSecond?measured:base;
+    }
+
     // Update the ten playback cards and progress from actual recorded samples.
     // Only the virtual-time display interpolates from the playback clock.
     function refreshPlaybackMetricCards(sample,displaySecond){
-      sample=sample||state.run.result?.samples?.[state.run.sampleIndex];
+      sample=sample||playbackVisualSample();
       if(!sample)return;
-      var clockSecond=Number.isFinite(displaySecond)?displaySecond:playbackDisplaySecond(sample);
+      var base=state.run.result?.samples?.[state.run.sampleIndex]||sample;
+      var clockSecond=Number.isFinite(displaySecond)?displaySecond:playbackDisplaySecond(base);
       var duration=Number(state.run.result?.durationSeconds);
       var progress=document.getElementById('playback-progress');
       if(progress)progress.textContent=(duration>0
@@ -319,7 +338,7 @@
           {unit:'min',label:'Change Runtime Losses unit'});
         else lossCard.textContent='—';
       }
-      document.getElementById('metric-instant-rate').textContent=formatInstantaneousOutputRate();
+      document.getElementById('metric-instant-rate').textContent=formatInstantaneousOutputRate(sample);
       document.getElementById('metric-rate').textContent=sample.virtualSecond>0
         ?formatRatePerMinute(sample.outputCount/sample.virtualSecond):'—';
       document.getElementById('metric-buffer').textContent=formatNumber(sum(sample.buffers));
@@ -409,9 +428,10 @@
       var renderStart=performance.now();
       var scrollAnchor = state.uiView==='simulation'?captureLiveEquipmentScrollAnchor():null;
       var sample=state.run.result.samples[state.run.sampleIndex];
-      refreshPlaybackMetricCards(sample);
+      refreshPlaybackMetricCards(playbackVisualSample()||sample,playbackDisplaySecond(sample));
       if (state.uiView === 'simulation'){
         renderLiveEquipment(sample);
+        refreshNumericalOverviewFromSample();
         updateLiveEquipmentStateBadges(playbackDisplaySecond(sample));
       }
       drawSimulationChart();
@@ -478,7 +498,10 @@
       });
     }
 
-    function formatInstantaneousOutputRate() {
+    function formatInstantaneousOutputRate(sample) {
+      if(sample&&sample!==state.run.result?.samples?.[state.run.sampleIndex]
+         &&Number.isFinite(sample.instantaneousOutputRatePerSecond))
+        return formatRatePerMinute(sample.instantaneousOutputRatePerSecond);
       // Summary retains only endpoint samples: an all-run average is not an
       // instantaneous rate. The cumulative average has its own metric card.
       if (state.run.result?.detailCoverage?.recordingMode==='SUMMARY') return '—';

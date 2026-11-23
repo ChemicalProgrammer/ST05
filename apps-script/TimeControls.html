@@ -100,7 +100,36 @@ window.STTimeControls=(function(){
   function inputValue(seconds,unit){
     return Number(seconds)/(inputFactors[unit]||1);
   }
+  // A hidden text mirror sizes the unit column intrinsically; the input fills
+  // the rest. Keep native controls and values intact, including on restoration.
+  function syncInput(wrapper){
+    var input=wrapper.querySelector(':scope > input[type=number]');
+    var select=wrapper.querySelector(':scope > select');
+    if(!input||!select)return;
+    var mirror=wrapper.querySelector(':scope > .time-input-unit-measure');
+    if(!mirror){
+      mirror=document.createElement('span');mirror.className='time-input-unit-measure';
+      mirror.setAttribute('aria-hidden','true');mirror.setAttribute('data-st-no-translate','');
+      wrapper.append(mirror);
+      wrapper.classList.add('time-value-control--fitted-unit');
+    }
+    var label=select.selectedOptions[0]?.label||'';
+    if(mirror.textContent!==label)mirror.textContent=label;
+  }
+  function syncInputs(root){
+    root=root||document;
+    if(root.matches?.('.time-value-control'))syncInput(root);
+    root.querySelectorAll('.time-value-control > select').forEach(function(select){syncInput(select.parentElement);});
+  }
+  if(typeof document!=='undefined'){
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){syncInputs();},{once:true});
+    else syncInputs();
+    document.addEventListener('change',function(event){
+      if(event.target.matches?.('.time-value-control > select'))syncInput(event.target.parentElement);
+    });
+    window.addEventListener('st-language-change',function(){syncInputs();});
+  }
   return {factors:secondsByUnit,inputFactors:inputFactors,inputSeconds:inputSeconds,
-    inputValue:inputValue,output:output,setOutput:setOutput,unitSelect:unitSelect,format:number};
+    inputValue:inputValue,syncInputs:syncInputs,output:output,setOutput:setOutput,unitSelect:unitSelect,format:number};
 }());
 </script>

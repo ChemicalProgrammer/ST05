@@ -46,13 +46,14 @@ button { --on-accent:#fff; }
 /* A single input contract owns both selectable and fixed units. Typography
    belongs to the control, rather than the label or the surrounding section. */
 .time-value-control {
-  display:inline-flex;align-items:center;min-width:0;width:100%;
+  display:inline-grid;grid-template-columns:minmax(0,1fr) max-content;
+  position:relative;align-items:center;min-width:0;width:100%;
   gap:var(--input-unit-gap);border:0;border-radius:0;background:transparent;
   overflow:visible;font-size:var(--font-input);font-weight:var(--weight-regular);
   line-height:var(--leading-tight);
 }
 .time-value-control > input[type=number] {
-  flex:1 1 auto;min-width:0;width:1%;margin:0;
+  grid-area:1 / 1 / 2 / 2;min-width:0;width:100%;margin:0;box-sizing:border-box;
   padding-inline:var(--space-2);padding-inline-end:var(--space-2);
   border:var(--border-width) solid var(--line-strong);border-radius:var(--radius-md);
   background:var(--surface);box-shadow:none;color:var(--ink);
@@ -60,14 +61,25 @@ button { --on-accent:#fff; }
 }
 .time-value-control > select,
 .time-value-control > .time-input-unit {
-  flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;
-  min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;
+  grid-area:1 / 2 / 2 / 3;width:auto!important;min-width:0!important;max-width:none!important;
   box-sizing:border-box;text-align:start!important;text-align-last:start!important;
   padding:0!important;margin:0;border:0;border-radius:0;background:transparent;
   font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;
   color:var(--unit-color);vertical-align:baseline;
 }
 .time-value-control > select {height:var(--control-height);min-height:var(--control-height);}
+/* Only the selected unit sets this column's width. The native select sits
+   over an inaccessible text mirror, so its longest option cannot reserve
+   empty space. The input takes all remaining width without resizing its card.
+   Intrinsic text sizing also follows fonts and zoom without measuring pixels. */
+.time-value-control > .time-input-unit-measure {
+  grid-area:1 / 2 / 2 / 3;visibility:hidden;pointer-events:none;user-select:none;
+  white-space:pre;font-size:inherit!important;font-weight:inherit!important;
+  line-height:inherit!important;
+}
+.time-value-control--fitted-unit > select {
+  position:absolute;inset:0;width:100%!important;
+}
 .time-value-control > input:disabled {background:var(--disabled-bg);color:var(--disabled);border-color:var(--line);}
 .time-value-control > select:disabled,
 .time-value-control:has(> input:disabled) > .time-input-unit {color:var(--disabled);cursor:not-allowed;}

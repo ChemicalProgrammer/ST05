@@ -57,7 +57,7 @@
         </div>
         <div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row"><label>Input <span class="time-value-control"><input type="number" value="5" step="any" aria-label="Cantidad demostrativa"><select aria-label="Unidad de entrada demostrativa"><option>s</option><option selected>min</option><option>h</option></select></span></label><label>Output <span id="design-ref-time-output"></span></label></div></div>
-          <div class="design-reference-cell design-reference-explanation" role="cell">El input conserva la cifra; el output convierte la cifra. Ambos reservan el mismo ancho fijo de unidad y una separación de 2 px para evitar saltos de posición.</div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">El input conserva la cifra y el ancho total del control: la unidad ocupa el ancho de su texto y la caja numérica se ajusta al espacio restante, con 8 px de separación. El output convierte la cifra, con 2 px de separación y espacio reservado para mantener estables los resultados.</div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Valor–unidad</strong><code>.time-value-control · STTimeControls.output()</code></div>
         </div>
         <div class="design-reference-row" role="row">

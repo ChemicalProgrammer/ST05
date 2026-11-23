@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {JSDOM,VirtualConsole} from 'jsdom';
 import postcss from 'postcss';
 import selectorParser from 'postcss-selector-parser';
@@ -8,6 +7,9 @@ import {renderAppsScript} from '../scripts/render-apps-script.mjs';
 
 const rendered=renderAppsScript().html;
 const page=new JSDOM(rendered,{virtualConsole:new VirtualConsole()});
+const timeControls=[...page.window.document.querySelectorAll('script')]
+  .map(node=>node.textContent).find(source=>/window\.STTimeControls\s*=/.test(source));
+assert.ok(timeControls,'Expected the served time control module');
 const rules=[];
 function compare(a,b){return a[0]-b[0]||a[1]-b[1]||a[2]-b[2];}
 function specificity(node){
@@ -65,6 +67,8 @@ function presentation(){
 function dom(attributes={}){
   const instance=new JSDOM(markup,{runScripts:'outside-only',virtualConsole:new VirtualConsole()});
   for(const [name,value] of Object.entries(attributes))instance.window.document.documentElement.setAttribute(name,value);
+  instance.window.eval(timeControls);
+  instance.window.STTimeControls.syncInputs();
   return instance;
 }
 const controlIds=['run-duration','run-sample-interval','simulation2d-limit'];
@@ -95,10 +99,25 @@ test('duration, recording and 2D inputs share value/unit presentation in every m
         assert.equal(css(input,'padding-inline-end'),'8px',id+' has the same internal trailing padding');
         assert.equal(css(unit,'padding'),'0',id+' does not add a second hidden unit gap');
         assert.equal(css(unit,'color'),css(unit,'--muted'),id+' unit follows the same muted theme color');
-        assert.equal(css(unit,'width'),'3.25ch',id+' reserves a compact fixed slot for the longest time abbreviation');
+        assert.equal(css(wrapper,'display'),'inline-grid',id+' keeps the input and unit in one shared row');
+        assert.equal(css(wrapper,'width'),'100%',id+' preserves its outer width');
+        assert.equal(css(wrapper,'grid-template-columns').replace(/\s+/g,''),'minmax(0,1fr)max-content',
+          id+' gives the input the remaining width after the selected unit');
+        assert.equal(css(input,'width'),'100%',id+' fills its flexible column');
+        assert.equal(css(input,'min-width'),'0',id+' can shrink without overflowing its row');
         if(unit.tagName==='SELECT'){
           assert.ok(unit.getAttribute('aria-label'));
           assert.equal(css(unit,'background-image'),'none');
+          assert.equal(css(unit,'width'),'100%',id+' fills only the selected-label column');
+          assert.equal(css(unit,'position'),'absolute',id+' cannot reserve the longest option width');
+          const measure=wrapper.querySelector('.time-input-unit-measure');
+          assert.ok(measure);assert.equal(measure.textContent,unit.selectedOptions[0].label);
+          assert.equal(css(measure,'visibility'),'hidden');
+          assert.equal(css(measure,'grid-area'),css(unit,'grid-area'));
+          for(const property of ['font-size','font-weight','line-height'])
+            assert.equal(css(measure,property),css(unit,property),id+' measures the same selected-unit typography');
+        }else{
+          assert.equal(css(unit,'width'),'auto',id+' fixed unit uses its natural text width');
         }
       }
     }finally{instance.window.close();}
@@ -129,8 +148,6 @@ test('locking a value also dims its unit and preserves the same spacing and type
 test('shared result units match time units while keeping numbers and labels separate',()=>{
   const instance=dom(),w=instance.window,d=w.document;
   try{
-    w.eval(fs.readFileSync(new URL('../apps-script/TimeControls.html',import.meta.url),'utf8')
-      .replace(/^<script>/,'').replace(/<\/script>\s*$/,''));
     const card=d.createElement('article');card.className='metric-card metric-card--result';
     card.innerHTML='<span>Throughput</span><strong class="metric-value"><b class="metric-number">343.7</b><span class="metric-unit">bpm</span></strong>';
     d.getElementById('results-kpis').append(card);

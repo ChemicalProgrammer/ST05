@@ -52,6 +52,7 @@ window.STRunOptions=(function(){
     var enabled=el('run-events-enabled').checked;document.documentElement.dataset.eventsEnabled=String(enabled);
     syncEventEditor(locked);
     renderDurationSummary();
+    window.STTimeControls?.syncInputs?.();
   }
   function syncEventEditor(locked){
     var section=el('simulation-event-section'),visible=el('run-events-enabled').checked||section.parentElement.id==='simulation2d-event-editor';

@@ -497,7 +497,9 @@
       cardToggle.append(title);heading.append(symbol,cardToggle);
       var meta=document.createElement('span');meta.className='critical-label';card.querySelector('.live-equipment-identity').appendChild(meta);
       var reliability=document.createElement('span');reliability.className='case-description reliability-label';card.querySelector('.live-equipment-identity').appendChild(reliability);headerDetails.append(card.querySelector('.live-equipment-identity'));
-      heading.append(card.querySelector('.live-state'));
+      // Align the status of every machine and conveyor in the same right column.
+      // It remains the original badge updated by renderLiveEquipment().
+      visualHeader.append(card.querySelector('.live-state'));
       // A conveyor's PASS / FAIL action lives in the identity panel, not in Geometry.
       geometryVerdict.classList.add('numeric-conveyor-verdict');
       // Keep a stable reference: the verdict button was moved out of the

@@ -162,10 +162,17 @@
               <label class="simulation2d-time-field"><span>Time</span><span class="simulation2d-time-input time-value-control"><input id="simulation2d-limit" type="number" min="0.01" step="any" value="60" aria-label="Simulation time limit in minutes" title="Simulation time limit"><span class="time-input-unit">min</span></span></label>
               <label>Source<select id="simulation2d-source"><option value="independent">Independent simulation</option><option value="representative">Representative round seed</option></select></label>
             </div>
+            <!-- Misma tarjeta de checkbox reutilizable que en la simulación numérica. -->
             <fieldset class="simulation2d-setting-toggles" aria-label="2D simulation options">
-              <label><input id="simulation2d-dimensions" type="checkbox"> Show dimensions</label>
-              <label><input id="simulation2d-failures" type="checkbox" checked> MTBF / MTTR failures</label>
-              <label><input id="simulation2d-show-events" type="checkbox" aria-controls="simulation2d-events-panel"> Show events and calendar</label>
+              <label class="checkbox-label st-checkbox-card" for="simulation2d-dimensions">
+                <input id="simulation2d-dimensions" type="checkbox"><span>Show dimensions</span>
+              </label>
+              <label class="checkbox-label st-checkbox-card" for="simulation2d-failures">
+                <input id="simulation2d-failures" type="checkbox" checked><span>MTBF / MTTR failures</span>
+              </label>
+              <label class="checkbox-label st-checkbox-card" for="simulation2d-show-events">
+                <input id="simulation2d-show-events" type="checkbox" aria-controls="simulation2d-events-panel"><span>Show events and calendar</span>
+              </label>
             </fieldset>
             <div id="simulation2d-equipment-view-home" hidden><label class="simulation2d-dialog-field">Equipment view<select id="simulation2d-machine-style"><option value="blocks">Blocks</option><option value="animated">Animated designs</option></select></label></div>
           </div>
@@ -248,13 +255,13 @@
 <label data-duration-method="SHIFTS">Number of shifts<input id="settings-shift-count" type="number" min="1" max="10000" step="1" value="1"></label>
 <label>Hours per shift<input id="run-shift-hours" type="number" min="0.25" max="24" step="0.25" value="8"></label>
 <label><?= __ST_TEXT__('batch.rounds') ?><input id="run-rounds" type="number" min="1" max="100" step="1" value="1"></label></div><div class="simulation-run-inclusions">
-  <label class="checkbox-label" for="run-reliability-enabled" title="Deactivate stochastic failures and repairs without deleting MTBF / MTTR values.">
+  <label class="checkbox-label st-checkbox-card" for="run-reliability-enabled" title="Deactivate stochastic failures and repairs without deleting MTBF / MTTR values.">
     <input id="run-reliability-enabled" type="checkbox" checked><span>Enable failures and repairs (MTBF / MTTR)</span>
   </label>
-  <label class="checkbox-label" for="run-events-enabled" title="Include scheduled equipment control events for this simulation. Existing events are preserved when unchecked.">
+  <label class="checkbox-label st-checkbox-card" for="run-events-enabled" title="Include scheduled equipment control events for this simulation. Existing events are preserved when unchecked.">
     <input id="run-events-enabled" type="checkbox"><span>Include control events</span>
   </label>
-  <label class="checkbox-label" for="run-calendar-enabled" title="Include the configured plant calendar in this run. Unchecking does not remove calendar settings.">
+  <label class="checkbox-label st-checkbox-card" for="run-calendar-enabled" title="Include the configured plant calendar in this run. Unchecking does not remove calendar settings.">
     <input id="run-calendar-enabled" type="checkbox"><span>Include plant calendar</span>
   </label>
 </div>

@@ -57,3 +57,26 @@ test('Case product/format controls keep single/multiple support',()=>{
   assert.ok(web.includes('value="single">Single product and format (default)'));
   assert.ok(web.includes('value="multiple">Multiple products and formats'));
 });
+
+// Un solo control para los checkboxes de configuración en ambas simulaciones.
+test('2D Settings reuses framed checkbox cards without replacing the input controls',()=>{
+  const markup=read('apps-script/WebApp.html');
+  const styles=read('apps-script/ComponentStyles.html');
+  const ui=read('apps-script/UiStandards.html');
+  const group=markup.split('<fieldset class="simulation2d-setting-toggles" aria-label="2D simulation options">')[1]?.split('</fieldset>')[0];
+  assert.ok(group,'The 2D settings checkbox group must exist');
+  const ids=['simulation2d-dimensions','simulation2d-failures','simulation2d-show-events'];
+  for(const id of ids){
+    assert.match(group,new RegExp('<label class="checkbox-label st-checkbox-card" for="'+id+'">'));
+    assert.match(group,new RegExp('<input id="'+id+'" type="checkbox"'));
+    assert.equal((group.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
+  }
+  assert.equal((group.match(/class="checkbox-label st-checkbox-card"/g)||[]).length,3);
+  assert.match(group,/id="simulation2d-failures" type="checkbox" checked/);
+  assert.match(group,/id="simulation2d-show-events" type="checkbox" aria-controls="simulation2d-events-panel"/);
+  const numerical=markup.split('<div class="simulation-run-inclusions">')[1]?.split('</div>')[0]||'';
+  assert.equal((numerical.match(/class="checkbox-label st-checkbox-card"/g)||[]).length,3);
+  assert.match(styles,/label\.st-checkbox-card \{[\s\S]*?border:var\(--border-width\) solid var\(--line\)/);
+  assert.match(styles,/label\.st-checkbox-card > input\[type=checkbox\] \{/);
+  assert.doesNotMatch(ui,/#simulation-duration-content \.simulation-run-inclusions \.checkbox-label \{/);
+});

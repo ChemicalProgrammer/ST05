@@ -1117,13 +1117,7 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
   column-gap:var(--space-4);row-gap:var(--space-2);
   margin:var(--space-2) 0;
 }
-#simulation-duration-content .simulation-run-inclusions .checkbox-label {
-  display:inline-flex;align-items:center;gap:var(--space-2);
-  margin:0;min-height:var(--control-height);
-}
-#simulation-duration-content .simulation-run-inclusions input[type=checkbox] {
-  flex:0 0 auto;margin:0;
-}
+/* Las tarjetas de checkbox ahora usan el control compartido .st-checkbox-card. */
 
 
 /* All modal dialogs are viewport-bound, but scroll only when their content
@@ -1143,13 +1137,6 @@ dialog[open] .table-scroll {max-inline-size:100%;min-inline-size:0;scrollbar-gut
 #simulation-duration-content .simulation-run-inclusions {
   display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
   gap:var(--space-2);width:100%;margin:var(--space-2) 0;
-}
-#simulation-duration-content .simulation-run-inclusions .checkbox-label {
-  min-width:0;min-height:var(--control-height);margin:0;
-  padding:var(--space-2) var(--space-3);background:var(--surface-soft);
-  border:var(--border-width) solid var(--line);border-radius:var(--radius-md);
-  display:flex;align-items:center;gap:var(--space-2);
-  font-size:var(--font-secondary);font-weight:var(--weight-medium);
 }
 #simulation-duration-content .simulation-duration-grid {
   display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));

@@ -28,7 +28,7 @@ test('Comparison starts with OEE and throughput cards using saved round means in
  }finally{h.dom.window.close();}}
 });
 test('missing saved outcomes show configuration context without invented KPIs; unlike flow units have no throughput delta',()=>{
- const h=setup(false);try{h.b.results.unitOfFlow='cases';h.render();assert.match(h.w.document.querySelectorAll('.comparison-kpi-delta')[1].textContent,/—/);h.b.results=null;h.render();assert.equal(h.w.document.querySelector('.comparison-kpi'),null);assert(h.w.document.querySelector('.comparison-context'));}finally{h.dom.window.close();}
+ const h=setup(false);try{h.b.results.unitOfFlow='cases';h.render();assert.match(h.w.document.querySelectorAll('.comparison-kpi-delta')[1].textContent,/—/);h.b.results=null;h.render();assert.equal(h.w.document.querySelector('.comparison-kpi'),null);assert.equal(h.w.document.querySelector('.comparison-context'),null,'Baseline note must be absent');}finally{h.dom.window.close();}
 });
 
 test('OEE comparison includes global and machine rows in Basic and Advance using equipment round means',()=>{

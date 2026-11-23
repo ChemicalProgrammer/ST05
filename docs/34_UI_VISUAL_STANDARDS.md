@@ -312,3 +312,7 @@ Se verificaron 141 pruebas enfocadas de componentes, generación dinámica, esti
 ### Corrección de centrado vertical del encabezado
 
 La captura de Productos mostró que centrar la barra respecto a la primera fila y dar al título la altura mínima de los botones dejaba demasiado espacio antes de la descripción. La regla compartida conserva ahora título y descripción como una columna compacta y centra la barra respecto al bloque completo. Esta misma regla cubre encabezados nativos, personalizados y dinámicos. Las pruebas existentes verifican la estructura y las reglas CSS ganadoras en ambos modos/temas; no sustituyen una medición visual del navegador.
+
+### Ajustes de presentación del 23 de noviembre de 2026
+
+El menú Valor–unidad ahora muestra exclusivamente las abreviaturas con selección visual de combobox. El OEE global usa `metric-card--featured` sin concatenar texto traducible a clases CSS. Las barras de Subsección y Registro ocupan una línea en escritorio, con desplazamiento horizontal en vista estrecha. Comparación ya no presenta la nota automática Baseline/Proposed. El catálogo conserva tres columnas y añade el tipo Básico/Compuesto y la composición de cada control bajo su nombre técnico.

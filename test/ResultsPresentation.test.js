@@ -90,6 +90,7 @@ test('result KPIs and rate-loss highlights use shared value/unit cards without c
       assert.equal(production.value.textContent,'960');
       assert.equal(production.unit.textContent,countLabel);
       assert.ok(cardMetric(h,'oee').card.classList.contains('metric-card--featured'));
+      assert.equal(cardMetric(h,'oee').card.classList.contains('primary-kpi'),false);
       const lossCards=[...h.node('results-rate-loss-highlights').querySelectorAll('article')];
       assert.equal(lossCards.length,3);
       lossCards.forEach((card,index)=>{

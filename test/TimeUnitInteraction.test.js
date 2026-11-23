@@ -34,7 +34,7 @@ function animateSpy(h){
   return calls;
 }
 
-test('unit picker shows full names and current selection, keeps input values and closes on outside click',()=>{
+test('unit picker shows only abbreviations and current selection, keeps input values and closes on outside click',()=>{
   const h=harness();
   try{
     const original=h.select,input=h.input;
@@ -44,7 +44,8 @@ test('unit picker shows full names and current selection, keeps input values and
     assert.equal(h.select.getAttribute('aria-expanded'),'true');
     assert.equal(h.select.getAttribute('aria-controls'),menu.id);
     const rows=[...menu.querySelectorAll('[role=option]')];assert.equal(rows.length,5);
-    assert.deepEqual(rows.map(row=>row.querySelector('.st-unit-menu-name').textContent),['Seconds','Minutes','Hours','Days','Weeks']);
+    assert.deepEqual(rows.map(row=>row.querySelector('.st-unit-menu-abbreviation').textContent),['s','min','h','d','wk']);
+    assert.equal(menu.querySelector('.st-unit-menu-name'),null);
     assert.equal(rows[1].getAttribute('aria-selected'),'true');assert.equal(rows[1].querySelector('.st-unit-menu-check').textContent,'✓');
     let changes=0;h.select.addEventListener('change',()=>changes++);
     choose(h,'d');
@@ -97,7 +98,7 @@ test('pointer activation suppresses the native popup without double toggles and 
   }finally{h.close();}
 });
 
-test('unit menu uses the owning modal and translates full names without changing abbreviations',()=>{
+test('unit menu uses the owning modal and only displays abbreviations',()=>{
   const h=harness();
   try{
     const dialog=h.d.createElement('dialog');dialog.open=true;h.d.body.append(dialog);dialog.append(h.select.parentElement);
@@ -107,7 +108,7 @@ test('unit menu uses the owning modal and translates full names without changing
     const menu=h.d.querySelector('[role=listbox]');assert.equal(menu.parentElement,dialog);assert.equal(menu._shown,true);
     assert.equal(menu.getAttribute('popover'),'manual');
     assert.deepEqual([...menu.querySelectorAll('.st-unit-menu-abbreviation')].map(node=>node.textContent),['s','min','h','d','wk']);
-    assert.deepEqual([...menu.querySelectorAll('.st-unit-menu-name')].map(node=>node.textContent),['Segundos','Minutos','Horas','Días','Semanas']);
+    assert.equal(menu.querySelector('.st-unit-menu-name'),null);
     assert.ok(parseFloat(menu.style.left)>=8);assert.ok(parseFloat(menu.style.top)>=8);
     h.w.dispatchEvent(new h.w.Event('resize'));assert.equal(h.d.querySelector('[role=listbox]'),null);
     assert.deepEqual(h.errors,[]);

@@ -44,6 +44,7 @@ test('Ctrl+Shift+S abre catálogo accesible y las pestañas funcionan',()=>{
         assert.ok(cells[1].textContent.trim(),'La segunda columna describe su función');
         assert.ok(cells[2].querySelector('strong')?.textContent.trim(),'La tercera columna identifica el nombre reutilizable');
         assert.ok(cells[2].querySelector('code')?.textContent.trim(),'El nombre incluye selector o token técnico');
+        assert.match(cells[2].querySelector('.design-reference-control-type')?.textContent||'',/^(Básico|Compuesto · .+)$/);
       }
     }
     const columns=w.document.querySelector('.design-reference-column-heads');

@@ -170,7 +170,7 @@ test('numerical and 2D headings share the description and progress row without c
   }
 });
 
-test('shared descriptions stay readable at narrow widths and toolbars can wrap',()=>{
+test('shared descriptions stay readable and toolbars stay on one row',()=>{
   const descriptions=[...document.querySelectorAll('.fold-heading .subsection-description, .fold-native > summary .subsection-description')];
   assert(descriptions.length>=20,'Exercise native details and regular subsection descriptions');
   for(const width of [360,760,1440]){
@@ -185,7 +185,7 @@ test('shared descriptions stay readable at narrow widths and toolbars can wrap',
     }
     for(const tools of document.querySelectorAll('.fold-heading > .fold-tools')){
       assert.equal(value(tools,'order',width),'1');
-      assert.equal(value(tools,'flex-wrap',width),'wrap',(tools.parentElement.parentElement.id||tools.className)+' at '+width+' px');
+      assert.equal(value(tools,'flex-wrap',width),'nowrap',(tools.parentElement.parentElement.id||tools.className)+' at '+width+' px');
       assert.equal(value(tools,'max-width',width),'100%');
     }
   }
@@ -211,11 +211,24 @@ test('canonical grids center wrapped tools beside the entire title and descripti
         assert.equal(value(description,'padding-inline-start',width),'var(--subsection-text-inset)',context);
       }
       if(tools){
-        assert.equal(value(tools,'grid-row',width),'1',context);
-        assert.equal(value(tools,'grid-column',width),'2',context);
+        assert.equal(value(tools,'grid-row',width),width<=900?'2':'1',context);
+        assert.equal(value(tools,'grid-column',width),width<=900?'1':'2',context);
         assert.equal(value(tools,'align-self',width),'center',context);
-        assert.equal(value(tools,'flex-wrap',width),'wrap',context);
+        assert.equal(value(tools,'flex-wrap',width),'nowrap',context);
       }
     }
+  }
+});
+
+test('Registro toolbar retains one horizontal row on desktop',()=>{
+  const section=document.getElementById('real-data-record')?.closest('.st-subsection');
+  assert.ok(section,'Registro should be mounted');
+  const bar=section.querySelector('.real-data-toolbar');
+  assert.ok(bar);
+  for(const width of [1024,1440,1900]){
+    assert.equal(value(bar,'flex-wrap',width),'nowrap');
+    assert.equal(value(bar.querySelector('.button-row'),'flex-wrap',width),'nowrap');
+    assert.equal(value(bar.querySelector('select'),'margin-inline-start',width),'0');
+    assert.equal(value(bar,'grid-row',width),'1');
   }
 });

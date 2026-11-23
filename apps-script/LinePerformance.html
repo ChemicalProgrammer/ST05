@@ -110,9 +110,12 @@ window.STLinePerformance = (function() {
     var tbody = document.getElementById('performance-rows');
     tbody.textContent = '';
     var headings=tbody.closest('table')?.querySelectorAll('thead th');
-    [[1,'performance.normal_bpm'],[2,'performance.maximum_bpm'],[3,'performance.recommended_bpm'],[7,'performance.effective_bpm']].forEach(function(pair){
+    // Resource calls must use literal keys so Apps Script resolves them before
+    // this module is sent to the browser; there is no client __ST_TEXT__ helper.
+    [[1,__ST_TEXT__('performance.normal_bpm')],[2,__ST_TEXT__('performance.maximum_bpm')],
+      [3,__ST_TEXT__('performance.recommended_bpm')],[7,__ST_TEXT__('performance.effective_bpm')]].forEach(function(pair){
       if(!headings?.[pair[0]])return;
-      var label=el('span',__ST_TEXT__(pair[1]).replace(/\s*·\s*\/min\s*$/,''));
+      var label=el('span',pair[1].replace(/\s*·\s*\/min\s*$/,''));
       headings[pair[0]].replaceChildren(label,document.createTextNode(' · '+rateUnit));
     });
     points.forEach(function(point) {

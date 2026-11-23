@@ -95,7 +95,7 @@ test('duration, recording and 2D inputs share value/unit presentation in every m
         assert.equal(css(input,'padding-inline-end'),'8px',id+' has the same internal trailing padding');
         assert.equal(css(unit,'padding'),'0',id+' does not add a second hidden unit gap');
         assert.equal(css(unit,'color'),css(unit,'--muted'),id+' unit follows the same muted theme color');
-        assert.equal(css(unit,'width'),'3.25em',id+' retains a stable slot when its time unit changes');
+        assert.equal(css(unit,'width'),'3.25ch',id+' reserves a compact fixed slot for the longest time abbreviation');
         if(unit.tagName==='SELECT'){
           assert.ok(unit.getAttribute('aria-label'));
           assert.equal(css(unit,'background-image'),'none');

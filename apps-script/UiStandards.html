@@ -1433,6 +1433,23 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
   white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
 }
 #simulation-playback #playback-performance {display:none!important;}
+/* Align subsection descriptions with label text after the fold chevron. */
+.fold-heading > .subsection-heading-copy > .subsection-description,
+.fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description {
+  padding-inline-start:calc(.45em + var(--space-1) + var(--space-2));
+}
+.fold-heading > .subsection-heading-copy > .subsection-playback-meta {
+  padding-inline-start:calc(.45em + var(--space-1) + var(--space-2));
+}
+#simulation-equipment .equipment-performance-filters {align-self:flex-start;}
+#simulation-equipment .equipment-filter-toggle[aria-pressed=true] {
+  background:var(--selected);color:var(--accent);border-color:var(--accent);
+}
+#simulation-equipment .equipment-filter-toggle[aria-pressed=false] {
+  background:var(--surface);color:var(--muted);border-color:var(--line-strong);
+}
+#live-equipment > .live-equipment-card[hidden] {display:none!important;}
+
 
 /* Equipment performance: the state badge always occupies the trailing
    header column. Machine/conveyor names stay left even when long. */

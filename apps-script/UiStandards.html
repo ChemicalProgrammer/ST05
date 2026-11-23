@@ -192,6 +192,10 @@ html[data-ui-mode=basic] #run-panel > .section-heading { display:none; }
 #settings-dialog .settings-case-options { display:grid; gap:var(--space-3); }
 #settings-dialog .settings-case-options label { margin:0; }
 #settings-page-appearance .settings-row { grid-template-columns:160px minmax(160px,260px); justify-content:start; gap:var(--space-3); }
+#settings-page-appearance .settings-language-row > .chart-note {
+  grid-column:1/-1;min-width:0;max-width:62ch;margin:0;
+  font-size:var(--font-secondary);line-height:var(--leading-body);
+}
 #settings-page-appearance .settings-colors { grid-template-columns:160px minmax(0,1fr); }
 #settings-page-appearance .settings-colors .accent-heading { align-self:center; }
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation:has(.analysis-capex[data-tier=ZERO]) { border-left-color:var(--capex-zero); }

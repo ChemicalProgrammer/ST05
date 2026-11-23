@@ -75,6 +75,6 @@ test('Subsection title is independent, while description and progress share row 
   assert.match(heading,/class="subsection-playback-meta"/);
   assert.match(heading,/<p class="subsection-description">[\s\S]*?<p id="simulation-playback-status">/);
   assert.match(styles,/#simulation-playback \.subsection-playback-meta \{[\s\S]*?display:flex;flex-wrap:wrap/);
-  assert.match(styles,/#simulation-playback \.fold-heading \.subsection-playback-meta > \.subsection-description \{[\s\S]*?white-space:nowrap/);
+  assert.match(styles,/#simulation-playback \.fold-heading \.subsection-playback-meta > \.subsection-description \{[\s\S]*?white-space:normal/);
   assert.match(styles,/#simulation-playback \.fold-heading #simulation-playback-status \{[\s\S]*?white-space:nowrap/);
 });

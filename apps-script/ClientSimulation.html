@@ -712,6 +712,15 @@
         partial.replicationStatus={state:'CALCULATING',rounds:session.run.rounds,baseSeed:session.run.seed};
         session.streaming=true;state.run.result=partial;state.run.representative=partial;state.run.roundIndex=0;
         if(!previous)state.run.sampleIndex=0;
+        else if(state.run.playing&&Number.isFinite(state.run._displayedVirtualSecond)){
+          // The clock may have reached a newer real recording while rendering
+          // was throttled. Follow that recorded frame when a Live chunk arrives.
+          // Never interpolate output or move into uncalculated virtual time.
+          var recorded=partial.samples.at(-1)?.virtualSecond??0;
+          var aligned=findSampleIndexAtOrBefore(partial.samples,
+            Math.min(recorded,state.run._displayedVirtualSecond));
+          state.run.sampleIndex=Math.max(state.run.sampleIndex,aligned);
+        }
         syncPlaybackRounds();toggle('simulation-results',true);
         // Progress callbacks may arrive faster than the visual FPS limit.
         // Keep calculation updates intact but coalesce expensive UI painting.

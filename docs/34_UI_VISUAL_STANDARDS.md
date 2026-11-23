@@ -114,6 +114,8 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 ### Cobertura de muestras
 El catálogo mantiene los nombres oficiales en la **tercera columna de todas las pestañas**. Incluye navegación real del Header, pestañas de diálogos, navegación entre simulaciones, variantes de botones, campos, menús, estado/progreso, tablas, gráficas y las familias de tarjetas. Los ejemplos interactivos están aislados: cambiar la pestaña o el color de un ejemplo no modifica el caso, su simulación, ni el selector de colores real. Los estilos viven en sus módulos propietarios; `DesignReference.html` incluye sólo la vista previa y su interacción.
 
+- **Idioma de la interfaz:** `Settings > Appearance > Language` ofrece **English** (predeterminado) y **Español**. Se guarda como preferencia local del navegador con `STPreferences`, sin modificar datos, cálculos ni casos. Las traducciones del módulo [`Language.html`](../apps-script/Language.html) se aplican a textos estáticos y a componentes generados posteriormente; se mantienen sin traducir los identificadores, entradas y nombres definidos por el usuario. Las frases técnicas aún no incluidas en el diccionario permanecen en su idioma original. **Reset app** vuelve a inglés.
+
 ### Reglas de comportamiento y aspecto
 
 - **Un componente, una responsabilidad.** Las dos eficiencias de Simulation Playback son **KPI destacado**; las otras diez tarjetas son **Tarjeta de resultado**. No debe trasladarse automáticamente la jerarquía destacada a otros resultados secundarios, escenarios o estados.

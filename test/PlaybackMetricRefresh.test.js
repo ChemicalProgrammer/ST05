@@ -82,3 +82,43 @@ test('Subsection title is independent, while description and progress share row 
   assert.match(styles,/#simulation-playback \.fold-heading \.subsection-playback-meta > \.subsection-description \{[\s\S]*?white-space:normal/);
   assert.match(styles,/#simulation-playback \.fold-heading #simulation-playback-status \{[\s\S]*?white-space:nowrap/);
 });
+
+test('Numerical Live, Fast and Summary cards distinguish completion from paused playback',()=>{
+  const samples=[
+    {virtualSecond:0,outputCount:0,runtimeLossSeconds:0,effectiveRuntimeSeconds:0,buffers:[],equipment:[{backupStopSeconds:0}],accumulationZones:[]},
+    {virtualSecond:60,outputCount:120,runtimeLossSeconds:3,effectiveRuntimeSeconds:57,buffers:[],equipment:[{backupStopSeconds:0}],accumulationZones:[]}
+  ];
+  const result={samples,durationSeconds:60,summary:{outputCount:120},detailCoverage:{recordingMode:'BOUNDED'}};
+  const elements=new Map();
+  const element=id=>{if(!elements.has(id))elements.set(id,{textContent:''});return elements.get(id);};
+  const state={run:{result,sampleIndex:1,playing:false}};
+  const context={state,
+    document:{getElementById:element},
+    playbackDisplaySecond:sample=>sample.virtualSecond,
+    STTimeControls:{setOutput(node,seconds){node.seconds=seconds;}},
+    formatNumber:value=>String(value),
+    formatRatePerMinute:value=>String(value*60),
+    formatLineOeeAtSample:()=> '—',
+    sum:values=>values.reduce((a,b)=>a+Number(b||0),0),
+    setPlaybackStatus:status=>{element('playback-status').textContent=status;}
+  };
+  loadFunctions(context,['formatInstantaneousOutputRate','refreshPlaybackMetricCards']);
+  vm.runInContext('refreshPlaybackMetricCards()',context);
+  assert.equal(element('playback-status').textContent,'Completed','Finished Fast calculation is not paused');
+  assert.equal(element('metric-instant-rate').textContent,'120','Fast mode uses recorded consecutive samples');
+  result.detailCoverage.recordingMode='SUMMARY';
+  vm.runInContext('refreshPlaybackMetricCards()',context);
+  assert.equal(element('playback-status').textContent,'Completed','Summary-only output remains visible at completion');
+  assert.equal(element('metric-instant-rate').textContent,'—','Summary endpoints do not imply an instantaneous rate');
+  result.provisional=true;
+  vm.runInContext('refreshPlaybackMetricCards()',context);
+  assert.equal(element('playback-status').textContent,'Paused','A provisional Live chunk is not marked completed');
+  state.run.playing=true;
+  vm.runInContext('refreshPlaybackMetricCards()',context);
+  assert.equal(element('playback-status').textContent,'Playing');
+});
+
+test('Numerical card frames avoid repeated input locking when the playback state does not change',()=>{
+  assert.match(source,/var playbackControlSignature=null;/);
+  assert.match(source,/if\(controlSignature!==playbackControlSignature\)\{playbackControlSignature=controlSignature;syncRunControls\(\);\}/);
+});

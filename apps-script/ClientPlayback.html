@@ -236,7 +236,7 @@
       setPlaybackStatus(state.run.playing?'Playing':(finished?'Completed':(sample.virtualSecond>0?'Paused':'Ready')));
     }
 
-    var playbackControlSignature=null;
+    var playbackControlSignature=null,playbackBoundExportResult=null;
     function renderPlaybackFrame() {
       // Locking every input/selector on every visual frame is expensive for
       // multi-equipment Live playback. Only synchronize when the lock state,
@@ -245,7 +245,16 @@
         Boolean(state.run.active),Boolean(state.run.playing),state.run.roundIndex,
         Boolean(roundSession?.pending),Boolean(roundSession?.firstUpdating),Boolean(roundSession?.dirty),
         Boolean(window.STSimulation2D?.isRunning?.()),state.activeSimulationId].join('|');
-      if(controlSignature!==playbackControlSignature){playbackControlSignature=controlSignature;syncRunControls();}
+      if(controlSignature!==playbackControlSignature){
+        playbackControlSignature=controlSignature;
+        syncRunControls();
+        playbackBoundExportResult=state.run.result;
+      }else if(state.run.result!==playbackBoundExportResult&&!state.run.result?.provisional){
+        // A completed round replaces the provisional object without changing
+        // playback locks. Rebind report exports once, not on every frame.
+        playbackBoundExportResult=state.run.result;
+        STReports.bindChartExports(state.run.result,state.activeCase,activePersistentSimulation(),state.run.roundIndex+1);
+      }
       var progress=document.getElementById('playback-progress'),effective=document.getElementById('run-effective-progress');
       if(effective){
         var result=state.run.result,stop=result?.effectiveRuntimeStop,frame=result?.samples?.[state.run.sampleIndex];

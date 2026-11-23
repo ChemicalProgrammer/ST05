@@ -144,11 +144,13 @@
         </div>
         </div>
 
-        <details class="raw-viewer">
-          <summary class="json-section-heading"><span><?= __ST_TEXT__('json.title') ?></span><span class="button-row"><button id="edit-setup-json" class="secondary icon-button" type="button" data-icon="edit" aria-label="Edit JSON" title="Edit JSON"></button><button id="import-setup-json" class="secondary icon-button" type="button" data-icon="download" aria-label="Import JSON" title="Import JSON"></button><button id="export-setup-json" class="secondary icon-button" type="button" data-icon="upload" aria-label="Export JSON" title="Export JSON"></button></span></summary>
-          <p class="chart-note"><?= __ST_TEXT__('exports.setup_note') ?></p>
-          <textarea id="case-json-preview" readonly spellcheck="false"></textarea>
-        </details>
+        <section id="simulation-json-section" class="fold-card" aria-labelledby="simulation-json-title">
+          <div class="fold-heading">
+            <div class="subsection-heading-copy"><h3 id="simulation-json-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="false" aria-controls="simulation-json-content"><?= __ST_TEXT__('json.title') ?></button></h3><p class="subsection-description"><?= __ST_TEXT__('json.description') ?></p></div>
+            <div class="fold-tools button-row"><button id="edit-setup-json" class="secondary icon-button" type="button" data-icon="edit" aria-label="Edit JSON" title="Edit JSON"></button><button id="import-setup-json" class="secondary icon-button" type="button" data-icon="download" aria-label="Import JSON" title="Import JSON"></button><button id="export-setup-json" class="secondary icon-button" type="button" data-icon="upload" aria-label="Export JSON" title="Export JSON"></button></div>
+          </div>
+          <div id="simulation-json-content" class="fold-content" hidden inert><textarea id="case-json-preview" readonly spellcheck="false" aria-label="<?= __ST_TEXT__('json.draft') ?>"></textarea></div>
+        </section>
       </section>
 
       <section id="products-panel" class="card hidden" aria-label="Formats"><div id="products-workspace"></div></section>
@@ -256,7 +258,7 @@
     <input id="run-calendar-enabled" type="checkbox"><span>Include plant calendar</span>
   </label>
 </div>
-<p id="run-effective-progress" class="chart-note" hidden></p></div></section>
+<p id="run-effective-progress" class="chart-note" role="status" aria-live="polite" hidden></p></div></section>
 
 <!-- Los parámetros necesarios para el motor siguen presentes sin subsección visual. -->
         <div id="run-internal-parameters" hidden aria-hidden="true">
@@ -599,6 +601,7 @@
     <?!= include_('Icons'); ?>
     <?!= include_('Motion'); ?>
     <?!= include_('Subsection'); ?>
+    <?!= include_('ContextMenus'); ?>
     <?!= include_('Dialogs'); ?>
     <?!= include_('Autosave'); ?>
     <?!= include_('WhatIf'); ?>
@@ -639,13 +642,11 @@
     <?!= include_('SheetImportMerge'); ?>
     <?!= include_('SheetImportCorrections'); ?>
     <?!= include_('SheetImport'); ?>
+    <input id="configuration-file" type="file" accept=".json,application/json" hidden>
     <dialog id="configuration-dialog" aria-labelledby="configuration-title">
       <header class="dialog-heading"><h2 id="configuration-title"><?= __ST_TEXT__('json.title') ?></h2><button id="configuration-close" class="ghost icon-button" type="button" data-icon="x" aria-label="<?= __ST_TEXT__('inspector.close') ?>"></button></header>
       <div class="dialog-body">
-        <p class="chart-note"><?= __ST_TEXT__('json.note') ?></p>
-        <div class="configuration-file-row"><button id="configuration-import" class="secondary" type="button" data-icon="download"><?= __ST_TEXT__('json.import') ?></button><span id="configuration-filename" role="status"></span></div>
-        <input id="configuration-file" type="file" accept=".json,application/json" hidden>
-        <p class="chart-note"><?= __ST_TEXT__('json.file') ?></p>
+        <p id="configuration-filename" role="status" hidden></p>
         <label for="configuration-draft"><?= __ST_TEXT__('json.draft') ?></label>
         <textarea id="configuration-draft" spellcheck="false"></textarea>
         <pre id="configuration-error" data-error-notice="message" data-error-title="Configuration error" role="alert"></pre>

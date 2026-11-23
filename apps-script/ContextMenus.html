@@ -1,0 +1,73 @@
+<script>
+/* Shared dismissal for action menus, including menus created after startup.
+   Native details subsections keep their own disclosure behavior. */
+(function(){
+  'use strict';
+  if(window.STContextMenus)return;
+  const selector='details.export-menu,details.import-menu,details.product-add-menu,details[data-context-menu]';
+  function isMenu(node){
+    return Boolean(node?.matches?.(selector)&&!node.matches('.fold-card,.st-subsection'));
+  }
+  function element(target){return target?.nodeType===1?target:target?.parentElement;}
+  function trigger(menu){return [...menu.children].find(child=>child.tagName==='SUMMARY');}
+  function menus(){return [...document.querySelectorAll(selector)].filter(isMenu);}
+  function sync(menu){trigger(menu)?.setAttribute('aria-expanded',String(menu.open));}
+  function close(menu,restoreFocus){
+    if(!menu.open)return;
+    menu.open=false;sync(menu);
+    if(restoreFocus)trigger(menu)?.focus({preventScroll:true});
+  }
+  function closeOthers(keep){menus().forEach(menu=>{if(menu!==keep)close(menu,false);});}
+  function outside(event){
+    const target=element(event.target);
+    if(!target)return;
+    menus().forEach(menu=>{if(menu.open&&!menu.contains(target))close(menu,false);});
+  }
+  // Pointer capture also works when a clicked control stops bubbling. The click
+  // listener covers keyboard activation and programmatic button.click(). Neither
+  // listener cancels the action or takes focus from the clicked control.
+  document.addEventListener('pointerdown',outside,true);
+  document.addEventListener('click',function(event){
+    outside(event);
+    const target=element(event.target),menu=target?.closest(selector);
+    if(isMenu(menu)&&!menu.open&&trigger(menu)?.contains(target))closeOthers(menu);
+  },true);
+  document.addEventListener('keydown',function(event){
+    if(event.key!=='Escape'||event.defaultPrevented||event.isComposing)return;
+    const target=element(event.target);
+    const dialog=target?.closest('dialog[open]')||document.activeElement?.closest('dialog[open]');
+    // A menu behind a modal must not consume the dialog's Escape key. A menu
+    // inside that dialog closes first; a subsequent Escape can close the dialog.
+    const open=menus().filter(menu=>menu.open&&menu.closest('dialog[open]')===(dialog||null));
+    if(!open.length)return;
+    const owner=target?.closest(selector),menu=open.includes(owner)?owner:open[open.length-1];
+    event.preventDefault();event.stopPropagation();
+    open.forEach(other=>{if(other!==menu)close(other,false);});
+    close(menu,true);
+  },true);
+  // Observe only the open attribute, not the frequently changing simulation
+  // content. When scripts open several menus in one turn, the last opened wins.
+  const observer=new MutationObserver(records=>{
+    let opened=null;
+    records.forEach(record=>{
+      const menu=record.target;
+      if(!isMenu(menu))return;
+      sync(menu);if(menu.open)opened=menu;
+    });
+    if(opened)closeOthers(opened);
+  });
+  observer.observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['open']});
+  document.addEventListener('toggle',function(event){
+    const menu=event.target;
+    if(!isMenu(menu))return;
+    sync(menu);if(menu.open)closeOthers(menu);
+  },true);
+  function init(){
+    const all=menus();all.forEach(sync);
+    const open=all.filter(menu=>menu.open);if(open.length)closeOthers(open[open.length-1]);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
+  else init();
+  window.STContextMenus=Object.freeze({closeAll:()=>closeOthers(null)});
+})();
+</script>

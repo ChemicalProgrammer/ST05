@@ -11,25 +11,23 @@ html[data-ui-mode=basic] .app-shell.case-open.assistant-open { padding-right:0; 
 #basic-section-row > .header-case-actions { flex-shrink:0; margin-left:auto; }
 #basic-navigation [aria-current=page] { background:var(--selected); color:var(--selected-text); }
 #basic-case-actions { display:flex; align-items:center; }
-html[data-ui-mode=basic] .chart-note,
+/* Explanatory prose follows one rule in Basic and Advance. Subsection copy,
+   live status and actionable errors remain part of their controls. */
+html[data-ui-mode] :is(
+  .chart-note,.eyebrow,.auth-note,.parameter-help,.format-zone-preview,
+  .section-heading p,.editor-subheading p,.format-zone-heading p,
+  .zone-caption,.zone-assumptions,.zone-audit-goals,
+  .equipment-speed-chart-heading p,.simulation-analysis-heading p,
+  .scenario-preview-context,
+  #batch-dialog .dialog-body > p:first-child,
+  #sheet-import-dialog .dialog-body > p:first-child,
+  .settings-section > p,#editor-meta,#run-case-meta
+):not(:is(.subsection-description,.subsection-playback-meta,
+  .gemini-ai-policy-note,.format-guidance,[role=status],[role=alert],
+  [aria-live],[data-error-notice],.error)) { display:none!important; }
 html[data-ui-mode=basic] .notice,
-html[data-ui-mode=basic] .eyebrow,
-html[data-ui-mode=basic] .auth-note,
-html[data-ui-mode=basic] .section-heading p,
-html[data-ui-mode=basic] .editor-subheading p,
-html[data-ui-mode=basic] .format-zone-heading p,
-html[data-ui-mode=basic] .format-zone-preview,
-html[data-ui-mode=basic] .zone-caption,
-html[data-ui-mode=basic] .zone-assumptions,
-html[data-ui-mode=basic] .zone-audit-goals,
-html[data-ui-mode=basic] #batch-dialog .dialog-body > p:first-child,
-html[data-ui-mode=basic] #sheet-import-dialog .dialog-body > p:first-child,
-html[data-ui-mode=basic] .settings-section > p:not(.gemini-ai-policy-note):not(.format-guidance),
-html[data-ui-mode=basic] .parameter-help,
-html[data-ui-mode=basic] #editor-meta,
-html[data-ui-mode=basic] #run-case-meta,
 html[data-ui-mode=basic] #status:not(.error),
-html[data-equipment-layout=split] .equipment-filters { display:none !important; }
+html[data-equipment-layout=split] .equipment-filters { display:none!important; }
 html[data-equipment-layout=split] #basic-conveyor-layout { display:block; }
 html[data-equipment-layout=split] #basic-conveyor-panel { display:none; }
 html[data-equipment-layout=split] .basic-machine { cursor:default; padding:var(--space-4); }
@@ -43,8 +41,6 @@ html[data-equipment-layout=split] #basic-conveyor-panel h3 { margin:0 0 var(--sp
 html[data-ui-mode=basic][data-basic-view=vgraph] #results-body > :not(#line-performance),
 html[data-ui-mode=basic][data-basic-view=vgraph] #line-performance > :not(#vgraph-profile) { display:none !important; }
 html[data-ui-mode=basic][data-basic-view=vgraph] #line-performance { margin-top:0; border-top:0; }
-html[data-ui-mode=basic] .equipment-speed-chart-heading p,
-html[data-ui-mode=basic] .simulation-analysis-heading p { display:none; }
 html[data-equipment-layout=split][data-basic-view=conveyors] { scrollbar-gutter:stable; }
 html[data-equipment-layout=split] #equipment-list .equipment-header .button-row { flex-wrap:nowrap; gap:var(--space-1); }
 html[data-equipment-layout=split] #equipment-list .equipment-header .icon-button { width:var(--size-28); height:var(--size-28); min-height:var(--size-28); padding:var(--space-1); }
@@ -169,8 +165,7 @@ html[data-equipment-layout=split] .basic-machine .equipment-header { border-bott
 html[data-equipment-layout=split] .basic-machine .equipment-header strong { color:var(--accent); }
 html[data-ui-mode=basic] #run-config,
 html[data-ui-mode=basic] .live-equipment-controls,
-html[data-ui-mode=basic] .live-equipment-columns > :last-child,
-html[data-ui-mode=basic] .live-controls-help { display:none !important; }
+html[data-ui-mode=basic] .live-equipment-columns > :last-child { display:none !important; }
 html[data-ui-mode=basic] .live-equipment-columns,
 html[data-ui-mode=basic] .live-equipment-card__row { grid-template-columns:minmax(0,1.15fr) minmax(0,.92fr) minmax(0,.65fr) minmax(0,2fr); }
 html[data-ui-mode=basic] .live-equipment-columns > :nth-child(4) { display:none; }
@@ -193,9 +188,7 @@ html[data-ui-mode=basic][data-basic-view=results] #results-table,
 html[data-ui-mode=basic][data-basic-view=results] #results-reference,
 html[data-ui-mode=basic][data-basic-view=results] #results-history-group { display:none !important; }
 html[data-ui-mode=basic] .scenario-change > details,
-html[data-ui-mode=basic] .scenario-change > .chart-note,
-html[data-ui-mode=basic] .analysis-recommendation > .analysis-checks,
-html[data-ui-mode=basic] .analysis-recommendation > .chart-note { display:none; }
+html[data-ui-mode=basic] .analysis-recommendation > .analysis-checks { display:none; }
 html[data-equipment-layout=split] .basic-conveyor-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap; margin-bottom:var(--space-3); }
 html[data-equipment-layout=split] .basic-conveyor-heading h3 { margin:0 !important; flex:1; min-width:120px; }
 html[data-equipment-layout=split] .basic-conveyor-heading .basic-conveyor-tabs { margin:0; flex-shrink:0; }

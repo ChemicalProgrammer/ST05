@@ -157,9 +157,9 @@ test('Equipment-performance status badge is right aligned for machines and conve
   assert.doesNotMatch(markup,/heading\.append\(card\.querySelector\('\.live-state'\)\)/);
   assert.match(css,/\.numeric-equipment-header > \.live-state \{[\s\S]*?grid-column:2;grid-row:1;justify-self:end/);
   assert.match(css,/\.numeric-equipment-header-details \{grid-column:1;grid-row:1/);
-  assert.match(playback,/overviewSide\.append\(visualHeader,controlDock,chartAside\)/);
-  assert.doesNotMatch(playback,/visualHeader\.append\(controlDock\)/);
-  assert.match(css,/\.numeric-equipment-overview-side > \.numeric-equipment-control-dock \{[\s\S]*?flex-flow:row wrap!important/);
+  assert.match(playback,/overviewSide\.append\(visualHeader,chartAside\)/);
+  assert.match(playback,/visualHeader\.append\(controlDock\)/);
+  assert.match(css,/\.numeric-equipment-header > \.numeric-equipment-control-dock \{[\s\S]*?flex-flow:row wrap!important/);
   assert.match(css,/#results-body > #results-history-group \{[\s\S]*?margin-block-start:var\(--subsection-gap\)!important/);
 });
 

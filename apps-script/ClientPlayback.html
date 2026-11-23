@@ -914,7 +914,7 @@
       card.className = 'live-equipment-card';
       card.setAttribute('data-equipment-id', equipmentId);
       card.setAttribute('role', 'listitem');
-      card.innerHTML = ("<div class=\"live-equipment-card__row\"><div class=\"live-equipment-identity live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.equipment') + "\"><strong></strong><span class=\"live-command\"></span></div><div class=\"live-equipment-operation live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.state_rate') + "\"><span class=\"live-state\"></span><b class=\"live-rate\"></b><span class=\"live-nominal-rate\"></span></div><div class=\"live-equipment-flow live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.units_oee') + "\"><span class=\"live-flow-label\"></span><b class=\"live-processed\"></b><span class=\"live-oee-label\" title=\"" + __ST_HTML_TEXT__('client.oee_availability_performance_quality_quality_is_assumed_100_until_the_model') + "\">" + __ST_HTML_TEXT__('client.oee') + "</span><b class=\"live-oee\"></b></div><div class=\"live-equipment-stats live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.time_losses') + "\"><div><span>" + __ST_HTML_TEXT__('client.starved') + "</span><span class=\"live-starved\"></span></div><div><span>" + __ST_HTML_TEXT__('client.blocked_2') + "</span><span class=\"live-blocked\"></span></div><div><span>" + __ST_HTML_TEXT__('client.waiting_prime') + "</span><span class=\"live-waiting-prime\"></span></div><div><span>" + __ST_HTML_TEXT__('client.back_up_stop') + "</span><span class=\"live-backup-stop\"></span></div><div><span>" + __ST_HTML_TEXT__('client.failure_2') + "</span><span class=\"live-failure\"></span></div><div><span>" + __ST_HTML_TEXT__('client.emergency') + "</span><span class=\"live-emergency\"></span></div></div><div class=\"live-speed-cell live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.speed_trend') + "\"><div class=\"equipment-speed-sparkline-heading\"><span>" + __ST_HTML_TEXT__('client.actual_last_60_s') + "</span><b class=\"live-sparkline-nominal-rate\"></b></div><canvas class=\"equipment-speed-sparkline\" height=\"56\" aria-label=\"" + __ST_HTML_TEXT__('client.rolling_actual_speed_chart') + "\"></canvas></div><div class=\"live-equipment-controls live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.scenario_controls') + "\"><button class=\"secondary live-control-run\" type=\"button\">" + __ST_HTML_TEXT__('client.run_resume') + "</button><button class=\"live-control-pause\" type=\"button\">" + __ST_HTML_TEXT__('client.pause') + "</button><button class=\"live-control-stop\" type=\"button\">" + __ST_HTML_TEXT__('client.planned_stop') + "</button><button class=\"live-control-emergency\" type=\"button\">" + __ST_HTML_TEXT__('client.emergency_stop') + "</button><button class=\"secondary live-control-reset\" type=\"button\">" + __ST_HTML_TEXT__('client.reset_run') + "</button></div></div><div class=\"live-equipment-zone\"></div>");
+      card.innerHTML = ("<div class=\"live-equipment-card__row\"><div class=\"live-equipment-identity live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.equipment') + "\"><strong></strong><span class=\"live-command\"></span></div><div class=\"live-equipment-operation live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.state_rate') + "\"><span class=\"live-state st-status-pill\"></span><b class=\"live-rate\"></b><span class=\"live-nominal-rate\"></span></div><div class=\"live-equipment-flow live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.units_oee') + "\"><span class=\"live-flow-label\"></span><b class=\"live-processed\"></b><span class=\"live-oee-label\" title=\"" + __ST_HTML_TEXT__('client.oee_availability_performance_quality_quality_is_assumed_100_until_the_model') + "\">" + __ST_HTML_TEXT__('client.oee') + "</span><b class=\"live-oee\"></b></div><div class=\"live-equipment-stats live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.time_losses') + "\"><div><span>" + __ST_HTML_TEXT__('client.starved') + "</span><span class=\"live-starved\"></span></div><div><span>" + __ST_HTML_TEXT__('client.blocked_2') + "</span><span class=\"live-blocked\"></span></div><div><span>" + __ST_HTML_TEXT__('client.waiting_prime') + "</span><span class=\"live-waiting-prime\"></span></div><div><span>" + __ST_HTML_TEXT__('client.back_up_stop') + "</span><span class=\"live-backup-stop\"></span></div><div><span>" + __ST_HTML_TEXT__('client.failure_2') + "</span><span class=\"live-failure\"></span></div><div><span>" + __ST_HTML_TEXT__('client.emergency') + "</span><span class=\"live-emergency\"></span></div></div><div class=\"live-speed-cell live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.speed_trend') + "\"><div class=\"equipment-speed-sparkline-heading\"><span>" + __ST_HTML_TEXT__('client.actual_last_60_s') + "</span><b class=\"live-sparkline-nominal-rate\"></b></div><canvas class=\"equipment-speed-sparkline\" height=\"56\" aria-label=\"" + __ST_HTML_TEXT__('client.rolling_actual_speed_chart') + "\"></canvas></div><div class=\"live-equipment-controls live-equipment-cell\" data-label=\"" + __ST_HTML_TEXT__('client.scenario_controls') + "\"><button class=\"secondary live-control-run\" type=\"button\">" + __ST_HTML_TEXT__('client.run_resume') + "</button><button class=\"live-control-pause\" type=\"button\">" + __ST_HTML_TEXT__('client.pause') + "</button><button class=\"live-control-stop\" type=\"button\">" + __ST_HTML_TEXT__('client.planned_stop') + "</button><button class=\"live-control-emergency\" type=\"button\">" + __ST_HTML_TEXT__('client.emergency_stop') + "</button><button class=\"secondary live-control-reset\" type=\"button\">" + __ST_HTML_TEXT__('client.reset_run') + "</button></div></div><div class=\"live-equipment-zone\"></div>");
       var efficiency=document.createElement('div');
       efficiency.className='live-equipment-efficiency';
       efficiency.hidden=true;
@@ -954,7 +954,7 @@
       geometryHeader.innerHTML='<strong>Conveyor Geometry</strong>';
       var geometryRows=document.createElement('div');geometryRows.className='live-equipment-2d-rows';
       var geometryVerdict=document.createElement('button');
-      geometryVerdict.type='button';geometryVerdict.className='live-equipment-geometry-verdict';
+      geometryVerdict.type='button';geometryVerdict.className='live-equipment-geometry-verdict st-status-pill';
       geometryVerdict.setAttribute('aria-haspopup','dialog');
       geometryVerdict.setAttribute('aria-controls','conveyor-analysis-dialog');
       geometryVerdict.title='Open conveyor analysis';
@@ -1014,19 +1014,19 @@
       var chartHeading=document.createElement('strong');chartHeading.className='numeric-equipment-chart-title';
       chartHeading.textContent='Speed trend';chartAside.append(chartHeading);
       chartAside.append(card.querySelector('.live-speed-cell'));
-      // Barra de controles independiente: el tamaño/texto de la etiqueta
-      // de estado no puede desplazar los botones al cambiar de estado.
-      // La barra flex se adapta al ancho de su tarjeta, sin matriz fija 2×N.
+      // Los controles comparten el recuadro de identidad, en una fila propia
+      // a todo ancho. El estado nunca comparte su columna con los botones.
       var controlDock=card.querySelector('.live-equipment-controls');
       controlDock.classList.add('numeric-equipment-control-dock');
+      visualHeader.append(controlDock);
       // Los contadores originales siguen en la fila heredada oculta; States
-      // es su origen visible. Los botones funcionan fuera del encabezado.
+      // es su origen visible.
       card.querySelector('.live-equipment-card__row').append(card.querySelector('.live-equipment-stats'));
       // Left third: identity, state, OEE, chart and manual controls.
       // Right two thirds: Overview, States, and Efficiency / Geometry.
       var overviewSide=document.createElement('aside');
       overviewSide.className='numeric-equipment-overview-side';
-      overviewSide.append(visualHeader,controlDock,chartAside);
+      overviewSide.append(visualHeader,chartAside);
       layout.append(overviewSide,detailGrid);
       card.querySelector('.live-equipment-card__row').before(layout);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');
@@ -1385,7 +1385,7 @@
       badge.textContent=status.replace(/_/g,' ');
       // Preserve numeric-conveyor-verdict on every frame. Removing it used to
       // reactivate the legacy absolute badge positioning and make it disappear.
-      badge.className='live-equipment-geometry-verdict numeric-conveyor-verdict '
+      badge.className='live-equipment-geometry-verdict numeric-conveyor-verdict st-status-pill '
         +(status==='FAIL'?'is-fail':status==='PASS'?'is-pass':status==='AT LIMIT'?'is-limit':'');
       badge.setAttribute('aria-label','Open conveyor analysis · '+status.replace(/_/g,' '));
       badge.title='Open conveyor analysis · '+status.replace(/_/g,' ');

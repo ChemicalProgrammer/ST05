@@ -43,7 +43,8 @@ const matchingCache=new WeakMap();
 function value(element,property,width=1440){
   let cache=matchingCache.get(element);
   if(!cache){cache=new Map();matchingCache.set(element,cache);}
-  const key=[width,document.documentElement.dataset.uiMode,document.documentElement.dataset.visualStyle].join(':');
+  const key=[width,document.documentElement.dataset.uiMode,document.documentElement.dataset.visualStyle,
+    document.documentElement.dataset.headerView,document.documentElement.dataset.basicView].join(':');
   if(!cache.has(key))cache.set(key,rules.map((rule,order)=>({...rule,order})).filter(rule=>{
     if(!applies(rule,width))return false;
     try{return element.matches(rule.selector);}catch{return false;}
@@ -231,4 +232,50 @@ test('Registro toolbar retains one horizontal row on desktop',()=>{
     assert.equal(value(bar.querySelector('select'),'margin-inline-start',width),'0');
     assert.equal(value(bar,'grid-row',width),'1');
   }
+});
+
+test('the first visible Equipment subsection does not inherit spacing from CSS-hidden Basic options',()=>{
+  const root=document.documentElement,equipment=document.getElementById('equipment-section');
+  const saved=['data-ui-mode','data-header-view','data-basic-view'].map(name=>[name,root.getAttribute(name)]);
+  let options=document.getElementById('basic-run-options'),created=false;
+  if(!options){
+    options=document.createElement('section');options.id='basic-run-options';options.className='fold-card';
+    equipment.before(options);created=true;
+  }
+  try{
+    for(const [mode,view,expected] of [['advance','equipment','0'],['advance','conveyors','0'],
+      ['basic','conveyors','0'],['basic','equipment','var(--subsection-gap)']]){
+      root.dataset.uiMode=mode;root.dataset.headerView=view;root.dataset.basicView=view;
+      for(const width of [360,760,1440])
+        assert.equal(value(equipment,'margin-block-start',width),expected,mode+'/'+view+'/'+width);
+    }
+  }finally{
+    if(created)options.remove();
+    for(const [name,original] of saved)if(original===null)root.removeAttribute(name);else root.setAttribute(name,original);
+  }
+});
+
+test('numeric status and both conveyor verdicts use the same shared pill geometry',()=>{
+  const card=document.createElement('article');card.className='live-equipment-card state-running';
+  card.innerHTML='<header class="numeric-equipment-header"><span class="live-state st-status-pill">Running</span>'
+    +'<button class="live-equipment-geometry-verdict numeric-conveyor-verdict st-status-pill is-pass">PASS</button></header>';
+  document.body.append(card);
+  const verdict=document.createElement('button');verdict.className='simulation2d-analysis-action simulation2d-verdict-pass st-status-pill';
+  document.getElementById('simulation2d-panel').append(verdict);
+  try{
+    const pills=[card.querySelector('.live-state'),card.querySelector('.numeric-conveyor-verdict'),verdict];
+    for(const pill of pills)for(const width of [360,1440]){
+      assert.equal(value(pill,'height',width),'var(--status-pill-height)');
+      assert.equal(value(pill,'font-size',width),'var(--status-pill-font-size)');
+      assert.equal(value(pill,'font-weight',width),'var(--status-pill-font-weight)');
+      assert.equal(value(pill,'font-family',width),'var(--status-pill-font-family)');
+      assert.equal(value(pill,'padding',width),'0 var(--status-pill-padding-x)');
+      assert.equal(value(pill,'gap',width),'var(--status-pill-gap)');
+      assert.equal(value(pill,'box-shadow',width),'none');
+    }
+    for(const pill of pills.slice(1)){
+      assert.equal(value(pill,'background'),'var(--success-soft)');
+      assert.equal(value(pill,'color'),'var(--success)');
+    }
+  }finally{card.remove();verdict.remove();}
 });

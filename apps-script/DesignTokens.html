@@ -19,6 +19,11 @@
   --border-width: 1px; --focus-width: 2px;
   --sidebar-width: 208px; --sidebar-collapsed: 60px; --header-height: 56px;
   --control-height: 34px; --icon-size: 16px; --dialog-width: 660px;
+  /* One status/evaluation pill in DOM cards and the 2D canvas. Values are
+     physical pixels so canvas zoom never changes the visible badge size. */
+  --status-pill-font-size: 11px; --status-pill-height: 20px;
+  --status-pill-padding-x: 7px; --status-pill-gap: 4px; --status-pill-dot-size: 4px;
+  --status-pill-font-weight: var(--weight-medium); --status-pill-font-family: var(--font-ui);
   /* Read-only time outputs reserve a compact slot for the longest abbreviation.
      Editable value/unit controls fit their selected unit intrinsically. */
   --time-unit-gap: 2px; --time-unit-slot: 3.25ch;

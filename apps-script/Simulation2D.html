@@ -24,8 +24,6 @@
 .simulation2d-machine-actions .icon-button { width:26px; height:22px; min-width:0; min-height:0; padding:3px; }
 #simulation2d-panel .icon-button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; opacity:1; }
 #simulation2d-panel .icon-button[aria-pressed="true"] svg { color:#fff; stroke:currentColor; }
-.simulation2d-analysis-action { position:absolute; pointer-events:auto; transform:translateY(-50%); transform-origin:left center; white-space:nowrap; background:none; color:var(--ink); border:0; border-radius:0; padding:0; min-width:0; min-height:0; line-height:1; text-decoration:none; cursor:pointer; }
-.simulation2d-analysis-action:hover { background:none; }
 .simulation2d-analysis-action[hidden] { display:none; }
 #simulation2d-events-panel[hidden] { display:none; }
 #simulation2d-event-editor > .fold-card { margin:0; }
@@ -95,19 +93,13 @@
 .simulation2d-viewport-zoom:hover,.simulation2d-viewport-zoom:focus-within { opacity:1; }
 .simulation2d-viewport-zoom input[type=range] { width:90px; min-width:40px; max-width:100%; margin:0; padding:0; accent-color:var(--accent); }
 .simulation2d-viewport-zoom output { min-width:5ch; margin:0; padding:0; text-align:right; color:var(--muted); font-size:var(--font-secondary); font-variant-numeric:tabular-nums; }
-/* Veredicto del conveyor: misma etiqueta suave, punto y tipografía que
-   .live-state en simulación numérica. No debe escalar con el zoom del canvas. */
+/* Evaluation uses the shared st-status-pill; only canvas positioning lives here. */
 .simulation2d-analysis-action {
-  display:inline-flex;align-items:center;justify-content:center;gap:var(--space-1);
-  position:absolute;z-index:2;pointer-events:auto;box-sizing:border-box;
-  min-width:0;min-height:16px;height:16px;max-width:72px;
-  padding:1px 5px;border:0;border-radius:var(--radius-pill);
-  font-size:10px;font-weight:var(--weight-medium);
-  overflow:hidden;text-overflow:ellipsis;
-  line-height:1.3;white-space:nowrap;
+  position:absolute;z-index:2;pointer-events:auto;max-width:72px;
+  transform:translateY(-50%);transform-origin:left center;
+  overflow:hidden;text-overflow:ellipsis;text-decoration:none;
   color:var(--muted);background:var(--stopped-soft);cursor:pointer;
 }
-.simulation2d-analysis-action::before {content:'●';font-size:.7em;flex:0 0 auto;}
 .simulation2d-analysis-action.simulation2d-verdict-pass {background:var(--success-soft);color:var(--success);}
 .simulation2d-analysis-action.simulation2d-verdict-fail {background:var(--failure-soft);color:var(--danger);}
 .simulation2d-analysis-action.simulation2d-verdict-at-limit {background:var(--starved-soft);color:var(--warning);}
@@ -485,7 +477,7 @@ window.STSimulation2D=(function(){
     for(const item of definitions){
       if(item.kind==='belt'){
         const button=document.createElement('button');
-        button.type='button';button.className='simulation2d-analysis-action';
+        button.type='button';button.className='simulation2d-analysis-action st-status-pill';
         var verdict=conveyorDimensions.get(item.id)?.status||'NOT EVALUATED';
         button.textContent=verdict;
         button.classList.add('simulation2d-verdict-'+verdict.toLowerCase().replace(/[^a-z]+/g,'-'));
@@ -940,9 +932,10 @@ window.STSimulation2D=(function(){
   function drawStatusPill(context,state,lamp,colors,x,y,options={}){
     const label=localize2D(state||'Stopped').toLocaleUpperCase();
     const palette=statusPillColors(lamp,colors);
-    const font=options.font||'500 11px system-ui';
-    const height=options.height||20,paddingX=options.paddingX??7;
-    const radius=options.dotRadius??2,gap=options.dotGap??5;
+    const metrics=colors.badgeMetrics||{font:'500 11px system-ui',height:20,paddingX:7,dotRadius:2,dotGap:4};
+    const font=options.font||metrics.font;
+    const height=options.height||metrics.height,paddingX=options.paddingX??metrics.paddingX;
+    const radius=options.dotRadius??metrics.dotRadius,gap=options.dotGap??metrics.dotGap;
     context.save();
     context.font=font;
     const calculated=context.measureText(label).width+2*paddingX+2*radius+gap;
@@ -958,30 +951,18 @@ window.STSimulation2D=(function(){
       Math.max(1,width-(2*paddingX+2*radius+gap)));
     context.restore();
   }
-  // La misma geometría visual de .live-state en tarjetas numéricas.
-  // Las coordenadas siguen el canvas, pero el badge mantiene 11px/19px
-  // en pantalla y no crece al ampliar el diagrama.
+  // Same metrics as st-status-pill, at a fixed screen size at every canvas zoom.
   function drawScreenStatusPill(context,state,lamp,colors,x,y,zoomFactor,maxWidth,align='center'){
-    const factor=Math.max(.01,zoomFactor);
+    const factor=Math.max(.001,zoomFactor);
     context.save();
     context.translate(x,y);context.scale(1/factor,1/factor);
     drawStatusPill(context,state,lamp,colors,0,0,{
-      font:'500 11px system-ui',height:19,
-      paddingX:7,dotRadius:2,dotGap:4,
-      maxWidth:Math.max(15,Math.min(110,maxWidth)),align
+      maxWidth:Math.max(15,maxWidth||110),align
     });
     context.restore();
   }
-  // Los estados sobre máquinas/bandas usan tamaño fijo de pantalla, nunca
-  // escalado por camera.scale; así no aparecen cápsulas gigantes al ampliar.
   function drawSignal(context,x,y,signal,colors,zoomFactor){
-    const factor=Math.max(.001,zoomFactor);
-    context.save();
-    context.translate(x,y);
-    context.scale(1/factor,1/factor);
-    drawStatusPill(context,signal.state,signal.lamp,colors,0,0,
-      {font:'500 11px system-ui',height:20,paddingX:8,dotRadius:2,dotGap:5,maxWidth:150});
-    context.restore();
+    drawScreenStatusPill(context,signal.state,signal.lamp,colors,x,y,zoomFactor,150);
   }
   // Pictograma ligero sobre canvas: máquinas y bandas tienen símbolos distintos.
   // El canvas reutiliza el path del mismo STIcons.equipment() que las tarjetas
@@ -1570,6 +1551,13 @@ window.STSimulation2D=(function(){
       [token,style.getPropertyValue('--'+token).trim()||fallback]));
     // Idénticos tokens de fondos/textos que las tarjetas numéricas .live-state.
     const color=(token,fallback)=>style.getPropertyValue('--'+token).trim()||fallback;
+    const badgeSize=(name,fallback)=>parseFloat(style.getPropertyValue('--status-pill-'+name))||fallback;
+    colors.badgeMetrics={
+      font:(style.getPropertyValue('--status-pill-font-weight').trim()||'500')+' '+
+        badgeSize('font-size',11)+'px '+(style.getPropertyValue('--status-pill-font-family').trim()||'system-ui'),
+      height:badgeSize('height',20),paddingX:badgeSize('padding-x',7),
+      dotRadius:badgeSize('dot-size',4)/2,dotGap:badgeSize('gap',4)
+    };
     colors.badges={
       running:{background:color('running-soft','#e5f4ec'),foreground:color('success','#23764a')},
       starved:{background:color('starved-soft','#fff1d8'),foreground:color('warning','#916000')},

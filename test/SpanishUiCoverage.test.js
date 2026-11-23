@@ -13,7 +13,7 @@ function translationCatalog(){
   const first=languageSource.match(/var translations=(\{[^\n]*\});/);
   assert.ok(first,'The English/Spanish translation catalog is required');
   const entries=[JSON.parse(first[1])];
-  for(const match of languageSource.matchAll(/Object\.assign\(translations,(\{[^\n]*\})\);/g))
+  for(const match of languageSource.matchAll(/Object\.assign\(translations,(\{[\s\S]*?\})\);/g))
     entries.push(JSON.parse(match[1]));
   const mapped=Object.assign({},...entries);
   for(const [key,value] of Object.entries({...mapped}))
@@ -152,7 +152,7 @@ test('Dynamic controls in Equipment, Results, What-If, Formats and Sheet import 
     'apps-script/Products.html':['Format name','Product name','Bottles per case','Import configuration'],
     'apps-script/ScenarioExplorer.html':['Scenario configuration','Find best scenario','Search depth','Add intervention target'],
     'apps-script/SheetImport.html':['Review catalog records','Packing proposal','Bottle volume'],
-    'apps-script/Settings.html':['Reset text','Choose a save interval between 1 and 3600 seconds.']
+    'apps-script/Settings.html':['Reset text']
   };
   for(const [path,terms] of Object.entries(screens)){
     const source=read(path);

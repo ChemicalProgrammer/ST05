@@ -1,8 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const read=path=>fs.readFileSync(path,'utf8');
+
+test('2D status pills retain shared pixel metrics at every zoom',()=>{
+  const source=read('apps-script/Simulation2D.html');
+  const start=source.indexOf('  function statusPillColors('),end=source.indexOf('  const telemetryIconPaths=',start);
+  const {drawScreenStatusPill,drawSignal}=vm.runInNewContext(source.slice(start,end)
+    +'\n({drawScreenStatusPill,drawSignal})',{localize2D:String});
+  const metrics={font:'500 13px system-ui',height:24,paddingX:8,dotRadius:3,dotGap:5};
+  for(const zoom of [.1,1,6]){
+    let factor=zoom;const stack=[],rectangles=[],dots=[],fonts=[];
+    const context={save(){stack.push(factor);},restore(){factor=stack.pop();},translate(){},scale(x){factor*=x;},
+      beginPath(){},fill(){},measureText(){return {width:40};},
+      roundRect(x,y,width,height){rectangles.push({width:width*factor,height:height*factor});},
+      arc(x,y,radius){dots.push(radius*factor);},fillText(){fonts.push(this.font);}};
+    const colors={badgeMetrics:metrics};
+    drawScreenStatusPill(context,'Running','running',colors,100,80,zoom,110);
+    drawSignal(context,100,80,{state:'Running',lamp:'running'},colors,zoom);
+    assert.equal(rectangles.length,2);
+    for(const box of rectangles){assert.equal(box.height,24);assert.equal(box.width,67);}
+    assert.deepEqual(dots,[3,3]);assert.deepEqual(fonts,[metrics.font,metrics.font]);
+    assert.equal(factor,zoom,'The caller canvas transform is restored');
+  }
+});
 
 test('2D equipment uses numeric-style status pills in the first table and above the machine',()=>{
   const src=read('apps-script/Simulation2D.html');
@@ -14,7 +37,8 @@ test('2D equipment uses numeric-style status pills in the first table and above 
   assert.ok(src.includes('drawScreenStatusPill(context,signal.state,signal.lamp,colors,'));
   assert.ok(src.includes("if(showSignal&&label==='State')"));
   assert.ok(src.includes('drawScreenStatusPill(context,value,signal.lamp,colors,'));
-  assert.ok(src.includes("font:'500 11px system-ui',height:19"));
+  assert.ok(src.includes('colors.badgeMetrics'));
+  assert.ok(src.includes("style.getPropertyValue('--status-pill-'+name)"));
   assert.ok(src.includes('context.scale(1/factor,1/factor)'));
   assert.ok(src.includes('context.scale(1/factor,1/factor)'),'Labels above equipment use constant on-screen size');
   for(const token of ['running-soft','starved-soft','blocked-soft','failure-soft','info-soft','stopped-soft'])
@@ -29,10 +53,12 @@ test('Conveyor geometry title and evaluation keep a compact zoom-independent bad
   assert.ok(!src.includes("analysisButton.style.transform='translate(-100%,-50%) scale("));
   assert.ok(src.includes('tableLeft>=screenWidth||cx<=0'));
   assert.ok(!src.includes('cx-analysisButton.offsetWidth*factor>=screenWidth'));
-  assert.ok(src.includes('.simulation2d-analysis-action::before {content:'+"'●'"));
+  assert.ok(src.includes("button.className='simulation2d-analysis-action st-status-pill'"));
   assert.ok(src.includes('.simulation2d-analysis-action.simulation2d-verdict-fail {background:var(--failure-soft);color:var(--danger);}'));
-  assert.ok(src.includes('font-size:10px'));
-  assert.ok(src.includes('height:16px;max-width:72px'));
+  const ui=read('apps-script/UiStandards.html');
+  assert.ok(ui.includes('font-size:var(--status-pill-font-size)'));
+  assert.ok(ui.includes('height:var(--status-pill-height)'));
+  assert.ok(ui.includes('width:var(--status-pill-dot-size)'));
   assert.ok(src.includes('analysisButton.style.maxWidth=Math.max(28,Math.min(72,tableWidth*.38))'));
   assert.ok(src.includes('window.STIcons.equipment(kind)'));
   assert.ok(src.includes('telemetryIconPaths.set(kind,path)'));

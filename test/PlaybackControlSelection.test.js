@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {JSDOM} from 'jsdom';
+import postcss from 'postcss';
 
 const source=name=>fs.readFileSync(new URL('../apps-script/'+name+'.html',import.meta.url),'utf8');
 function functions(window,name,names){
@@ -18,7 +19,8 @@ function harness(){
   const ids=['run-initial-format','duration-mode','run-duration','run-sample-interval','run-sample-interval-unit',
     'run-seed','run-rounds','run-shift-hours','run-shift-count','add-control-event','open-event-generator','run-playback-rate'];
   const dom=new JSDOM('<div class="playback-toolbar">'+Object.values(actions).map(id=>'<button id="'+id+'"></button>').join('')
-    +'<button id="export-charts"></button></div>'+ids.map(id=>'<input id="'+id+'">').join(''),{runScripts:'outside-only'});
+    +'<button id="export-charts"></button></div>'+ids.map(id=>id==='run-playback-rate'
+      ?'<select id="'+id+'">'+source('PlaybackSpeedOptions')+'</select>':'<input id="'+id+'">').join(''),{runScripts:'outside-only'});
   const w=dom.window,sample={virtualSecond:2,equipment:[]},result={seed:1,durationSeconds:60,samples:[sample],summary:{}};
   const simulation={id:'s1',name:'First',equipment:[],dynamicConfig:{durationSeconds:60},results:{replay:copy(result)}};
   w.state={activeSimulationId:'s1',activeCase:{id:'case',equipment:[],simulations:[simulation]},liveZoneDetails:{},
@@ -34,6 +36,7 @@ function harness(){
     playbackRoundPositions:()=>({}),playbackReplay:()=>null
   });
   w.eval(source('ClientPlayback'));
+  functions(w,'ClientUtils',['restorePlaybackSpeed']);
   functions(w,'ClientSimulation',['runControlsLocked','syncRunControls','captureSimulationView','activatePersistentSimulation']);
   // The production controller returns early on this native playback branch.
   // Physics is covered separately; this checks the actual toolbar behavior.
@@ -98,17 +101,36 @@ test('individual controls retain the clicked action including reset and emergenc
   const h=harness(),{w}=h;
   try{
     const names=['RUN','PAUSE','STOP','EMERGENCY_STOP','RESET_AND_RUN'];
-    const card=w.document.createElement('article');card.className='live-equipment-card';
-    card.innerHTML='<div class="numeric-equipment-control-dock">'+names.map(()=>'<button></button>').join('')+'</div>';
+    Object.assign(w,{
+      __ST_HTML_TEXT__:key=>key,STEquipmentEfficiency:{basis:'',fields:[]},
+      STIcons:{svg:()=>'<svg></svg>'},matchMedia:()=>({matches:true}),requestAnimationFrame:fn=>fn()
+    });
+    const card=w.createLiveEquipmentCard('machine');
+    const dock=card.querySelector('.numeric-equipment-control-dock');
+    assert.equal(dock.parentElement,card.querySelector('.numeric-equipment-header'));
+    assert.ok(dock.parentElement.contains(card.querySelector('.live-state')));
+    assert.ok(dock.parentElement.contains(card.querySelector('.live-oee')));
     w.document.body.append(card);
     const calls=[];w.applyLiveScenarioControl=(id,action)=>calls.push([id,action]);
-    const buttons=[...card.querySelectorAll('button')];
-    buttons.forEach((button,index)=>w.bindLiveEquipmentControl(button,'machine',names[index]));
+    const buttons=[...dock.querySelectorAll('button[data-scenario-action]')];
+    assert.equal(buttons.length,5);
+    const selectedRules=[];
+    postcss.parse(source('UiStandards').replace(/<\/?style>/g,'')).walkRules(rule=>{
+      if(rule.selector.includes('.numeric-equipment-control-dock')&&rule.selector.includes('button[aria-pressed=true]')
+        &&rule.nodes.some(node=>node.prop==='background'&&node.value==='var(--accent)'))selectedRules.push(rule);
+    });
+    assert.ok(selectedRules.length);
     for(let index=0;index<buttons.length;index++){
       buttons[index].click();
       assert.equal(w.state.run.equipmentControlActions.machine,names[index]);
       buttons.forEach((button,i)=>assert.equal(button.getAttribute('aria-pressed'),String(i===index)));
+      assert.ok(selectedRules.some(rule=>buttons[index].matches(rule.selector)),'The selected CSS rule must match the actual production card');
     }
+    card.querySelector('.numeric-card-name-toggle').click();
+    assert.equal(card.dataset.cardCollapsed,'true');
+    assert.equal(dock.parentElement,card.querySelector('.numeric-equipment-header'));
+    buttons.at(-1).disabled=true;
+    assert.ok(selectedRules.some(rule=>buttons.at(-1).matches(rule.selector)),'Disabled active controls retain their selected style');
     buttons[0].disabled=true;buttons[0].click();
     assert.equal(calls.length,5);
     assert.equal(w.state.run.equipmentControlActions.machine,'RESET_AND_RUN');

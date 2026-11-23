@@ -66,6 +66,7 @@ var ST_TEXT_RESOURCES = {
   "json.import":"Import JSON",
   "json.edit":"Edit JSON",
   "json.title":"Active simulation JSON",
+  "json.description":"Review, edit, import, or export the active simulation configuration.",
   "json.note":"Import a configuration export or paste a simulation object with equipment and optional dynamicConfig. Only the active simulation changes. Case identity and other simulations are preserved. Apply clears previous results.",
   "json.apply":"Validate and Apply",
   "json.cancel":"Cancel",

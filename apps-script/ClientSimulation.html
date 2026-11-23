@@ -151,13 +151,13 @@
       }
       syncPlaybackRounds();
       state.isDirty = autosave.pending() || hadUnsavedChanges;
-      document.querySelectorAll('.live-equipment-card').forEach(function(card){card.dataset.losses='closed';card.classList.remove('show-losses');card.querySelector('.loss-toggle').setAttribute('aria-expanded','false');});
+      document.querySelectorAll('#live-equipment .live-equipment-card').forEach(function(card){card.dataset.losses='closed';card.classList.remove('show-losses');card.querySelector('.loss-toggle')?.setAttribute('aria-expanded','false');});
       renderEditor();
       if (state.run.result) {
         renderResultJsonPreview(state.run.result);
         toggle('simulation-results', true);
         renderPlaybackFrame();
-        (view?.lossesOpen||[]).forEach(function(id){var card=Array.from(document.querySelectorAll('.live-equipment-card')).find(function(c){return c.dataset.equipmentId===id;});if(card){card.dataset.losses='open';card.classList.add('show-losses');card.querySelector('.loss-toggle').setAttribute('aria-expanded','true');}});
+        (view?.lossesOpen||[]).forEach(function(id){var card=Array.from(document.querySelectorAll('#live-equipment .live-equipment-card')).find(function(c){return c.dataset.equipmentId===id;});if(card){card.dataset.losses='open';card.classList.add('show-losses');card.querySelector('.loss-toggle')?.setAttribute('aria-expanded','true');}});
       }
       renderSimulationAnalysis();
       shell.sync();
@@ -223,7 +223,7 @@
         [result.samples[Math.max(0,state.run.sampleIndex-1)],sample].forEach(function(frame){if(!replay.samples.some(function(saved){return saved.virtualSecond===frame.virtualSecond;}))replay.samples.push(cloneJson(frame));});
         replay.samples.sort(function(a,b){return a.virtualSecond-b.virtualSecond;});
       }
-      simulation.results.view={virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),playbackAction:state.run.playbackAction,equipmentControlActions:cloneJson(state.run.equipmentControlActions||{}),lossesOpen:Array.from(document.querySelectorAll('.live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;})};
+      simulation.results.view={virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),playbackAction:state.run.playbackAction,equipmentControlActions:cloneJson(state.run.equipmentControlActions||{}),lossesOpen:Array.from(document.querySelectorAll('#live-equipment .live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;})};
     }
     function compactStoredReplays(simulations) {
       (simulations||[]).forEach(function(simulation){

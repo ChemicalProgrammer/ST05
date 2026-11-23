@@ -23,10 +23,11 @@ test('numerical configuration removes the extra section but keeps model inputs',
   assert.ok(web.includes('id="run-internal-parameters" hidden'));
 });
 
-test('numeric control buttons wrap independently of the changing status pill',()=>{
+test('numeric control buttons stay inside the identity frame on an independent full-width row',()=>{
   const playback=read('ClientPlayback.html'),css=read('UiStandards.html');
-  assert.ok(playback.includes('overviewSide.append(visualHeader,controlDock,chartAside)'));
-  assert.ok(!playback.includes('visualHeader.append(controlDock)'));
+  assert.ok(playback.includes('overviewSide.append(visualHeader,chartAside)'));
+  assert.ok(playback.includes('visualHeader.append(controlDock)'));
+  assert.ok(css.includes('grid-column:1 / -1!important;grid-row:3!important;'));
   assert.ok(playback.includes("visualHeader.append(card.querySelector('.live-state'))"));
   assert.ok(css.includes('flex-flow:row wrap!important'));
   assert.ok(css.includes('grid-template-columns:minmax(0,1fr) max-content!important'));
@@ -39,7 +40,7 @@ test('2D machine and conveyor icons share STIcons and verdict follows geometry h
   assert.ok(src.includes('new Path2D(data)'));
   assert.ok(src.includes('telemetryIconPaths.set(kind,path)'));
   assert.ok(src.includes('analysisButton.style.maxWidth=Math.max(28,Math.min(72,tableWidth*.38))'));
-  assert.ok(src.includes('height:16px;max-width:72px'));
+  assert.ok(src.includes("button.className='simulation2d-analysis-action st-status-pill'"));
   assert.ok(!src.includes('#simulation2d-legend'));
   assert.ok(!web.includes('id="simulation2d-legend"'));
   assert.ok(!web.includes('Scroll to zoom at the pointer. Drag or hold the middle mouse button to pan. Use Fit to recenter.</p>'));

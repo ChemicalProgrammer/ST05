@@ -368,14 +368,14 @@ the same Advance prompt sections for both.
   `run-shift-count` remain internal hidden inputs because the simulation
   engine and saved input contracts still depend on them. The informational
   duration and shift-boundary prose has been removed; reporting logic remains.
-- **Numeric equipment cards:** action buttons are a flex-wrapping row beneath
-  the equipment header. They use available width and never share a grid track
+- **Numeric equipment cards:** action buttons are a flex-wrapping row inside
+  the equipment identity header, below its name, state and OEE. They use available width and never share a grid track
   with the changing status badge. Existing commands and enable/disable logic
   are unchanged.
 - **Simulation 2D:** the first telemetry-card glyph is rendered from the same
   cached `STIcons.equipment()` SVG path as numerical cards, via `Path2D`
   when supported. Status pills use shared semantic tokens; the conveyor
-  geometry verdict is a single compact 16px-high control anchored within its
+  geometry verdict is a single compact 20px-high control anchored within its
   header row, without inheriting the zoom scale. The bottom legend and
   navigation instructions have been removed without changing canvas controls.
 - **Results:** explanatory prose under the summary KPIs and rate-loss cards is
@@ -388,3 +388,47 @@ the same Advance prompt sections for both.
   still leave a tooltip/data flag on the comparison container rather than
   inserting a paragraph before the result controls. Scenario validation,
   evidence and guardrails in the underlying engine are retained.
+
+
+### Completion of the final UI requests — 23 November 2026
+
+- **Simulation JSON** uses the same `STSubsection` header, description, toolbar
+  and collapsible body as Equipment. It starts collapsed. Edit/import/export
+  remain in the subsection toolbar, independently of the disclosure button.
+  The editor dialog contains no Import button. Both external import actions
+  open the file picker directly and then open the selected file for review;
+  cancelling the picker does not open an empty dialog. Capture and file reading
+  are bound to the current case/simulation and ignore stale asynchronous results.
+- **Action menus** use the delegated `STContextMenus` controller. Outside
+  pointer/click and Escape close the menu; Escape restores its summary focus.
+  Opening a menu closes other action menus, including dynamically created ones.
+  Subsection disclosures are excluded, and menus behind a modal do not consume
+  that modal's Escape key. `details[data-context-menu]` is the opt-in contract.
+- **Explanatory notes** are omitted consistently in Basic and Advance through
+  the common presentation rule. Subsection descriptions, live status, errors,
+  and existing policy/format guidance keep their respective control roles.
+- **First-section spacing** ignores the Basic-only settings block when it is
+  hidden in Advance or in the Conveyors tab. Visible neighboring subsections
+  retain the shared gap; native and custom toolbars follow the same single-row
+  contract.
+- **Equipment identity controls** occupy a separate full-width row inside the
+  bordered identity header. The row can wrap and stays within that header in
+  collapsed cards. Selection styles belong to the control dock, including a
+  selected disabled command and the emergency state.
+- **Status and conveyor verdict** reuse `.st-status-pill` and `--status-pill-*`
+  metrics. The default height is 20 px, type is 11 px, with 7 px horizontal
+  padding and a 4 px dot/gap. Numerical and 2D verdicts share soft semantic
+  backgrounds. Canvas pills read these tokens and compensate the zoom so
+  their on-screen dimensions stay stable. The component catalog uses the same
+  class instead of a separate badge example.
+- **Case activation** restores and captures loss-panel state only inside
+  `#live-equipment`; the independent component-catalog cards are excluded.
+
+Validation for this completion: 95 focused tests passed, including the JSON
+workflow, delegated menus, CSS visibility, subsection layout, localization and
+playback controls. An independent full-app DOM run passed 16 checks with a
+19-equipment demo, including import/apply/manual save and a short numerical
+run. All 52 generated script blocks, 26 stylesheets and server code parsed.
+A real-browser visual check was unavailable: Chromium is absent and its
+standard download was blocked by the executor. DOM/CSS checks do not claim
+pixel verification or deployment to Apps Script.

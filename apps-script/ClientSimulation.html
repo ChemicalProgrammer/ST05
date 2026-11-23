@@ -444,14 +444,25 @@
       });
       var periodNote=document.createElement('p'),periodWarning=document.createElement('p');periodNote.className='notice event-generator-duration';periodWarning.className='chart-note event-generator-window-warning';periodWarning.setAttribute('role','alert');grid.before(periodNote,periodWarning);
       function periodFeedback(){
-        try{var run=STRunOptions.read(),c=run.durationOptions,fmt=n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:3}),description=c.method==='SHIFTS'?fmt(c.shiftCount)+' shift(s) × '+fmt(c.shiftHours)+' h':c.method==='DATES'?c.start+' → '+c.end+' ('+c.timeZone+')':'Elapsed time';
-          periodNote.textContent='Simulation period: '+description+' = '+fmt(run.durationSeconds/3600)+' h ('+fmt(run.durationSeconds/60)+' min).';
-          var start=eventSeconds(inputs.start.value,inputs.start._eventUnit,inputs.start._eventOrigin,inputs.start._eventZone),end=eventSeconds(inputs.end.value,inputs.end._eventUnit,inputs.end._eventOrigin,inputs.end._eventZone),total=eventSeconds(inputs.total.value,inputs.total._eventUnit),message='';
-          if(end>run.durationSeconds+.000001)message='The event window ends at '+fmt(end/60)+' min, but the simulation lasts '+fmt(run.durationSeconds/60)+' min. Close this dialog and adjust Duration method or shift count in Simulation, or shorten the window.';
-          else if(end<=start)message='Window end must be later than window start.';
-          else if(total>end-start+.000001)message='Total pause time ('+fmt(total/60)+' min) exceeds the event window ('+fmt((end-start)/60)+' min). Increase the window / simulation period or reduce pause time.';
+        var isSpanish=window.STLanguage?.current()==='es';
+        var tr=value=>window.STLanguage?.translate(value)??value;
+        try{
+          var run=STRunOptions.read(),c=run.durationOptions,fmt=n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:3});
+          var description=c.method==='SHIFTS'?fmt(c.shiftCount)+' '+(isSpanish?'turno(s)':'shift(s)')+' × '+fmt(c.shiftHours)+' h':
+            c.method==='DATES'?c.start+' → '+c.end+' ('+c.timeZone+')':tr('Elapsed time');
+          periodNote.textContent=tr('Simulation period:')+' '+description+' = '+fmt(run.durationSeconds/3600)+' h ('+fmt(run.durationSeconds/60)+' min).';
+          var start=eventSeconds(inputs.start.value,inputs.start._eventUnit,inputs.start._eventOrigin,inputs.start._eventZone),
+            end=eventSeconds(inputs.end.value,inputs.end._eventUnit,inputs.end._eventOrigin,inputs.end._eventZone),
+            total=eventSeconds(inputs.total.value,inputs.total._eventUnit),message='';
+          if(end>run.durationSeconds+.000001)message=isSpanish
+            ?'La ventana de eventos termina a los '+fmt(end/60)+' min, pero la simulación dura '+fmt(run.durationSeconds/60)+' min. Cierra este diálogo y ajusta el método de duración o la cantidad de turnos en Simulación, o reduce la ventana.'
+            :'The event window ends at '+fmt(end/60)+' min, but the simulation lasts '+fmt(run.durationSeconds/60)+' min. Close this dialog and adjust Duration method or shift count in Simulation, or shorten the window.';
+          else if(end<=start)message=tr('Window end must be later than window start.');
+          else if(total>end-start+.000001)message=isSpanish
+            ?'El tiempo total de pausas ('+fmt(total/60)+' min) supera la ventana de eventos ('+fmt((end-start)/60)+' min). Amplía la ventana o el periodo de simulación, o reduce el tiempo de pausas.'
+            :'Total pause time ('+fmt(total/60)+' min) exceeds the event window ('+fmt((end-start)/60)+' min). Increase the window / simulation period or reduce pause time.';
           periodWarning.textContent=message;periodWarning.hidden=!message;return message;
-        }catch(error){periodWarning.textContent=error.message;periodWarning.hidden=false;return error.message;}
+        }catch(error){var message=tr(error.message);periodWarning.textContent=message;periodWarning.hidden=false;return message;}
       }
       var equipment=dialog.querySelector('.event-generator-equipment');state.activeCase.equipment.forEach(e=>{var l=document.createElement('label');l.className='checkbox-label';var box=document.createElement('input');box.type='checkbox';box.value=e.id;box.className='event-generator-equipment-choice';l.append(box,document.createTextNode(e.name||e.id));equipment.append(l);});
       var preview=null,apply=dialog.querySelector('.event-generator-apply'),status=dialog.querySelector('.event-generator-status'),table=dialog.querySelector('.event-generator-preview');
@@ -461,7 +472,11 @@
       }catch(error){invalidate();status.textContent='Preview could not be generated: '+(error.message||String(error));}finally{dialog.removeAttribute('aria-busy');finish?.();}};
       apply.onclick=function(){if(!preview||runControlsLocked()||activePersistentSimulation()!==owner||state.activeCase!==ownerCase)return;var group='events-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),name=inputs.name.value.trim();if(!name){inputs.name.reportValidity();return;}
         preview.forEach(e=>{state.run.commands.push({atVirtualSecond:e.start,equipmentId:e.equipmentId,action:'PAUSE',groupId:group,groupLabel:name,generatorSeed:Number(inputs.seed.value)},{atVirtualSecond:e.end,equipmentId:e.equipmentId,action:'RUN',groupId:group,groupLabel:name,generatorSeed:Number(inputs.seed.value)});});state.run.commands.sort((a,b)=>a.atVirtualSecond-b.atVirtualSecond);document.getElementById('run-events-enabled').checked=true;setControlEventsExpanded(true);dialog.close();renderControlEvents();markCaseDirty();syncRunControls();};
-      dialog.querySelector('.event-generator-cancel').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{dialog.remove();focus?.focus();},{once:true});document.body.append(dialog);dialog.showModal();inputs.name.focus();
+      dialog.querySelector('.event-generator-cancel').onclick=()=>dialog.close();
+      var onLanguageChange=function(){if(dialog.open)periodFeedback();};
+      window.addEventListener('st-language-change',onLanguageChange);
+      dialog.addEventListener('close',()=>{window.removeEventListener('st-language-change',onLanguageChange);dialog.remove();focus?.focus();},{once:true});
+      document.body.append(dialog);dialog.showModal();inputs.name.focus();
     }
     var selectedControlEvents=new Set(),controlEventAnchor=null,controlEventSelectionOwner='';
     function allEditableControlEvents(){return (state.run.commands||[]).concat(state.run.plannedStops||[]);}

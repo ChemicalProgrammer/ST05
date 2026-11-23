@@ -19,3 +19,31 @@ test('internal capacity label follows the incoming unit and preserves the saved 
  const data={};assert(w.STEquipmentRoles.readCapacity(fields,data));assert.equal(data.equipment.internalCapacityBottles,24);assert.equal(data.equipment.residenceTimeSeconds,2.5);
  dom.window.close();
 });
+
+
+test('machine occupancy mode selector round-trips positional slots and storage safely',()=>{
+ const dom=new JSDOM('<div class="equipment-grid"></div>'+
+   '<input class="equipment-input-unit" value="BOTTLES">'+
+   '<input class="equipment-unit" value="BOTTLES">'+
+   '<input class="equipment-process-data"><input class="equipment-characteristics">',
+   {runScripts:'outside-only'});
+ try{
+  const w=dom.window;w.__ST_TEXT__=text=>text;
+  w.eval(fs.readFileSync('apps-script/EquipmentRoles.html','utf8').replace(/<\/?script>/g,''));
+  const fields=w.document.body,card={_fields:fields};
+  const equipment={id:'blow',type:'BLOWMOLDER',processData:{equipment:{
+    internalCapacityBottles:36,residenceTimeSeconds:3,occupancyMode:'POSITIONS'}}};
+  w.STEquipmentRoles.attach(card,equipment);
+  const input=fields.querySelector('.equipment-occupancy-mode');
+  assert(input,'Physical machine design exposes reusable occupancy selector');
+  assert.equal(input.value,'POSITIONS');
+  assert.equal(fields.querySelector('.equipment-internal-capacity').value,'36');
+  const stored={};assert(w.STEquipmentRoles.readCapacity(fields,stored));
+  assert.equal(stored.equipment.occupancyMode,'POSITIONS');
+  assert.equal(stored.equipment.internalCapacityBottles,36);
+  input.value='STORAGE';
+  const reverted={};assert(w.STEquipmentRoles.readCapacity(fields,reverted));
+  assert.equal(reverted.equipment.occupancyMode,'STORAGE');
+  assert.equal(reverted.equipment.residenceTimeSeconds,3);
+ }finally{dom.window.close();}
+});

@@ -22,6 +22,7 @@ export function simulateLine(input) {
   applyDueCommands(runtime);
   updatePlantCalendar(runtime, false);
   initializeInitialMaterialStates(runtime);
+  recordStateTransitions(runtime);
   addSample(runtime);
   executeTicks(runtime);
   if(runtime.samples.at(-1)?.virtualSecond!==runtime.virtualSecond)addSample(runtime);
@@ -37,15 +38,17 @@ export async function simulateLineAsync(input, options = {}) {
   const runtime = createRuntime(input);
   runtime.summaryOnly=options.summaryOnly===true;
   runtime.captureEvents=options.detail===true;
+  runtime.captureStateTransitions=options.detail!==false&&!runtime.summaryOnly;
   if(runtime.summaryOnly){runtime.omittedEvents+=runtime.events.length;runtime.events.length=0;}
-  applyDueCommands(runtime); updatePlantCalendar(runtime, false); initializeInitialMaterialStates(runtime); addSample(runtime);
+  applyDueCommands(runtime); updatePlantCalendar(runtime, false); initializeInitialMaterialStates(runtime); recordStateTransitions(runtime); addSample(runtime);
   // Stream only new frames. Provisional snapshots never become final statistics.
-  let publishedSamples=0,lastPartialAt=0;
+  let publishedSamples=0,publishedTransitions=0,lastPartialAt=0;
   function publishPartial(){
     if(!options.onPartial||runtime.summaryOnly||runtime.samples.length===publishedSamples)return;
     const now=Date.now();if(publishedSamples&&now-lastPartialAt<100&&runtime.virtualSecond<runtime.run.durationSeconds)return;lastPartialAt=now;
     const partial=createResult(runtime,true);
     partial.samples=runtime.samples.slice(publishedSamples);publishedSamples=runtime.samples.length;
+    partial.stateTransitions=runtime.stateTransitions.slice(publishedTransitions);publishedTransitions=runtime.stateTransitions.length;
     partial.events=[]; // The bounded event log is sent once with the completed result.
     partial.provisional=true;partial.calculatedThroughSeconds=runtime.virtualSecond;
     options.onPartial(partial);
@@ -128,6 +131,8 @@ function createRuntime(input) {
     zones,
     events: [],
     samples: [],zoneDefinitions:{},
+    stateTransitions:[],lastRecordedStates:[],omittedStateTransitions:0,
+    captureStateTransitions:true,
     outputCount: 0,
     lineRateLossStarvationSeconds:0,lineRateLossRampSeconds:0,lineRateLossStopTransitionSeconds:0,
     lineRunSeconds: 0, lineEffectiveRuntimeSeconds: 0, lineRateShortfallSeconds: 0, lineRateRecoverySeconds: 0,
@@ -392,6 +397,7 @@ function executeTicks(runtime, until = runtime.run.durationSeconds) {
     advanceEquipmentControlTimers(runtime);
     runtime.tickCount=(runtime.tickCount||0)+1;
     runtime.virtualSecond=runtime.tickCount*runtime.run.tickSeconds;
+    recordStateTransitions(runtime);
     addSampleIfDue(runtime);
   }
 }
@@ -1422,6 +1428,21 @@ function getTransitUnits(zone) {
   return total;
 }
 
+// Lightweight exact state timeline; full measurement samples remain bounded.
+// A change is recorded only when the calculated availability state changes.
+const MAX_STATE_TRANSITIONS=4000;
+function recordStateTransitions(runtime){
+  if(!runtime.captureStateTransitions||runtime.summaryOnly)return;
+  runtime.equipment.forEach((unit,index)=>{
+    const state=unit.availabilityState||unit.mode||'UNKNOWN';
+    if(runtime.lastRecordedStates[index]===state)return;
+    runtime.lastRecordedStates[index]=state;
+    if(runtime.stateTransitions.length<MAX_STATE_TRANSITIONS)
+      runtime.stateTransitions.push([round(runtime.virtualSecond),index,state]);
+    else runtime.omittedStateTransitions++;
+  });
+}
+
 function addSampleIfDue(runtime) {
   if(runtime.summaryOnly)return;
   const live=runtime.run.calculationMode==='LIVE';
@@ -1483,7 +1504,7 @@ function addSample(runtime) {
   runtime.historyTicks=0;runtime.equipment.forEach(item=>{item.historySum=0;item.historyMin=undefined;item.historyMax=undefined;});
 }
 
-function recordingCoverage(runtime){return {omittedEvents:runtime.omittedEvents,requestedSampleSeconds:runtime.run.sampleEverySeconds||runtime.run.tickSeconds,effectiveSampleSeconds:runtime.sampleInterval,maximumSamples:1001,aggregated:runtime.sampleInterval>(runtime.run.sampleEverySeconds||runtime.run.tickSeconds),recordingMode:runtime.run.calculationMode==='SUMMARY'?'SUMMARY':'BOUNDED',exactReplay:false};}
+function recordingCoverage(runtime){return {omittedEvents:runtime.omittedEvents,requestedSampleSeconds:runtime.run.sampleEverySeconds||runtime.run.tickSeconds,effectiveSampleSeconds:runtime.sampleInterval,maximumSamples:1001,aggregated:runtime.sampleInterval>(runtime.run.sampleEverySeconds||runtime.run.tickSeconds),recordingMode:runtime.run.calculationMode==='SUMMARY'?'SUMMARY':'BOUNDED',exactReplay:false,stateTransitionsRecorded:runtime.stateTransitions.length,stateTransitionsOmitted:runtime.omittedStateTransitions};}
 
 function createRecordedZoneSample(runtime,zone){
   const frame=createZoneSample(zone);
@@ -1619,6 +1640,7 @@ function createResult(runtime,partial=false) {
       createZoneMetrics(zone, duration)
     ])),
     events: partial?[]:runtime.events.slice(),
+    stateTransitions:runtime.stateTransitions,
     samples: runtime.samples
   };
 }

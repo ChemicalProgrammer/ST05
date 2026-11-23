@@ -103,7 +103,7 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **KPI destacado** | `.metric-card.metric-card--featured` | Dentro de Simulation Playback, **solo** Theoretical equipment efficiency y Simulated efficiency. Valor grande y borde superior grueso en color primario |
 | **Tarjeta de escenario** | `.metric-card.metric-card--scenario` | Alternativas de What-if/CAPEX, con un borde lateral semántico y acciones del escenario |
 | **Tarjeta de estado** | `.metric-card.metric-card--status` | Resultado de validación, estado o diagnóstico; compacta y con etiqueta semántica |
-| **Tarjeta de equipo** | `.live-equipment-card` | Encabezado, estado, OEE y gráfico, con subsecciones internas configurables; no debe adoptar el estilo de KPI destacado |
+| **Tarjeta de equipo** | `.live-equipment-card` | Encabezado, estado, OEE y gráfico, con subsecciones internas configurables; el tag de estado en Equipment performance se alinea siempre a la derecha, tanto en máquinas como conveyors |
 | **KPI de resultado** | `.result-kpi`, `.metric-card--result` | Indicadores KPI en Results, no equivalentes a los KPI destacados de eficiencia |
 | **Panel de gráfica** | `.chart-panel` | Contenedor de gráficos y sus títulos |
 | **Tabla de datos** | `.table-scroll`, `table` | Tabla con columnas optimizadas y scroll horizontal |

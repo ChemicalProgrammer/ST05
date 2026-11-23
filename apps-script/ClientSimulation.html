@@ -362,7 +362,7 @@
       var playButton=document.getElementById('play-simulation');
       var hasResult=Boolean(state.run.result);
       playButton.disabled=twoDRunning||(hasResult
-        ? state.run.result?.detailCoverage?.recordingMode==='SUMMARY'
+        ? state.run.playing||state.run.result?.detailCoverage?.recordingMode==='SUMMARY'
         : locked||!isRunReady());
       playButton.setAttribute('aria-label',hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation'));
       playButton.title=hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation');
@@ -812,7 +812,7 @@
       setStatus(roundSession?.streaming?__ST_TEXT__('batch.streaming'):roundSession?.pending?__ST_TEXT__('batch.first_ready'):state.run.durationMode === 'INDEFINITE'
         ? __ST_TEXT__('client.simulation_completed_at_its_virtual_safety_ceiling_playback_is_starting')
         : __ST_TEXT__('client.simulation_completed_playback_is_starting'));
-      if(run.calculationMode==='LIVE')startPlayback();else{state.run.active=false;state.run.sampleIndex=Math.max(0,state.run.result.samples.length-1);renderPlaybackFrame();setStatus('Calculation complete. Results are ready; playback is optional.');}
+      if(run.calculationMode==='LIVE')startPlayback();else{state.run.active=false;state.run.sampleIndex=Math.max(0,state.run.result.samples.length-1);renderPlaybackFrame();setStatus(roundSession?.pending?'First round ready. Calculating remaining rounds…':'Calculation complete. Results are ready; playback is optional.');}
     }
 
     function readRunConfiguration() {

@@ -7,7 +7,7 @@ close icon or Escape applies pending settings through the existing save pipeline
 | Tab | Options | Scope |
 | --- | --- | --- |
 | Case | Name, include What-If DOE, equipment chart colors, JSON-field visibility | Case JSON; normal case save policy |
-| Appearance | Theme, accent palette, text size; existing restricted interface-mode selector | Browser preferences |
+| Appearance | Language (English / Español), theme, accent palette, text size; existing restricted interface-mode selector | Browser preferences |
 | Simulation | Autosave and interval, fixed/random seed policy | Browser preferences; seed policy in both modes; autosave only in Advance, Basic saves manually |
 | Gemini | Model, private API key, mode-specific prompt sections and inclusion checkboxes | Google account User Properties |
 | Storage | Drive workspace root folder | Google account settings |
@@ -24,6 +24,8 @@ series also colors line output; equipment beyond 13 repeat these series. Reset
 removes the overrides. Colors apply immediately, survive opening the saved case,
 and clear when returning to the gallery. These display changes mark the case
 pending without invalidating simulation results or changing simulation inputs.
+
+Appearance includes **Language**, with **English** selected by default and **Español** available. The choice is browser-local (`st.ui.v1.language`), applies without recalculation or reopening cases and persists after reload. The localized UI uses the shared `Language.html` vocabulary for static and dynamically inserted labels, titles, placeholders and button accessibility text. Case names, simulation names and user-supplied data are excluded. Some technical strings without translated entries retain their source wording; add translations to the dictionary rather than translating identifiers or JSON keys. Reset app restores English.
 
 Appearance applies immediately in this browser. Text size offers 80%, 90%, 100%,
 110% and 125% of the shared Advance typography. Advance defaults to 100%, Basic

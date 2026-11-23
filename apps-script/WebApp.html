@@ -330,9 +330,16 @@
           </section>
           <div id="simulation-results" class="hidden">
           <section id="simulation-equipment" class="fold-card">
-          <div class="fold-heading"><div><h3 id="simulation-equipment-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-equipment-content">Equipment performance</button></h3>
-          <p class="live-controls-help subsection-description"><?= __ST_TEXT__('view.scenario_controls_apply_at_the_displayed_virtual_second_and_deterministical') ?></p></div></div>
+          <div class="fold-heading">
+            <div class="subsection-heading-copy"><h3 id="simulation-equipment-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-equipment-content">Equipment performance</button></h3>
+              <p class="live-controls-help subsection-description"><?= __ST_TEXT__('view.scenario_controls_apply_at_the_displayed_virtual_second_and_deterministical') ?></p></div>
+            <div class="fold-tools button-row equipment-performance-filters" role="group" aria-label="Equipment card visibility">
+              <button id="toggle-performance-machines" class="secondary icon-button equipment-filter-toggle" type="button" data-icon="machine" aria-pressed="true" aria-label="Show machines" title="Hide machines"></button>
+              <button id="toggle-performance-conveyors" class="secondary icon-button equipment-filter-toggle" type="button" data-icon="conveyor" aria-pressed="true" aria-label="Show conveyors" title="Hide conveyors"></button>
+            </div>
+          </div>
           <div id="simulation-equipment-content" class="fold-content">
+          <p id="performance-filter-empty" class="chart-note hidden" role="status">Both equipment types are hidden. Enable Machines or Conveyors above.</p>
           <div id="live-equipment" class="live-equipment" aria-labelledby="simulation-equipment-title"></div></div>
           </section>
 

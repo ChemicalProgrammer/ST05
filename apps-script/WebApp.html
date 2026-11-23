@@ -329,7 +329,6 @@
           <!-- El avance y la cancelación de las rondas quedan disponibles al plegar la reproducción. -->
           <section id="batch-dialog" class="round-background hidden" aria-labelledby="batch-title"><strong id="batch-title"><?= __ST_TEXT__('batch.title') ?></strong><progress id="batch-progress" max="1" value="0"></progress><span id="batch-status" role="status" aria-live="polite"></span><button id="batch-cancel" type="button" class="ghost icon-button" data-icon="stop" aria-label="<?= __ST_TEXT__('view.cancel') ?>" title="<?= __ST_TEXT__('view.cancel') ?>"></button></section><p id="rounds-warning" class="round-warning hidden" role="alert"></p>
           </section>
-          <div id="simulation-results" class="hidden">
           <section id="simulation-equipment" class="fold-card">
           <div class="fold-heading">
             <div class="subsection-heading-copy"><h3 id="simulation-equipment-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-equipment-content">Equipment performance</button></h3>
@@ -341,9 +340,12 @@
           </div>
           <div id="simulation-equipment-content" class="fold-content">
           <p id="performance-filter-empty" class="chart-note hidden" role="status">Both equipment types are hidden. Enable Machines or Conveyors above.</p>
-          <div id="live-equipment" class="live-equipment" aria-labelledby="simulation-equipment-title"></div></div>
+          <p id="simulation-equipment-empty" class="chart-note" role="status">Run a numerical simulation to display equipment performance.</p>
+          <div id="simulation-results" class="hidden">
+            <div id="live-equipment" class="live-equipment" aria-labelledby="simulation-equipment-title"></div>
+          </div>
+          </div>
           </section>
-
         </div>
       </section>
 

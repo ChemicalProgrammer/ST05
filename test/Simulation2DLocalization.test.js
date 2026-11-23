@@ -69,7 +69,7 @@ test('Spanish mode translates all visible 2D Settings and Layout labels in the s
     const captions=[...doc.querySelectorAll('#simulation2d-results .simulation2d-metrics dt')].map(dt=>dt.textContent.trim());
     assert.deepEqual(captions,['Tiempo transcurrido','Botellas producidas','En transportadores','Máquinas en marcha','Back-up activo']);
     assert.deepEqual([...doc.querySelectorAll('#simulation2d-viewports option')].map(o=>o.textContent.trim()),['1 vista','2 vistas','3 vistas','4 vistas']);
-    assert.equal(content(doc,'#simulation2d-legend .run'),'En marcha / descargando');
+    assert.equal(doc.querySelector('#simulation2d-legend'),null,'The visual legend was removed');
     assert.equal(doc.querySelector('#simulation2d-appearance').getAttribute('aria-label'),'Apariencia de la distribución');
     assert.equal(doc.querySelector('#simulation2d-fullscreen').getAttribute('title'),'Abrir diagrama a pantalla completa');
     assert.equal(content(doc,'#simulation2d-playback-state'),'Listo');

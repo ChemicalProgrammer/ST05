@@ -25,12 +25,16 @@ test('Conveyor geometry title and evaluation keep a compact zoom-independent bad
   assert.ok(src.includes('card(data.column,cardLeft,data.title,data.rows,data.showSignal,data.verdict)'));
   assert.ok(src.includes("analysisButton.style.transform='translate(-100%,-50%)'"));
   assert.ok(!src.includes("analysisButton.style.transform='translate(-100%,-50%) scale("));
-  assert.ok(src.includes('cx-analysisButton.offsetWidth>=screenWidth'));
+  assert.ok(src.includes('tableLeft>=screenWidth||cx<=0'));
   assert.ok(!src.includes('cx-analysisButton.offsetWidth*factor>=screenWidth'));
   assert.ok(src.includes('.simulation2d-analysis-action::before {content:'+"'●'"));
   assert.ok(src.includes('.simulation2d-analysis-action.simulation2d-verdict-fail {background:var(--failure-soft);color:var(--danger);}'));
-  assert.ok(src.includes('font-size:var(--font-caption)'));
-  assert.ok(src.includes('height:20px;max-width:min(100%,140px)'));
+  assert.ok(src.includes('font-size:10px'));
+  assert.ok(src.includes('height:16px;max-width:72px'));
+  assert.ok(src.includes('analysisButton.style.maxWidth=Math.max(28,Math.min(72,tableWidth*.38))'));
+  assert.ok(src.includes('window.STIcons.equipment(kind)'));
+  assert.ok(src.includes('telemetryIconPaths.set(kind,path)'));
+  assert.ok(!src.includes('#simulation2d-legend'));
 });
 
 test('Products and Formats have a single workspace top gutter',()=>{

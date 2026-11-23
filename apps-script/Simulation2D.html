@@ -46,15 +46,6 @@
   #simulation2d-panel .fold-tools .icon-button { width:23px; padding-inline:2px; }
   #simulation2d-speed { padding-inline:2px 13px; background-position:right 2px center; background-size:10px; }
 }
-#simulation2d-legend { display:flex; flex-wrap:wrap; gap:var(--space-2) var(--space-4); margin-block:var(--space-2); }
-#simulation2d-legend span::before { content:""; display:inline-block; width:.65em; height:.65em; border-radius:50%; margin-inline-end:.4em; background:var(--lamp); }
-#simulation2d-legend .run { --lamp:var(--running); }
-#simulation2d-legend .starved { --lamp:var(--starved); }
-#simulation2d-legend .blocked { --lamp:var(--blocked); }
-#simulation2d-legend .info { --lamp:var(--info); }
-#simulation2d-legend .failure { --lamp:var(--failure); }
-#simulation2d-legend .stop { --lamp:var(--muted); }
-
 #simulation2d-appearance-dialog { --dialog-width:880px; }
 #simulation2d-appearance-dialog .dialog-body > h3 { margin:0 0 var(--space-3); font-size:var(--font-card); }
 .simulation2d-dialog-field { margin-bottom:var(--space-4); }
@@ -109,9 +100,10 @@
 .simulation2d-analysis-action {
   display:inline-flex;align-items:center;justify-content:center;gap:var(--space-1);
   position:absolute;z-index:2;pointer-events:auto;box-sizing:border-box;
-  min-width:0;min-height:20px;height:20px;max-width:min(100%,140px);
-  padding:2px var(--space-2);border:0;border-radius:var(--radius-pill);
-  font-size:var(--font-caption);font-weight:var(--weight-medium);
+  min-width:0;min-height:16px;height:16px;max-width:72px;
+  padding:1px 5px;border:0;border-radius:var(--radius-pill);
+  font-size:10px;font-weight:var(--weight-medium);
+  overflow:hidden;text-overflow:ellipsis;
   line-height:1.3;white-space:nowrap;
   color:var(--muted);background:var(--stopped-soft);cursor:pointer;
 }
@@ -978,20 +970,40 @@ window.STSimulation2D=(function(){
     context.restore();
   }
   // Pictograma ligero sobre canvas: máquinas y bandas tienen símbolos distintos.
+  // El canvas reutiliza el path del mismo STIcons.equipment() que las tarjetas
+  // numéricas. Path2D se guarda en caché y evita crear SVG/DOM por frame.
+  const telemetryIconPaths=new Map();
   function drawTelemetryIcon(context,x,y,belt,ink){
-    const s=tableScale;
-    context.save();
-    context.strokeStyle=ink;
-    context.lineWidth=Math.max(.7,1.5*s);
-    if(belt){
-      context.strokeRect(x,y-5*s,12*s,6*s);
-      for(const cx of [x+3*s,x+9*s]){
-        context.beginPath();context.arc(cx,y+3*s,1.6*s,0,Math.PI*2);context.stroke();
+    const kind=belt?'CONVEYOR':'MACHINE',size=15*tableScale;
+    let path=telemetryIconPaths.get(kind);
+    if(path===undefined){
+      path=null;
+      if(typeof Path2D==='function'&&window.STIcons?.equipment){
+        const svg=window.STIcons.equipment(kind);
+        const data=svg?.match(/<path\s+d="([^"]+)"/)?.[1];
+        if(data)try{path=new Path2D(data);}catch(_){}
       }
+      telemetryIconPaths.set(kind,path);
+    }
+    context.save();
+    context.strokeStyle=ink;context.fillStyle='transparent';
+    context.lineWidth=1.7;context.lineJoin='round';context.lineCap='round';
+    if(path){
+      context.translate(x,y-size*.68);
+      context.scale(size/24,size/24);
+      context.stroke(path);
     }else{
-      context.strokeRect(x+1*s,y-7*s,10*s,10*s);
-      context.strokeRect(x+3*s,y-5*s,6*s,5*s);
-      context.beginPath();context.moveTo(x+6*s,y);context.lineTo(x+6*s,y+3*s);context.stroke();
+      // Contextos de prueba o navegadores sin Path2D conservan un pictograma.
+      context.lineWidth=Math.max(.7,1.5*tableScale);
+      if(belt){
+        context.strokeRect(x,y-5*tableScale,12*tableScale,6*tableScale);
+        for(const cx of [x+3*tableScale,x+9*tableScale]){
+          context.beginPath();context.arc(cx,y+3*tableScale,1.6*tableScale,0,Math.PI*2);context.stroke();
+        }
+      }else{
+        context.strokeRect(x+1*tableScale,y-7*tableScale,10*tableScale,10*tableScale);
+        context.strokeRect(x+3*tableScale,y-5*tableScale,6*tableScale,5*tableScale);
+      }
     }
     context.restore();
   }
@@ -1168,7 +1180,7 @@ window.STSimulation2D=(function(){
     telemetryGroupWidth=telemetryPairWidth+telemetryWidths[2]+telemetryGap;
     conveyorGroupWidth=telemetryPairWidth+telemetryWidths[3]+telemetryGap;
   }
-  function drawTelemetry(context,item,left,y,signal,ink,border,surface,muted,soft,colors){
+  function drawTelemetry(context,item,left,y,signal,ink,border,surface,muted,soft,colors,screenFactor=1){
     function text(value,x,baseline,maxWidth){
       if(Number.isFinite(maxWidth)&&maxWidth>0)context.fillText(value,x,baseline,maxWidth);
       else context.fillText(value,x,baseline);
@@ -1206,10 +1218,12 @@ window.STSimulation2D=(function(){
         text(title,glyphX+16*tableScale,y+21*tableScale,
           Math.max(8*tableScale,width-2*telemetryPadding-16*tableScale-pillMaxWidth-4*tableScale));
       }else if(verdict){
-        // The title is ordinary text. The clickable verdict capsule is a
-        // real accessible button in the control overlay at the right.
+        // La única etiqueta PASS/FAIL pertenece a la cabecera de Geometría;
+        // dejarle una reserva fija en pantalla evita cubrir el título.
         context.fillStyle=ink;
-        text(localize2D(title),parameterX,y+21*tableScale,width-2*telemetryPadding);
+        const reserved=Math.min(width*.45,(76/Math.max(.01,screenFactor)));
+        text(localize2D(title),parameterX,y+21*tableScale,
+          Math.max(12*tableScale,width-2*telemetryPadding-reserved));
       }else if(title){
         context.fillStyle=ink;
         text(localize2D(title),parameterX,y+21*tableScale,width-2*telemetryPadding);
@@ -1586,12 +1600,16 @@ window.STSimulation2D=(function(){
       const analysisButton=analysisButtons.get(item.id);
       if(analysisButton){
         const left=origin+items[index].center-items[index].telemetryWidth/2+telemetryPairWidth+telemetryGap;
-        const cx=(left+telemetryWidths[3]-8*tableScale)*factor;
-        const cy=(telemetryY+items[index].telemetryOffset+17.5*tableScale)*factor;
+        const tableLeft=left*factor,tableWidth=telemetryWidths[3]*factor;
+        const cx=tableLeft+tableWidth-telemetryPadding*factor;
+        const cy=(telemetryY+items[index].telemetryOffset+19*tableScale)*factor;
+        // Una etiqueta única, anclada a la fila del encabezado, sin escala CSS
+        // por zoom y sin competir con las filas de valores.
+        analysisButton.style.maxWidth=Math.max(28,Math.min(72,tableWidth*.38))+'px';
         analysisButton.style.left=cx+'px';analysisButton.style.top=cy+'px';
         analysisButton.style.transform='translate(-100%,-50%)';
         analysisButton.style.transformOrigin='right center';
-        analysisButton.hidden=cx<=0||cx-analysisButton.offsetWidth>=screenWidth||cy<0||cy>h;
+        analysisButton.hidden=tableLeft>=screenWidth||cx<=0||cy<0||cy>h;
       }
       const controls=machineControls.get(item.id);
       if(!controls)continue;
@@ -1685,7 +1703,7 @@ window.STSimulation2D=(function(){
       const left=origin+center-telemetryWidth/2;
       if(left+telemetryWidth<0||left>w)continue;
       const signal=item.kind==='belt'?beltSignal(item):machineSignal(item);
-      drawTelemetry(context,item,left,telemetryY+telemetryOffset,signal,ink,border,surface,muted,soft,colors);
+      drawTelemetry(context,item,left,telemetryY+telemetryOffset,signal,ink,border,surface,muted,soft,colors,factor);
     }
     if(transfer){
       drawPalletInfeed(context,line,items,origin,y,{belt:beltColor,caseColor:appearance.cases||defaultLayoutColors.cases,caseAccent:appearance.caseLabel||defaultLayoutColors.caseLabel,caseMarkShape:appearance.caseLabelShape,surface,accent},transfer);

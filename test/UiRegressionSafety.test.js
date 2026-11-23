@@ -157,7 +157,10 @@ test('Equipment-performance status badge is right aligned for machines and conve
   assert.doesNotMatch(markup,/heading\.append\(card\.querySelector\('\.live-state'\)\)/);
   assert.match(css,/\.numeric-equipment-header > \.live-state \{[\s\S]*?grid-column:2;grid-row:1;justify-self:end/);
   assert.match(css,/\.numeric-equipment-header-details \{grid-column:1;grid-row:1/);
-  assert.match(css,/\.numeric-equipment-control-dock \{[\s\S]*?grid-column:2!important;grid-row:2 \/ span 2!important/);
+  assert.match(playback,/overviewSide\.append\(visualHeader,controlDock,chartAside\)/);
+  assert.doesNotMatch(playback,/visualHeader\.append\(controlDock\)/);
+  assert.match(css,/\.numeric-equipment-overview-side > \.numeric-equipment-control-dock \{[\s\S]*?flex-flow:row wrap!important/);
+  assert.match(css,/#results-body > #results-history-group \{[\s\S]*?margin-block-start:var\(--subsection-gap\)!important/);
 });
 
 test('Elegant combobox highlights selected text and checkmark in white on the solid accent',()=>{

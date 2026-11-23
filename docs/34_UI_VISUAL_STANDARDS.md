@@ -355,3 +355,36 @@ case saving. The unsaved-changes warning is preserved.
 **Settings > Gemini** exposes the same full Advance personality, engineering
 policies and generation controls in both Basic and Advance; the backend uses
 the same Advance prompt sections for both.
+
+
+### Visual cleanup, responsive controls and shared Equipment layout (23 Nov 2026)
+
+- **Equipment and Conveyors:** both Basic and Advance use the same
+  `equipmentLayout` preference: `split` for separate tabs and `combined`
+  for a single Equipment view. The default when unset is `split`; the
+  current Basic layouts remain available.
+- **Simulation:** the obsolete Run configuration / scheduled events subsection
+  and Model assumptions disclosure have been removed. `run-seed` and
+  `run-shift-count` remain internal hidden inputs because the simulation
+  engine and saved input contracts still depend on them. The informational
+  duration and shift-boundary prose has been removed; reporting logic remains.
+- **Numeric equipment cards:** action buttons are a flex-wrapping row beneath
+  the equipment header. They use available width and never share a grid track
+  with the changing status badge. Existing commands and enable/disable logic
+  are unchanged.
+- **Simulation 2D:** the first telemetry-card glyph is rendered from the same
+  cached `STIcons.equipment()` SVG path as numerical cards, via `Path2D`
+  when supported. Status pills use shared semantic tokens; the conveyor
+  geometry verdict is a single compact 16px-high control anchored within its
+  header row, without inheriting the zoom scale. The bottom legend and
+  navigation instructions have been removed without changing canvas controls.
+- **Results:** explanatory prose under the summary KPIs and rate-loss cards is
+  not shown between controls. Its numerical meaning remains available via
+  metric tooltips and report data. The Equipment performance / Charts and
+  history groups have an explicit `--subsection-gap` even when V-Graph is
+  mounted in between.
+- **What-If and Comparison:** redundant context paragraphs and the
+  in-section design verification disclosure are removed. Unit mismatches
+  still leave a tooltip/data flag on the comparison container rather than
+  inserting a paragraph before the result controls. Scenario validation,
+  evidence and guardrails in the underlying engine are retained.

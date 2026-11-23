@@ -106,15 +106,7 @@ html[data-equipment-layout=split] #basic-conveyor-panel .equipment-grid:not(.rel
 html[data-equipment-layout=split] #basic-conveyor-panel .reliability-controls { display:none; }
 html[data-equipment-layout=split] .basic-conveyor-validation { grid-column:2; grid-row:2/5; }
 html[data-ui-mode=basic][data-basic-view=results] #line-performance { display:none; }
-html[data-ui-mode=basic] #run-config > summary,
-html[data-ui-mode=basic] #run-config > .compact-heading,
-html[data-ui-mode=basic] #simulation-event-home #control-events,
-html[data-ui-mode=basic] #run-config label:has(> #duration-mode),
-html[data-ui-mode=basic] #run-config label:has(> #run-duration),
-html[data-ui-mode=basic] #run-config label:has(> #run-shift-hours),
-html[data-ui-mode=basic] #run-config label:has(> #run-shift-count),
-html[data-ui-mode=basic] #run-config label:has(> #run-sample-interval),
-html[data-ui-mode=basic] #run-config label:has(> #run-seed) { display:none !important; }
+html[data-ui-mode=basic] #simulation-event-home #control-events { display:none !important; }
 @media(max-width:760px){
  html[data-equipment-layout=split] .basic-conveyor-validation { grid-column:1; grid-row:auto; }
 }

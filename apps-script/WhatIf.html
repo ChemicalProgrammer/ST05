@@ -7,7 +7,6 @@ window.STWhatIf = (function() {
     item.append(node('span',project.searchScope==='ALL'?'All CAPEX':label(project.tier),'analysis-capex'),node('span',label(project.basis),'badge'),node('h4',project.title||label(project.titleKey)));
     item.querySelector('.analysis-capex').dataset.tier=project.tier;
     if(project.description&&!project.explore)item.append(node('p',project.description,'chart-note'));
-    if(project.evidence){var detail=node('details','','analysis-checks');detail.append(node('summary',__ST_TEXT__('scenario.evidence')));Object.entries(project.evidence).forEach(function(pair){if(pair[1]!=null)detail.append(node('p',label(pair[0])+': '+pair[1]));});item.append(detail);}
     STScenarioExplorer.attach(item,project,create,simulation||{id:project.sourceSimulationId,equipment:equipment||[],dynamicConfig:{}});
     return item;
   }
@@ -15,12 +14,8 @@ window.STWhatIf = (function() {
     window.STMotion?.watchCards(target);
     var plan=STScenarios.plan(simulation);target.textContent='';if(simulation.results?.batch)target.appendChild(node('p',__ST_TEXT__('batch.evidence'),'notice'));var grid=node('div','','scenario-grid');
     var proposals=visibleProjects(plan);STScenarioExplorer.tools(target,simulation,plan,create);
-    if(simulation.dynamicConfig?.initialFormatId||simulation.dynamicConfig?.initialProductId)target.prepend(node('p','Search retains the initial format and changeovers. Product and format settings take precedence over equipment defaults.','chart-note'));
     if(!proposals.length)target.appendChild(node('p',__ST_TEXT__('scenario.no_supported'),'empty'));
     STReports.bindWhatIf(simulation,plan,proposals);
-    var checks=node('details','','analysis-checks scenario-design-checks');checks.appendChild(node('summary',__ST_TEXT__('scenario.design_checks')));
-    checks.appendChild(node('p',__ST_TEXT__('scenario.basis_note'),'chart-note'));
-    var list=node('ul');plan.checks.forEach(function(check){list.appendChild(node('li',(check.equipmentId?check.equipmentId+' · ':'')+label(check.rule)+': '+label(check.status)+(check.coverage!=null?' ('+check.coverage.toFixed(2)+'× MTTR)':'')));});checks.appendChild(list);target.appendChild(checks);
   }
   function unavailable(simulation,target,message){
     target.replaceChildren();window.STMotion?.watchCards(target);

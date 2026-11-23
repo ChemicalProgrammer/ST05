@@ -1460,6 +1460,50 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
   .st-subsection.fold-native > summary.st-subsection-header .subsection-native-title::before {transition:none;}
 }
 
+
+/* Final shared numeric-card layout: buttons are their own responsive row.
+   Never share the status badge's CSS grid column: status text can grow
+   without moving the control buttons while the simulation is running. */
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
+  grid-template-columns:minmax(0,1fr) max-content!important;
+  grid-template-rows:auto auto!important;
+}
+.live-equipment-card .numeric-equipment-overview-side > .numeric-equipment-control-dock {
+  display:flex!important;flex-flow:row wrap!important;
+  align-items:center;justify-content:flex-end!important;
+  align-self:stretch;gap:var(--space-1)!important;
+  width:100%!important;min-width:0;max-width:100%;
+  height:auto;box-sizing:border-box;
+  margin:0!important;padding:0!important;background:transparent;
+  border:0!important;grid-column:auto!important;grid-row:auto!important;
+}
+.live-equipment-card .numeric-equipment-overview-side > .numeric-equipment-control-dock > button {
+  flex:0 0 var(--control-height)!important;
+  width:var(--control-height)!important;
+  height:var(--control-height)!important;
+  min-width:var(--control-height)!important;
+  min-height:var(--control-height)!important;
+  grid-column:auto!important;grid-row:auto!important;
+}
+html[data-events-enabled=false] .live-equipment-card
+ .numeric-equipment-overview-side > .numeric-equipment-control-dock {
+  display:none!important;
+}
+/* Compact/collapsed cards use display:contents on the overview parent.
+   Explicit grid tracks prevent the dock from landing over the chart. */
+.live-equipment-card[data-card-collapsed=true] .numeric-equipment-overview-side > .numeric-equipment-control-dock {
+  grid-column:1!important;grid-row:2!important;justify-self:stretch;
+}
+@container(max-width:650px){
+  .live-equipment-card[data-card-collapsed=true] .numeric-equipment-overview-side > .numeric-equipment-control-dock {
+    grid-column:1!important;grid-row:3!important;
+  }
+}
+/* A non-fold-card line-performance section may separate the Results groups
+   in the DOM. Reserve the common gap regardless of that intermediate panel. */
+#results-body > #results-history-group {
+  margin-block-start:var(--subsection-gap)!important;
+}
 </style>
 
 

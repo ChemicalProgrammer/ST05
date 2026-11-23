@@ -231,8 +231,8 @@ window.STResults=(function(){
     let section=target.querySelector(':scope > .rate-loss-highlights');
     if(!section){
       section=document.createElement('section');section.className='rate-loss-highlights';
-      const cards=document.createElement('div'),note=document.createElement('p');
-      cards.className='result-kpis';note.className='chart-note';section.append(cards,note);target.replaceChildren(section);
+      const cards=document.createElement('div');
+      cards.className='result-kpis';section.append(cards);target.replaceChildren(section);
     }
     const cards=section.querySelector('.result-kpis'),keys=['rate-loss-output','rate-loss-production','rate-loss-efficiency'];
     data.cards.forEach(function(item,index){
@@ -240,7 +240,6 @@ window.STResults=(function(){
       card.title=item.help;card.setAttribute('aria-description',item.help);card.tabIndex=0;
       label.textContent=item.label;setMetricValue(value,item.value,item.unit,item.digits,'es-MX');
     });
-    section.querySelector('.chart-note').textContent=data.note;
   }
   function renderRateLossImpact(target,result){
     const data=STReports.rateLossImpact(result),heading=document.createElement('h3'),scroll=document.createElement('div'),table=document.createElement('table'),head=document.createElement('tr'),thead=document.createElement('thead'),body=document.createElement('tbody');
@@ -418,7 +417,14 @@ window.STResults=(function(){
   function compare(target,a,b){
     if(!a.results?.summary||!b.results?.summary)return;
     if((a.results.engineId||'ST_CURRENT')!==(b.results.engineId||'ST_CURRENT')){var modelNote=document.createElement('p');modelNote.className='notice';modelNote.textContent='Different engines: ST spatial fluid model versus experimental SimPy spatial product model. Sensors, ramps and random failure schedules are not equivalent.';target.appendChild(modelNote);}
-    if(unitLabel(a.results.unitOfFlow||a.results.replay?.unitOfFlow)!==unitLabel(b.results.unitOfFlow||b.results.replay?.unitOfFlow)){var notice=document.createElement('p');notice.className='chart-note';notice.textContent=__ST_TEXT__('performance.unit_mismatch');target.appendChild(notice);}
+    if(unitLabel(a.results.unitOfFlow||a.results.replay?.unitOfFlow)!==unitLabel(b.results.unitOfFlow||b.results.replay?.unitOfFlow)){
+      // Advertencia disponible al consultar el contenedor, no una nota que
+      // separe visualmente Configuración de Comparación de resultados.
+      target.title=__ST_TEXT__('performance.unit_mismatch');
+      target.dataset.unitsMismatch='true';
+    }else{
+      target.removeAttribute('title');delete target.dataset.unitsMismatch;
+    }
     var block=comparisonSection(__ST_TEXT__('results.outcome_comparison'),'comparison-outcomes'),section=block.section;
     block.body.innerHTML=("<div class=\"table-scroll\"><table><thead><tr><th>" + __ST_HTML_TEXT__('results.metric') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('view.baseline') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.proposed') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.absolute') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.relative') + "</th></tr></thead><tbody></tbody></table></div>");
     var right=metrics(b.results);

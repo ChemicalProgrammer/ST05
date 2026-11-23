@@ -592,8 +592,8 @@ window.STScenarioExplorer=(function(){
     var add=button('Add intervention target',function(){if(activeHost)return;if(simulation.dynamicConfig?.reliabilityEnabled===false&&field.value!=='nominalRatePerSecond'){notice.textContent='Enable MTBF / MTTR failures in Settings → Simulation before adding reliability targets.';return;}try{var unit=simulation.equipment.find(e=>e.id===equipment.value),before=field.value.split('.').reduce((v,k)=>v?.[k],unit),change={equipmentId:equipment.value,path:field.value,before:before??null,after:Number(targetValue.value)/(field.value==='nominalRatePerSecond'?60:1),unit:field.value==='nominalRatePerSecond'?'units/s':'min',...(field.value==='nominalRatePerSecond'?{replacementMaximumBpm:Number(replacementMax.value)}:{}),external:true,interventionType:tierSelect.value,justification:justification.value.trim()};STScenarios.apply(simulation,[change]);var option={tier:STScenarios.interventions[tierSelect.value].tier,changes:[change]};simulation.whatIf=simulation.whatIf||{};simulation.whatIf.externalOptions=(simulation.whatIf.externalOptions||[]).map(p=>({tier:p.tier,changes:p.tier===option.tier?p.changes.filter(c=>c.equipmentId!==change.equipmentId||c.path!==change.path):p.changes})).filter(p=>p.changes.length).concat([option]);pool=pool.map(p=>({tier:p.tier,changes:p.tier===option.tier?p.changes.filter(c=>c.equipmentId!==change.equipmentId||c.path!==change.path):p.changes}));pool.push(option);changed(simulation);notice.textContent='Target saved as a hypothesis. Run Find best scenario in its CAPEX category.';rebuild();}catch(error){notice.textContent='Cannot add target: '+error.message;}});add.classList.add('scenario-add-intervention');
     interventions.append(equipment,field,tierSelect,targetValue,replacementMax,justification,add,notice);
     var editorStore=el('div','','scenario-target-editor-store');editorStore.hidden=true;editorStore.append(interventions);
-    var staleTargetsNotice=el('p','Saved demo targets no longer match this simulation. Current targets are shown.','chart-note scenario-stale-targets');staleTargetsNotice.hidden=true;
-    container.append(editorStore,staleTargetsNotice,combined);
+    // Guardar la condición como metadato; no insertar una nota entre tarjetas.
+    container.append(editorStore,combined);
     function rebuild(){
       combined.replaceChildren();combined.className='scenario-tier-grid';
       var basic=document.documentElement.dataset.uiMode==='basic';
@@ -609,7 +609,7 @@ window.STScenarioExplorer=(function(){
           demoChangesByTier[tier]=linked.scenario.changes;
         }catch(_){outdatedDemo=true;}
       });
-      staleTargetsNotice.hidden=!outdatedDemo;
+      container.dataset.outdatedDemo=String(outdatedDemo);
       if(!interventions.closest('dialog[open]'))editorStore.append(interventions);
       if(basic){
         var current=el('article','','analysis-recommendation scenario-current'),values=simulation.results?.summary?metric(simulation.results):{},metrics=el('div','','scenario-basic-metrics');

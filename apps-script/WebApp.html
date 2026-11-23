@@ -223,15 +223,6 @@
 <input id="simulation2d-zoom" type="range" min="-10" max="6" step="any" value="0" aria-label="Zoom" title="Zoom">
 <output id="simulation2d-zoom-value" for="simulation2d-zoom">100%</output>
             </div>
-            <div id="simulation2d-legend" class="chart-note" aria-label="Machine states">
-              <span class="run">Running / discharging</span>
-              <span class="starved">Starved</span>
-              <span class="blocked">Blocked / Back-up</span>
-              <span class="info">Starting / ramp / waiting for Prime / planned stop</span>
-              <span class="failure">Failure / emergency stop</span>
-              <span class="stop">Ready / paused / stopped</span>
-            </div>
-            <p class="chart-note">Scroll to zoom at the pointer. Drag or hold the middle mouse button to pan. Use Fit to recenter.</p>
           </div>
         </div>
       </section>
@@ -265,24 +256,13 @@
     <input id="run-calendar-enabled" type="checkbox"><span>Include plant calendar</span>
   </label>
 </div>
-<p id="run-duration-summary" class="chart-note"></p><p id="run-effective-progress" class="chart-note" hidden></p><p class="chart-note">Shifts are reporting boundaries, not stop/start events.</p></div></section>
+<p id="run-effective-progress" class="chart-note" hidden></p></div></section>
 
-        <details id="run-config" class="run-config fold-card fold-native" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title"><?= __ST_TEXT__('view.run_configuration_scheduled_events') ?></span><span class="subsection-description">Configure the random seed and advanced timing options for this run.</span></span></summary>
-          <div class="field-grid run-fields">
-
-
-
-            <label><?= __ST_TEXT__('view.random_seed') ?><input id="run-seed" type="number" min="0" step="1" value="20260909"></label>
-
-            <label class="hidden" aria-hidden="true"><?= __ST_TEXT__('batch.shift_count') ?><input id="run-shift-count" type="number" min="1" max="10000" step="1" value="1"></label>
-
-          </div>
-
-          <details class="model-boundary fold-card fold-native"><summary><span class="subsection-heading-copy"><span class="subsection-native-title"><?= __ST_TEXT__('view.model_assumptions_timing') ?></span><span class="subsection-description">Read the timing assumptions used by the simulation engine.</span></span></summary><p>
-            <?= __ST_TEXT__('view.at_1_one_virtual_second_takes_one_real_second_the_engine_integrates_at_0_25') ?></p></details>
-
-
-        </details>
+<!-- Los parámetros necesarios para el motor siguen presentes sin subsección visual. -->
+        <div id="run-internal-parameters" hidden aria-hidden="true">
+          <input id="run-seed" type="number" min="0" step="1" value="20260909">
+          <input id="run-shift-count" type="number" min="1" max="10000" step="1" value="1">
+        </div>
 <div id="simulation-event-home">
 <section id="simulation-event-section" class="fold-card hidden" aria-labelledby="equipment-control-events-title">          <div class="fold-heading">
             <div>
@@ -369,10 +349,10 @@
               </div>
             </div>
             <div id="results-overview-content" class="fold-content">
-            <p id="results-meta" class="chart-note"></p>
+            <p id="results-meta" hidden aria-hidden="true"></p>
             <p id="results-round-note" class="chart-note" hidden>Per-format round totals were not saved in this older result. Run again to calculate format averages.</p>
             <div id="results-kpis" class="result-kpis"></div>
-            <p id="results-reference" class="chart-note"></p>
+            <p id="results-reference" hidden aria-hidden="true"></p>
             <section id="results-rate-loss-highlights"></section>
           </div></section>
           <details id="results-production-group" class="results-group fold-card fold-native">
@@ -426,7 +406,6 @@
           <details id="results-history-group" class="results-group fold-card fold-native" open>
             <summary><span class="subsection-heading-copy"><span class="subsection-native-title">Charts and history</span><span class="subsection-description">Explore the recorded simulation curves and historical trends.</span></span></summary>
             <div class="results-group-content">
-              <p class="chart-note">Charts show the history of the round currently selected for playback in Simulation.</p>
               <div class="chart-layout">
                 <section class="chart-panel">
                   <h3><?= __ST_TEXT__('view.cumulative_production') ?></h3>
@@ -468,7 +447,6 @@
         <div id="whatif-empty" class="empty"><h3><?= __ST_TEXT__('view.start_with_a_baseline_run') ?></h3><p><?= __ST_TEXT__('view.run_the_active_simulation_to_generate_an_evidence_based_recommendation') ?></p><button data-view="simulation" data-icon="play"><?= __ST_TEXT__('view.go_to_simulation') ?></button></div>
           <section id="simulation-analysis" class="simulation-analysis hidden" aria-labelledby="simulation-analysis-title">
             <h3 id="simulation-analysis-title" class="sr-only">Scenario options</h3>
-            <p class="chart-note whatif-context"><?= __ST_TEXT__('view.the_recommendation_combines_this_run_s_losses_with_the_physical_conveyor_au') ?></p>
 
             <div id="simulation-analysis-content" class="simulation-analysis-content"></div>
           </section>
@@ -535,7 +513,7 @@
               <option value="multiple">Multiple products and formats</option>
             </select>
           </label>
-          <label>Equipment layout<select id="settings-equipment-layout"><option value="">Default for interface mode</option><option value="split">Separate Equipment and Conveyors tabs</option><option value="combined">Single Equipment tab</option></select></label></section>
+          <label>Equipment and conveyors view<select id="settings-equipment-layout" aria-label="Equipment and conveyors view"><option value="">Separate tabs (default)</option><option value="split">Separate Equipment and Conveyors</option><option value="combined">Equipment and Conveyors together</option></select></label></section>
           <section id="settings-chart-section" class="settings-section"><div class="settings-section-heading"><h3>Chart Series Colors</h3><button id="settings-chart-reset" type="button" class="ghost">Reset colors</button></div><p>Equipment appears in line order. Colors repeat after 13 items; the first color also applies to line output.</p><div id="settings-chart-colors" class="settings-color-columns"></div></section>
         </div>
         <div id="settings-page-appearance" class="hidden" role="tabpanel" aria-labelledby="settings-tab-appearance">

@@ -1014,18 +1014,19 @@
       var chartHeading=document.createElement('strong');chartHeading.className='numeric-equipment-chart-title';
       chartHeading.textContent='Speed trend';chartAside.append(chartHeading);
       chartAside.append(card.querySelector('.live-speed-cell'));
-      // Controls are an independent vertical dock inside the equipment identity panel.
-      // The old duplicate counter elements stay in the hidden legacy row because
-      // the playback updater still targets them; States is their visible source.
+      // Barra de controles independiente: el tamaño/texto de la etiqueta
+      // de estado no puede desplazar los botones al cambiar de estado.
+      // La barra flex se adapta al ancho de su tarjeta, sin matriz fija 2×N.
       var controlDock=card.querySelector('.live-equipment-controls');
       controlDock.classList.add('numeric-equipment-control-dock');
-      visualHeader.append(controlDock);
+      // Los contadores originales siguen en la fila heredada oculta; States
+      // es su origen visible. Los botones funcionan fuera del encabezado.
       card.querySelector('.live-equipment-card__row').append(card.querySelector('.live-equipment-stats'));
       // Left third: identity, state, OEE, chart and manual controls.
       // Right two thirds: Overview, States, and Efficiency / Geometry.
       var overviewSide=document.createElement('aside');
       overviewSide.className='numeric-equipment-overview-side';
-      overviewSide.append(visualHeader,chartAside);
+      overviewSide.append(visualHeader,controlDock,chartAside);
       layout.append(overviewSide,detailGrid);
       card.querySelector('.live-equipment-card__row').before(layout);
       var title=card.querySelector('.live-equipment-identity strong'),heading=document.createElement('div'),symbol=document.createElement('span');

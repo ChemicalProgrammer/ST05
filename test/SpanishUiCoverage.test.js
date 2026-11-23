@@ -143,3 +143,23 @@ test('The runtime duration summary switches languages without editing simulation
   assert.equal(fields['run-shift-count'].value,'2');
   assert.equal(fields['run-duration'].value,'300');
 });
+
+test('Dynamic controls in Equipment, Results, What-If, Formats and Sheet import use translated labels',()=>{
+  const screens={
+    'apps-script/BasicMode.html':['Inputs','Upstream','Downstream','Speed & sensors','Bottles at stop'],
+    'apps-script/ClientEquipment.html':['Transport unit','Bottle → Case','Characteristics'],
+    'apps-script/Results.html':['Effective Run Time','Equipment operation','Equipment time breakdown'],
+    'apps-script/Products.html':['Format name','Product name','Bottles per case','Import configuration'],
+    'apps-script/ScenarioExplorer.html':['Scenario configuration','Find best scenario','Search depth','Add intervention target'],
+    'apps-script/SheetImport.html':['Review catalog records','Packing proposal','Bottle volume'],
+    'apps-script/Settings.html':['Reset text','Choose a save interval between 1 and 3600 seconds.']
+  };
+  for(const [path,terms] of Object.entries(screens)){
+    const source=read(path);
+    for(const label of terms){
+      assert.ok(source.includes(label),path+' no longer contains a tracked UI label: '+label);
+      assert.ok(Object.prototype.hasOwnProperty.call(dict,label)&&dict[label],
+        path+' contains untranslated label: '+label);
+    }
+  }
+});

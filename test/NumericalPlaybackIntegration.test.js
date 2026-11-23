@@ -254,7 +254,15 @@ test('reopening a saved view reconstructs its precise time even when the compact
     h.context.activatePersistentSimulation('s1',true);
     assert.equal(h.state.run.sampleIndex,0,'Saved history has no frame at the exact view time');
     assert.equal(h.state.run._resumeVirtualSecond,3.725);
-    h.context.startPlayback();await h.settle();await h.tick(0);
+    h.context.startPlayback();await h.settle();
+    // Restoration can span bounded work slices when other test files consume
+    // CPU. Drive pending work without advancing the simulated wall clock.
+    const restoreDeadline=Date.now()+5000;
+    for(let attempt=0;attempt<200&&Date.now()<restoreDeadline&&!h.context.numericalPlaybackSession.ready;attempt++){
+      await h.tick(0);
+      if(!h.context.numericalPlaybackSession.ready)await new Promise(resolve=>setTimeout(resolve,1));
+    }
+    assert.equal(h.context.numericalPlaybackSession.ready,true,'Saved-position reconstruction must finish');
     const restored=h.context.playbackVisualSample();
     assert(Math.abs(restored.virtualSecond-3.725)<1e-8);
     assert.equal(h.element('metric-time').seconds,restored.virtualSecond);

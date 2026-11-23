@@ -137,6 +137,8 @@
       state.run.active=false;
       state.run.playing=false;
       var view=simulation.results?.view;
+      markNumericalPlaybackAction(view?.playbackAction);
+      state.run.equipmentControlActions=cloneJson(view?.equipmentControlActions||{});
       state.run.playbackPositions={result:state.run.representative,times:{...view?.roundTimes}};
       if(Number.isFinite(view?.virtualSecond))state.run.playbackPositions.times[view.roundIndex||0]=view.virtualSecond;
       state.liveZoneDetails=cloneJson(view?.zoneDetails||{});
@@ -220,7 +222,7 @@
         [result.samples[Math.max(0,state.run.sampleIndex-1)],sample].forEach(function(frame){if(!replay.samples.some(function(saved){return saved.virtualSecond===frame.virtualSecond;}))replay.samples.push(cloneJson(frame));});
         replay.samples.sort(function(a,b){return a.virtualSecond-b.virtualSecond;});
       }
-      simulation.results.view={virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),lossesOpen:Array.from(document.querySelectorAll('.live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;})};
+      simulation.results.view={virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),playbackAction:state.run.playbackAction,equipmentControlActions:cloneJson(state.run.equipmentControlActions||{}),lossesOpen:Array.from(document.querySelectorAll('.live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;})};
     }
     function compactStoredReplays(simulations) {
       (simulations||[]).forEach(function(simulation){
@@ -370,6 +372,7 @@
         : locked||!isRunReady());
       playButton.setAttribute('aria-label',hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation'));
       playButton.title=hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation');
+      markNumericalPlaybackAction(state.run.playbackAction);
       document.querySelectorAll('#products-workspace input,#products-workspace select,#products-workspace button,#planned-line-events input,#planned-line-events select,#planned-line-events button,#add-product-changeover').forEach(function(control){control.disabled=locked||control.dataset.formatDisabled==='true';});
       STRunOptions.sync(locked);syncEventSelection();
     }
@@ -819,6 +822,8 @@
       invalidateActiveResult();
       shell.sync();
       state.run.configuration = copyRunConfiguration(run);
+      state.run.equipmentControlActions={};
+      markNumericalPlaybackAction('play');
       state.run.active=true;syncRunControls();
       execution.seed=run.seed;
       var calculation=calculateBatch(run,execution),session=roundSession;

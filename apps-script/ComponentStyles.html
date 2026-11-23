@@ -34,7 +34,8 @@ button { --on-accent:#fff; }
   font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;
   margin-block-start:var(--space-2);
 }
-/* Input and output use the same fixed-size unit slot, independent of the selected unit's text width. */
+/* Inputs and general time outputs keep a stable unit slot. Compact equipment
+   metrics size their selected unit separately below. */
 .time-value-control {gap:var(--time-unit-gap)!important;}
 .time-value-control > input[type=number] {padding-inline-end:var(--space-1)!important;}
 .time-value-control > select {flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;box-sizing:border-box;text-align:start!important;text-align-last:start!important;padding-inline:0!important;}
@@ -58,6 +59,27 @@ button { --on-accent:#fff; }
   vertical-align:baseline!important;
 }
 .metric-card--result > strong .st-time-output select {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--muted);vertical-align:baseline!important;}
+/* State counters end at the same right edge as other equipment values. The
+   general 3.25em unit slot must not leave a blank tail after a short unit. */
+.live-equipment-card .st-time-output[data-variant=metric] > .st-time-unit {
+  flex:0 0 auto!important;width:auto!important;min-width:0!important;max-width:none!important;
+  field-sizing:content;text-align:end!important;text-align-last:end!important;
+  font-weight:var(--weight-regular)!important;color:var(--muted)!important;
+}
+.live-equipment-card .st-time-output[data-variant=metric] > b {
+  font-weight:var(--weight-semibold)!important;color:var(--ink);
+}
+/* Preserve the last numerical playback action even while its button is
+   disabled during calculation or playback, as in the 2D toolbar. */
+#simulation-playback .playback-toolbar .icon-button[aria-pressed=true],
+#simulation-playback .playback-toolbar .icon-button[aria-pressed=true]:disabled {
+  background:var(--accent)!important;border-color:var(--accent)!important;
+  color:#fff!important;opacity:1!important;
+}
+#simulation-playback .playback-toolbar .icon-button[aria-pressed=true] svg {
+  color:#fff!important;stroke:currentColor;opacity:1!important;
+}
+.live-equipment-card .numeric-equipment-header-kpis[hidden] {display:none!important;}
 @media(hover:hover) and (pointer:fine) {
   :is(.metric-card--result,.metric-card--featured,.metric-card--scenario,
        #simulation-playback-metrics > article,#results-kpis .result-kpi,

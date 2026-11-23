@@ -1409,7 +1409,7 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
 /* Título y descripción forman una columna compacta. La barra se centra
    verticalmente respecto al bloque completo, también si no hay descripción. */
 .st-subsection > .st-subsection-header {
-  display:grid;grid-template-columns:minmax(0,1fr) fit-content(65%);
+  display:grid;grid-template-columns:minmax(0,1fr) max-content;
   column-gap:var(--space-3);row-gap:var(--subsection-description-gap);
   align-items:center;
 }
@@ -1427,7 +1427,11 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
 }
 .st-subsection > .st-subsection-header > .fold-tools {
   grid-column:2;grid-row:1;justify-self:end;align-self:center;
-  flex-wrap:wrap;min-width:0;max-width:100%;
+  flex-wrap:nowrap;width:max-content;min-width:0;max-width:100%;
+}
+/* La barra y sus subgrupos mantienen una línea en escritorio. */
+.st-subsection > .st-subsection-header > .fold-tools > .button-row {
+  flex-wrap:nowrap;margin-inline-start:0;
 }
 .st-subsection > .st-subsection-header:not(:has(> .fold-tools:not(:empty))) {
   grid-template-columns:minmax(0,1fr);
@@ -1455,6 +1459,14 @@ html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric
 .st-subsection.fold-native > summary.st-subsection-header > .fold-tools {
   display:flex;order:1;align-items:center;flex:0 1 auto;flex-wrap:wrap;
   gap:var(--space-2);min-width:0;max-width:100%;margin:0 0 0 auto;padding:0;
+}
+/* En vista estrecha, se desplaza la barra horizontalmente sin partirla. */
+@media(max-width:900px){
+  .st-subsection > .st-subsection-header {grid-template-columns:minmax(0,1fr);}
+  .st-subsection > .st-subsection-header > .fold-tools {
+    grid-column:1;grid-row:2;justify-self:start;width:100%;max-width:100%;
+    overflow-x:auto;flex-wrap:nowrap;
+  }
 }
 .st-subsection > .st-subsection-header > .fold-tools:empty {display:none;}
 @media(prefers-reduced-motion:reduce){

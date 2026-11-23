@@ -307,6 +307,7 @@
 .design-reference-explanation {color:var(--muted);}
 .design-reference-control-name {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);}
 .design-reference-control-name strong {color:var(--ink);font-size:var(--font-body);font-weight:var(--weight-semibold);}
+.design-reference-control-type {display:block;color:var(--muted);font-size:var(--font-secondary);line-height:var(--leading-body);}
 .design-reference-control-name code,.design-reference-body code {font-size:var(--font-caption);padding:1px 4px;border-radius:var(--radius-sm);background:var(--surface-soft);overflow-wrap:anywhere;}
 .design-reference-subsection {margin:0;width:100%;padding:var(--space-3);}
 .design-reference-subsection .fold-heading h3 {min-width:0;}
@@ -475,6 +476,38 @@
     button.addEventListener('click',function(){
       button.setAttribute('aria-pressed',String(button.getAttribute('aria-pressed')!=='true'));
     });
+  });
+  // Tipo y composición del control, preservando las tres columnas del catálogo.
+  var composedParts={
+    "Subsección":"Título + descripción + barra de herramientas + contenido",
+    "Subsección nativa":"Título + descripción + contenido plegable",
+    "Barra de herramientas":"Botón/Icono + selector + menú",
+    "Valor–unidad":"Campo/valor + selector de unidades",
+    "Menú desplegable de acciones":"Botón/Icono + opciones",
+    "Encabezado y pie de diálogo":"Título + barra de botones",
+    "Valor manual activable":"Checkbox + campo numérico",
+    "Pestañas de cuadro de diálogo":"Barra + pestañas",
+    "Pestañas del catálogo":"Barra + pestañas",
+    "Pestaña de simulación":"Botones de navegación + estado",
+    "KPI destacado":"Etiqueta + valor/unidad",
+    "Tarjeta de resultado":"Etiqueta + valor/unidad",
+    "KPI de resultado":"Tarjeta + KPI",
+    "Tarjeta de escenario":"Etiqueta + KPI + acciones",
+    "Tarjeta de estado":"Tarjeta + etiqueta de estado",
+    "Tarjeta de equipo":"Identidad + estado + métricas + gráfica",
+    "Tarjeta de configuración de equipo":"Encabezado + campos + indicadores",
+    "Panel de gráfica":"Título + gráfica + herramientas",
+    "Tabla de datos":"Encabezados + celdas",
+    "Fila de caso":"Identidad + estado + acciones",
+    "Ruta del caso (breadcrumb)":"Etiquetas de ruta + actual"
+  };
+  dialog.querySelectorAll('.design-reference-row').forEach(function(row){
+    var cell=row.querySelector('.design-reference-control-name');
+    var name=cell?.querySelector('strong')?.textContent.trim();
+    if(!name||cell.querySelector('.design-reference-control-type'))return;
+    var type=document.createElement('span');type.className='design-reference-control-type';
+    type.textContent=composedParts[name]?'Compuesto · '+composedParts[name]:'Básico';
+    cell.append(type);
   });
   function refreshTokens(){
     var rootStyles=getComputedStyle(document.documentElement);

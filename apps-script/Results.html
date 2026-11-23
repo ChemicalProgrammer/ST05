@@ -41,7 +41,8 @@ window.STResults=(function(){
     const shown=new Set(['failure-downtime','effective-runtime']);
     metrics(result,unit).filter(function(_,index){return !window.STBasicMode?.isBasic()||index<3;}).forEach(function(item,index){
       const key=keys[index];shown.add(key);
-      const card=kpiCard(target,key,(index===0?'metric-card--featured':'metric-card--result')+(index===0?__ST_TEXT__('results.primary_kpi'):''));
+      // Las clases CSS son identificadores, no texto traducible.
+      const card=kpiCard(target,key,index===0?'metric-card--featured':'metric-card--result');
       const label=card.children[0],value=card.children[1],stats=result?.batch?.statistics?.[['lineOeePercent','throughputPerMinute','outputCount'][index]];
       label.textContent=item[0];const amount=Number.isFinite(stats?.mean)?stats.mean:item[1];
       if(index>=3)setTimeMetric(value,amount,label.textContent);else setMetricValue(value,amount,item[2],index===0?2:undefined);

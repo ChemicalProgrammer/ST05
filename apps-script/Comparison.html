@@ -63,7 +63,6 @@ window.STComparison=function(state,isFiniteNumber){
       if (!a || !b || a.id === b.id) { const empty=document.createElement('p');empty.className='comparison-empty metric-card metric-card--status';empty.setAttribute('role','status');empty.textContent=__ST_TEXT__('comparison.select_two_different_simulations');target.append(empty);return; }
       STResults.compare(target,a,b);
       STResults.compareEquipmentOee(target,a,b);
-      appendComparisonContext(target, a, b);
       var basic=Boolean(window.STBasicMode?.isBasic());
       appendChangedInputs(target,a,b);
       appendComparisonSection(target,__ST_TEXT__('comparison.simulation_configuration'),STInputComparison.run(a.dynamicConfig),STInputComparison.run(b.dynamicConfig));
@@ -96,34 +95,6 @@ window.STComparison=function(state,isFiniteNumber){
       }
       target.appendChild(section);
     }
-    function appendComparisonContext(target, left, right) {
-      var context = document.createElement('section');
-      context.className = 'comparison-context metric-card metric-card--status';
-      var leftSeed = left.results?.seed;
-      var rightSeed = right.results?.seed;
-      var leftDuration = left.results?.durationSeconds;
-      var rightDuration = right.results?.durationSeconds;
-      var bothSaved = hasSavedSimulationResult(left.results) && hasSavedSimulationResult(right.results);
-      var sameRounds=(left.results?.batch?.rounds||1)===(right.results?.batch?.rounds||1),sameEngine=(left.results?.engineId||'ST_CURRENT')===(right.results?.engineId||'ST_CURRENT');
-      var paired = bothSaved && leftSeed === rightSeed && leftDuration === rightDuration && sameRounds && sameEngine;
-      context.classList.add(paired ? 'comparison-context-paired' : 'comparison-context-caution');
-      var heading = document.createElement('strong');
-      heading.textContent = left.name + __ST_TEXT__('comparison.vs') + right.name;
-      context.appendChild(heading);
-      var detail = document.createElement('p');
-      if (!bothSaved) {
-        detail.textContent = __ST_TEXT__('comparison.configuration_can_be_compared_now_run_and_save_both_simulations_before_inte');
-      } else if (paired) {
-        detail.textContent = __ST_TEXT__('comparison.paired_run_both_used_seed') + leftSeed + __ST_TEXT__('comparison.and') + leftDuration + __ST_TEXT__('comparison.virtual_seconds_result_differences_can_be_attributed_to_the_saved_configura');
-      } else if(!sameRounds||!sameEngine){
-        detail.textContent='Different replication counts or simulation engines. Rerun both with matching settings before attributing the result difference to configuration changes.';
-      } else {
-        detail.textContent = __ST_TEXT__('comparison.comparison_caution_saved_seed_or_virtual_duration_differs') + leftSeed + ' / ' + leftDuration + __ST_TEXT__('comparison.s_vs') + rightSeed + ' / ' + rightDuration + __ST_TEXT__('comparison.s_configuration_differences_remain_valid_but_rerun_both_with_the_same_seed_');
-      }
-      context.appendChild(detail);
-      target.appendChild(context);
-    }
-
     function hasSavedSimulationResult(result) {
       return Boolean(result && result.replay && result.summary &&
         isFiniteNumber(result.seed) && isFiniteNumber(result.durationSeconds));

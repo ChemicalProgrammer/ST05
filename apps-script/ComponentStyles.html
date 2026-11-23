@@ -109,17 +109,17 @@ button { --on-accent:#fff; }
 }
 .st-unit-menu::backdrop {background:transparent;pointer-events:none;}
 .st-unit-menu-option {
-  display:grid;grid-template-columns:minmax(3ch,max-content) minmax(0,1fr) 16px;
-  align-items:center;gap:var(--space-3);min-height:var(--control-height);
-  padding:var(--space-2);border:0;border-radius:var(--radius-sm);cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);
+  min-height:var(--control-height);padding:var(--space-2) var(--space-3);
+  border:0;border-radius:var(--radius-sm);cursor:pointer;
   color:var(--ink);background:transparent;user-select:none;
 }
 .st-unit-menu-option.is-active {background:var(--surface-hover);}
-.st-unit-menu-option[aria-selected=true] {background:var(--accent-soft);color:var(--accent);}
+.st-unit-menu-option[aria-selected=true] {background:var(--accent);color:#fff;}
 .st-unit-menu-option[aria-selected=true].is-active {outline:1px solid var(--line-strong);outline-offset:-1px;}
 .st-unit-menu-option[aria-disabled=true] {color:var(--disabled);cursor:not-allowed;}
-.st-unit-menu-abbreviation {font-weight:var(--weight-semibold);white-space:nowrap;}
-.st-unit-menu-name {min-width:0;overflow-wrap:anywhere;}
+.st-unit-menu-abbreviation {font-weight:inherit;white-space:nowrap;}
+.st-unit-menu-option[aria-selected=true] .st-unit-menu-abbreviation {font-weight:var(--weight-semibold);}
 .st-unit-menu-check {text-align:center;font-weight:var(--weight-semibold);}
 /* Read-only numbers use the enclosing result/table scale. The unit remains a
    native select, while fixed text uses the identical metric-unit contract. */

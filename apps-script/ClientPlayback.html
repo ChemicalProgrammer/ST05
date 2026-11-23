@@ -1160,6 +1160,10 @@
 
     function updateNumerical2DRows(host,rows,type,card){
       var valid=new Set();
+      var reserveSeconds=type==='states'?Math.max(
+        Number(state.run.configuration?.durationSeconds)||0,
+        Number(state.run.result?.durationSeconds)||0,
+        Number(state.run.result?.effectiveRuntimeStop?.limitSeconds)||0):0;
       rows.forEach(function(row,index){
         var key=type+index;valid.add(key);
         var nodes=host._numericRows||(host._numericRows=new Map());
@@ -1182,9 +1186,11 @@
         }
         var slot=el.lastElementChild;
         if(type==='states'&&Number.isFinite(row[1])){
+          delete slot.dataset.display;
           STTimeControls.setOutput(slot,row[1],{
             unit:card.dataset.stateTimeUnit||'s',scope:host,label:'Change equipment states unit',
-            variant:'metric',valueClass:'numeric-time-value',unitClass:'numeric-time-unit',gap:2
+            variant:'metric',valueClass:'numeric-time-value',unitClass:'numeric-time-unit',gap:2,
+            reserveSeconds:reserveSeconds
           });
         }else{
           var value=row[1]===null||row[1]===undefined?'—':String(row[1]);

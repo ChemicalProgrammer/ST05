@@ -32,6 +32,14 @@ window.STTimeControls=(function(){
     if(unit&&opts.unitFontSize)unit.style.fontSize=String(opts.unitFontSize);
     if(value&&opts.valueWeight)value.style.fontWeight=String(opts.valueWeight);
     if(unit&&opts.unitColor)unit.style.color=String(opts.unitColor);
+    if(opts.variant==='metric'){
+      // Reserve the counter's full run horizon before playback starts. A
+      // changing number of decimal digits must not steal space from its label.
+      var horizon=Number(opts.reserveSeconds);
+      horizon=Number.isFinite(horizon)?Math.max(86400,horizon):86400;
+      var places=Math.max(10,formatter.format(Math.ceil(horizon)).length+4);
+      wrapper.style.setProperty('--st-time-value-width',places+'ch');
+    }
   }
   function output(seconds,opts){
     opts=opts||{};
@@ -42,16 +50,18 @@ window.STTimeControls=(function(){
     wrapper.append(value,unit);
     applyAppearance(wrapper,opts);
     wrapper._stAppearance=[opts?.variant||'',opts?.className||'',opts?.valueClass||'',opts?.unitClass||'',
-      opts?.gap??'',opts?.valueFontSize||'',opts?.unitFontSize||'',opts?.valueWeight||'',opts?.unitColor||''].join('|');
+      opts?.gap??'',opts?.valueFontSize||'',opts?.unitFontSize||'',opts?.valueWeight||'',opts?.unitColor||'',opts?.reserveSeconds??''].join('|');
     function refresh(){
       var seconds=Number(wrapper.dataset.seconds);
+      wrapper.dataset.unit=unit.value;
       value.textContent=Number.isFinite(seconds)?number(seconds/secondsByUnit[unit.value]):'—';
     }
     unit.addEventListener('change',function(){
+      refresh();
       var scope=opts.scope||wrapper;
       scope.querySelectorAll('.st-time-output').forEach(function(node){
         var otherUnit=node.querySelector('.st-time-unit');
-        if(otherUnit){otherUnit.value=unit.value;var b=node.querySelector('b');
+        if(otherUnit){otherUnit.value=unit.value;node.dataset.unit=unit.value;var b=node.querySelector('b');
           if(b){var seconds=Number(node.dataset.seconds);b.textContent=Number.isFinite(seconds)?number(seconds/secondsByUnit[unit.value]):'—';}
         }
       });
@@ -68,7 +78,7 @@ window.STTimeControls=(function(){
     // Appearance options are normally constant for a mounted control.
     // Apply them only when the caller changes the requested style.
     var appearance=[opts?.variant||'',opts?.className||'',opts?.valueClass||'',opts?.unitClass||'',
-      opts?.gap??'',opts?.valueFontSize||'',opts?.unitFontSize||'',opts?.valueWeight||'',opts?.unitColor||''].join('|');
+      opts?.gap??'',opts?.valueFontSize||'',opts?.unitFontSize||'',opts?.valueWeight||'',opts?.unitColor||'',opts?.reserveSeconds??''].join('|');
     if(current._stAppearance!==appearance){
       applyAppearance(current,opts);
       current._stAppearance=appearance;

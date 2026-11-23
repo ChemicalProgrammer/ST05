@@ -34,13 +34,13 @@ button { --on-accent:#fff; }
   font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;
   margin-block-start:var(--space-2);
 }
-/* Inputs and general time outputs keep a stable unit slot. Compact equipment
-   metrics size their selected unit separately below. */
+/* Inputs and general time outputs keep their stable unit slot. Equipment
+   counters have a separate layout; generic sizing/weight must not reach them. */
 .time-value-control {gap:var(--time-unit-gap)!important;}
 .time-value-control > input[type=number] {padding-inline-end:var(--space-1)!important;}
 .time-value-control > select {flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;box-sizing:border-box;text-align:start!important;text-align-last:start!important;padding-inline:0!important;}
 .st-time-output,.time-output-value {gap:var(--time-unit-gap)!important;align-items:baseline;}
-:is(.st-time-output,.live-equipment-card .st-time-output[data-variant=metric]) > .st-time-unit {
+.st-time-output:not([data-variant=metric]) > .st-time-unit {
   flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;
   min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;
   box-sizing:border-box;text-align:start!important;text-align-last:start!important;
@@ -55,19 +55,43 @@ button { --on-accent:#fff; }
 .time-value-control > select {font-size:inherit!important;line-height:inherit!important;font-weight:inherit!important;}
 .st-time-output > b,
 .st-time-output > .st-time-unit {
-  font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;
+  font-size:inherit!important;line-height:inherit!important;
   vertical-align:baseline!important;
 }
+.st-time-output:not([data-variant=metric]) > b,
+.st-time-output:not([data-variant=metric]) > .st-time-unit {font-weight:inherit!important;}
 .metric-card--result > strong .st-time-output select {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--muted);vertical-align:baseline!important;}
-/* State counters end at the same right edge as other equipment values. The
-   general 3.25em unit slot must not leave a blank tail after a short unit. */
-.live-equipment-card .st-time-output[data-variant=metric] > .st-time-unit {
-  flex:0 0 auto!important;width:auto!important;min-width:0!important;max-width:none!important;
-  field-sizing:content;text-align:end!important;text-align-last:end!important;
-  font-weight:var(--weight-regular)!important;color:var(--muted)!important;
+/* One definition owns compact counters. The number's width is fixed for the
+   run horizon, so variable decimals cannot wrap the neighbouring label.
+   Native unit selects use the selected abbreviation's width (not their
+   longest option or experimental field-sizing). Their text ends at the right
+   edge, while the number uses exactly the same weight as Overview values. */
+.live-equipment-card .st-time-output[data-variant=metric] {
+  --st-time-unit-width:1.1ch;
+  display:inline-flex!important;flex:0 0 auto;align-items:baseline;
+  justify-content:flex-end;gap:2px!important;white-space:nowrap;
+  font-size:var(--font-secondary);font-weight:var(--weight-semibold);
+  font-variant-numeric:tabular-nums;line-height:1.2;vertical-align:baseline;
+  min-height:0;height:auto;color:var(--ink);
+}
+.live-equipment-card .st-time-output[data-variant=metric][data-unit=min] {--st-time-unit-width:3.3ch;}
+.live-equipment-card .st-time-output[data-variant=metric][data-unit=wk] {--st-time-unit-width:2.5ch;}
+.live-equipment-card .st-time-output[data-variant=metric] > select.st-time-unit {
+  flex:0 0 var(--st-time-unit-width);width:var(--st-time-unit-width);
+  min-width:0;max-width:none;box-sizing:content-box;
+  text-align:end;text-align-last:end;font-weight:var(--weight-regular);
+  padding:0;margin:0;min-height:0;height:auto;border:0;background:transparent;
+  box-shadow:none;color:var(--muted);appearance:none;-webkit-appearance:none;
+  cursor:pointer;
 }
 .live-equipment-card .st-time-output[data-variant=metric] > b {
-  font-weight:var(--weight-semibold)!important;color:var(--ink);
+  display:block;flex:0 0 var(--st-time-value-width,10ch);
+  inline-size:var(--st-time-value-width,10ch);min-inline-size:var(--st-time-value-width,10ch);
+  font-weight:var(--weight-semibold);text-align:end;white-space:nowrap;
+  margin:0;padding:0;color:var(--ink);
+}
+.live-equipment-card .st-time-output[data-variant=metric] > select.st-time-unit:hover {
+  color:var(--accent);text-decoration:underline;
 }
 /* Preserve the last numerical playback action even while its button is
    disabled during calculation or playback, as in the 2D toolbar. */

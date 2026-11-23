@@ -851,26 +851,6 @@ html[data-ui-mode=basic][data-events-enabled=false] .live-equipment-card .numeri
 .live-equipment-card .numeric-equipment-layout > .live-equipment-detail-grid {
   display:flex!important; flex-direction:column; gap:var(--space-2)!important; min-width:0;
 }
-.live-equipment-card .st-time-output[data-variant=metric] {
-  display:inline-flex!important; align-items:baseline; justify-content:flex-end;
-  gap:2px!important; white-space:nowrap;
-  line-height:inherit; font-size:inherit; color:inherit;
-}
-.live-equipment-card .st-time-output[data-variant=metric] .numeric-time-value {
-  color:var(--ink); font-size:var(--font-secondary)!important;
-  font-weight:var(--weight-semibold); line-height:inherit; margin:0; padding:0;
-}
-.live-equipment-card .st-time-output[data-variant=metric] select.numeric-time-unit {
-  width:auto!important; min-width:0!important; max-width:none!important;
-  border:0!important; margin:0!important; padding:0!important;
-  font-size:var(--font-secondary)!important; font-weight:var(--weight-normal);
-  color:var(--muted)!important; line-height:inherit; text-align:left;
-  text-align-last:left; vertical-align:baseline;
-  -webkit-appearance:none; appearance:none;
-}
-.live-equipment-card .st-time-output[data-variant=metric] select.numeric-time-unit:hover {
-  color:var(--accent)!important; text-decoration:underline;
-}
 @container(max-width:920px) {
   .live-equipment-card .numeric-equipment-layout {
     grid-template-columns:minmax(195px,1fr) minmax(0,1.75fr)!important;
@@ -955,22 +935,6 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
  .live-equipment-card[data-card-collapsed=true] .numeric-equipment-chart-side {
    grid-column:1;grid-row:2;
  }
-}
-/* Match time values to other compact field values: no native select minimum height. */
-.live-equipment-card .st-time-output[data-variant=metric] {
-  display:inline-flex!important;align-items:baseline!important;
-  gap:2px!important;min-height:0!important;height:auto!important;
-  vertical-align:baseline;
-}
-.live-equipment-card .st-time-output[data-variant=metric] :is(b,select) {
-  font-size:var(--font-secondary)!important;line-height:1.2!important;
-  min-height:0!important;height:auto!important;padding-block:0!important;margin-block:0!important;
-}
-.live-equipment-card .st-time-output[data-variant=metric] select {
-  appearance:none!important;-webkit-appearance:none!important;
-  width:auto!important;min-width:0!important;max-width:none!important;
-  padding:0!important;border:0!important;background:transparent!important;
-  box-shadow:none!important;display:inline-block!important;
 }
 @media(prefers-reduced-motion:reduce) {
   .live-equipment-card .numeric-card-toggle svg {transition:none!important;}

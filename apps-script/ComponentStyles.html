@@ -1,4 +1,8 @@
 <style>
+/* Solid accent buttons always use white text and white currentColor icons,
+   including in dark mode and dialogs. Semantic soft, ghost, disabled and
+   outline button styles retain their explicit foreground colors. */
+button { --on-accent:#fff; }
 /* Componentes reutilizables. Editar variables en DesignTokens.html y
    documentar nuevos tipos en docs/34_UI_VISUAL_STANDARDS.md. */
 /* ─── Tipos de tarjetas reutilizables de SimuLine ───

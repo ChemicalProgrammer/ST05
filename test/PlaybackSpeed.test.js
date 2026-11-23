@@ -189,3 +189,40 @@ test('Paused numerical replay resumes the exact virtual offset with an advancing
  now=1100;
  assert.equal(vm.runInContext('playbackElapsed(state.run.result.samples[0])',context),.5);
 });
+
+
+test('Recorded numeric samples refresh between expensive chart frames during high-speed playback',()=>{
+ const code=readClientSource();
+ const samples=Array.from({length:101},(_,i)=>({virtualSecond:i,outputCount:i}));
+ const state={run:{result:{samples},sampleIndex:0,playing:true,active:true}};
+ let now=0,callback,delay,charts=0,light=[];
+ const stats={lastPaintAt:-Infinity};
+ const context={state,roundSession:null,playbackClock:null,playbackRenderStats:stats,
+   playbackRefreshIntervalMs:()=>100,performance:{now:()=>now},
+   document:{getElementById:()=>({value:'1000'})},
+   window:{setTimeout(fn,ms){callback=fn;delay=ms;return 1;},clearTimeout(){}},
+   renderPlaybackFrame(){charts++;stats.lastPaintAt=now;stats.lastNumericPaintAt=now;},
+   refreshPlaybackMetricCards(frame){light.push(['kpi',frame.virtualSecond]);},
+   refreshNumericalOverviewFromSample(){light.push(['equipment',state.run.sampleIndex]);},
+   syncRunControls(){},setPlaybackStatus(){},captureSimulationView(){},
+   autosave:{change(){}},finishRoundSession(){},};
+ state.uiView='simulation';
+ vm.createContext(context);
+ for(const name of ['findSampleIndexAtOrBefore','schedulePlaybackStep','playbackElapsed']){
+   const start=code.indexOf('    function '+name+'('),end=code.indexOf('\n    function ',start+10);
+   assert.ok(start>=0&&end>start);
+   vm.runInContext(code.slice(start,end),context);
+ }
+ vm.runInContext('schedulePlaybackStep()',context);
+ assert.equal(charts,1);
+ now=35;callback();
+ assert.equal(state.run.sampleIndex,35);
+ assert.equal(charts,1,'Full chart render remains FPS-limited');
+ now=70;callback();
+ assert.equal(state.run.sampleIndex,70);
+ assert.deepEqual(light,[['kpi',35],['equipment',35]],
+   'Equipment data must change from the actual new sample before the next chart redraw');
+ assert.equal(charts,1);
+ now=105;callback();
+ assert.equal(charts,2,'Heavy frame refresh retains its original configured cadence');
+});

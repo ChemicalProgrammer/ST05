@@ -563,7 +563,8 @@ window.STSimulation2D=(function(){
         const designSpeedPerSecond=maximum>0?maximum/60:item.nominalRatePerSecond;
         const rate=Math.min(item.nominalRatePerSecond,designSpeedPerSecond);
         const residenceSeconds=data.equipment?.residenceTimeSeconds??0;
-        return {capacityBottles,residenceSeconds,inputBottleFactor,inputUnit:data.flowUnits?.input||'BOTTLES',id:item.id,name:item.name||item.id,
+        const occupancyMode=data.equipment?.occupancyMode==='POSITIONS'?'POSITIONS':'STORAGE';
+        return {capacityBottles,residenceSeconds,occupancyMode,inputBottleFactor,inputUnit:data.flowUnits?.input||'BOTTLES',id:item.id,name:item.name||item.id,
           kind:'machine',unit,length:1100,rate,bottlesPerUnit,designSpeedPerSecond,
           rampSeconds:item.restartRampUpSeconds??data.downstream?.rampUpTimeSeconds??0,
           primeRampSeconds:zones[index-1]?.primeSensorPositionMm!=null?zones[index-1].downstreamRampUpSeconds:undefined,

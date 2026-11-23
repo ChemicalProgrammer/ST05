@@ -143,3 +143,15 @@ test('The global error button is solid red and announces the error count',()=>{
   assert.match(dialogs,/button\.setAttribute\('aria-label',label\)/);
   assert.match(dialogs,/header\.dataset\.count=String\(count\)/);
 });
+
+test('Equipment-performance status badge is right aligned for machines and conveyors',()=>{
+  const playback=read('apps-script/ClientPlayback.html');
+  const css=read('apps-script/UiStandards.html');
+  const markup=playback.slice(playback.indexOf("heading.className='live-equipment-heading'"),playback.indexOf("// A conveyor's PASS / FAIL action",playback.indexOf("heading.className='live-equipment-heading'")));
+  assert.match(markup,/heading\.append\(symbol,cardToggle\)/);
+  assert.match(markup,/visualHeader\.append\(card\.querySelector\('\.live-state'\)\)/);
+  assert.doesNotMatch(markup,/heading\.append\(card\.querySelector\('\.live-state'\)\)/);
+  assert.match(css,/\.numeric-equipment-header > \.live-state \{[\s\S]*?grid-column:2;grid-row:1;justify-self:end/);
+  assert.match(css,/\.numeric-equipment-header-details \{grid-column:1;grid-row:1/);
+  assert.match(css,/\.numeric-equipment-control-dock \{[\s\S]*?grid-column:2!important;grid-row:2 \/ span 2!important/);
+});

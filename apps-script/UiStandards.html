@@ -1434,6 +1434,24 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
 }
 #simulation-playback #playback-performance {display:none!important;}
 
+/* Equipment performance: the state badge always occupies the trailing
+   header column. Machine/conveyor names stay left even when long. */
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
+  grid-template-columns:minmax(0,1fr) max-content!important;
+  grid-template-rows:auto auto auto;
+}
+.live-equipment-card .numeric-equipment-header-details {grid-column:1;grid-row:1;min-width:0;}
+.live-equipment-card .numeric-equipment-header > .live-state {
+  grid-column:2;grid-row:1;justify-self:end;align-self:start;
+  margin:0;max-width:100%;white-space:nowrap;
+}
+.live-equipment-card .numeric-equipment-header-kpis {grid-column:1;grid-row:2;}
+.live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock,
+html[data-ui-mode=basic] .live-equipment-card .numeric-equipment-header .numeric-equipment-control-dock {
+  grid-column:2!important;grid-row:2 / span 2!important;
+}
+
+
 </style>
 
 

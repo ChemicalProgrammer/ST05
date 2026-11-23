@@ -136,3 +136,94 @@ test('Deleting equipment keeps numerical performance heading visible without sta
     assert.match(empty.textContent,/Add at least two/);
   }finally{dom.window.close();}
 });
+
+
+test('Numerical Overview updates Flow, Processed and Inside from successive measured samples',()=>{
+  const dom=new JSDOM('<article><section class="live-equipment-2d-summary">'+
+    '<div class="live-equipment-2d-rows"></div></section></article>');
+  try{
+    const card=dom.window.document.querySelector('article');
+    const context={document:dom.window.document,formatNumber:n=>String(n)};
+    vm.createContext(context);
+    vm.runInContext(sourceFunction('updateNumerical2DRows')+
+      '\n'+sourceFunction('updateNumericalSummaryRows'),context);
+    const model={id:'blow',type:'BLOWMOLDER',nominalRatePerSecond:10,
+      processData:{equipment:{internalCapacityBottles:36}}};
+    const rows=()=>Array.from(card.querySelectorAll('.live-equipment-2d-row'))
+      .map(el=>[el.querySelector('.live-equipment-2d-label').textContent,
+        el.querySelector('.live-equipment-2d-value').textContent]);
+    const first={id:'blow',actualRatePerSecond:10,processedUnits:100,
+      internalInventoryBottles:24,internalCapacityBottles:36,internalInputBottleFactor:1};
+    context.updateNumericalSummaryRows(card,first,model,null,null,'RUNNING');
+    const start=rows();
+    assert.deepEqual(start.slice(1,5),[
+      ['Design speed','600bpm'],['Flow','600bpm'],
+      ['Processed','100bottles'],['Inside','24 / 36bottles']
+    ]);
+    const next={...first,actualRatePerSecond:7,processedUnits:340,internalInventoryBottles:10};
+    context.updateNumericalSummaryRows(card,next,model,null,null,'RUNNING');
+    const updated=rows();
+    assert.deepEqual(updated.slice(1,5),[
+      ['Design speed','600bpm'],['Flow','420bpm'],
+      ['Processed','340bottles'],['Inside','10 / 36bottles']
+    ]);
+    assert.notDeepEqual(updated,start,'Measured sample changes must update all dependent metrics');
+    assert.equal(card.querySelectorAll('.live-equipment-2d-row').length,8,
+      'Rendering must reuse rows rather than add duplicate metrics');
+  }finally{dom.window.close();}
+});
+
+test('Light playback refreshes visible equipment summary only for a new recorded sample',()=>{
+  const dom=new JSDOM('<div id="live-equipment"><article class="live-equipment-card"'+
+    ' data-equipment-id="blow" data-equipment-index="0">'+
+    '<section class="live-equipment-2d-summary"></section><b class="live-oee"></b>'+
+    '</article></div>');
+  try{
+    const model={id:'blow',type:'BLOWMOLDER',nominalRatePerSecond:10};
+    const sample1={virtualSecond:20,equipment:[{id:'blow',actualRatePerSecond:4,oeePercent:40}],accumulationZones:[]};
+    const sample2={virtualSecond:40,equipment:[{id:'blow',actualRatePerSecond:7,oeePercent:70}],accumulationZones:[]};
+    const state={run:{result:{samples:[sample1,sample2]},sampleIndex:0},
+      activeCase:{equipment:[model]},uiView:'simulation'};
+    const updates=[];
+    const context={document:dom.window.document,state,
+      window:{STNumericCardDiagnostics:{overview:true}},
+      conveyorCardRates:()=>null,formatPercent:n=>String(n*100)+'%',
+      updateNumericalSummaryRows:(card,unit)=>updates.push(unit.actualRatePerSecond)};
+    vm.createContext(context);
+    vm.runInContext(sourceFunction('refreshNumericalOverviewFromSample'),context);
+    context.refreshNumericalOverviewFromSample();
+    context.refreshNumericalOverviewFromSample();
+    assert.deepEqual(updates,[4],'Unchanged recording frame must not cause duplicate Overview work');
+    state.run.sampleIndex=1;
+    context.refreshNumericalOverviewFromSample();
+    assert.deepEqual(updates,[4,7],'A new measured frame must update the Overview even without a full repaint');
+    assert.equal(dom.window.document.querySelector('.live-oee').textContent,'70%');
+    assert.equal(state.run.result.samples.length,2,'UI refresh cannot mutate engine samples');
+  }finally{dom.window.close();}
+});
+
+test('Live state elapsed indicator advances on exact transitions without inventing output',()=>{
+  const dom=new JSDOM('<div id="live-equipment">'+
+    '<article class="live-equipment-card state-running" data-equipment-index="0" '+
+    'data-displayed-availability-state="RUNNING"><span class="live-state">RUNNING</span>'+
+    '<span class="numeric-state-elapsed" hidden></span></article></div>');
+  try{
+    const result={stateTransitions:[[0,0,'RUNNING'],[12,0,'BACKUP_STOP']],
+      detailCoverage:{stateTransitionsOmitted:0}};
+    const context={state:{run:{result}},document:dom.window.document,
+      playbackStateTimelineCache:{result:null,length:-1,byEquipment:[]},
+      window:{STLanguage:{translate:s=>s}},formatNumber:n=>String(n)};
+    vm.createContext(context);
+    vm.runInContext(sourceFunction('updateLiveEquipmentStateBadges'),context);
+    context.updateLiveEquipmentStateBadges(12.5);
+    const marker=dom.window.document.querySelector('.numeric-state-elapsed');
+    assert.equal(marker.hidden,false);
+    assert.equal(marker.textContent,'Time in state: 0.5 s');
+    context.updateLiveEquipmentStateBadges(15);
+    assert.equal(marker.textContent,'Time in state: 3 s');
+    assert.equal(dom.window.document.querySelector('.live-state').textContent,'BACKUP STOP');
+    result.detailCoverage.stateTransitionsOmitted=1;
+    context.updateLiveEquipmentStateBadges(16);
+    assert.equal(marker.hidden,true,'Truncated transitions must not show an unreliable state timer');
+  }finally{dom.window.close();}
+});

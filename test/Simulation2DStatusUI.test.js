@@ -11,9 +11,11 @@ test('2D equipment uses numeric-style status pills in the first table and above 
   assert.ok(src.includes('function drawSignal(context,x,y,signal,colors,zoomFactor)'));
   assert.ok(src.includes('drawSignal(context,x+width/2,signalY,signal,colors,factor)'));
   assert.ok(src.includes('drawSignal(context,sx,top-14,signal,colors,factor)'));
-  assert.ok(src.includes('drawStatusPill(context,signal.state,signal.lamp,colors,'));
+  assert.ok(src.includes('drawScreenStatusPill(context,signal.state,signal.lamp,colors,'));
   assert.ok(src.includes("if(showSignal&&label==='State')"));
-  assert.ok(src.includes('drawStatusPill(context,value,signal.lamp,colors,'));
+  assert.ok(src.includes('drawScreenStatusPill(context,value,signal.lamp,colors,'));
+  assert.ok(src.includes("font:'500 11px system-ui',height:19"));
+  assert.ok(src.includes('context.scale(1/factor,1/factor)'));
   assert.ok(src.includes('context.scale(1/factor,1/factor)'),'Labels above equipment use constant on-screen size');
   for(const token of ['running-soft','starved-soft','blocked-soft','failure-soft','info-soft','stopped-soft'])
     assert.ok(src.includes("color('"+token+"'"),'Use shared numeric badge token '+token);

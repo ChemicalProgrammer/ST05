@@ -958,6 +958,20 @@ window.STSimulation2D=(function(){
       Math.max(1,width-(2*paddingX+2*radius+gap)));
     context.restore();
   }
+  // La misma geometría visual de .live-state en tarjetas numéricas.
+  // Las coordenadas siguen el canvas, pero el badge mantiene 11px/19px
+  // en pantalla y no crece al ampliar el diagrama.
+  function drawScreenStatusPill(context,state,lamp,colors,x,y,zoomFactor,maxWidth,align='center'){
+    const factor=Math.max(.01,zoomFactor);
+    context.save();
+    context.translate(x,y);context.scale(1/factor,1/factor);
+    drawStatusPill(context,state,lamp,colors,0,0,{
+      font:'500 11px system-ui',height:19,
+      paddingX:7,dotRadius:2,dotGap:4,
+      maxWidth:Math.max(15,Math.min(110,maxWidth)),align
+    });
+    context.restore();
+  }
   // Los estados sobre máquinas/bandas usan tamaño fijo de pantalla, nunca
   // escalado por camera.scale; así no aparecen cápsulas gigantes al ampliar.
   function drawSignal(context,x,y,signal,colors,zoomFactor){
@@ -1207,13 +1221,10 @@ window.STSimulation2D=(function(){
         context.textAlign='left';
         // Igual que la cabecera numérica: nombre a la izquierda y una
         // etiqueta de estado suave alineada a la derecha.
-        const pillMaxWidth=Math.min(width*.45,76*tableScale);
-        drawStatusPill(context,signal.state,signal.lamp,colors,
-          left+width-telemetryPadding,y+19*tableScale,{
-            font:'500 '+telemetryFont,height:15*tableScale,
-            paddingX:4*tableScale,dotRadius:1.5*tableScale,
-            dotGap:3*tableScale,maxWidth:pillMaxWidth,align:'right'
-          });
+        const pillMaxWidth=Math.min(width*.45,110/Math.max(.01,screenFactor));
+        drawScreenStatusPill(context,signal.state,signal.lamp,colors,
+          left+width-telemetryPadding,y+19*tableScale,screenFactor,
+          Math.min(110,width*.45*screenFactor),'right');
         context.fillStyle=ink;context.textAlign='left';context.font='600 '+telemetryFont;
         text(title,glyphX+16*tableScale,y+21*tableScale,
           Math.max(8*tableScale,width-2*telemetryPadding-16*tableScale-pillMaxWidth-4*tableScale));
@@ -1242,12 +1253,9 @@ window.STSimulation2D=(function(){
         if(showSignal&&label==='State'){
           // Etiqueta de la primera tabla con el mismo fondo suave, punto y
           // color de texto que .live-state en la simulación numérica.
-          drawStatusPill(context,value,signal.lamp,colors,
-            valueX-valueWidth/2,baseline-4*tableScale,{
-              font:'500 '+telemetryFont,height:15*tableScale,
-              paddingX:4*tableScale,dotRadius:1.5*tableScale,
-              dotGap:3*tableScale,maxWidth:valueWidth
-            });
+          drawScreenStatusPill(context,value,signal.lamp,colors,
+            valueX-valueWidth/2,baseline-4*tableScale,screenFactor,
+            Math.min(110,valueWidth*screenFactor));
         }else{
           context.fillStyle=ink;
           text(localize2D(value),valueX,baseline,valueWidth);

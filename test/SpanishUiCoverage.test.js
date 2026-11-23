@@ -107,3 +107,39 @@ test('Dynamic duration reporting translates components without changing input va
   assert.match(simulation,/window\.removeEventListener\('st-language-change',onLanguageChange\)/);
   assert.match(simulation,/periodNote\.textContent=tr\('Simulation period:'\)/);
 });
+
+test('The runtime duration summary switches languages without editing simulation inputs',()=>{
+  const source=read('apps-script/RunOptions.html');
+  const code=source.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(code);
+  const fields={
+    'duration-mode':{value:'SHIFTS'},
+    'run-duration':{value:'300'},
+    'run-duration-unit':{value:'MINUTES'},
+    'run-start-at':{value:''},
+    'run-end-at':{value:''},
+    'run-effective-target':{value:'978'},
+    'run-time-zone':{value:'America/Mexico_City'},
+    'run-shift-hours':{value:'8'},
+    'run-shift-count':{value:'2'},
+    'run-track-shifts':{checked:true},
+    'run-duration-summary':{textContent:''}
+  };
+  let locale='en',listener;
+  const window={STLanguage:{
+    current:()=>locale,
+    translate:word=>locale==='es'?({
+      days:'días',hours:'horas','complete shifts':'turnos completos',
+      'of one shift':'de un turno'
+    }[word]||word):word
+  },addEventListener(name,fn){if(name==='st-language-change')listener=fn;}};
+  const document={getElementById:id=>fields[id]};
+  new Function('window','document',code)(window,document);
+  assert.equal(typeof listener,'function');
+  listener();
+  assert.match(fields['run-duration-summary'].textContent,/16 hours.*2 complete shifts/);
+  locale='es';listener();
+  assert.match(fields['run-duration-summary'].textContent,/16 horas.*2 turnos completos/);
+  assert.equal(fields['run-shift-count'].value,'2');
+  assert.equal(fields['run-duration'].value,'300');
+});

@@ -91,3 +91,48 @@ test('Subsection description aligns with the text after the disclosure chevron',
   assert.match(css,/\.subsection-heading-copy > \.subsection-description,[\s\S]*?padding-inline-start:calc\(\.45em \+ var\(--space-1\) \+ var\(--space-2\)\)/);
   assert.match(css,/\.subsection-heading-copy > \.subsection-playback-meta \{[\s\S]*?padding-inline-start:calc\(\.45em \+ var\(--space-1\) \+ var\(--space-2\)\)/);
 });
+
+test('Deleting equipment keeps numerical performance heading visible without stale cards',()=>{
+  const web=read('apps-script/WebApp.html');
+  const sectionStart=web.indexOf('<section id="simulation-equipment"');
+  const resultStart=web.indexOf('<div id="simulation-results"',sectionStart);
+  const sectionEnd=web.indexOf('</section>',sectionStart);
+  assert.ok(sectionStart>0&&sectionStart<resultStart&&resultStart<sectionEnd,
+    'Equipment heading must be outside the conditional replay container');
+  const dom=new JSDOM('<section id="simulation-equipment"><h3>Equipment performance</h3>'+
+    '<p id="simulation-equipment-empty" class="chart-note hidden"></p>'+
+    '<div id="simulation-results"><div id="live-equipment"></div></div></section>');
+  try{
+    const models=[{id:'F',type:'FILLER'},{id:'C',type:'CONVEYOR'}];
+    const context={document:dom.window.document,window:{STLanguage:{current:()=> 'en',translate:text=>text}},
+      state:{activeCase:{equipment:models},run:{result:null,sampleIndex:0}}};
+    const start=source.indexOf('    function updateNumericalEquipmentVisibility(');
+    const end=source.indexOf('\n    var playbackControlSignature=',start);
+    assert.ok(start>0&&end>start);
+    vm.createContext(context);
+    vm.runInContext(source.slice(start,end),context);
+    const panel=dom.window.document.getElementById('simulation-results');
+    const empty=dom.window.document.getElementById('simulation-equipment-empty');
+    assert.equal(context.updateNumericalEquipmentVisibility(),false);
+    assert.equal(panel.classList.contains('hidden'),true);
+    assert.equal(empty.classList.contains('hidden'),false);
+    assert.match(empty.textContent,/Run a numerical simulation/);
+    assert.ok(dom.window.document.querySelector('#simulation-equipment h3'));
+    const sample={virtualSecond:1,equipment:[{id:'F'},{id:'C'}]};
+    context.state.run.result={samples:[sample],detailCoverage:{recordingMode:'BOUNDED'}};
+    assert.equal(context.updateNumericalEquipmentVisibility(),true);
+    assert.equal(panel.classList.contains('hidden'),false);
+    assert.equal(empty.classList.contains('hidden'),true);
+    // A previously saved three-equipment replay must not label current equipment incorrectly.
+    context.state.run.result={samples:[{virtualSecond:1,equipment:[{id:'F'},{id:'X'},{id:'C'}]}]};
+    assert.equal(context.updateNumericalEquipmentVisibility(),false);
+    assert.match(empty.textContent,/do not match/);
+    context.state.run.result={samples:[],detailCoverage:{recordingMode:'SUMMARY'}};
+    assert.equal(context.updateNumericalEquipmentVisibility(),false);
+    assert.match(empty.textContent,/Summary only/);
+    context.state.run.result=null;
+    models.splice(1,1);
+    context.updateNumericalEquipmentVisibility();
+    assert.match(empty.textContent,/Add at least two/);
+  }finally{dom.window.close();}
+});

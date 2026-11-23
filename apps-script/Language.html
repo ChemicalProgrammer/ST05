@@ -15,7 +15,7 @@ window.STLanguage=(function(){
   document.documentElement.lang=language;
   function normalize(value){return String(value==null?'':value);}
   function localized(value,target){
-    var text=normalize(value),match=text.match(/^(\\s*)([\\s\\S]*?)(\\s*)$/);
+    var text=normalize(value),match=text.match(/^(\s*)([\s\S]*?)(\s*)$/);
     if(!match)return text;
     var key=match[2],valueResult=target==='es'
       ?Object.prototype.hasOwnProperty.call(translations,key)?translations[key]:key

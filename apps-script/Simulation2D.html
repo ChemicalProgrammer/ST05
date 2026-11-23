@@ -937,8 +937,8 @@ window.STSimulation2D=(function(){
     context.beginPath();context.arc(x,y,8,0,Math.PI*2);context.fill();context.stroke();
     if(visual.ring>0){context.lineWidth=2.5;context.lineCap='round';context.strokeStyle=accent;context.beginPath();context.arc(x,y,8,-Math.PI/2,-Math.PI/2+2*Math.PI*visual.ring);context.stroke();}
     context.fillStyle=filled?'#fff':'#17202a';context.fillText(label,x,y+4);context.restore();
-    const reason=visual.pending?state.name+' · '+num(state.elapsed)+' / '+num(state.duration)+' s':
-      (label==='B'?'Back-up':'Prime')+' · '+(state.active?'Active':'Clear');
+    const reason=visual.pending?localize2D(state.name)+' · '+num(state.elapsed)+' / '+num(state.duration)+' s':
+      (label==='B'?'Back-up':'Prime')+' · '+localize2D(state.active?'Active':'Clear');
     verdictHitBoxes.push({left:x-11,right:x+11,top:y-11,bottom:y+11,reason});
   }
   function drawSignal(context,x,y,lamp,colors){
@@ -1263,7 +1263,8 @@ window.STSimulation2D=(function(){
         const valid=value>0&&start>=0&&end<=item.length+.000001;
         const midpoint=Number.isFinite(start)&&Number.isFinite(end)
           ?Math.max(0,Math.min(item.length,(start+end)/2)):item.length/2;
-        const text=Number.isFinite(value)?label+' · '+num(value)+' mm'+(row.deficit?' deficit':'')+(row.partial?' (partial)':''):label+' · pending';
+        const translated=localize2D(label);
+        const text=Number.isFinite(value)?translated+' · '+num(value)+' mm'+(row.deficit?' '+localize2D('deficit'):'')+(row.partial?' ('+localize2D('partial')+')':''):translated+' · '+localize2D('pending');
         const dimension=new CanvasDimension(text,x+(valid?start:midpoint)*coordinateScale,
           x+(valid?end:midpoint)*coordinateScale,rowY,beltY,context.measureText(text).width,row.deficit);
         if(tier===0)dimension.inline=false;
@@ -1284,7 +1285,7 @@ window.STSimulation2D=(function(){
       for(const dimension of dimensions)dimension.draw(context,pointer);
       if(tier===dimensionLevels-1&&dimensions.length){
         const lact=dimensions[0],minimum=design.minimumLength;
-        const text=Number.isFinite(minimum)?'L min · '+num(minimum)+' mm'+(design.minimumPartial?' (partial)':''):'L min · pending';
+        const text=Number.isFinite(minimum)?localize2D('L min')+' · '+num(minimum)+' mm'+(design.minimumPartial?' ('+localize2D('partial')+')':''):localize2D('L min')+' · '+localize2D('pending');
         context.fillText(text,lact.center,rowY+(lact.inline?14:4));
       }
     }

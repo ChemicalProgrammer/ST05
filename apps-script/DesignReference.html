@@ -61,6 +61,11 @@
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Valor–unidad</strong><code>.time-value-control · STTimeControls.output()</code></div>
         </div>
         <div class="design-reference-row" role="row">
+  <div class="design-reference-cell design-reference-preview" role="cell"><label class="design-reference-language-preview">Language<select aria-label="Selector de idioma demostrativo"><option value="en" data-st-no-translate>English</option><option value="es" data-st-no-translate>Español</option></select></label></div>
+  <div class="design-reference-cell design-reference-explanation" role="cell">Preferencia local de idioma (English predeterminado, Español alternativo) en Settings &gt; Appearance. Cambia el idioma visual sin modificar el caso.</div>
+  <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Selector de idioma</strong><code>#settings-language · STLanguage.setLanguage()</code></div>
+</div>
+<div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><select aria-label="Formato de ejemplo"><option>500 mL</option><option>1,000 mL</option></select></div>
           <div class="design-reference-cell design-reference-explanation" role="cell">Lista de una sola elección con altura, tipografía y estados comunes de formulario.</div>
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Selector de opciones</strong><code>select</code></div>
@@ -371,6 +376,7 @@
 }
 .design-reference-preview button.design-reference-error-button {background:var(--danger)!important;color:var(--page)!important;border:2px solid var(--danger)!important;}
 .design-reference-error-counter {display:inline-grid;place-items:center;min-width:19px;height:19px;border-radius:var(--radius-pill);font-size:var(--font-caption);font-weight:var(--weight-bold);color:var(--danger);background:var(--surface);border:1px solid var(--danger);}
+.design-reference-language-preview {width:min(100%,220px);display:grid;gap:var(--space-2);font-size:var(--font-secondary);}
 .design-reference-input-preview,.design-reference-radio-preview {width:min(100%,270px);min-width:0;}
 .design-reference-input-preview label {display:grid;gap:var(--space-2);font-size:var(--font-secondary);}
 .design-reference-input-preview textarea {max-width:100%;resize:vertical;}

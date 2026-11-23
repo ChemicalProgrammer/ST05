@@ -23,6 +23,50 @@ The visible `run.plannedStops` array is the physical source of truth after appli
 
 The physical tick remains 0.25 s. Fast/Summary use larger UI work chunks, not larger physical steps. Progress shows overall percentage, equivalent simulated minutes and a rough remaining-time estimate. Playback speeds now extend to 10,000× and 1,000,000×; speed controls animation only.
 
+## Live equipment telemetry (transient)
+
+Live runs now record a separate timeline of at most 5,001 small, exact
+machine/conveyor snapshots while calculating the first round. It is sampled
+at the physical time-step and bounded by a virtual-time interval that yields
+at most 5,000 display points over the requested horizon. Workers stream
+new snapshots at most once every approximately 100 ms of real time; the
+numerical equipment cards check for available telemetry every 125 ms
+(eight checks per second) independently of the heavier charts.
+
+The visual layer chooses the most recently **calculated** telemetry frame at
+or before the displayed virtual time and never invents intermediate product,
+OEE, speed or inventory. Live telemetry is memory-only and is explicitly
+excluded from saved replay/history, reports and case data. Pausing preserves
+the last measured time; other replay rounds or reopened cases use their
+normal retained numerical samples. Configured visual FPS controls expensive
+charts separately. This is a refresh opportunity, not a guarantee of eight
+new calculated snapshots per second when a worker is busy or the virtual
+clock advances past the computed horizon.
+
+## Machine occupancy: storage versus physical positions
+
+Machine design now exposes `Internal occupancy model`, separately from
+`Internal capacity` and the optional `Residence time (s)`:
+
+- **Storage capacity (variable fill)** is the existing/default behaviour.
+  Capacity is only a ceiling; a steady 480 bpm flow with three seconds of
+  residence can contain 24 bottles even when the ceiling is 36.
+- **Physical positions (rotating pockets)** treats the configured capacity
+  as a fixed number of discrete incoming positions. Each admitted unit
+  travels a full machine rotation (the pocket count) before becoming eligible
+  for discharge. Pocket advancement follows the operating rate, including
+  ramps; explicit residence time remains an independent minimum. Positions
+  can remain empty during starvation/startup, and cannot be filled with
+  artificial products. Under steady 480 bpm with 36 occupied pockets the
+  implied rotation time is 4.5 seconds. The 2D and numerical engines both
+  implement this optional policy.
+
+Existing cases without the new field stay in Storage mode. Set it per
+machine in Equipment; changing it invalidates the previous numerical
+result and requires re-simulation. The occupancy value is a physical model
+assumption, not a guarantee of a fully supplied carousel under all operating
+conditions.
+
 ## Recording and charts
 
 The current engine caps first-round frames at roughly 1,000 (maximum 1,001 including endpoints), respecting a coarser requested sample interval. Sampling times are aligned to ticks and endpoints are retained. Rate buckets contain mean, minimum and maximum across their ticks. UI runs store static conveyor descriptions once in `zoneDefinitions`. The viewer resolves those descriptions when displaying a frame. Saving keeps its existing further replay compaction; exact metrics and accounting are retained.

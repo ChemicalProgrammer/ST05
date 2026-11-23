@@ -264,7 +264,8 @@
           zoneDefinitions:cloneJson(result.zoneDefinitions||{}),
           accumulationZoneMetrics: cloneJson(result.accumulationZoneMetrics),
           shifts:result.shifts,detailCoverage:result.detailCoverage,replicationStatus:cloneJson(result.replicationStatus||null),
-          samples: replaySamples, events: result.events || []
+          samples: replaySamples, events: result.events || [],
+          stateTransitions:result.stateTransitions||[]
         }
       };
       compactStoredReplays([{results:stored}]);
@@ -691,6 +692,7 @@
         if(previous&&partial.calculatedThroughSeconds<=previous.calculatedThroughSeconds)return;
         var last=previous?.samples.at(-1)?.virtualSecond??-1;
         partial.samples=(previous?.samples||[]).concat(partial.samples.filter(function(sample){return sample.virtualSecond>last;}));
+        partial.stateTransitions=(previous?.stateTransitions||[]).concat(partial.stateTransitions||[]);
         partial.replicationStatus={state:'CALCULATING',rounds:session.run.rounds,baseSeed:session.run.seed};
         session.streaming=true;state.run.result=partial;state.run.representative=partial;state.run.roundIndex=0;
         if(!previous)state.run.sampleIndex=0;

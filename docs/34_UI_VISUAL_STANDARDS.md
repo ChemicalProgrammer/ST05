@@ -73,6 +73,7 @@ Para consultar las muestras directamente en la aplicación, abre el diálogo **S
 | **Separador interno de subsección** | `.subsection-fieldset`, `.subsection-divider` | Agrupa controles interiores con una línea fina y una leyenda seminegrita en color primario |
 | **Pestaña de navegación principal** | `.app-section-tab`, `#basic-navigation` | Botones de Equipo/Conveyors/Simulation/Results en el header, con `aria-current=page` para la vista activa |
 | **Pestañas de cuadro de diálogo** | `.settings-tabs [role=tab]` | Navegación interna de Settings y del selector de tema, con `aria-selected` |
+| **Selector de idioma** | `#settings-language`, `STLanguage.setLanguage()` | Idioma de la interfaz (English predeterminado / Español), persistido localmente sin afectar el caso |
 | **Pestaña de simulación** | `.simulation-navigation .workspace-tab` | Cambia entre escenarios guardados y comparación |
 | **Selector de simulación** | `.simulation-picker`, `#simulation-selector` | Desplegable de simulaciones del header |
 | **Ruta del caso (breadcrumb)** | `.breadcrumb` | Nombre del caso y sección actual |

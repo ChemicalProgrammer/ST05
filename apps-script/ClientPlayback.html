@@ -236,8 +236,45 @@
       setPlaybackStatus(state.run.playing?'Playing':(finished?'Completed':(sample.virtualSecond>0?'Paused':'Ready')));
     }
 
+    // The Equipment Performance heading is independent of recorded replay.
+    // Editing or deleting equipment invalidates the old result but must not
+    // make the entire section disappear. Never pair stale frames with the
+    // new equipment array just because their numeric positions are similar.
+    function updateNumericalEquipmentVisibility() {
+      var current=Array.isArray(state.activeCase?.equipment)?state.activeCase.equipment:[];
+      var result=state.run?.result,samples=result?.samples;
+      var sample=Array.isArray(samples)&&samples.length
+        ?(samples[state.run.sampleIndex]||samples[0]):null;
+      var units=sample?.equipment;
+      var matches=Array.isArray(units)&&units.length===current.length
+        &&units.length>0&&units.every(function(unit,index){
+          return unit?.id&&unit.id===current[index]?.id;
+        });
+      var show=Boolean(result&&matches),container=document.getElementById('simulation-results');
+      if(container)container.classList.toggle('hidden',!show);
+      var empty=document.getElementById('simulation-equipment-empty');
+      if(empty){
+        var message=current.length<2
+          ?'Add at least two pieces of equipment to simulate the line.'
+          :!result?'Run a numerical simulation to display equipment performance.'
+          :result.detailCoverage?.recordingMode==='SUMMARY'
+            ?'Summary only stores aggregate results. Use Live or Fast calculation for equipment cards.'
+          :sample&&!matches
+            ?'Saved results do not match the current equipment. Run the simulation again.'
+            :'This result has no recorded equipment frames. Run Live or Fast calculation to view equipment cards.';
+        if(empty.textContent!==message&&window.STLanguage?.current?.()!=='es')empty.textContent=message;
+        else if(window.STLanguage?.current?.()==='es'){
+          var localized=window.STLanguage.translate(message);
+          if(empty.textContent!==localized)empty.textContent=localized;
+        }
+        empty.classList.toggle('hidden',show);
+      }
+      return show;
+    }
+
     var playbackControlSignature=null,playbackBoundExportResult=null;
     function renderPlaybackFrame() {
+      updateNumericalEquipmentVisibility();
       // Locking every input/selector on every visual frame is expensive for
       // multi-equipment Live playback. Only synchronize when the lock state,
       // selected round or recording mode changes; form events sync directly.
@@ -375,7 +412,7 @@
           });
           if(index<0)return;
           var unit=sample.equipment[index];
-          if(!unit)return;
+          if(!unit||unit.id!==card.dataset.equipmentId)return;
           var model=state.activeCase.equipment[index];
           var chartModel=updateLiveEquipmentCard(card,unit,model,index,sample);
           if(window.STNumericCardDiagnostics?.chart!==false)
@@ -413,6 +450,7 @@
     }
 
     function renderLiveEquipment(sample) {
+      if(!updateNumericalEquipmentVisibility())return;
       var target = document.getElementById('live-equipment');
       target.setAttribute('role', 'list');
       var columns = ensureLiveEquipmentColumns(target);
@@ -423,8 +461,9 @@
       var displayedEquipmentIds = {};
       var previousElement = columns;
       sample.equipment.forEach(function(unit, index) {
-        var model = state.activeCase.equipment[index] || {};
-        var equipmentId = unit.id || ('unit-' + index);
+        var model = state.activeCase.equipment[index];
+        if(!model||unit.id!==model.id)return; // Never mislabel a stale result.
+        var equipmentId = unit.id;
         var card = cardsByEquipmentId[equipmentId] || createLiveEquipmentCard(equipmentId);
         card.dataset.equipmentGroup=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR'?'conveyors':'machines';
         var wasHidden=card.hidden;card.hidden=!equipmentPerformanceVisible(model);

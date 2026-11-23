@@ -1463,16 +1463,28 @@ async function simulateLineAsync(input, options = {}) {
   runtime.summaryOnly=options.summaryOnly===true;
   runtime.captureEvents=options.detail===true;
   runtime.captureStateTransitions=options.detail!==false&&!runtime.summaryOnly;
+  // Dedicated lightweight Live telemetry is transient browser data. It does
+  // not consume the bounded history sample budget or change simulation ticks.
+  if(options.onPartial&&input.run.calculationMode==='LIVE'&&!runtime.summaryOnly){
+    runtime.liveTelemetry=[];
+    runtime.liveTelemetryInterval=Math.max(runtime.run.tickSeconds,
+      Math.ceil(runtime.run.durationSeconds/5000/runtime.run.tickSeconds)*runtime.run.tickSeconds);
+    runtime.nextLiveTelemetryAt=0;
+  }
   if(runtime.summaryOnly){runtime.omittedEvents+=runtime.events.length;runtime.events.length=0;}
   applyDueCommands(runtime); updatePlantCalendar(runtime, false); initializeInitialMaterialStates(runtime); recordStateTransitions(runtime); addSample(runtime);
-  // Stream only new frames. Provisional snapshots never become final statistics.
-  let publishedSamples=0,publishedTransitions=0,lastPartialAt=0;
+  if(runtime.liveTelemetry)recordLiveTelemetry(runtime);
+  // Stream only newly available frames/telemetry. No artificial bottle totals.
+  let publishedSamples=0,publishedTransitions=0,publishedTelemetry=0,lastPartialAt=0;
   function publishPartial(){
-    if(!options.onPartial||runtime.summaryOnly||runtime.samples.length===publishedSamples)return;
+    if(!options.onPartial||runtime.summaryOnly||(runtime.samples.length===publishedSamples
+      &&(runtime.liveTelemetry?.length||0)===publishedTelemetry))return;
     const now=Date.now();if(publishedSamples&&now-lastPartialAt<100&&runtime.virtualSecond<runtime.run.durationSeconds)return;lastPartialAt=now;
     const partial=createResult(runtime,true);
     partial.samples=runtime.samples.slice(publishedSamples);publishedSamples=runtime.samples.length;
     partial.stateTransitions=runtime.stateTransitions.slice(publishedTransitions);publishedTransitions=runtime.stateTransitions.length;
+    partial.liveTelemetry=runtime.liveTelemetry?.slice(publishedTelemetry)||[];
+    publishedTelemetry=runtime.liveTelemetry?.length||0;
     partial.events=[]; // The bounded event log is sent once with the completed result.
     partial.provisional=true;partial.calculatedThroughSeconds=runtime.virtualSecond;
     options.onPartial(partial);
@@ -1507,6 +1519,7 @@ async function simulateLineAsync(input, options = {}) {
   if(runtime.samples.at(-1)?.virtualSecond!==runtime.virtualSecond)addSample(runtime);
   updatePlantCalendar(runtime,false);
   const result=createResult(runtime); result.shifts=shifts; result.detailCoverage=recordingCoverage(runtime);
+  if(runtime.liveTelemetry)result.liveTelemetry=runtime.liveTelemetry;
   return {ok:true,result};
 }
 
@@ -1823,6 +1836,8 @@ function executeTicks(runtime, until = runtime.run.durationSeconds) {
     runtime.virtualSecond=runtime.tickCount*runtime.run.tickSeconds;
     recordStateTransitions(runtime);
     addSampleIfDue(runtime);
+    if(runtime.liveTelemetry&&runtime.virtualSecond+1e-8>=runtime.nextLiveTelemetryAt)
+      recordLiveTelemetry(runtime);
   }
 }
 
@@ -2874,6 +2889,42 @@ function recordStateTransitions(runtime){
       runtime.stateTransitions.push([round(runtime.virtualSecond),index,state]);
     else runtime.omittedStateTransitions++;
   });
+}
+
+// Live-only diagnostic snapshots. A separate, bounded 5,000-frame display
+// timeline permits smooth card updates while the normal recorded history stays
+// at ~1,000 frames and reports retain their original numerical definitions.
+function recordLiveTelemetry(runtime) {
+  if(!runtime.liveTelemetry||runtime.liveTelemetry.length>=5001)return;
+  const frame={
+    virtualSecond:round(runtime.virtualSecond),
+    outputCount:round(runtime.outputCount),
+    effectiveRuntimeSeconds:runtime.lineRateReferenceValid?round(runtime.lineRunSeconds-runtime.lineRateShortfallSeconds):null,
+    runtimeLossSeconds:runtime.lineRateReferenceValid?round(runtime.lineRateShortfallSeconds):null,
+    accumulationZones:runtime.zones.filter(zone=>zone.visible).map(zone=>({
+      id:zone.id,ownerEquipmentId:zone.ownerEquipmentId,
+      inventoryUnits:round(getZoneInventory(zone)),
+      overflowUnits:round(zone.overflowUnits),
+      backup:{controlActive:zone.backupActive}
+    })),
+    equipment:runtime.equipment.map(item=>({
+      id:item.id,unitOfFlow:item.unitOfFlow,mode:item.mode,
+      availabilityState:item.availabilityState,
+      processedUnits:round(item.outputCount),outputCount:round(item.outputCount),
+      actualRatePerSecond:round(item.actualRatePerSecond),
+      internalInventoryBottles:equipmentInventoryBottles(item),
+      internalCapacityBottles:item.residence?equipmentCapacityBottles(item):undefined,
+      internalInputBottleFactor:item.residence?(item.outputBottleFactor||1)/(item.inputPerOutput||1):undefined,
+      internalInputUnit:item.processData?.flowUnits?.input==='CASES'?'cases':'bottles',
+      designSpeedPerSecond:machineDesignRatePerSecond(item),
+      estimatedResidenceSeconds:item.residence?round(estimateResidence(item)):undefined,
+      failureCount:item.failureCount,backupStopSeconds:round(item.backupStopSeconds),
+      oeePercent:round(createEquipmentEffectiveness(item,runtime.virtualSecond).oee*100)
+    }))
+  };
+  frame.buffers=frame.accumulationZones.map(zone=>zone.inventoryUnits);
+  runtime.liveTelemetry.push(frame);
+  runtime.nextLiveTelemetryAt=runtime.virtualSecond+runtime.liveTelemetryInterval;
 }
 
 function addSampleIfDue(runtime) {

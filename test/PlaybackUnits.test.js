@@ -209,7 +209,7 @@ test('equipment summary uses native lowercase cases for counts and cpm for desig
   }finally{h.close();}
 });
 
-test('equipment throughput uses the same bpm or cpm abbreviation as its native flow',()=>{
+test('equipment throughput keeps separate, stable numbers and native units through updates and localization',async()=>{
   const h=harness(),card=equipmentCard(h),{w}=h;
   try{
     const model={id:'machine',name:'Machine',type:'FILLER',unitOfFlow:'BOTTLES',nominalRatePerSecond:10};
@@ -221,15 +221,46 @@ test('equipment throughput uses the same bpm or cpm abbreviation as its native f
     w.state.run.result.samples=[measured];
     w.state.run.sampleIndex=0;
     const throughput=card.querySelector('[data-efficiency="throughput"]');
-    for(const [flowUnit,rateUnit] of [['bottles','bpm'],['cases','cpm'],['bottles','bpm']]){
+    let numberNode,unitNode;
+    for(const [flowUnit,rateUnit,produced] of [['bottles','bpm',43790],['cases','cpm',43200],['bottles','bpm',60000]]){
       unit.unitOfFlow=flowUnit;
+      unit.outputCount=produced;
+      const stored=JSON.stringify(w.state.run.result);
       w.updateLiveEquipmentCard(card,unit,model,0,measured);
       assert.equal(card.querySelector('[data-efficiency="throughput"]'),throughput);
-      assert.equal(throughput.textContent,format(437.9)+' '+rateUnit);
+      const number=throughput.querySelector('.live-equipment-2d-number'),suffix=throughput.querySelector('.live-equipment-2d-unit');
+      assert.ok(number&&suffix,'Throughput exposes its value and unit separately, like Overview');
+      if(numberNode){
+        assert.equal(number,numberNode,'Updating production retains the numeric element');
+        assert.equal(suffix,unitNode,'Switching native unit retains the unit element');
+      }else {numberNode=number;unitNode=suffix;}
+      assert.equal(number.textContent,format(produced/6000*60),'Physical rate converts seconds to minutes exactly once');
+      assert.equal(suffix.textContent,rateUnit);
+      assert.equal(throughput.textContent,format(produced/6000*60)+' '+rateUnit);
       assert.equal(summaryRow(card,'Flow').querySelector('.live-equipment-2d-unit').textContent,rateUnit);
       assert.equal(summaryRow(card,'Processed').querySelector('.live-equipment-2d-unit').textContent,flowUnit);
       assert.equal(card.querySelector('.live-rate').textContent,format(480)+' '+rateUnit);
       assert.doesNotMatch(throughput.textContent,/bottles\/min|cases\/min/);
+      assert.equal(JSON.stringify(w.state.run.result),stored,'Rendering cannot change the physical result');
     }
+    unit.runningSeconds=0;
+    w.updateLiveEquipmentCard(card,unit,model,0,measured);
+    assert.equal(numberNode.textContent,'—','Unavailable throughput keeps its explicit unit and stable nodes');
+    assert.equal(unitNode.textContent,'bpm');
+    unit.runningSeconds=6000;unit.outputCount=0;unit.unitOfFlow='units';
+    w.eval(source('Language').replace(/^<script>/,'').replace(/<\/script>\s*$/,''));
+    w.STLanguage.setLanguage('es');
+    w.updateLiveEquipmentCard(card,unit,model,0,measured);
+    await new Promise(resolve=>w.setTimeout(resolve,0));
+    assert.equal(numberNode.textContent,'0','A measured zero stays distinct from unavailable throughput');
+    assert.equal(unitNode.textContent,'unid/min');
+    const translated=unitNode.firstChild;
+    unit.outputCount=120;
+    w.updateLiveEquipmentCard(card,unit,model,0,measured);
+    assert.equal(numberNode.textContent,format(1.2));
+    assert.equal(unitNode.firstChild,translated,'A new numeric frame cannot rewrite an unchanged translated unit');
+    assert.equal(unitNode.textContent,'unid/min');
+    assert.equal(throughput.querySelector('.live-equipment-2d-number'),numberNode);
+    assert.equal(throughput.querySelector('.live-equipment-2d-unit'),unitNode);
   }finally{h.close();}
 });

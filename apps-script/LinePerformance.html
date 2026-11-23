@@ -1,6 +1,6 @@
 <script>
 window.STLinePerformance = (function() {
-  function unitLabel(unit){return window.STBasicMode?.unitLabel(unit)||unit||'units';}
+  function units(unit){return window.STFlowUnits.labels(unit);}
   function el(tag, text) { var item = document.createElement(tag); if (text !== undefined) item.textContent = text; return item; }
   function value(n, digits) { return Number.isFinite(n) ? n.toLocaleString(undefined, {maximumFractionDigits: digits === undefined ? 1 : digits}) : '—'; }
   function svg(tag, attrs, text) {
@@ -9,9 +9,10 @@ window.STLinePerformance = (function() {
     if (text !== undefined) item.textContent = text;
     return item;
   }
-  function plot(target, points) {
+  function plot(target, points, rateUnit) {
     target.textContent = '';
     target._vgraphPoints=points;
+    target._vgraphRateUnit=rateUnit;
     var valid = points.filter(function(p) { return Number.isFinite(p.normalBpm); });
     if (!valid.length) return;
     var all = valid.flatMap(function(p) { return [p.normalBpm, p.recommendedBpm].filter(Number.isFinite); });
@@ -61,7 +62,7 @@ window.STLinePerformance = (function() {
     var y = function(pct) { return bottom - (pct - minimum) / (maximum - minimum) * (bottom - top); };
     [minimum, (minimum + maximum) / 2, maximum].forEach(function(pct) {
       chart.appendChild(svg('line', {x1:left, x2:right, y1:y(pct), y2:y(pct), class:'vgraph-grid'}));
-      chart.appendChild(svg('text', {x:left - 8, y:y(pct) + 4, class:'vgraph-label', 'text-anchor':'end'}, value(pct, 0) + ' /min'));
+      chart.appendChild(svg('text', {x:left - 8, y:y(pct) + 4, class:'vgraph-label', 'text-anchor':'end'}, value(pct, 0) + ' '+rateUnit));
     });
     chart.appendChild(svg('polyline', {points:valid.map(function(p, i) { return x(i) + ',' + y(p.normalBpm); }).join(' '), class:'vgraph-normal'}));
     var segment = [];
@@ -69,8 +70,8 @@ window.STLinePerformance = (function() {
     valid.forEach(function(p, i) { if (Number.isFinite(p.recommendedBpm)) segment.push(x(i) + ',' + y(p.recommendedBpm)); else flush(); });
     flush();
     valid.forEach(function(p, i) {
-      var normal=svg('circle', {cx:x(i), cy:y(p.normalBpm), r:5, class:'vgraph-normal-dot'});normal.appendChild(svg('title',{},p.name+' · '+__ST_TEXT__('performance.normal')+': '+value(p.normalBpm)+' /min'));chart.appendChild(normal);
-      if (Number.isFinite(p.recommendedBpm)) {var recommended=svg('circle', {cx:x(i), cy:y(p.recommendedBpm), r:3, class:'vgraph-recommended-dot'});recommended.appendChild(svg('title',{},p.name+' · '+__ST_TEXT__('performance.recommended')+': '+value(p.recommendedBpm)+' /min'));chart.appendChild(recommended);}
+      var normal=svg('circle', {cx:x(i), cy:y(p.normalBpm), r:5, class:'vgraph-normal-dot'});normal.appendChild(svg('title',{},p.name+' · '+__ST_TEXT__('performance.normal')+': '+value(p.normalBpm)+' '+p.displayRateUnit));chart.appendChild(normal);
+      if (Number.isFinite(p.recommendedBpm)) {var recommended=svg('circle', {cx:x(i), cy:y(p.recommendedBpm), r:3, class:'vgraph-recommended-dot'});recommended.appendChild(svg('title',{},p.name+' · '+__ST_TEXT__('performance.recommended')+': '+value(p.recommendedBpm)+' '+p.displayRateUnit));chart.appendChild(recommended);}
       if(spacing>=45)chart.appendChild(svg('text',{x:x(i),y:y(p.normalBpm)+25,class:'vgraph-value vgraph-normal-value','text-anchor':'middle'},value(p.normalBpm)));
       if(Number.isFinite(p.recommendedBpm)&&spacing>=45)chart.appendChild(svg('text',{x:x(i),y:y(p.recommendedBpm)-15,class:'vgraph-value vgraph-recommended-value','text-anchor':'middle'},value(p.recommendedBpm)));
       var labelSize=Math.max(10,Math.min(15,spacing/11));
@@ -86,30 +87,48 @@ window.STLinePerformance = (function() {
       if (p.isPacemaker) chart.appendChild(svg('text', {x:x(i), y:height-24, class:'vgraph-reference', 'text-anchor':'middle'}, spacing<45?'★':__ST_TEXT__('performance.reference_short')));
     });
     target.appendChild(chart);
-    if(!target._vgraphResize){target._vgraphWidth=target.clientWidth;target._vgraphHeight=height;target._vgraphResize=function(){var nextHeight=Math.max(360,Math.floor((window.innerHeight||700)-target.getBoundingClientRect().top-32));if(target.clientWidth!==target._vgraphWidth||Math.abs(nextHeight-target._vgraphHeight)>2){target._vgraphWidth=target.clientWidth;target._vgraphHeight=nextHeight;plot(target,target._vgraphPoints);}};window.addEventListener('resize',target._vgraphResize);if(window.ResizeObserver){target._vgraphObserver=new ResizeObserver(target._vgraphResize);target._vgraphObserver.observe(target);}}
+    if(!target._vgraphResize){target._vgraphWidth=target.clientWidth;target._vgraphHeight=height;target._vgraphResize=function(){var nextHeight=Math.max(360,Math.floor((window.innerHeight||700)-target.getBoundingClientRect().top-32));if(target.clientWidth!==target._vgraphWidth||Math.abs(nextHeight-target._vgraphHeight)>2){target._vgraphWidth=target.clientWidth;target._vgraphHeight=nextHeight;plot(target,target._vgraphPoints,target._vgraphRateUnit);}};window.addEventListener('resize',target._vgraphResize);if(window.ResizeObserver){target._vgraphObserver=new ResizeObserver(target._vgraphResize);target._vgraphObserver.observe(target);}}
   }
   function render(result, equipment) {
     if (!document.getElementById('line-performance')) return;
-    if(result?.products){document.getElementById('vgraph-context').textContent='Product-specific speed recommendations are pending validation.';document.getElementById('vgraph-plot').replaceChildren();document.getElementById('performance-rows').replaceChildren();document.getElementById('vgraph-caveat').textContent='Use the per-product operating settings and conveyor geometry in Simulation → Configure products. Rates in bottles/min and cases/min cannot be compared directly.';return;}
+    if(result?.products){document.getElementById('vgraph-context').textContent='Product-specific speed recommendations are pending validation.';document.getElementById('vgraph-plot').replaceChildren();document.getElementById('performance-rows').replaceChildren();document.getElementById('vgraph-caveat').textContent='Use the per-product operating settings and conveyor geometry in Simulation → Configure products. Rates in bpm and cpm cannot be compared directly.';return;}
     var analysis = window.SimulatorEngine.analyzeLinePerformance(equipment, result);
+    // The analysis already supplies per-minute values. Only their labels are
+    // normalized here; each machine retains its own native output unit.
+    var models=new Map((equipment||[]).map(function(model){return [model.id,model];}));
+    var points=analysis.points.map(function(point){
+      var model=models.get(point.id),unit=result?.equipmentMetrics?.[point.id]?.unitOfFlow
+        ||model?.processData?.flowUnits?.output||model?.unitOfFlow||analysis.unitOfFlow;
+      return Object.assign({},point,{displayRateUnit:units(unit).rate});
+    });
+    var rateUnits=Array.from(new Set(points.map(function(point){return point.displayRateUnit;})));
+    var rateUnit=rateUnits.length===1?rateUnits[0]:units(analysis.unitOfFlow).rate;
+    if(rateUnits.length>1)rateUnit=units('units').rate;
     document.getElementById('vgraph-context').textContent = __ST_TEXT__('performance.context') + (analysis.points.find(function(p) { return p.isPacemaker; })?.name || '—');
-    plot(document.getElementById('vgraph-plot'), analysis.points);
+    plot(document.getElementById('vgraph-plot'), points,rateUnit);
     document.getElementById('vgraph-caveat').textContent = __ST_TEXT__('performance.recovery_method');
     var tbody = document.getElementById('performance-rows');
     tbody.textContent = '';
-    analysis.points.forEach(function(point) {
+    var headings=tbody.closest('table')?.querySelectorAll('thead th');
+    [[1,'performance.normal_bpm'],[2,'performance.maximum_bpm'],[3,'performance.recommended_bpm'],[7,'performance.effective_bpm']].forEach(function(pair){
+      if(!headings?.[pair[0]])return;
+      var label=el('span',__ST_TEXT__(pair[1]).replace(/\s*·\s*\/min\s*$/,''));
+      headings[pair[0]].replaceChildren(label,document.createTextNode(' · '+rateUnit));
+    });
+    points.forEach(function(point) {
       var row = el('tr');
       row.title=point.recoveryBasis+' · '+__ST_TEXT__('equipment.recovery_time')+': '+value(point.recoveryTimeSeconds);
+      function rate(amount){return value(amount)+(rateUnits.length>1&&Number.isFinite(amount)?' '+point.displayRateUnit:'');}
       [point.name + (point.isPacemaker ? ' · ' + __ST_TEXT__('performance.reference_short') : ''),
-        value(point.normalBpm), value(point.maximumBpm), value(point.recommendedBpm)+(point.recommendationExceedsMaximum?' †':''), value(point.speedHeadroomPercent) + (point.speedHeadroomPercent === null ? '' : '%'),
+        rate(point.normalBpm), rate(point.maximumBpm), rate(point.recommendedBpm)+(point.recommendationExceedsMaximum?' †':''), value(point.speedHeadroomPercent) + (point.speedHeadroomPercent === null ? '' : '%'),
         value(point.availability === null ? null : point.availability * 100) + (point.availability === null ? '' : '%'),
         value(point.runtimeEfficiency === null ? null : point.runtimeEfficiency * 100) + (point.runtimeEfficiency === null ? '' : '%'),
-        value(point.observedBpm)].forEach(function(cell, i) { var item = el('td', cell); if (i) item.className = 'numeric'; row.appendChild(item); });
+        rate(point.observedBpm)].forEach(function(cell, i) { var item = el('td', cell); if (i) item.className = 'numeric'; row.appendChild(item); });
       tbody.appendChild(row);
     });
     document.getElementById('throughput-method').textContent =
-      __ST_TEXT__('performance.method') + ' ' + value(analysis.outputCount) + ' ' + unitLabel(analysis.unitOfFlow) + ' ÷ ' +
-      value(analysis.durationSeconds / 60, 3) + ' min = ' + value(analysis.outletBpm) + ' ' + unitLabel(analysis.unitOfFlow) + '/min. ' +
+      __ST_TEXT__('performance.method') + ' ' + value(analysis.outputCount) + ' ' + units(analysis.unitOfFlow).count + ' ÷ ' +
+      value(analysis.durationSeconds / 60, 3) + ' min = ' + value(analysis.outletBpm) + ' ' + units(analysis.unitOfFlow).rate + '. ' +
       __ST_TEXT__('performance.equipment_note');
     document.getElementById('throughput-method').classList.toggle('hidden',!result||Boolean(result.provisional));
   }

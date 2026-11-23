@@ -1,11 +1,24 @@
 <script>
 // Results and matched failure-free diagnostics use engine-supplied physical metrics.
 window.STResults=(function(){
-  function unitLabel(unit){return window.STBasicMode?.unitLabel(unit)||unit||'units';}
-  function number(value,digits){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:digits===undefined?1:digits}):'—';}
+  function unitLabel(unit){return window.STFlowUnits.labels(unit).count;}
+  function rateLabel(unit){return window.STFlowUnits.labels(unit).rate;}
+  function number(value,digits,locale){return Number.isFinite(value)?value.toLocaleString(locale,{maximumFractionDigits:digits===undefined?1:digits}):'—';}
+  // Values and units use the same reusable presentation as the live KPIs.
+  // Keep them separate so translations and unit styles never affect numbers.
+  function setMetricValue(target,amount,unit,digits,locale){
+    const value=document.createElement('b'),suffix=document.createElement('span');
+    target.classList.add('metric-value');value.className='metric-number';suffix.className='metric-unit';
+    value.textContent=number(amount,digits,locale);suffix.textContent=String(unit||'').trim();
+    target.replaceChildren(value,document.createTextNode(' '),suffix);
+  }
+  function setTimeMetric(target,minutes,label){
+    target.classList.add('metric-value');
+    STTimeControls.setOutput(target,Number.isFinite(minutes)?minutes*60:NaN,{unit:'min',label:label+' · Change displayed time unit'});
+  }
   function downtime(result){return Object.values(result.equipmentMetrics||{}).reduce(function(n,m){return n+(m.pausedSeconds||0)+(m.stoppedSeconds||0);},0)/60;}
   function metrics(result){var s=result.summary;return [
-    [__ST_TEXT__('results.global_oee'),s.lineOeePercent,'%',false],[__ST_TEXT__('results.throughput'),s.outputCount/result.durationSeconds*60,' '+unitLabel(result.unitOfFlow||result.replay?.unitOfFlow)+'/min',false],[__ST_TEXT__('results.production'),s.outputCount,' '+unitLabel(result.unitOfFlow||result.replay?.unitOfFlow),false],
+    [__ST_TEXT__('results.global_oee'),s.lineOeePercent,'%',false],[__ST_TEXT__('results.throughput'),s.outputCount/result.durationSeconds*60,' '+rateLabel(result.unitOfFlow||result.replay?.unitOfFlow),false],[__ST_TEXT__('results.production'),s.outputCount,' '+unitLabel(result.unitOfFlow||result.replay?.unitOfFlow),false],
     ['Rate Loss',s.lineRateLossSeconds==null?null:s.lineRateLossSeconds/60,__ST_TEXT__('client.min'),false],[__ST_TEXT__('results.equipment_downtime'),downtime(result),__ST_TEXT__('client.min'),true],[__ST_TEXT__('results.starving'),s.totalStarvedSeconds/60,__ST_TEXT__('client.min'),true],[__ST_TEXT__('results.blocking'),s.totalBlockedSeconds/60,__ST_TEXT__('client.min'),true]
   ];}
   function failureBreakdown(result,equipment){
@@ -75,14 +88,14 @@ window.STResults=(function(){
   }
   function renderEffectiveRunTimeCard(target,result,simulation){
     const data=effectiveRunTime(result,simulation),card=document.createElement('article');card.className='result-kpi metric-card metric-card--result effective-run-time-kpi';
-    const label=document.createElement('span'),value=document.createElement('strong');label.textContent='Effective Run Time';value.textContent=number(data.minutes,2)+' min';
+    const label=document.createElement('span'),value=document.createElement('strong');label.textContent='Effective Run Time';setTimeMetric(value,data.minutes,label.textContent);
     card.title='Tiempo efectivo según la fórmula solicitada: Production Available Time − Unplanned Downtime de línea − Production Rate Losses (pérdida bruta de velocidad). '+number(data.available,2)+' − '+number(data.unplanned,2)+' − '+number(data.rateLoss,2)+' = '+number(data.minutes,2)+' min. El downtime se obtiene como tiempo disponible menos tiempo con salida positiva; incluye las causas de falta de producción de línea y no es la suma de fallas de equipos. Las exclusiones del calendario se descuentan del tiempo disponible. No se añade la recuperación por encima de la referencia: por eso puede diferir del tiempo equivalente calculado como producción / referencia. Se supone calidad del 100 %. En vista promedio se promedian todas las rondas. — indica datos incompletos o un calendario que no corresponde al período simulado.';
     card.setAttribute('aria-description',card.title);card.tabIndex=0;card.append(label,value);target.append(card);
   }
   function renderFailureCard(target,result,equipment){
     const data=failureBreakdown(result,equipment),card=document.createElement('article');card.className='result-kpi metric-card metric-card--result equipment-failure-kpi';card.setAttribute('role','button');card.tabIndex=0;card.style.cursor='pointer';card.setAttribute('aria-haspopup','dialog');
     card.title='Suma de minutos en falla propia por MTBF/MTTR de todos los equipos. Incluye tiempos simultáneos. Pulsa para ver minutos y participación porcentual por equipo.';card.setAttribute('aria-description',card.title);
-    const label=document.createElement('span'),value=document.createElement('strong');label.textContent='Downtime total por fallas (MTBF/MTTR)';value.textContent=number(data.total,2)+' min';card.append(label,value);card.title+=' '+data.view+'.';card.setAttribute('aria-description',card.title);card.onclick=()=>openFailureBreakdown(data);card.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();card.click();}};target.append(card);
+    const label=document.createElement('span'),value=document.createElement('strong');label.textContent='Downtime total por fallas (MTBF/MTTR)';setMetricValue(value,data.total,'min',2);card.append(label,value);card.title+=' '+data.view+'.';card.setAttribute('aria-description',card.title);card.onclick=()=>openFailureBreakdown(data);card.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();card.click();}};target.append(card);
   }
   var lossJobs=new Map(),calculationCount=0,idleLossTasks=[];
   window.addEventListener('st-calculation-activity',event=>{calculationCount=Math.max(0,calculationCount+(event.detail.active?1:-1));if(!calculationCount)idleLossTasks.splice(0).forEach(start=>start());});
@@ -137,7 +150,7 @@ window.STResults=(function(){
     var remaining=Number.isFinite(failureFree)&&(formatted||Number.isFinite(capacityGap))?100-(Number.isFinite(capacityGap)?capacityGap:0)-failureFree:null;
     if(!formatted&&!diagnostic&&!counter&&failuresDisabled&&d.accountingAvailable){conditional=0;remaining=d.residualLossPp;}
     var cards=add('div','');cards.className='result-kpis result-loss-kpis';
-    [['Conditional MTBF / MTTR loss',conditional],['Nominal machine-speed gap',capacityGap],['Remaining loss without failures',remaining]].forEach(([label,value])=>{var card=add('article','',cards);card.className='result-kpi metric-card metric-card--result';if(diagnostic?.error)card.title=diagnostic.error;add('span',label,card);add('strong',Number.isFinite(value)?number(value,2)+'%':'—',card);});
+    [['Conditional MTBF / MTTR loss',conditional],['Nominal machine-speed gap',capacityGap],['Remaining loss without failures',remaining]].forEach(([label,value])=>{var card=add('article','',cards);card.className='result-kpi metric-card metric-card--result';if(diagnostic?.error)card.title=diagnostic.error;add('span',label,card);setMetricValue(add('strong','',card),value,'%',2);});
     if(formatted)add('p',Number.isFinite(capacityGap)?'Nominal machine-speed gap uses saved format speeds, bottles per case and active durations, weighted in bottle equivalents. Remaining loss covers transport, planned stops and other flow effects.':'Format-aware losses use the same product schedule, units and seeds. Remaining loss includes speed, transport, planned stops and other flow effects. Run the simulation again to restore the format snapshots and durations needed to separate the nominal machine-speed gap.').className='chart-note';
     if(diagnostic?.status==='PENDING')add('p','Calculating matched loss diagnostics…').className='chart-note';
     if(action && ['DEFERRED','ERROR'].includes(diagnostic?.status)){
@@ -174,7 +187,15 @@ window.STResults=(function(){
     });
   }
   function renderRateLossHighlights(target,result){
-    target.hidden=!result?.summary;target.innerHTML=target.hidden?'':STReports.rateLossHighlightsHtml(result,false);
+    target.replaceChildren();target.hidden=!result?.summary;if(target.hidden)return;
+    const data=STReports.rateLossHighlights(result),section=document.createElement('section'),cards=document.createElement('div'),note=document.createElement('p');
+    section.className='rate-loss-highlights';cards.className='result-kpis';
+    data.cards.forEach(function(item){
+      const card=document.createElement('article'),label=document.createElement('span'),value=document.createElement('strong');
+      card.className='result-kpi metric-card metric-card--result';card.title=item.help;card.setAttribute('aria-description',item.help);card.tabIndex=0;
+      label.textContent=item.label;setMetricValue(value,item.value,item.unit,item.digits,'es-MX');card.append(label,value);cards.append(card);
+    });
+    note.className='chart-note';note.textContent=data.note;section.append(cards,note);target.append(section);
   }
   function renderRateLossImpact(target,result){
     const data=STReports.rateLossImpact(result),heading=document.createElement('h3'),scroll=document.createElement('div'),table=document.createElement('table'),head=document.createElement('tr'),thead=document.createElement('thead'),body=document.createElement('tbody');
@@ -229,13 +250,13 @@ window.STResults=(function(){
     });
     for(const model of equipment){
       const m=result.equipmentMetrics?.[model.id]||{};
-      const unit=unitLabel(m.unitOfFlow||model.unitOfFlow||result.unitOfFlow);
+      const flowUnit=m.unitOfFlow||model.unitOfFlow||result.unitOfFlow,unit=unitLabel(flowUnit);
       const speed=ratio(m.outputCount,m.runningSeconds,60);
       const conveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
       const equipmentZones=zones.map(round=>conveyor?round.find(zone=>zone.ownerEquipmentId===model.id&&Number.isFinite(zone.conveyorSpeedMmPerSecond)):null);
       const belt=mean(equipmentZones.map(zone=>zone?.conveyorSpeedMmPerSecond));
       const cellWithUnit=(value,suffix)=>Number.isFinite(value)?number(value,2)+' '+suffix:'—';
-      const values=[model.name||model.id,cellWithUnit(speed,unit+'/min'),number(belt===null?null:belt*0.06,2),
+      const values=[model.name||model.id,cellWithUnit(speed,rateLabel(flowUnit)),number(belt===null?null:belt*0.06,2),
         number(mean(equipmentZones.map(zone=>zone?.movingPitchMm)),2),number(mean(equipmentZones.map(zone=>zone?.accumulatedPitchMm)),2),
         cellWithUnit(mean(equipmentZones.map(zone=>zone?.averageInventoryUnits)),unit),
         cellWithUnit(mean(equipmentZones.map(zone=>zone?.maximumInventoryUnits)),unit),number(m.failureCount,2),
@@ -263,7 +284,7 @@ window.STResults=(function(){
         const cell=row.insertCell(),value=efficiency[key];
         cell.className='numeric';
         cell.textContent=!Number.isFinite(value)?'—':key==='throughput'
-          ?number(value*60,2)+' '+unitLabel(metric.unitOfFlow||model.unitOfFlow||result.unitOfFlow)+'/min'
+          ?number(value*60,2)+' '+rateLabel(metric.unitOfFlow||model.unitOfFlow||result.unitOfFlow)
           :number(value*100,2)+' %';
       }
     }
@@ -314,7 +335,7 @@ window.STResults=(function(){
     STPlantCalendar.renderResults(document.getElementById('results-plant-comparison'),ready?result:null,simulation);
     STProducts.results(document.getElementById('results-products'),ready?result:null);
     var designReady=Boolean(activeCase?.equipment?.length);
-    var batchTarget=document.getElementById('batch-results');batchTarget.classList.toggle('hidden',!result?.batch);batchTarget.innerHTML=result?.batch?STReports.batchHtml(result.batch):'';
+    var batchTarget=document.getElementById('batch-results');batchTarget.classList.toggle('hidden',!result?.batch);batchTarget.innerHTML=result?.batch?STReports.batchHtml(result.batch,rateLabel(result.unitOfFlow||result.replay?.unitOfFlow)):'';
     const production=document.getElementById('results-production-group');
     production.hidden=!ready||!Array.from(production.querySelectorAll('.results-group-content > section')).some(section=>!section.hidden&&!section.classList.contains('hidden')&&section.childElementCount&&!(section===batchTarget&&window.STBasicMode?.isBasic()));
 
@@ -330,7 +351,16 @@ window.STResults=(function(){
     if(result.detailCoverage?.omittedEvents)document.getElementById('results-meta').textContent+=' · '+result.detailCoverage.omittedEvents+' detailed events omitted; totals retained';
 
     var target=document.getElementById('results-kpis');target.textContent='';
-    metrics(result).filter(function(_,index){return !window.STBasicMode?.isBasic()||index<3;}).forEach(function(item,index){var card=document.createElement('article');card.className='result-kpi metric-card '+(index===0?'metric-card--featured':'metric-card--result')+(index===0?__ST_TEXT__('results.primary_kpi'):'');var label=document.createElement('span'),value=document.createElement('strong');var mean=result.batch?.statistics?.[['lineOeePercent','throughputPerMinute','outputCount'][index]]?.mean;label.textContent=item[0];value.textContent=number(Number.isFinite(mean)?mean:item[1],index===0?2:undefined)+item[2];card.append(label,value);if(Number.isFinite(mean)){var range=document.createElement('small'),stats=result.batch.statistics[['lineOeePercent','throughputPerMinute','outputCount'][index]];range.textContent='Min '+number(stats.min,2)+' · Max '+number(stats.max,2);card.append(range);}target.appendChild(card);});
+    metrics(result).filter(function(_,index){return !window.STBasicMode?.isBasic()||index<3;}).forEach(function(item,index){
+      var card=document.createElement('article');card.className='result-kpi metric-card '+(index===0?'metric-card--featured':'metric-card--result')+(index===0?__ST_TEXT__('results.primary_kpi'):'');
+      card.dataset.metric=['oee','throughput','production','rate-loss','equipment-downtime','starved','blocked'][index];
+      var label=document.createElement('span'),value=document.createElement('strong'),mean=result.batch?.statistics?.[['lineOeePercent','throughputPerMinute','outputCount'][index]]?.mean;
+      label.textContent=item[0];const amount=Number.isFinite(mean)?mean:item[1];
+      if(index>=3)setTimeMetric(value,amount,label.textContent);else setMetricValue(value,amount,item[2],index===0?2:undefined);
+      card.append(label,value);
+      if(Number.isFinite(mean)){var range=document.createElement('small'),stats=result.batch.statistics[['lineOeePercent','throughputPerMinute','outputCount'][index]];range.textContent='Min '+number(stats.min,2)+' · Max '+number(stats.max,2);card.append(range);}
+      target.appendChild(card);
+    });
     renderFailureCard(target,result,simulation?.equipment||activeCase?.equipment||[]);
     renderEffectiveRunTimeCard(target,result,simulation);
     document.getElementById('results-reference').textContent=result.engineId==='DES_SIMPY_EXPERIMENTAL'?'DES · SimPy 4.1.2 (experimental). OEE is not validated. '+(result.limitations||[]).join(' '):__ST_TEXT__('results.oee_reference')+(result.summary.lineOeePacemakerName||'not available')+__ST_TEXT__('results.quality_assumes_100_no_reject_model_loss_and_downtime_totals_are_equipment_')+' '+__ST_TEXT__('results.partial_note')+' '+__ST_TEXT__('results.productive_note');
@@ -356,8 +386,8 @@ window.STResults=(function(){
     metrics(a.results).slice(0,2).forEach(function(m,i){
       var left=comparedValue(a.results,i,m[1]),rightValue=comparedValue(b.results,i,right[i][1]),delta=Number.isFinite(left)&&Number.isFinite(rightValue)&&!(i===1&&unitMismatch)?rightValue-left:null;
       var card=document.createElement('article');card.className='comparison-kpi';var title=document.createElement('h4');title.textContent=m[0];card.append(title);
-      [[a,left],[b,rightValue]].forEach(function(pair){var row=document.createElement('div');row.className='comparison-kpi-value';var label=document.createElement('span'),value=document.createElement('strong');label.textContent=pair[0].name;var unit=pair[0].results.unitOfFlow||pair[0].results.replay?.unitOfFlow;value.textContent=number(pair[1])+(i===0?'%':' '+unitLabel(unit)+'/min');row.append(label,value);card.append(row);});
-      var change=document.createElement('p');change.className='comparison-kpi-delta';change.textContent='Δ '+(delta>0?'+':'')+number(delta)+(i===0?__ST_TEXT__('results.pp'):' '+unitLabel(a.results.unitOfFlow||a.results.replay?.unitOfFlow)+'/min');card.append(change);
+      [[a,left],[b,rightValue]].forEach(function(pair){var row=document.createElement('div');row.className='comparison-kpi-value';var label=document.createElement('span'),value=document.createElement('strong');label.textContent=pair[0].name;var unit=pair[0].results.unitOfFlow||pair[0].results.replay?.unitOfFlow;setMetricValue(value,pair[1],i===0?'%':rateLabel(unit));row.append(label,value);card.append(row);});
+      var change=document.createElement('p');change.className='comparison-kpi-delta';change.textContent='Δ '+(delta>0?'+':'')+number(delta)+(i===0?__ST_TEXT__('results.pp'):' '+rateLabel(a.results.unitOfFlow||a.results.replay?.unitOfFlow));card.append(change);
       var basis=document.createElement('p');basis.className='chart-note';basis.textContent=[a,b].map(function(sim){return sim.name+': '+(sim.results.batch?.rounds||1)+' round(s)';}).join(' · ');card.append(basis);highlights.append(card);
     });
     section.querySelector('h3').after(highlights);

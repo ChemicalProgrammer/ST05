@@ -65,7 +65,7 @@ html[data-visual-style=elegant] :is(.editor-subheading,.simulation-analysis-head
 html[data-visual-style=elegant] :is(#basic-run-options-title,#simulation-analysis-title,#equipment-control-events-title,#vgraph-title,#results-title,.basic-conveyor-heading h3,#cases-panel > .section-heading h2) {
   color:var(--secondary-text);
 }
-html[data-visual-style=elegant] :is(.equipment-card,.chart-panel,.equipment-speed-chart-panel,.result-kpi,.analysis-recommendation,.format-zone-setup,.table-scroll) {
+html[data-visual-style=elegant] :is(.equipment-card,.chart-panel,.equipment-speed-chart-panel,.result-kpi:not(.metric-card),.analysis-recommendation,.format-zone-setup,.table-scroll) {
   box-shadow:var(--shadow);
 }
 html[data-visual-style=elegant] .equipment-card {
@@ -125,7 +125,8 @@ html[data-visual-style=elegant][data-ui-mode=basic] :is(#basic-efficiencies > di
 }
 html[data-visual-style=elegant] :is(.chart-panel,.equipment-speed-chart-panel) { border-top:2px solid var(--elegant-border); }
 html[data-visual-style=elegant] :is(.equipment-speed-chart-heading h3,.chart-panel h3) { color:var(--secondary-text); }
-html[data-visual-style=elegant] .result-kpi { background:var(--surface); border-top:2px solid var(--elegant-border); }
+/* Reusable metric cards keep their result/featured variant in every theme. */
+html[data-visual-style=elegant] .result-kpi:not(.metric-card) { background:var(--surface); border-top:2px solid var(--elegant-border); }
 html[data-visual-style=elegant] .primary-kpi { background:var(--accent-soft); border-top-color:var(--accent); }
 html[data-visual-style=elegant] .scenario-current-title { color:var(--secondary-text); }
 html[data-visual-style=elegant] .analysis-recommendation { background:var(--surface); border-radius:var(--radius-md); }

@@ -1130,9 +1130,23 @@
         });
         var efficiency=STEquipmentEfficiency.fromNumerical(unit,model);
         STEquipmentEfficiency.fields.forEach(function([key]){
-          var value=efficiency[key];
-          efficiencyCard.querySelector('[data-efficiency="'+key+'"]').textContent=!Number.isFinite(value)?'—':
-            key==='throughput'?formatRatePerMinute(value,equipmentFlowUnit):formatPercent(value);
+          var value=efficiency[key],target=efficiencyCard.querySelector('[data-efficiency="'+key+'"]');
+          if(key==='throughput'){
+            if(!target._rateValue||target._rateValue.parentNode!==target){
+              target.classList.add('live-equipment-2d-value');
+              var number=document.createElement('span'),label=document.createElement('span');
+              number.className='live-equipment-2d-number';label.className='live-equipment-2d-unit';
+              target.replaceChildren(number,document.createTextNode(' '),label);
+              target._rateValue=number;target._rateUnit=label;target._rateUnitKey=null;
+            }
+            var display=Number.isFinite(value)?formatNumber(value*60):'—';
+            if(target._rateValue.textContent!==display)target._rateValue.textContent=display;
+            var unitLabel=flowUnitLabels(equipmentFlowUnit).rate;
+            // Preserve translated unit text and mounted nodes between frames.
+            if(target._rateUnitKey!==unitLabel){
+              target._rateUnit.textContent=unitLabel;target._rateUnitKey=unitLabel;
+            }
+          }else target.textContent=Number.isFinite(value)?formatPercent(value):'—';
         });
       }
       var rate=card.querySelector('.live-rate');

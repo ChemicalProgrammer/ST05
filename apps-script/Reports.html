@@ -179,9 +179,12 @@ window.STReports=(function(){
     var container=document.createElement('div');container.append(root);
     return '<!doctype html><html lang="en" data-ui-mode="'+(basic()?'basic':'advance')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(title)+'</title><style>'+css+palette+'</style></head><body>'+container.innerHTML+'</body></html>';
   }
-  function batchHtml(batch){
+  function batchHtml(batch,displayRateLabel){
     if(!batch)return '';
-    return '<h2>'+escape(__ST_TEXT__('batch.title'))+'</h2><p>'+escape(__ST_TEXT__('batch.note'))+'</p>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('batch.mean'),__ST_TEXT__('batch.sd'),__ST_TEXT__('batch.range')],Object.entries(batch.statistics).map(function(pair){var m=pair[1];return [human(pair[0]),value(m.mean),value(m.standardDeviation),value(m.min)+' – '+value(m.max)];}))+'<h3>'+escape(__ST_TEXT__('batch.by_shift'))+'</h3>'+table([__ST_TEXT__('batch.round'),__ST_TEXT__('exports.seed'),__ST_TEXT__('batch.shift'),__ST_TEXT__('results.production'),__ST_TEXT__('results.throughput')+' / min',__ST_TEXT__('client.oee')+' %',__ST_TEXT__('results.starving')+' (s)',__ST_TEXT__('results.blocking')+' (s)',__ST_TEXT__('results.failure_time')+' (s)'],(batch.rows||[]).flatMap(function(r){return (r.shifts||[]).map(function(s){return [r.round,r.seed,s.shift,value(s.outputCount),value(s.throughputPerMinute),value(s.lineOeePercent),value(s.starvedSeconds),value(s.blockedSeconds),value(s.failureSeconds)];});}));
+    // Callers that know the output unit can label existing per-minute values.
+    // Standalone report exports keep their previous signature and fallback.
+    var throughputLabel=__ST_TEXT__('results.throughput')+(displayRateLabel?' ('+displayRateLabel+')':' / min');
+    return '<h2>'+escape(__ST_TEXT__('batch.title'))+'</h2><p>'+escape(__ST_TEXT__('batch.note'))+'</p>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('batch.mean'),__ST_TEXT__('batch.sd'),__ST_TEXT__('batch.range')],Object.entries(batch.statistics).map(function(pair){var m=pair[1];return [human(pair[0]),value(m.mean),value(m.standardDeviation),value(m.min)+' – '+value(m.max)];}))+'<h3>'+escape(__ST_TEXT__('batch.by_shift'))+'</h3>'+table([__ST_TEXT__('batch.round'),__ST_TEXT__('exports.seed'),__ST_TEXT__('batch.shift'),__ST_TEXT__('results.production'),throughputLabel,__ST_TEXT__('client.oee')+' %',__ST_TEXT__('results.starving')+' (s)',__ST_TEXT__('results.blocking')+' (s)',__ST_TEXT__('results.failure_time')+' (s)'],(batch.rows||[]).flatMap(function(r){return (r.shifts||[]).map(function(s){return [r.round,r.seed,s.shift,value(s.outputCount),value(s.throughputPerMinute),value(s.lineOeePercent),value(s.starvedSeconds),value(s.blockedSeconds),value(s.failureSeconds)];});}));
   }
   function chartsHtml(){
     var surface=getComputedStyle(document.documentElement).getPropertyValue('--surface').trim(),html='';

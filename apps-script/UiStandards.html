@@ -409,10 +409,8 @@ html[data-visual-style=elegant] .subsection-title { color:var(--secondary-text);
 }
 .fold-heading h3, #realdata-panel .fold-heading .real-data-section-title { margin:0; color:var(--accent); font:inherit; line-height:var(--leading-tight); }
 /* Reusable subsection pieces: title, optional descriptive subtitle and internal divider. */
-.fold-heading .subsection-heading-copy { min-width:0; flex:1 1 auto; }
 .fold-heading .subsection-heading-title, .fold-heading h3 { color:var(--accent);font-size:var(--font-card);font-weight:var(--weight-semibold);line-height:var(--leading-tight); }
-.fold-heading .subsection-description { margin:var(--space-2) 0 0;max-width:84ch;color:var(--muted);font-size:var(--font-secondary);font-weight:var(--weight-regular);line-height:var(--leading-body); }
-.fold-native > summary .subsection-heading-copy { display:flex;flex-direction:column;gap:var(--space-2);min-width:0; }
+.fold-heading .subsection-description { color:var(--muted);font-size:var(--font-secondary);font-weight:var(--weight-regular);line-height:var(--leading-body); }
 .fold-native > summary .subsection-description { display:block;color:var(--muted);font-size:var(--font-secondary);font-weight:var(--weight-regular);line-height:var(--leading-body); }
 .subsection-fieldset { min-width:0; border:0;border-top:var(--border-width) solid var(--line);padding:var(--space-3) 0 0;margin:var(--space-4) 0 0; }
 .fold-card fieldset > legend.subsection-divider, legend.subsection-divider { padding:0 var(--space-2) 0 0;color:var(--accent);font-size:var(--font-secondary);font-weight:var(--weight-semibold);line-height:var(--leading-body); }
@@ -458,10 +456,6 @@ html[data-visual-style=elegant] :is(#equipment-control-events-title,#vgraph-titl
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 input[type=number] { -moz-appearance:textfield; appearance:textfield; }
-.time-value-control { display:inline-flex; align-items:stretch; min-width:0; width:100%; border:var(--border-width) solid var(--line); border-radius:var(--radius-md); overflow:hidden; background:var(--surface); }
-.time-value-control > input[type=number] { flex:1; min-width:0; width:1%; border:0; box-shadow:none; border-radius:0; background:transparent; }
-.time-value-control > select { flex:0 0 auto; width:auto; min-width:4.5em; max-width:7em; margin:0; border:0; border-left:var(--border-width) solid var(--line); border-radius:0; background:var(--surface-soft); cursor:pointer; text-align:center; }
-.time-value-control:focus-within { outline:2px solid var(--accent); outline-offset:1px; }
 .live-equipment-state-details { border:1px solid var(--line); border-radius:var(--radius-md); margin-block-start:var(--space-2); padding:var(--space-2); }
 .live-equipment-state-details > strong { display:block; font-size:var(--font-secondary); margin-bottom:var(--space-2); }
 .live-equipment-state-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:var(--space-2); }
@@ -471,24 +465,6 @@ input[type=number] { -moz-appearance:textfield; appearance:textfield; }
 .live-equipment-summary-details { display:flex; flex-wrap:wrap; gap:var(--space-2) var(--space-4); margin-block-start:var(--space-2); }
 .live-equipment-summary-details > div { display:flex; flex-direction:column; gap:var(--space-1); min-width:85px; }
 .live-equipment-summary-details span { color:var(--muted); font-size:var(--font-secondary); }
-.time-output-value { display:inline-flex; align-items:baseline; gap:var(--space-1); }
-.time-output-value select { border:0; background:transparent; width:auto; max-width:4.8em; padding:0; color:var(--accent); cursor:pointer; font:inherit; }
-
-/* Shared inline time control: the unit itself opens the native contextual menu.
-   Never draw a chevron or spinner. */
-.st-time-unit,
-.time-value-control > select {
-  -webkit-appearance:none!important; -moz-appearance:none!important; appearance:none!important;
-  background-image:none!important; cursor:pointer;
-  color:var(--accent); text-align:center; text-align-last:center;
-  padding:0 var(--space-1); min-width:2.4em;
-}
-.st-time-unit::-ms-expand,
-.time-value-control > select::-ms-expand { display:none; }
-.st-time-unit:focus-visible,
-.time-value-control > select:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-.st-time-output { display:inline-flex!important; align-items:baseline; gap:var(--space-1); white-space:nowrap; }
-.st-time-output b { font-variant-numeric:tabular-nums; }
 .live-equipment-state-details,
 .live-equipment-performance-group { min-width:0; border:1px solid var(--line); border-radius:var(--radius-md); padding:var(--space-2); margin:0; }
 .live-equipment-state-details > strong,
@@ -510,19 +486,6 @@ input[type=number] { -moz-appearance:textfield; appearance:textfield; }
   .live-equipment-detail-grid { grid-template-columns:1fr; }
 }
 
-
-/* Duration input uses the same normal border as other numeric inputs;
-   the unit is an unboxed, inline, reusable selector. */
-.time-value-control { border:0!important; border-radius:0!important; background:transparent!important;
-  overflow:visible!important; gap:var(--time-unit-gap)!important; align-items:center; }
-.time-value-control > input[type=number] { min-width:0; flex:1; width:1%; background:var(--surface)!important;
-  border:var(--border-width) solid var(--line)!important; border-radius:var(--radius-md)!important;
-  padding-inline:var(--space-2); }
-.time-value-control > select { min-width:2.4em!important; max-width:none!important; width:auto!important;
-  background:transparent!important; border:0!important; border-radius:0!important;
-  color:var(--accent)!important; padding:0 var(--space-1)!important; }
-.time-value-control:focus-within { outline:none!important; }
-.time-value-control > input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 
 /* Numerical cards: 2D-style three-column groups + a full-width sparkline. */
 .live-equipment-card .live-equipment-detail-grid { display:grid; grid-template-columns:minmax(0,1.13fr) minmax(0,.9fr) minmax(0,1.07fr);
@@ -550,7 +513,7 @@ input[type=number] { -moz-appearance:textfield; appearance:textfield; }
   align-items:center; min-height:24px; padding:var(--space-1) var(--space-2); }
 .live-equipment-card .live-equipment-2d-row:nth-child(even) { background:var(--surface-soft); }
 .live-equipment-card .live-equipment-2d-label { color:var(--muted); font-size:var(--font-secondary); }
-.live-equipment-card .live-equipment-2d-value { display:flex; align-items:center; justify-content:end; gap:var(--space-1);
+.live-equipment-card .live-equipment-2d-value { display:flex; align-items:center; justify-content:end; gap:var(--time-unit-gap);
   text-align:right; font-variant-numeric:tabular-nums; }
 .live-equipment-card .live-equipment-2d-value b { font-weight:var(--weight-semibold); }
 .live-equipment-card .live-equipment-2d-unit { color:var(--muted); min-width:2em; text-align:left; font-size:var(--font-secondary); }
@@ -638,7 +601,7 @@ input[type=number] { -moz-appearance:textfield; appearance:textfield; }
 .live-equipment-card .live-equipment-2d-summary .live-equipment-2d-row:first-child { display:none; }
 .live-equipment-card .live-equipment-2d-label { color:var(--muted); font-size:var(--font-caption); line-height:1.15; }
 .live-equipment-card .live-equipment-2d-value { justify-content:flex-start; text-align:left;
-  font-size:var(--font-secondary); min-width:0; max-width:100%; flex-wrap:wrap; gap:var(--space-1); }
+  font-size:var(--font-secondary); min-width:0; max-width:100%; flex-wrap:wrap; gap:var(--time-unit-gap); }
 .live-equipment-card .live-equipment-2d-value b { overflow-wrap:anywhere; }
 .live-equipment-card .live-equipment-2d-unit { min-width:0; }
 .live-equipment-card .live-equipment-state-grid .st-time-output { justify-content:flex-start; }
@@ -1354,73 +1317,66 @@ html[data-ui-mode=basic][data-basic-view=conveyors]
   .workspace-content {padding-block-start:var(--workspace-gutter);}
 }
 
-/* Subsección: las herramientas comparten una sola fila por defecto.
-   La propia cabecera puede pasar el grupo completo a la segunda línea
-   solo si el ancho real no permite mantenerlo al lado del título. */
+/* Title and tools share the first row when they fit. Descriptive content owns
+   the full following row, so a wide toolbar cannot shorten its text column.
+   display:contents flattens only the copy wrapper, preserving the h3 and its
+   accessible toggle, and leaves native summary elements untouched. */
+.fold-heading {row-gap:var(--space-1);}
 .fold-heading > :is(.fold-tools,.button-row),
 .fold-heading .fold-tools > .button-row {
-  display:flex;align-items:center;flex-wrap:nowrap;
+  display:flex;align-items:center;flex-wrap:wrap;
   gap:var(--space-2);min-width:0;max-width:100%;
 }
+.fold-heading > :is(.fold-tools,.button-row,select) {order:1;flex:0 1 auto;}
 .fold-heading > :is(.fold-tools,.button-row) > :is(button,details,select),
 .fold-heading .fold-tools > .button-row > :is(button,details) {flex-shrink:0;}
-@media(max-width:620px){
-  .fold-heading {row-gap:var(--space-2);}
-  .fold-heading > :is(.fold-tools,.button-row) {flex-wrap:wrap;max-width:100%;}
-}
-/* Título y descripción son renglones independientes en todas las Subsecciones.
-   Las herramientas permanecen a la derecha y sólo saltan cuando falta ancho. */
 .fold-heading > .subsection-heading-copy,
 .fold-heading > div:has(> h3 > .fold-toggle) {
-  display:flex;flex:1 1 auto;min-width:0;
-  align-items:stretch;flex-direction:column;flex-wrap:nowrap;
-  gap:var(--space-1);
+  display:contents;
 }
 .fold-heading > .subsection-heading-copy > :is(h3,.subsection-heading-title),
 .fold-heading > div:has(> h3 > .fold-toggle) > h3 {
-  display:block;flex:none;min-width:0;margin:0;
+  display:block;order:0;flex:1 1 auto;min-width:0;margin:0;
   white-space:normal;
 }
-/* Wrap according to actual available width (not viewport breakpoints):
-   one line whenever it fits, at most two when the panel is narrower. */
 .fold-heading > .subsection-heading-copy > .subsection-description,
 .fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description,
+.fold-heading > .subsection-heading-copy > .subsection-playback-meta {
+  order:2;flex:1 0 100%;min-width:0;max-width:100%;
+  padding-inline-start:calc(.45em + var(--space-1) + var(--space-2));
+}
+/* Natural wrapping uses the actual section width. Do not clamp explanatory
+   text or give it a fixed character limit on large or narrow sections. */
+.fold-heading .subsection-description,
 .fold-native > summary .subsection-description {
-  display:-webkit-box;min-width:0;max-width:100%;margin:0;
-  overflow:hidden;overflow-wrap:anywhere;white-space:normal;text-overflow:ellipsis;
-  -webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  display:block;min-width:0;max-width:100%;margin:0;
+  overflow:visible;overflow-wrap:anywhere;white-space:normal;text-overflow:clip;
 }
 .fold-native > summary .subsection-heading-copy {
   display:flex;flex:1 1 auto;min-width:0;align-items:stretch;
   flex-direction:column;flex-wrap:nowrap;gap:var(--space-1);
 }
 .fold-native > summary .subsection-native-title {display:block;}
-/* Título en su propio renglón; la descripción y el progreso comparten
-   un único segundo renglón mientras el ancho disponible lo permita. */
+/* Numerical playback and the 2D layout use the same descriptive row. The
+   progress stays at its trailing edge and wraps only when both do not fit. */
+.fold-heading .subsection-playback-meta,
 #simulation-playback .subsection-playback-meta {
   display:flex;flex-wrap:wrap;align-items:baseline;
   column-gap:var(--space-3);row-gap:var(--space-1);
   min-width:0;max-width:100%;
 }
+.fold-heading .subsection-playback-meta > .subsection-description,
 #simulation-playback .fold-heading .subsection-playback-meta > .subsection-description {
-  display:-webkit-box;flex:0 1 auto;min-width:0;max-width:100%;margin:0;
-  white-space:normal;overflow:hidden;overflow-wrap:anywhere;text-overflow:ellipsis;
-  -webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  display:block;flex:1 1 auto;min-width:0;max-width:100%;margin:0;
+  white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip;
 }
+.fold-heading .subsection-progress-status,
 #simulation-playback .fold-heading #simulation-playback-status {
   display:inline-flex;flex:0 0 auto;align-items:baseline;flex-wrap:nowrap;
   gap:var(--space-2);min-width:0;max-width:100%;margin:0;
-  white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
+  margin-inline-start:auto;white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
 }
 #simulation-playback #playback-performance {display:none!important;}
-/* Align subsection descriptions with label text after the fold chevron. */
-.fold-heading > .subsection-heading-copy > .subsection-description,
-.fold-heading > div:has(> h3 > .fold-toggle) > .subsection-description {
-  padding-inline-start:calc(.45em + var(--space-1) + var(--space-2));
-}
-.fold-heading > .subsection-heading-copy > .subsection-playback-meta {
-  padding-inline-start:calc(.45em + var(--space-1) + var(--space-2));
-}
 #simulation-equipment .equipment-performance-filters {align-self:flex-start;}
 #simulation-equipment .equipment-filter-toggle[aria-pressed=true] {
   background:var(--selected);color:var(--accent);border-color:var(--accent);

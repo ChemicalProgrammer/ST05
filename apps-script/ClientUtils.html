@@ -22,6 +22,9 @@
       return formatNumber(Number(ratePerSecond || 0) * 60)+' '+flowUnitLabels(unit).rate;
     }
 
+    // Results and playback share the same native-unit aliases and rate labels.
+    globalThis.STFlowUnits=Object.freeze({labels:flowUnitLabels,formatRatePerMinute:formatRatePerMinute});
+
     function formatPercent(value) {
       return isFiniteNumber(value) ? formatNumber(value * 100) + '%' : '—';
     }

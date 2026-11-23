@@ -81,7 +81,8 @@ window.STRealData=(function(){
           try{const draft=M.normalize(current()),h=M.timeHierarchy(draft,true),previous=draft.timeOverrides[id];draft.timeOverrides[id]={enabled:toggle.checked,valueSeconds:previous?.valueSeconds??(finite(h.values[id])?Math.max(0,h.values[id]):null)};draft.timeHierarchyEnabled=true;if(M.timeCategories[id])draft.timeBreakdown[id].enabled=!toggle.checked;persist(M.normalize(draft));refresh();status('Modo de captura actualizado.');}catch(error){status(error.message,true);}
         };
         value.oninput=()=>{if(value.readOnly||!value.checkValidity())return;edit(value.dataset.realField,value.value===''?null:Number(value.value)*60);};
-        group.append(toggle,value,el('span','min'));summary.append(group);
+        const valueControl=el('span',null,'time-value-control');valueControl.append(value,el('span','min','time-input-unit'));
+        group.append(toggle,valueControl);summary.append(group);
       }
       details.open=['total','plant','production','runtime'].includes(id);details.append(summary,body);parent.append(details);return {details,summary,body};
     }
@@ -106,7 +107,7 @@ window.STRealData=(function(){
     const losses=node(runtime.body,'losses','Runtime Losses','Production Rate Losses + Scrap + Rework, en minutos equivalentes.');
     const grid=el('div',null,'real-data-fields');losses.body.append(grid);
     for(const field of [['rateLossSeconds','Production Rate Losses (min)','number',60],['aem.scrapSeconds','Scrap (min equivalentes)','number',60],['aem.reworkSeconds','Rework (min equivalentes)','number',60],['validation.rateLossBasis','Definición del rate loss','select',1,[['UNCONFIRMED','Pendiente'],['GROSS','Pérdida bruta'],['NET','Balance neto']]]])control(grid,field,record);
-    const effective=el('div',null,'real-data-time-node real-data-time-result'),effectiveValue=el('output',null,'numeric');effective.dataset.timeNode='effective';effectiveValue.dataset.timeValue='effective';effectiveValue.setAttribute('aria-label','Effective Runtime calculado en minutos');tip(effectiveValue,'Effective Runtime calculado = Runtime − Runtime Losses. Runtime Losses = Production Rate Losses + Scrap + Rework, salvo total capturado manualmente.');effective.append(el('span','Effective Runtime'),effectiveValue);
+    const effective=el('div',null,'real-data-time-node real-data-time-result'),effectiveValue=el('output',null,'numeric metric-value');effective.dataset.timeNode='effective';effectiveValue.dataset.timeValue='effective';effectiveValue.setAttribute('aria-label','Effective Runtime calculado en minutos');tip(effectiveValue,'Effective Runtime calculado = Runtime − Runtime Losses. Runtime Losses = Production Rate Losses + Scrap + Rework, salvo total capturado manualmente.');effectiveValue.append(el('b','—','metric-number'),document.createTextNode(' '),el('span','min','metric-unit'));effective.append(el('span','Effective Runtime'),effectiveValue);
     const reported=el('div',null,'real-data-fields');
     const reportedInput=control(reported,['effectiveRuntimeSeconds','Effective Runtime reportado (min)','number',60],record);
     tip(reportedInput,'Valor reportado por planta. Es el único Effective Runtime real utilizado en las comparaciones y sus indicadores derivados. Si está vacío, queda pendiente; cero es un valor válido.');
@@ -119,7 +120,7 @@ window.STRealData=(function(){
         const manual=M.timeMode(record,id),wasManual=output.dataset.inputMode==='true';output.readOnly=!manual;output.classList.toggle('calculated-value',!manual);output.dataset.inputMode=String(manual);
         if(document.activeElement!==output||!manual||manual!==wasManual)output.value=manual&&record.timeOverrides?.[id]?.valueSeconds===null?'':finite(h.values[id])?Number((h.values[id]/60).toFixed(6)):'';
         const toggle=document.querySelector('[data-time-toggle="'+id+'"]');toggle.checked=manual;
-      }else output.textContent=fmt(h.values[id]==null?null:h.values[id]/60)+' min';
+      }else output.querySelector('.metric-number').textContent=fmt(h.values[id]==null?null:h.values[id]/60);
     }
     for(const minutes of document.querySelectorAll('[data-explorer-minutes]')){
       const id=minutes.dataset.explorerMinutes;

@@ -9,7 +9,7 @@ button { --on-accent:#fff; }
    No se cambia el valor ni la frecuencia de los resultados: CSS-only.
    El relieve aparece únicamente al pasar el puntero, sin will-change. */
 .metric-card {min-width:0;border:var(--border-width) solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);background:var(--surface);}
-.metric-card--result,#simulation-playback-metrics > article.metric-card--result,#results-kpis .result-kpi,.result-loss-kpis .result-kpi {
+.metric-card--result,#simulation-playback-metrics > article.metric-card--result {
   background:var(--surface-soft);border:var(--border-width) solid var(--line-strong);
   border-radius:var(--radius-md);padding:var(--space-3);min-width:0;
 }
@@ -36,16 +36,58 @@ button { --on-accent:#fff; }
 }
 /* Keep the number and its unit as separate, persistent nodes during playback.
    Count labels can be translated without rewriting or rounding the number. */
+.metric-value {display:inline-flex;align-items:baseline;gap:var(--time-unit-gap);white-space:nowrap;}
+:is(.metric-card--result,.metric-card--featured,.comparison-kpi-value) > .metric-value,
 #simulation-playback-metrics .metric-card--result > .playback-metric-value {
   display:flex;align-items:baseline;gap:var(--time-unit-gap);white-space:nowrap;
 }
+.metric-value > .metric-number,
 #simulation-playback-metrics .playback-metric-value > b {font:inherit;font-weight:var(--weight-semibold);}
-/* Inputs and general time outputs keep their stable unit slot. Equipment
-   counters have a separate layout; generic sizing/weight must not reach them. */
-.time-value-control {gap:var(--time-unit-gap)!important;}
-.time-value-control > input[type=number] {padding-inline-end:var(--space-1)!important;}
-.time-value-control > select {flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;box-sizing:border-box;text-align:start!important;text-align-last:start!important;padding-inline:0!important;}
-.st-time-output,.time-output-value {gap:var(--time-unit-gap)!important;align-items:baseline;}
+/* A single input contract owns both selectable and fixed units. Typography
+   belongs to the control, rather than the label or the surrounding section. */
+.time-value-control {
+  display:inline-flex;align-items:center;min-width:0;width:100%;
+  gap:var(--input-unit-gap);border:0;border-radius:0;background:transparent;
+  overflow:visible;font-size:var(--font-input);font-weight:var(--weight-regular);
+  line-height:var(--leading-tight);
+}
+.time-value-control > input[type=number] {
+  flex:1 1 auto;min-width:0;width:1%;margin:0;
+  padding-inline:var(--space-2);padding-inline-end:var(--space-2);
+  border:var(--border-width) solid var(--line-strong);border-radius:var(--radius-md);
+  background:var(--surface);box-shadow:none;color:var(--ink);
+  font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;
+}
+.time-value-control > select,
+.time-value-control > .time-input-unit {
+  flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;
+  min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;
+  box-sizing:border-box;text-align:start!important;text-align-last:start!important;
+  padding:0!important;margin:0;border:0;border-radius:0;background:transparent;
+  font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;
+  color:var(--unit-color);vertical-align:baseline;
+}
+.time-value-control > select {height:var(--control-height);min-height:var(--control-height);}
+.time-value-control > input:disabled {background:var(--disabled-bg);color:var(--disabled);border-color:var(--line);}
+.time-value-control > select:disabled,
+.time-value-control:has(> input:disabled) > .time-input-unit {color:var(--disabled);cursor:not-allowed;}
+.time-value-control:focus-within {outline:none;}
+.time-value-control > input:focus-visible,
+.time-value-control > select:focus-visible,
+.st-time-unit:focus-visible {outline:var(--focus-width) solid var(--accent);outline-offset:1px;}
+.st-time-unit,.time-value-control > select {
+  appearance:none!important;-webkit-appearance:none!important;-moz-appearance:none!important;
+  background-image:none!important;cursor:pointer;
+}
+.st-time-unit::-ms-expand,.time-value-control > select::-ms-expand {display:none;}
+/* Read-only numbers use the enclosing result/table scale. The unit remains a
+   native select, while fixed text uses the identical metric-unit contract. */
+.st-time-output,.time-output-value {
+  display:inline-flex!important;gap:var(--time-unit-gap)!important;
+  align-items:baseline;white-space:nowrap;
+}
+.st-time-output > b {font-variant-numeric:tabular-nums;}
+.st-time-output > .st-time-unit {color:var(--unit-color);}
 .st-time-output:not([data-variant=metric]) > .st-time-unit {
   flex:0 0 var(--time-unit-slot)!important;width:var(--time-unit-slot)!important;
   min-width:var(--time-unit-slot)!important;max-width:var(--time-unit-slot)!important;
@@ -57,8 +99,6 @@ button { --on-accent:#fff; }
 .metric-card--result > strong .st-time-output,
 .metric-card--result > strong .st-time-output b {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:inherit;}
 /* Value & Unit share one typographic scale and baseline in every reusable time control. */
-.time-value-control > input[type=number],
-.time-value-control > select {font-size:inherit!important;line-height:inherit!important;font-weight:inherit!important;}
 .st-time-output > b,
 .st-time-output > .st-time-unit {
   font-size:inherit!important;line-height:inherit!important;
@@ -69,7 +109,8 @@ button { --on-accent:#fff; }
 /* All result-card units follow the established time-unit typography. Compact
    equipment-state counters below keep their separate, smaller unit style. */
 #simulation-playback-metrics .playback-metric-unit,
-.metric-card--result > strong .st-time-output select {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--muted);vertical-align:baseline!important;}
+.metric-value > .metric-unit,
+.metric-card--result > strong .st-time-output select {font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:var(--unit-color);vertical-align:baseline!important;}
 /* One definition owns compact counters. The number's width is fixed for the
    run horizon, so variable decimals cannot wrap the neighbouring label.
    Native unit selects use the selected abbreviation's width (not their
@@ -101,6 +142,14 @@ button { --on-accent:#fff; }
 }
 .live-equipment-card .st-time-output[data-variant=metric] > select.st-time-unit:hover {
   color:var(--accent);text-decoration:underline;
+}
+/* Equipment throughput follows the compact summary typography. Broad legacy
+   span selectors must not turn its numeric value into a secondary label. */
+.live-equipment-card .live-equipment-efficiency [data-efficiency=throughput] > .live-equipment-2d-number {
+  font-size:inherit;line-height:inherit;font-weight:var(--weight-semibold);color:var(--ink);
+}
+.live-equipment-card .live-equipment-efficiency [data-efficiency=throughput] > .live-equipment-2d-unit {
+  font-size:inherit;line-height:inherit;font-weight:var(--weight-regular);color:var(--unit-color);
 }
 /* Preserve the last numerical playback action even while its button is
    disabled during calculation or playback, as in the 2D toolbar. */

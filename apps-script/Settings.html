@@ -92,7 +92,16 @@ window.STSettings = (function() {
       label.append(check,document.createTextNode(category.label));target.append(label);
     });
   }
-  function resetModeSelector(preserveUnlock){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-save-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-autosave').checked=options.autosaveEnabled;el('settings-autosave-seconds').value=String(options.autosaveSeconds);el('settings-autosave-seconds').disabled=!el('settings-autosave').checked;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');if(preserveUnlock!==true){modeCount=0;modeStarted=0;el('settings-interface-section').classList.add('hidden');}el('settings-interface-mode').value=document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC';}
+  // Modo predeterminado para nuevos casos; respeta registros múltiples heredados.
+  function productFormatMode(record){
+    const explicit=record?.metadata?.productFormatMode;
+    if(explicit==='single'||explicit==='multiple')return explicit;
+    const catalog=record?.metadata?.formatCatalog||{},legacy=record?.metadata?.products;
+    return (catalog.products?.length||0)>1||(catalog.formats?.length||0)>1||
+      (Array.isArray(legacy)&&legacy.length>1)?'multiple':'single';
+  }
+  function resetModeSelector(preserveUnlock){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-save-section').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='advance');el('settings-autosave').checked=options.autosaveEnabled;el('settings-autosave-seconds').value=String(options.autosaveSeconds);el('settings-autosave-seconds').disabled=!el('settings-autosave').checked;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
+    el('settings-product-format-mode').value=productFormatMode(record);el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');if(preserveUnlock!==true){modeCount=0;modeStarted=0;el('settings-interface-section').classList.add('hidden');}el('settings-interface-mode').value=document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC';}
   async function changeMode(){
     if(modeChanging)return;
     var picker=el('settings-interface-mode'),previous=document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC',mode=picker.value;
@@ -202,6 +211,15 @@ window.STSettings = (function() {
     ['plant-calendar-close','plant-calendar-done'].forEach(function(id){el(id).onclick=function(){el('plant-calendar-dialog').close();};});
     el('plant-calendar-dialog').addEventListener('close',function(){el('open-plant-calendar').focus();});
     el('settings-interface-mode').onchange=changeMode;
+    el('settings-product-format-mode').onchange=function(){
+      const record=activeCase();if(!record)return;
+      const requested=this.value==='multiple'?'multiple':'single';
+      if(productFormatMode(record)===requested)return;
+      // Nunca se eliminan productos/formats al activar la vista Simple.
+      record.metadata={...(record.metadata||{}),productFormatMode:requested};
+      caseChanged?.();
+      window.STProducts?.render(true);
+    };
     el('settings-equipment-layout').onchange=function(){
       var options=STPreferences.caseOptions();options.equipmentLayout=this.value;
       if(STPreferences.setCaseOptions(options))window.dispatchEvent(new Event('st-equipment-layout-change'));

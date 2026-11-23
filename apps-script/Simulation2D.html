@@ -934,18 +934,41 @@ window.STSimulation2D=(function(){
       (label==='B'?'Back-up':'Prime')+' · '+localize2D(state.active?'Active':'Clear');
     verdictHitBoxes.push({left:x-11,right:x+11,top:y-11,bottom:y+11,reason});
   }
-  function drawSignal(context,x,y,lamp,colors){
-    const entries=Object.entries(colors),spacing=12,width=entries.length*spacing+6;
-    context.fillStyle='#edf2f7';
-    context.strokeStyle='#79899b';
-    strokeBox(context,x-width/2,y-9,width,18);
-    entries.forEach(([key,color],index)=>{
-      context.beginPath();
-      context.arc(x+(index-(entries.length-1)/2)*spacing,y,4.5,0,Math.PI*2);
-      context.fillStyle=key===lamp?color:'#cbd5df';
-      context.strokeStyle=key===lamp?'#344255':'#9ba9b7';
-      context.fill();context.stroke();
-    });
+  // Etiqueta de estado compartida sobre máquinas y transportadores.
+  // Evita un semáforo de múltiples luces: muestra color y texto localizado.
+  function drawSignal(context,x,y,signal,colors){
+    const value=localize2D(signal.state||'Stopped');
+    context.save();
+    context.font='600 '+telemetryFont;
+    const width=Math.max(35*tableScale,Math.min(146*tableScale,context.measureText(value).width+18*tableScale));
+    const height=22*tableScale;
+    context.fillStyle=colors[signal.lamp]||colors.muted;
+    context.beginPath();
+    context.roundRect(x-width/2,y-height/2,width,height,height/2);
+    context.fill();
+    context.fillStyle='#fff';
+    context.textAlign='center';
+    context.textBaseline='middle';
+    context.fillText(value,x,y,width-12*tableScale);
+    context.restore();
+  }
+  // Pictograma ligero sobre canvas: máquinas y bandas tienen símbolos distintos.
+  function drawTelemetryIcon(context,x,y,belt,ink){
+    const s=tableScale;
+    context.save();
+    context.strokeStyle=ink;
+    context.lineWidth=Math.max(.7,1.5*s);
+    if(belt){
+      context.strokeRect(x,y-5*s,12*s,6*s);
+      for(const cx of [x+3*s,x+9*s]){
+        context.beginPath();context.arc(cx,y+3*s,1.6*s,0,Math.PI*2);context.stroke();
+      }
+    }else{
+      context.strokeRect(x+1*s,y-7*s,10*s,10*s);
+      context.strokeRect(x+3*s,y-5*s,6*s,5*s);
+      context.beginPath();context.moveTo(x+6*s,y);context.lineTo(x+6*s,y+3*s);context.stroke();
+    }
+    context.restore();
   }
   function drawText(context,text,x,y,available){
     const width=context.measureText(text).width;
@@ -1105,8 +1128,8 @@ window.STSimulation2D=(function(){
           });
         }
         context.font='600 '+telemetryFont;
-        const heading=context.measureText(card.showSignal?(card.title||''):localize2D(card.title||'')).width+
-          (card.verdict?context.measureText(card.verdict).width+28*tableScale:card.showSignal?22*tableScale:0);
+        const heading=context.measureText(localize2D(card.title||'')).width+
+          (card.verdict?context.measureText(localize2D(card.verdict)).width+28*tableScale:card.showSignal?22*tableScale:0);
         const content=columns.reduce((sum,width)=>sum+width,0)+parameterValueGap+telemetryColumnGap;
         columns[0]+=Math.max(0,heading-content);
       }
@@ -1121,7 +1144,10 @@ window.STSimulation2D=(function(){
     conveyorGroupWidth=telemetryPairWidth+telemetryWidths[3]+telemetryGap;
   }
   function drawTelemetry(context,item,left,y,signal,ink,border,surface,muted,soft,colors){
-    function text(value,x,baseline){context.fillText(value,x,baseline);}
+    function text(value,x,baseline,maxWidth){
+      if(Number.isFinite(maxWidth)&&maxWidth>0)context.fillText(value,x,baseline,maxWidth);
+      else context.fillText(value,x,baseline);
+    }
     function card(columnIndex,left,title,rows,showSignal,verdict){
       const width=telemetryWidths[columnIndex];
       const [parameterWidth,valueWidth,unitWidth]=telemetryColumns[columnIndex];
@@ -1135,14 +1161,14 @@ window.STSimulation2D=(function(){
       context.fillRect(left+1,y+6*tableScale,width-2,39*tableScale);
       context.font='600 '+telemetryFont;context.textAlign='left';
       if(showSignal){
-        const capsuleWidth=width-16*tableScale;
-        context.fillStyle=colors[signal.lamp];
-        context.beginPath();
-        context.roundRect(left+8*tableScale,y+8*tableScale,capsuleWidth,telemetryRowHeight,telemetryRowHeight/2);
-        context.fill();
-        context.fillStyle='#fff';
-        context.textAlign='center';
-        text(title,left+width/2,y+21*tableScale,capsuleWidth-20*tableScale);
+        // La primera tarjeta conserva nombre con icono; el estado se muestra
+        // como etiqueta de color en su fila State y sobre el equipo.
+        const glyphX=parameterX,glyphY=y+21*tableScale-1*tableScale;
+        drawTelemetryIcon(context,glyphX,glyphY,item.kind==='belt',colors.info||ink);
+        context.fillStyle=ink;
+        context.font='600 '+telemetryFont;
+        context.textAlign='left';
+        text(title,glyphX+16*tableScale,y+21*tableScale,width-2*telemetryPadding-16*tableScale);
       }else if(verdict){
         // The title is ordinary text. The clickable verdict capsule is a
         // real accessible button in the control overlay at the right.
@@ -1162,15 +1188,25 @@ window.STSimulation2D=(function(){
         if(index%2===1){context.fillStyle=soft;context.fillRect(left+1,rowY,width-2,telemetryRowHeight);}
         context.font=telemetryFont;context.fillStyle=muted;
         text(localize2D(label),parameterX,baseline,parameterWidth);
-        context.fillStyle=ink;context.font='600 '+telemetryFont;context.textAlign='right';
-        text(localize2D(value),valueX,baseline,valueWidth);
+        context.font='600 '+telemetryFont;context.textAlign='right';
+        if(showSignal&&label==='State'){
+          const status=localize2D(value),chipWidth=Math.min(valueWidth,context.measureText(status).width+10*tableScale);
+          const chipHeight=15*tableScale,chipX=valueX-chipWidth,chipY=baseline-12*tableScale;
+          context.fillStyle=colors[signal.lamp]||colors.muted;
+          context.beginPath();context.roundRect(chipX,chipY,chipWidth,chipHeight,chipHeight/2);context.fill();
+          context.fillStyle='#fff';
+          text(status,valueX-5*tableScale,baseline,chipWidth-9*tableScale);
+        }else{
+          context.fillStyle=ink;
+          text(localize2D(value),valueX,baseline,valueWidth);
+        }
         context.fillStyle=muted;context.font=telemetryFont;context.textAlign='left';
         text(localize2D(unit),unitX,baseline,unitWidth);
       });
     }
     let cardLeft=left;
     for(const data of telemetryData(item,signal)){
-      card(data.column,cardLeft,data.column===3?'':data.title,data.rows,data.showSignal,data.verdict);
+      card(data.column,cardLeft,data.title,data.rows,data.showSignal,data.verdict);
       cardLeft+=telemetryWidths[data.column]+telemetryGap;
     }
     context.textAlign='center';
@@ -1540,7 +1576,7 @@ window.STSimulation2D=(function(){
         const {backup,prime}=item;
         const closeSensors=Number.isFinite(prime)&&Number.isFinite(backup)&&Math.abs(prime-backup)*scale<19;
         const signal=beltSignal(item),signalY=sensorY-22-(closeSensors?20:0);
-        drawSignal(context,x+width/2,signalY,signal.lamp,colors);
+        drawSignal(context,x+width/2,signalY,signal,colors);
 
         for(const [label,position] of [
           ['B',backup],
@@ -1593,7 +1629,7 @@ window.STSimulation2D=(function(){
         }
         if(!detailed)window.STSimulation2DMachines.drawConveyor(context,x+width*.1,y+beltInset,width*.8,beltDepth,{belt:beltColor,surface});
         const sx=x+width/2;
-        drawSignal(context,sx,top-14,signal.lamp,colors);
+        drawSignal(context,sx,top-14,signal,colors);
       }
     }
     for(let index=0;index<line.length;index++){

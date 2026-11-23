@@ -141,31 +141,49 @@ test('existing and dynamically created subsections remain translatable after enh
   }finally{h.close();}
 });
 
-test('Products and Formats build their material and machine/conveyor subsections through the shared factory',async()=>{
+test('Single product and format use one subsection; multiple mode restores machine and conveyor overrides',async()=>{
   const h=harness('<section id="products-workspace"></section><select id="run-initial-format"></select>');
   try{
     h.w.eval(source('STIcons'));h.w.eval(source('SimulatorEngine'));h.w.eval(source('STProducts'));
-    const simulation={id:'simulation',name:'Test',equipment:[],dynamicConfig:{}};
-    const state={uiView:'products',activeSimulationId:simulation.id,activeCase:{id:'case',metadata:{},equipment:[],simulations:[simulation]}};
+    const simulation={id:'simulation',name:'Test',equipment:[
+      {id:'filler',name:'Filler',type:'FILLER',processData:{flowUnits:{input:'BOTTLES',output:'BOTTLES'}}},
+      {id:'belt',name:'Conveyor',type:'CONVEYOR',processData:{role:'CONVEYOR',flowUnits:{input:'BOTTLES',output:'BOTTLES'}}}
+    ],dynamicConfig:{}};
+    const state={uiView:'products',activeSimulationId:simulation.id,
+      activeCase:{id:'case',metadata:{},equipment:[],simulations:[simulation]}};
     h.w.STProducts.init(state,{simulation:()=>simulation,locked:()=>false,capture:()=>true,changed(){},edited(){}});
     await h.w.STProducts.open(true);
-    function assertSections(titles){
-      const groups=[...h.d.querySelectorAll('.product-subsection')];
-      assert.deepEqual(groups.map(group=>group.querySelector('.fold-toggle').textContent),titles);
-      groups.forEach(section=>{
-        assert.ok(section.classList.contains('st-subsection'));
-        const control=h.api.enhance(section);assert.ok(control.description);assert.ok(control.tools);
-        assert.equal(control.header.querySelector(':scope > .fold-tools'),control.tools);
-        assert.equal(section.querySelector('.fold-toggle').getAttribute('aria-controls'),control.body.id);
-      });
-    }
-    assertSections(['Products']);
-    h.d.querySelector('[aria-label="Add product"]').click();assertSections(['Products','Machines','Conveyors']);
-    const name=h.d.querySelector('[aria-label="Product name"]');name.value='Example';name.dispatchEvent(new h.w.Event('input',{bubbles:true}));
+    const sections=()=>[...h.d.querySelectorAll('.product-subsection')];
+    const titles=()=>sections().map(group=>group.querySelector('.fold-toggle').textContent);
+    assert.deepEqual(titles(),['Products & Formats']);
+    assert.equal(h.d.querySelector('.formats-tabs,.product-material-picker,.product-add-menu'),null);
+    assert.ok(h.d.querySelector('[aria-label="Product name"]'));
+    assert.ok(h.d.querySelector('[aria-label="Format name"]'));
+    assert.equal(state.activeCase.metadata.formatCatalog.products.length,1);
+    assert.equal(state.activeCase.metadata.formatCatalog.formats.length,1);
+    // El modo Single nunca aplica overrides ocultos de perfiles múltiples.
+    state.activeCase.metadata.formatCatalog.formats[0].equipment.filler={enabled:true,ratePerMinute:123,inputUnit:'BOTTLES',outputUnit:'BOTTLES'};
+    assert.deepEqual(h.w.STProducts.formats()[0].equipment,{});
+    assert.equal(simulation.dynamicConfig.initialFormatId,state.activeCase.metadata.formatCatalog.formats[0].id);
+    const name=h.d.querySelector('[aria-label="Product name"]');
+    name.value='Example';name.dispatchEvent(new h.w.Event('input',{bubbles:true}));
     assert.equal(state.activeCase.metadata.formatCatalog.products[0].name,'Example');
-    h.d.querySelector('[data-format-tab="formats"]').click();
-    h.d.querySelector('[aria-label="Add format"]').click();assertSections(['Formats','Machines','Conveyors']);
-    assert.ok(h.d.querySelector('.product-selector-row > select'));
+
+    state.activeCase.metadata.productFormatMode='multiple';
+    h.d.getElementById('products-workspace').replaceChildren();
+    await h.w.STProducts.open(true);
+    assert.deepEqual(titles(),['Products & Formats','Machines','Conveyors']);
+    const picker=h.d.querySelector('.product-material-picker');
+    assert.ok(picker);assert.equal(picker.querySelectorAll('optgroup').length,2);
+    assert.ok(h.d.querySelector('.product-add-menu > summary'));
+    picker.value='formats:'+state.activeCase.metadata.formatCatalog.formats[0].id;
+    picker.dispatchEvent(new h.w.Event('change',{bubbles:true}));
+    assert.deepEqual(titles(),['Products & Formats','Machines','Conveyors']);
+    const ids=[...h.d.querySelectorAll('.product-settings-table tbody tr[data-equipment-id]')].map(row=>row.dataset.equipmentId);
+    assert.ok(ids.includes('filler'),'A format can override bottle equipment');
+    assert.ok(ids.includes('belt'),'Tables use equipment from the selected simulation');
+    h.d.querySelector('.product-add-menu button').click();
+    assert.equal(state.activeCase.metadata.formatCatalog.products.length,2);
     assert.deepEqual(h.errors,[]);
   }finally{h.close();}
 });

@@ -57,3 +57,34 @@ The ST engine uses continuous equivalent flow, not discrete box assembly. Global
 This does not add an automatic shift planner, progressive draining, mixed-product fronts, rejects, multiple lanes or fit checks. Explicit changeovers change the active format. OEE integrates its configured rate reference. The full CAPEX cards retain Configuration, DOE controls, search, saved evidence and result deletion with formats selected. Search preserves the initial format and changeovers; product/format profiles take precedence over equipment defaults, so changing a default overridden by a profile may produce no gain. Format-specific speed recommendations still require validation. Results retain equipment-state percentages and the matched failure-free diagnostic using the original format schedule and seeds. For formats, the nominal machine-speed ceiling sums the lowest machine capacity in bottle equivalents over each format’s active duration and divides by integrated ideal bottle output. It uses the immutable run snapshots, including rate overrides and bottles per case. Baseline OEE, conditional reliability loss, nominal machine-speed gap and remaining loss sum to 100%; remaining loss includes transport, planned stops and other flow effects. Older results lacking snapshots or format durations show a dash for the nominal gap and include it in remaining loss until recalculated. Long-period diagnostics require the Calculate matched loss diagnostics action. Experimental DES does not support these format changes.
 
 Tests cover migration equivalence, independent format packaging, shared product behavior, checkbox fallback, configuration import/export, reference guards, main-case saving, format changeovers and material balance. Plant calibration is still required.
+
+
+## Interface de un producto y formato / múltiples productos y formatos
+
+En **Settings > Case > Product and format configuration**, la configuración del caso
+admite dos modos de edición. La elección se conserva como
+`metadata.productFormatMode` (`single` o `multiple`); las estructuras de
+`metadata.formatCatalog` y las instantáneas de simulación no cambian.
+
+- **Single** (predeterminado para un caso nuevo): una sola Subsección
+  **Products & Formats** muestra los campos del producto y del formato vinculados.
+  No tiene selectores de objetos, botones para crear/eliminar objetos ni tablas de
+  ajustes por máquina/transportador. La línea sigue usando los parámetros instalados
+  por defecto, excepto por los valores dimensionales y de empaque suministrados.
+- **Multiple**: la misma Subsección contiene un combobox con grupos Products y
+  Formats y un botón/icono de agregar con menú contextual **Add product/Add format**.
+  Elegir cualquiera de los objetos cambia sus campos y las subsecciones Machines y
+  Conveyors. La lista de equipos se obtiene de la simulación activa, con respaldo
+  del caso, y ya no se filtra hasta quedar vacía por la unidad de flujo. Los perfiles
+  locales siguen conservando los valores no activos como overrides deshabilitados.
+- Los casos anteriores que ya tienen varios productos o formatos se presentan en
+  Multiple si carecen de preferencia explícita. Pasar a Single no elimina registros;
+  únicamente limita qué formularios se muestran. Al regresar a Multiple se recupera
+  el catálogo completo.
+- El simulador continúa resolviendo formatos a través de
+  `normalizeFormatCatalog/resolvePackingFormats` y utiliza el identificador inicial
+  de la simulación; el menú de edición no cambia los datos o IDs de los resultados
+  guardados.
+
+Los nombres de equipos y productos definidos por los usuarios no se traducen. Los
+rótulos de los campos, tooltips y tablas sí usan la preferencia de idioma.

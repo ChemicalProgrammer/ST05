@@ -66,7 +66,7 @@ window.STRunOptions=(function(){
   // Resuelve el ancho de la gráfica en segundos a partir del tiempo visible y la duración del turno.
   function windowSeconds(end,shift){var value=el('run-chart-window').value;if(value==='FULL')return Infinity;if(value==='SHIFT')return shift||28800;if(value!=='AUTO')return Number(value);return end<=300?60:end<=3600?900:end<=86400?3600:end<=604800?86400:Math.min(end,604800);}
   // Devuelve el texto de la ventana seleccionada para la leyenda de la gráfica.
-  function windowLabel(){var s=el('run-chart-window'),text=s.options[s.selectedIndex]?.textContent||'Auto';return 'Actual · '+text;}
+  function windowLabel(){var s=el('run-chart-window'),text=s.options[s.selectedIndex]?.textContent||'Auto';return (window.STLanguage?.current()==='es'?'Real · ':'Actual · ')+label(text);}
   // Changing the visual language must not re-enable locked controls or change run inputs.
   window.addEventListener('st-language-change',renderDurationSummary);
   return {read:read,apply:apply,sync:sync,syncEventEditor:syncEventEditor,resolve:resolve,zonedTimestamp:zonedTimestamp,durationSeconds:function(){return resolve(config());},windowSeconds:windowSeconds,windowLabel:windowLabel};

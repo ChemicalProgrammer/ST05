@@ -1,0 +1,116 @@
+<script>
+/* SimuLine interface language: browser-local, independent from case and engine.
+   English is canonical; Spanish is an explicit opt-in. */
+window.STLanguage=(function(){
+  'use strict';
+  var translations={"Settings":"Configuración","General":"General","Appearance":"Apariencia","Simulation":"Simulación","Simulation 2D":"Simulación 2D","Storage":"Almacenamiento","Case":"Caso","Language":"Idioma","English":"Inglés","Spanish":"Español","English (default)":"Inglés (predeterminado)","Español":"Español","Choose the interface language. Applied immediately in this browser.":"Elige el idioma de la interfaz. Se aplica inmediatamente en este navegador.","Equipment":"Equipos","Machines":"Máquinas","Conveyors":"Transportadores","Machine":"Máquina","Conveyor":"Transportador","Formats":"Formatos","Products":"Productos","Product":"Producto","V-Graph":"Gráfica V","Results":"Resultados","Real data":"Datos reales","What-If":"Qué pasaría si","Comparison":"Comparación","Case name":"Nombre del caso","Cases":"Casos","Your cases":"Tus casos","New case":"Nuevo caso","Create case":"Crear caso","Create demo":"Crear demostración","Demo":"Demostración","Saved cases":"Casos guardados","Close case":"Cerrar caso","Open case":"Abrir caso","Delete case":"Eliminar caso","Clone case":"Duplicar caso","Copy of":"Copia de","Current case":"Caso actual","Simulation playback":"Reproducción de simulación","Simulation setup":"Configuración de simulación","Simulation settings":"Ajustes de simulación","Equipment performance":"Desempeño de los equipos","Equipment control events":"Eventos de control de equipos","Performance summary":"Resumen de desempeño","Losses and transitions":"Pérdidas y transiciones","Scenario options":"Opciones de escenarios","Scenario analysis":"Análisis de escenarios","Production and calendar":"Producción y calendario","Rate loss":"Pérdida de velocidad","Start ramps and stop transitions":"Rampas de arranque y transiciones de parada","Charts and history":"Gráficas e historial","Model assumptions and timing":"Supuestos del modelo y tiempos","Effective throughput by machine":"Producción efectiva por máquina","Line speed profile · V-Graph design":"Perfil de velocidad de línea · Diseño V-Graph","Plant calendar":"Calendario de planta","Calendar":"Calendario","Schedule":"Programa","Overview":"Resumen","States":"Estados","Equipment efficiency":"Eficiencia de equipos","Conveyor geometry":"Geometría del transportador","Speed trend":"Tendencia de velocidad","Chart":"Gráfica","Charts":"Gráficas","Play a simulation round and monitor efficiencies, output, and runtime metrics.":"Reproduce una ronda y monitorea eficiencia, producción y tiempos de operación.","Review the current line efficiency and simulation settings.":"Consulta la eficiencia actual de la línea y los ajustes de simulación.","Configure machines and conveyors, their order, properties, and data exchange.":"Configura máquinas y transportadores, su orden, propiedades e intercambio de datos.","Choose the simulation duration, source, and visual playback options.":"Selecciona la duración, fuente y opciones visuales de la reproducción.","Set the format, time horizon, rounds, and included sources of downtime.":"Define formato, duración, rondas y fuentes de paradas incluidas.","Review the main performance indicators for the selected simulation.":"Consulta los indicadores principales de la simulación seleccionada.","Compare current and recommended line rates to identify balancing opportunities.":"Compara las velocidades actuales y recomendadas para identificar oportunidades de balanceo.","Review nominal, achievable, and recommended throughput for each machine.":"Consulta la producción nominal, alcanzable y recomendada de cada máquina.","Explore the recorded simulation curves and historical trends.":"Explora las curvas registradas y las tendencias históricas de la simulación.","Browse, filter, and manage your saved simulation cases.":"Explora, filtra y administra tus casos de simulación guardados.","Ready":"Listo","Running":"En marcha","RUNNING":"EN MARCHA","RAMPING UP":"ACELERANDO","STARTING":"ARRANCANDO","STARVED":"SIN ALIMENTACIÓN","BLOCKED":"BLOQUEADO","FAULTED":"EN FALLA","STOPPED":"DETENIDO","PAUSED":"PAUSADO","FAULT":"FALLA","IDLE":"INACTIVO","FAILURE":"FALLA","WAITING FOR PRIME":"ESPERANDO PRIME","BACKUP STOP":"PARADA POR ACUMULACIÓN","EMERGENCY STOP":"PARADA DE EMERGENCIA","PLANNED STOP":"PARADA PLANIFICADA","MICRO STOP":"MICROPARADA","Completed":"Completado","Playing":"Reproduciendo","Paused":"En pausa","Stopped":"Detenido","Calculating":"Calculando","Loading":"Cargando","Saving":"Guardando","Saved":"Guardado","Pending":"Pendiente","Failed":"Fallido","Error":"Error","Warning":"Advertencia","Success":"Correcto","Open":"Abrir","Close":"Cerrar","Done":"Listo","Cancel":"Cancelar","Apply":"Aplicar","Save":"Guardar","Save case":"Guardar caso","Reset":"Restablecer","Reset default":"Restablecer valor predeterminado","Refresh":"Actualizar","Reload":"Recargar","Retry":"Reintentar","Add":"Agregar","Remove":"Quitar","Delete":"Eliminar","Edit":"Editar","Rename":"Renombrar","Copy":"Copiar","Export":"Exportar","Import":"Importar","Download":"Descargar","Upload":"Subir","Continue":"Continuar","Next":"Siguiente","Previous":"Anterior","Back":"Atrás","Search":"Buscar","Filter":"Filtrar","Sort":"Ordenar","Show":"Mostrar","Hide":"Ocultar","Show machines":"Mostrar máquinas","Hide machines":"Ocultar máquinas","Show conveyors":"Mostrar transportadores","Hide conveyors":"Ocultar transportadores","Show dimensions":"Mostrar cotas","Show events and calendar":"Mostrar eventos y calendario","Select all events":"Seleccionar todos los eventos","All":"Todos","Yes":"Sí","No":"No","On":"Activado","Off":"Desactivado","Enabled":"Habilitado","Disabled":"Deshabilitado","Theoretical equipment efficiency":"Eficiencia teórica de equipos","Simulated efficiency":"Eficiencia simulada","Runtime Efficiency":"Eficiencia en operación","Operational efficiency":"Eficiencia operativa","Availability":"Disponibilidad","OEE":"OEE","Global OEE":"OEE global","Virtual time":"Tiempo virtual","Output":"Producción","Effective Runtime":"Tiempo efectivo de operación","Runtime Losses":"Pérdidas de tiempo de operación","Instantaneous output rate":"Tasa instantánea de producción","Cumulative average rate":"Velocidad promedio acumulada","Accumulation inventory":"Inventario acumulado","Overflow loss":"Pérdida por desbordamiento","Back-up control time":"Tiempo de control Back-up","Throughput":"Producción efectiva","Production":"Producción","Total time":"Tiempo total","Running time":"Tiempo en marcha","Downtime":"Tiempo de parada","Unplanned Downtime":"Paradas no planificadas","Planned Downtime":"Paradas planificadas","Actual":"Real","Current":"Actual","Recommended":"Recomendado","Normal":"Normal","Maximum":"Máximo","Minimum":"Mínimo","Average":"Promedio","Mean":"Media","Standard deviation":"Desviación estándar","Efficiency":"Eficiencia","Performance":"Desempeño","Quality":"Calidad","Rate":"Velocidad","Speed":"Velocidad","Design speed":"Velocidad de diseño","Nominal speed":"Velocidad nominal","Unit":"Unidad","Units":"Unidades","Duration":"Duración","Time":"Tiempo","Minutes":"Minutos","Seconds":"Segundos","Hours":"Horas","Days":"Días","Weeks":"Semanas","Shift":"Turno","Shifts":"Turnos","Round":"Ronda","Rounds":"Rondas","Simulation A":"Simulación A","Simulation B":"Simulación B","Scenario":"Escenario","Scenarios":"Escenarios","Settings categories":"Categorías de configuración","Case saving":"Guardado de casos","Autosave":"Guardado automático","Save interval (seconds)":"Intervalo de guardado (segundos)","Equipment layout":"Distribución de equipos","Default for interface mode":"Predeterminado del modo de interfaz","Separate Equipment and Conveyors tabs":"Pestañas separadas de Equipos y Transportadores","Single Equipment tab":"Una sola pestaña de Equipos","Interface mode":"Modo de interfaz","Text size":"Tamaño de texto","Primary color":"Color primario","Secondary color":"Color secundario","Theme":"Tema","Light":"Claro","Dark":"Oscuro","Automatic":"Automático","System automatic":"Automático del sistema","Theme colors":"Colores del tema","Current color":"Color actual","Recommended color":"Color recomendado","Change Current color":"Cambiar color actual","Change Recommended color":"Cambiar color recomendado","Chart Series Colors":"Colores de series de gráficas","Reset colors":"Restablecer colores","Calculation":"Cálculo","Calculation mode":"Modo de cálculo","Simulation engine":"Motor de simulación","Current engine (default)":"Motor actual (predeterminado)","Automatic calculation":"Cálculo automático","Live":"En vivo","Live calculation":"Cálculo en vivo","Fast calculation":"Cálculo rápido","Summary only":"Sólo resumen","Seed policy":"Política de semillas","Fixed — repeatable runs":"Fija — rondas reproducibles","Random — new base seed for each run":"Aleatoria — semilla nueva por corrida","Recording and charts":"Registro y gráficas","Display sample interval":"Intervalo de muestreo mostrado","Visual refresh rate":"Frecuencia de actualización visual","Card chart window":"Ventana de gráfica por tarjeta","Show shift accounting":"Mostrar conteo por turnos","Last 1 min":"Último minuto","Last 5 min":"Últimos 5 minutos","Last 15 min":"Últimos 15 minutos","Last 1 hour":"Última hora","Last shift":"Último turno","Last 24 hours":"Últimas 24 horas","Full simulation":"Simulación completa","Numerical cards · Performance diagnostics":"Tarjetas numéricas · Diagnóstico de desempeño","Temporary display switches to isolate slow sections. They affect rendering only, not calculated results or saved inputs.":"Opciones temporales para aislar secciones lentas. Sólo cambian la visualización, no los resultados ni los datos guardados.","Speed trend charts":"Gráficas de tendencia de velocidad","Sections":"Secciones","Show Real data":"Mostrar datos reales","Show JSON fields":"Mostrar campos JSON","Failure categories":"Categorías de fallas","General stops":"Paradas generales","Minor stops":"Paradas menores","Major stops":"Paradas mayores","Failures enabled":"Fallas habilitadas","MTBF (min)":"MTBF (min)","MTTR (min)":"MTTR (min)","Fail":"Falla","Invalid":"Inválido","Gemini":"Gemini","Agent response":"Respuesta del agente","Agent prompts":"Instrucciones del agente","Model":"Modelo","Temperature (0–2)":"Temperatura (0–2)","Response mode":"Modo de respuesta","Model default":"Predeterminado del modelo","API key":"Clave API","Remove API key":"Quitar clave API","Check the saved case":"Revisar el caso guardado","Conversation":"Conversación","Ask Gemini":"Preguntar a Gemini","Send":"Enviar","Message":"Mensaje","Case context":"Contexto del caso","Connected":"Conectado","Not connected":"Sin conexión","Account":"Cuenta","Drive workspace":"Espacio de trabajo en Drive","Drive folder ID":"ID de carpeta de Drive","Save pending case changes after the selected interval. Basic always uses the Save icon. Autosave settings are saved in this case.":"Guarda los cambios pendientes después del intervalo. En modo básico se usa el icono Guardar. Estas preferencias se guardan en el caso.","Open a case to edit its name, DOE and chart colors. These options are saved with the case.":"Abre un caso para modificar su nombre, DOE y colores de gráficas. Estas opciones se guardan con el caso.","Applies immediately in this browser.":"Se aplica inmediatamente en este navegador.","The model list will refresh after the new API key is saved.":"La lista de modelos se actualizará después de guardar la nueva clave API.","New simulation":"Nueva simulación","Rename simulation":"Renombrar simulación","Delete simulation":"Eliminar simulación","Clone simulation":"Duplicar simulación","Baseline":"Caso base","Zero CAPEX":"CAPEX cero","Medium CAPEX":"CAPEX medio","High CAPEX":"CAPEX alto","Run":"Ejecutar","Run simulation":"Ejecutar simulación","Start simulation":"Iniciar simulación","Pause":"Pausar","Stop":"Detener","Play":"Reproducir","Restart":"Reiniciar","Reset + run":"Restablecer y ejecutar","Run / resume":"Ejecutar / reanudar","Planned stop":"Parada planificada","Emergency stop":"Parada de emergencia","Manual":"Manual","AUTO":"AUTO","Command":"Comando","Command:":"Comando:","Actions":"Acciones","Events":"Eventos","Equipment events":"Eventos de equipo","Time losses":"Pérdidas de tiempo","Actual · last 60 s":"Real · últimos 60 s","Conveyor design audit":"Auditoría de diseño del transportador","Conveyor accumulation and sensors":"Acumulación y sensores de transportador","Product length":"Longitud de producto","Package length":"Longitud de empaque","Discharge pitch":"Paso de descarga","Back-up sensor":"Sensor Back-up","Prime sensor":"Sensor Prime","Line configuration":"Configuración de línea","Equipment results":"Resultados de equipos","Simulation results":"Resultados de simulación","Simulation comparison":"Comparación de simulaciones","Proposed":"Propuesto","Value":"Valor","Parameter":"Parámetro","Status":"Estado","No items selected":"No hay elementos seleccionados","No results yet":"Todavía no hay resultados","No equipment matches this filter.":"Ningún equipo coincide con este filtro.","Apply selected changes":"Aplicar cambios seleccionados","Import JSON":"Importar JSON","Export case (JSON)":"Exportar caso (JSON)","HTML report":"Informe HTML","PDF / Print":"PDF / Imprimir","Data · JSON":"Datos · JSON","Full results · JSON":"Resultados completos · JSON","Error details":"Detalles del error","View error details":"Ver detalles del error","Error code":"Código de error","Technical trace":"Rastreo técnico","No additional details were provided.":"No se proporcionaron detalles adicionales.","Clear error":"Borrar error","Copy error":"Copiar error","Error copied":"Error copiado","Application error":"Error de aplicación","Case saving error":"Error al guardar el caso","Retry save":"Reintentar guardado","Loading console…":"Cargando consola…","Preparing your workspace…":"Preparando tu espacio de trabajo…","Connecting to your workspace…":"Conectando a tu espacio de trabajo…","About SimuLine":"Acerca de SimuLine","Packaging line simulator":"Simulador de líneas de envasado","Simulator version":"Versión del simulador","Developers":"Desarrolladores","Help":"Ayuda","FAQ":"Preguntas frecuentes","FAQ / Preguntas frecuentes":"Preguntas frecuentes","Cancel changes":"Cancelar cambios","Select language":"Seleccionar idioma","Change language":"Cambiar idioma"};
+  var englishOfSpanish={"Registro":"Record","Datos reales":"Real data","Ajuste calibrado de rate loss":"Calibrated rate-loss adjustment","Comparación de parámetros":"Parameter comparison","Gráficas":"Charts","Exportar gráficas":"Export charts","Equipo":"Equipment","Equipo actual":"Current equipment","Velocidad de banda":"Belt speed","Paradas":"Stops","Tiempo efectivo":"Effective time","Eficiencia simulada":"Simulated efficiency","Sección":"Section","Subsección":"Subsection","Configuración":"Settings","Análisis":"Analysis","Cálculos":"Calculations","Resultado":"Result","Iniciar":"Start","Detener":"Stop","Actualizar":"Refresh","Guardar":"Save","Aplicar":"Apply","Opciones":"Options","No disponible":"Not available","Sin resultados":"No results","Tiempo de ejecución":"Runtime","Pérdida de velocidad":"Rate loss"};
+  var language=window.STPreferences?.read('language')==='es'?'es':'en';
+  var originals=new WeakMap(),attributes=new WeakMap(),observer=null,applying=false;
+  var attributeNames=['title','aria-label','placeholder','data-label','alt'];
+  var skipSelector='script,style,noscript,svg,canvas,textarea,pre,code,[contenteditable],[data-st-no-translate],'+
+    '#cases-list .case-identity,#breadcrumb-case,#header-case-name,#editor-title,'+
+    '.live-equipment-identity strong,.equipment-title-name,.case-identity strong,'+
+    '#gemini-messages,#gemini-question,#gemini-history,#simulation-json-preview';
+  document.documentElement.lang=language;
+  function normalize(value){return String(value==null?'':value);}
+  function localized(value,target){
+    var text=normalize(value),match=text.match(/^(\\s*)([\\s\\S]*?)(\\s*)$/);
+    if(!match)return text;
+    var key=match[2],valueResult=target==='es'
+      ?Object.prototype.hasOwnProperty.call(translations,key)?translations[key]:key
+      :Object.prototype.hasOwnProperty.call(englishOfSpanish,key)?englishOfSpanish[key]:key;
+    return match[1]+valueResult+match[3];
+  }
+  function skipped(node){
+    var parent=node.nodeType===3?node.parentElement:node;
+    return !parent||!!parent.closest?.(skipSelector);
+  }
+  function updateText(node){
+    if(!node||node.nodeType!==3||skipped(node))return;
+    var raw=node.nodeValue||'',entry=originals.get(node);
+    if(!entry||raw!==entry.en&&raw!==entry.es){
+      entry={en:raw,es:localized(raw,'es')};
+      if(Object.prototype.hasOwnProperty.call(englishOfSpanish,raw.trim())){
+        entry.en=localized(raw,'en');entry.es=raw;
+      }
+      originals.set(node,entry);
+    }
+    var wanted=language==='es'?entry.es:entry.en;
+    if(raw!==wanted)node.nodeValue=wanted;
+  }
+  function updateAttribute(node,name){
+    if(!node?.hasAttribute?.(name)||skipped(node))return;
+    var current=node.getAttribute(name),cache=attributes.get(node);
+    if(!cache){cache={};attributes.set(node,cache);}
+    var entry=cache[name];
+    if(!entry||current!==entry.en&&current!==entry.es){
+      entry={en:current,es:localized(current,'es')};
+      if(Object.prototype.hasOwnProperty.call(englishOfSpanish,current.trim())){
+        entry.en=localized(current,'en');entry.es=current;
+      }
+      cache[name]=entry;
+    }
+    var wanted=language==='es'?entry.es:entry.en;
+    if(current!==wanted)node.setAttribute(name,wanted);
+  }
+  function applyTree(root){
+    if(!root)return;
+    if(root.nodeType===3){updateText(root);return;}
+    if(root.nodeType!==1&&root.nodeType!==9&&root.nodeType!==11)return;
+    if(root.nodeType===1&&skipped(root))return;
+    var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    while(walker.nextNode())updateText(walker.currentNode);
+    if(root.nodeType===1)attributeNames.forEach(function(name){updateAttribute(root,name);});
+    if(root.querySelectorAll)root.querySelectorAll('[title],[aria-label],[placeholder],[data-label],[alt]').forEach(function(node){
+      attributeNames.forEach(function(name){updateAttribute(node,name);});
+    });
+  }
+  function observe(){
+    if(observer)observer.disconnect();
+    if(language!=='es'||!document.body)return;
+    observer=new MutationObserver(function(changes){
+      if(applying)return;
+      applying=true;
+      try{
+        changes.forEach(function(change){
+          if(change.type==='characterData')updateText(change.target);
+          else if(change.type==='attributes')updateAttribute(change.target,change.attributeName);
+          else change.addedNodes.forEach(applyTree);
+        });
+      }finally{applying=false;}
+    });
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true,
+      attributes:true,attributeFilter:attributeNames});
+  }
+  function apply(){
+    document.documentElement.lang=language;
+    var wasObserving=!!observer;
+    if(wasObserving)observer.disconnect();
+    applying=true;
+    try{applyTree(document.body);applyTree(document.head?.querySelector('title'));}
+    finally{applying=false;}
+    observe();
+    var picker=document.getElementById('settings-language');
+    if(picker)picker.value=language;
+  }
+  function setLanguage(value){
+    var next=value==='es'?'es':'en';
+    if(language!==next){language=next;window.STPreferences?.write('language',next);}
+    apply();
+    window.dispatchEvent(new CustomEvent('st-language-change',{detail:{language:next}}));
+  }
+  function init(){
+    var picker=document.getElementById('settings-language');
+    if(picker){
+      picker.value=language;
+      picker.addEventListener('change',function(){setLanguage(this.value);});
+    }
+    apply();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
+  else init();
+  return {current:function(){return language;},setLanguage:setLanguage,apply:apply,
+    translate:function(value){return localized(value,language);}};
+})();
+</script>

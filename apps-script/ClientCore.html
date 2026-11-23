@@ -153,6 +153,13 @@
     }, { passive: true });
 
     function bindEvents() {
+      // Pressed icon-buttons toggle only what is rendered in Equipment performance.
+      ['machines','conveyors'].forEach(function(group){
+        var button=document.getElementById('toggle-performance-'+group);
+        button.addEventListener('click',function(){
+          setEquipmentPerformanceFilter(group,button.getAttribute('aria-pressed')!=='true');
+        });
+      });
       document.getElementById('sign-in-form').addEventListener('submit', function(event) { event.preventDefault(); signIn(); });
       document.getElementById('sign-out').addEventListener('click', lockWorkspace);
       document.getElementById('home-cases').addEventListener('click', showCaseHome);

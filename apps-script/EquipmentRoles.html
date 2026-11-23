@@ -8,6 +8,8 @@ window.STEquipmentRoles=(function(){
     if(residence){if(!residence.checkValidity())return false;if(residence.value==='')delete data.equipment.residenceTimeSeconds;else data.equipment.residenceTimeSeconds=Number(residence.value);}
     if(input.value==='')delete data.equipment.internalCapacityBottles;
     else data.equipment.internalCapacityBottles=Number(input.value);
+    var occupancy=fields.querySelector('.equipment-occupancy-mode');
+    if(occupancy)data.equipment.occupancyMode=occupancy.value==='POSITIONS'?'POSITIONS':'STORAGE';
     return true;
   }
   function machineType(e){var types=['BLOWER','BLOWMOLDER','PUCKER','FILLER','CAPPER','FEEDER','DEPUCKER','SLEEVER','CASE_PACKER','PALLETIZER','CUSTOM'];return e.type==='PACEMAKER'?(types.includes(e.processData?.machineType)?e.processData.machineType:'CUSTOM'):e.type||'CUSTOM';}
@@ -36,6 +38,15 @@ window.STEquipmentRoles=(function(){
     capacity.type='number';capacity.className='equipment-internal-capacity';capacity.placeholder='30';
     capacity.min='1';capacity.step='1';capacity.value=equipment.processData?.equipment?.internalCapacityBottles??'';
     capacityLabel.append(capacity);grid.append(capacityLabel);
+    var occupancyLabel=document.createElement('label'),occupancy=document.createElement('select');
+    occupancyLabel.className='machine-design-field';
+    occupancyLabel.append(document.createTextNode('Internal occupancy model'));
+    occupancy.className='equipment-occupancy-mode';
+    [['STORAGE','Storage capacity (variable fill)'],['POSITIONS','Physical positions (rotating pockets)']]
+      .forEach(function(choice){var option=document.createElement('option');option.value=choice[0];option.textContent=choice[1];occupancy.append(option);});
+    occupancy.value=equipment.processData?.equipment?.occupancyMode==='POSITIONS'?'POSITIONS':'STORAGE';
+    occupancy.title='Storage is a volume ceiling. Physical positions use a finite rotating pocket count: at steady full feed the positions are occupied, and starvation leaves real empty pockets. The optional Residence time remains a separate minimum.';
+    occupancyLabel.append(occupancy);grid.append(occupancyLabel);
     function refresh(){
       try{
         var data=JSON.parse(fields.querySelector('.equipment-process-data').value),characteristics=JSON.parse(fields.querySelector('.equipment-characteristics').value);
@@ -44,6 +55,7 @@ window.STEquipmentRoles=(function(){
         fields.querySelector('.equipment-recovery-time').value=data.equipment?.recoveryTimeSeconds??'';
         capacity.value=data.equipment?.internalCapacityBottles??'';
         fields.querySelector('.equipment-residence-time').value=data.equipment?.residenceTimeSeconds??'';
+        occupancy.value=data.equipment?.occupancyMode==='POSITIONS'?'POSITIONS':'STORAGE';
         refreshCapacityUnit();
       }catch(_){/* Validation handles incomplete JSON. */}
     }

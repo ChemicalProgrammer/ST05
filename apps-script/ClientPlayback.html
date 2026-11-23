@@ -1318,6 +1318,9 @@ function summarizeGeometrySources(sources, assumptions) {
       }
 
       var wasPlaying = state.run.playing;
+      // A recalculated scenario has different physical counters. Do not reuse
+      // transient display-only telemetry from its predecessor.
+      state.run.liveTelemetry=[];
       var actions = action === 'RESET_AND_RUN' ? ['RESET', 'RUN'] : [action];
       var commands=actions.map(function(nextAction) {
         return {

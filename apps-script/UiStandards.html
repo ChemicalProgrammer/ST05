@@ -387,7 +387,7 @@ html[data-ui-mode=basic][data-events-enabled=true] .live-controls-help { display
 html[data-visual-style=elegant] .subsection-title { color:var(--secondary-text); border-bottom-color:var(--elegant-border); }
 
 /* Subsección (Subsection): control reutilizable de bloque plegable.
-   API: STSubsection.create({title, description, tools}); STSubsection.init(root).
+   API: STSubsection.create({title, description, tools, variant:'B'}); STSubsection.init(root).
    Las clases son la apariencia interna del componente, no su constructor.
    El contenedor padre aporta el primer margen exterior; evita sumarlo dos veces. */
 .fold-card, html[data-ui-mode=basic] #basic-run-options.fold-card {
@@ -1322,29 +1322,57 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
 /* The shared header gradient is full bleed to the card's inner border.
    Negative margins cancel only the parent's content inset; equal padding
    keeps text, descriptions and tools exactly where they were. */
+.st-subsection {
+  --subsection-header-padding-start:var(--subsection-header-inset);
+  --subsection-header-padding-end:var(--space-3);
+  --subsection-header-title-size:var(--font-card);
+  --subsection-header-copy-gap:var(--subsection-description-gap);
+  --subsection-header-text:var(--accent);
+  --subsection-header-description-text:var(--muted);
+  --subsection-header-divider:var(--accent);
+}
+/* Subsección B is the default in dialogs, including components constructed
+   before insertion. An explicit A keeps full-size reference examples intact.
+   Variables reset on each section so nested A sections cannot inherit B. */
+.st-subsection.st-subsection-b,
+.st-subsection[data-subsection-variant="B"],
+:is(dialog,[role="dialog"]) .st-subsection:not([data-subsection-variant="A"]) {
+  --subsection-header-padding-start:var(--subsection-b-header-padding-block);
+  --subsection-header-padding-end:var(--subsection-b-header-padding-block);
+  --subsection-header-title-size:var(--subsection-b-title-size);
+  --subsection-header-copy-gap:var(--subsection-b-heading-gap);
+  --subsection-header-text:var(--subsection-b-text);
+  --subsection-header-description-text:var(--subsection-b-text);
+  --subsection-header-divider:var(--subsection-b-divider);
+}
 .st-subsection > .st-subsection-header {
   display:grid;grid-template-columns:minmax(0,1fr) max-content;
-  column-gap:var(--space-3);row-gap:var(--subsection-description-gap);
+  column-gap:var(--space-3);row-gap:var(--subsection-header-copy-gap);
   align-items:center;
   box-sizing:border-box;
   margin:calc(-1 * var(--subsection-header-inset)) calc(-1 * var(--subsection-header-inset)) 0;
-  padding:var(--subsection-header-inset) var(--subsection-header-inset) var(--space-3);
+  padding:var(--subsection-header-padding-start) var(--subsection-header-inset) var(--subsection-header-padding-end);
+  color:var(--subsection-header-text);border-block-end-color:var(--subsection-header-divider);
   background-color:var(--surface);
   background-image:var(--subsection-header-gradient);
   border-radius:calc(var(--radius-md) - var(--border-width)) calc(var(--radius-md) - var(--border-width)) 0 0;
 }
 .st-subsection > .st-subsection-header > .subsection-heading-copy {
   display:flex;flex-direction:column;align-items:stretch;align-self:center;
-  grid-column:1;grid-row:1;gap:var(--subsection-description-gap);min-width:0;
+  grid-column:1;grid-row:1;gap:var(--subsection-header-copy-gap);min-width:0;
 }
 .st-subsection > .st-subsection-header > .subsection-heading-copy > :is(h3,.subsection-native-title) {
   align-self:stretch;align-items:center;
   min-block-size:0;min-width:0;margin:0;
+  color:var(--subsection-header-text);font-size:var(--subsection-header-title-size);
 }
 .st-subsection > .st-subsection-header > .subsection-heading-copy > :is(.subsection-description,.subsection-playback-meta) {
   align-self:stretch;
   padding-inline-start:var(--subsection-text-inset);min-width:0;
+  color:var(--subsection-header-description-text);
 }
+.st-subsection > .st-subsection-header .fold-toggle {color:var(--subsection-header-text);}
+.st-subsection > .st-subsection-header .subsection-description {color:var(--subsection-header-description-text);}
 .st-subsection > .st-subsection-header > .fold-tools {
   grid-column:2;grid-row:1;justify-self:end;align-self:center;
   flex-wrap:nowrap;width:max-content;min-width:0;max-width:100%;
@@ -1363,7 +1391,7 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
 .st-subsection.fold-native > summary.st-subsection-header > .subsection-heading-copy {display:flex;}
 .st-subsection.fold-native > summary.st-subsection-header .subsection-native-title {
   display:flex;align-items:center;align-self:stretch;order:0;flex:0 1 auto;
-  min-width:0;margin:0;font-size:var(--font-card);line-height:var(--leading-tight);
+  min-width:0;margin:0;font-size:var(--subsection-header-title-size);line-height:var(--leading-tight);
   gap:var(--space-2);
 }
 .st-subsection.fold-native > summary.st-subsection-header .subsection-native-title::before {

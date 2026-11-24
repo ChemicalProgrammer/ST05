@@ -12,6 +12,12 @@ window.STSubsection=(function(){
     return node;
   }
   function isNode(value){return Boolean(value&&typeof value.nodeType==='number');}
+  function setVariant(section,variant){
+    if(variant===undefined)return;
+    if(!['A','B'].includes(variant))throw new TypeError('Subsection variant must be A or B.');
+    section.dataset.subsectionVariant=variant;
+    section.classList.toggle('st-subsection-b',variant==='B');
+  }
   function append(target,value){
     if(value==null)return;
     if(Array.isArray(value)){value.forEach(item=>append(target,item));return;}
@@ -98,6 +104,7 @@ window.STSubsection=(function(){
     if(spec.title==null)throw new TypeError('Subsection title is required.');
     const native=spec.native!==false;
     const section=element(native?'details':'section',spec.className||'');
+    setVariant(section,spec.variant);
     if(spec.id)section.id=spec.id;
     const header=element(native?'summary':'div',native?'':'fold-heading');
     const copy=element(native?'span':'div','subsection-heading-copy');

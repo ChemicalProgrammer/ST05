@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {JSDOM,VirtualConsole} from 'jsdom';
 import {renderAppsScript} from '../scripts/render-apps-script.mjs';
 import {fixture as realDataFixture,mount as mountRealData} from './helpers/RealDataHarness.js';
@@ -145,6 +146,7 @@ test('existing and dynamically created subsections remain translatable after enh
 test('Single product and format use one subsection; multiple mode restores machine and conveyor overrides',async()=>{
   const h=harness('<section id="products-workspace"></section><select id="run-initial-format"></select>');
   try{
+    h.w.eval(fs.readFileSync('apps-script/ClientUtils.html','utf8'));
     h.w.eval(source('STIcons'));h.w.eval(source('SimulatorEngine'));h.w.eval(source('STProducts'));
     const simulation={id:'simulation',name:'Test',equipment:[
       {id:'filler',name:'Filler',type:'FILLER',processData:{flowUnits:{input:'BOTTLES',output:'BOTTLES'}}},

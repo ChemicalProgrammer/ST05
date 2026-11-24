@@ -73,6 +73,14 @@
 .scenario-config-dialog[data-scenario-scope] .scenario-limit{gap:var(--space-1)}
 .scenario-config-dialog[data-scenario-scope] .scenario-limit input[type=number]{width:5.7rem}
 .scenario-config-dialog[data-scenario-scope] .scenario-parameter-table :is(tr,th,td)[hidden]{display:none!important}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters{min-width:61rem}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters :is(th,td):is(:nth-child(2),:nth-child(3)){text-align:left;white-space:normal;overflow-wrap:anywhere}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters :is(th,td):nth-child(2){min-width:8rem}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters :is(th,td):nth-child(3){min-width:9rem}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters input[type=number]{width:5rem;min-width:4.5rem}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters .scenario-doe-level{width:4.5rem}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters :is(input,select):disabled{opacity:.6}
+.scenario-config-dialog[data-scenario-scope] .scenario-doe-state{margin:var(--space-1) 0 0;font-size:var(--font-caption);color:var(--muted)}
 @media(max-width:640px){.scenario-config-dialog[data-scenario-scope] .scenario-config-fields{grid-template-columns:minmax(0,1fr)}}
 </style>
 <script>
@@ -276,9 +284,10 @@ window.STScenarioExplorer=(function(){
     // categories; never park editable machine rows in a hidden store.
     var searchSection=el('section','','scenario-config-section scenario-config-search-page'),inputSection=el('section','','scenario-config-section'),conveyorSection=el('section','','scenario-config-section'),reliabilityPage=el('section','','scenario-config-section');
     var configLabels={'Search':'Búsqueda','Equipment':'Equipos','Conveyors':'Transportadores','Reliability':'Confiabilidad','Search settings':'Configuración de búsqueda','Search scope':'Alcance de búsqueda','Design of experiments (DOE)':'Diseño de experimentos (DOE)','Equipment variables':'Variables de equipos','Conveyor variables':'Variables de transportadores','Reliability exploration':'Exploración de confiabilidad','Reliability equipment and limits':'Equipos y límites de confiabilidad','Select search depth.':'Selecciona la profundidad de búsqueda.','Light: no DOE. Medium: balanced. High: deeper refinement.':'Ligera: sin DOE. Media: equilibrada. Alta: mayor refinamiento.','Reliability targets are exploratory; blank limits use automatic targets.':'Los objetivos de confiabilidad son exploratorios; los límites vacíos permiten objetivos automáticos.','Scenario configuration':'Configuración de escenarios','Search depth':'Profundidad de búsqueda','Light':'Ligera','Medium':'Media','High':'Alta','Automatic priority':'Prioridad automática','Choose equipment':'Elegir equipos','All eligible equipment':'Todos los equipos elegibles','Use':'Usar','Target':'Objetivo','Proposed':'Propuesto','Feasible limit':'Límite factible','Low':'Bajo','Current MTBF / MTTR (min)':'MTBF / MTTR actual (min)','MTBF maximum (min)':'MTBF máximo (min)','MTTR minimum (min)':'MTTR mínimo (min)','Evaluate':'Evaluar','Select the categories to include.':'Selecciona las categorías que deseas incluir.','Select factors or request an automatic screening.':'Selecciona factores o solicita una evaluación automática.','Select variables, targets and feasible limits.':'Selecciona variables, objetivos y límites factibles.','Explore reliability targets as hypotheses, not verified investments.':'Explora objetivos de confiabilidad como hipótesis, no como inversiones verificadas.','Choose equipment and optional MTBF / MTTR limits.':'Selecciona equipos y límites opcionales de MTBF / MTTR.','Equipment scope':'Alcance de equipos','Include Zero CAPEX optimizations':'Incluir optimizaciones Zero CAPEX','Include Medium CAPEX optimizations':'Incluir optimizaciones Medium CAPEX','Include DOE in this search':'Incluir DOE en esta búsqueda','Explore MTBF / MTTR targets before High CAPEX search':'Explorar objetivos MTBF / MTTR antes de la búsqueda High CAPEX','Maximum equipment (automatic)':'Máximo de equipos (automático)','Select all equipment inputs':'Seleccionar todas las variables de equipos','Select equipment DOE factors':'Seleccionar factores DOE de equipos','Suggest factor combination':'Sugerir combinación de factores','Cancel screening':'Cancelar evaluación','No applicable variables':'Sin variables aplicables'};
+    Object.assign(configLabels,{'DOE unavailable at Light depth.':'DOE no está disponible en profundidad Ligera.','Choose Medium or High depth to use DOE.':'Selecciona profundidad Media o Alta para usar DOE.','No eligible numeric inputs.':'No hay variables numéricas elegibles.','Enable DOE to choose factors and edit Low / High levels.':'Activa DOE para elegir factores y editar los niveles Bajo / Alto.'});
     function configText(value){return document.documentElement.lang==='es'&&configLabels[value]?configLabels[value]:window.STLanguage?.translate(value)||value;}
     function configGroup(page,title,description,tools,content){
-      var group=STSubsection.create({title:configText(title),description:configText(description),native:false,className:'scenario-config-group',tools:tools||[],content:content});
+      var group=STSubsection.create({title:configText(title),description:configText(description),variant:'B',native:false,className:'scenario-config-group',tools:tools||[],content:content});
       page.append(group.section);return group;
     }
     function checkboxHeader(table,cell,check,label){
@@ -289,13 +298,14 @@ window.STScenarioExplorer=(function(){
     if(scopeOptions.length)configGroup(searchSection,'Search scope','Select the categories to include.',[],scopeBox);
     var suggestionPercent=el('span','—','scenario-suggestion-percent');suggestionPercent.setAttribute('aria-label','Current simulation progress');
     var doeTools=el('div','','button-row scenario-config-toolbar');doeTools.append(doeChoice);
-    var doeContent=el('div','','scenario-config-doe-content');factorActions.append(factorCount,suggestionPercent);doeContent.append(factorActions);
+    var doeContent=el('div','','scenario-config-doe-content'),doeState=el('p','','chart-note scenario-doe-state');doeState.setAttribute('role','status');factorActions.append(factorCount,suggestionPercent);doeContent.append(factorActions,doeState);
     var doeGroup=configGroup(searchSection,'Design of experiments (DOE)','Select factors or request an automatic screening.',doeTools,doeContent);
     var equipmentTable=list.closest('table'),equipmentUseAll=document.createElement('input');equipmentUseAll.type='checkbox';equipmentUseAll.className='scenario-equipment-use-all';equipmentUseAll.setAttribute('aria-label',configText('Select all equipment inputs'));
     checkboxHeader(equipmentTable,'thead th',equipmentUseAll,'Use');checkboxHeader(equipmentTable,doeHeading,doeAll,'DOE');
     doeAll.setAttribute('aria-label',configText('Select equipment DOE factors'));doeAll.title=doeAll.getAttribute('aria-label');
     var conveyorEdits=el('div','','scenario-edit-details');
     var conveyorList=parameterTable(conveyorEdits,['Use','Equipment','Parameter','Current',project.catalog?'Target':'Proposed','Unit','Feasible limit','DOE','Low','High'],'scenario-changes','Adjustable conveyor parameters');
+    conveyorList.closest('table').classList.add('scenario-conveyor-parameters');
     Array.from(conveyorList.closest('table').querySelectorAll('th')).slice(-3).forEach(cell=>cell.dataset.doeColumn='');
     rows.forEach(r=>{r.isConveyor=source.equipment.find(e=>e.id===r.change.equipmentId)?.type==='CONVEYOR';if(r.isConveyor)conveyorList.append(r.row);});
     var conveyorUseAll=document.createElement('input'),conveyorDoeAll=document.createElement('input');
@@ -320,7 +330,7 @@ window.STScenarioExplorer=(function(){
       [depthSelect,reliabilityScope].filter(Boolean).forEach(select=>Array.from(select.options).forEach(option=>option.textContent=configText(option.textContent)));
       [depthLabel,countLabel,scopeLabel].filter(Boolean).forEach(label=>{if(label.firstChild?.nodeType===3)label.firstChild.textContent=configText(label.firstChild.textContent.trim());});
       [doeChoice,exploratoryLabel,...scopeBox.querySelectorAll('label')].forEach(label=>{var node=Array.from(label.childNodes).find(n=>n.nodeType===3&&n.textContent.trim());if(node)node.textContent=configText(node.textContent.trim());});
-      [equipmentTable,conveyorList.closest('table'),reliabilitySection?.querySelector('table')].filter(Boolean).forEach(table=>table.querySelectorAll('thead th').forEach(cell=>{var span=cell.querySelector('.scenario-column-select span');if(span)span.textContent=configText(span.textContent);else if(!cell.children.length)cell.textContent=configText(cell.textContent);}));
+      [equipmentTable,conveyorList.closest('table'),reliabilitySection?.querySelector('table')].filter(Boolean).forEach(table=>table.querySelectorAll('thead th').forEach(cell=>{var span=cell.querySelector('.scenario-column-select span');if(span)span.textContent=configText(span.textContent);else if(!cell.children.length)cell.textContent=cell.textContent==='High'?'Alto':configText(cell.textContent);}));
       suggestFactors.textContent=configText('Suggest factor combination');
     }
     context.remove();
@@ -337,20 +347,36 @@ window.STScenarioExplorer=(function(){
       if(focus)tabButtons[index].focus();
     }
     ['Search','Equipment','Conveyors','Reliability'].forEach((label,index)=>{var tab=button(configText(label),()=>selectConfigTab(index));tab.id=configId+'-tab-'+index;tab.setAttribute('role','tab');tab.setAttribute('aria-controls',configId+'-page-'+index);pages[index].id=configId+'-page-'+index;pages[index].setAttribute('role','tabpanel');pages[index].setAttribute('aria-labelledby',tab.id);tab.onkeydown=function(event){if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();var visible=configAvailability().map((v,i)=>v?i:-1).filter(i=>i>=0),position=visible.indexOf(index);selectConfigTab(event.key==='Home'?visible[0]:event.key==='End'?visible[visible.length-1]:visible[(position+(event.key==='ArrowRight'?1:-1)+visible.length)%visible.length],true);};tabButtons.push(tab);configTabs.append(tab);});dialog.insertBefore(configTabs,body);selectConfigTab(0);
-    function syncConfigTabs(){selectConfigTab(selectedConfig);if(reliabilityGroup){var manual=rows.some(r=>scopeAllowed(r.change)&&!r.change.disabledReason&&r.change.path.startsWith('noiseProfile.reliability.'));exploratoryLabel.hidden=depth==='LIGHT';reliabilitySection.hidden=!(manual||exploreReliability.checked&&depth!=='LIGHT');}}
+    function syncConfigTabs(){
+      selectConfigTab(selectedConfig);
+      // Keep the original live DOE controls beside the conveyor table. A
+      // machine-only scope retains access in Search instead of a hidden tab.
+      var hasConveyors=rows.some(r=>r.isConveyor&&scopeAllowed(r.change)),group=hasConveyors?conveyorGroup:doeGroup;
+      if(doeChoice.parentElement!==group.tools)group.tools.append(doeChoice);
+      if(doeContent.parentElement!==group.body)group.body.prepend(doeContent);
+      doeGroup.section.hidden=hasConveyors||!rows.some(r=>eligibleForDOE(r));
+      if(reliabilityGroup){var manual=rows.some(r=>scopeAllowed(r.change)&&!r.change.disabledReason&&r.change.path.startsWith('noiseProfile.reliability.'));exploratoryLabel.hidden=depth==='LIGHT';reliabilitySection.hidden=!(manual||exploreReliability.checked&&depth!=='LIGHT');}
+    }
     function syncBulk(check,available,selected){var count=available.filter(selected).length;check.checked=available.length>0&&count===available.length;check.indeterminate=count>0&&count<available.length;check.disabled=!available.length;}
     function refreshFactors(){
       if(activeHost)return;var available=rows.filter(r=>r.doe&&eligibleForDOE(r)),count=available.filter(r=>r.check.checked&&r.doe.use.checked).length;
       syncBulk(equipmentUseAll,rows.filter(r=>!r.isConveyor&&!r.check.disabled),r=>r.check.checked);syncBulk(conveyorUseAll,rows.filter(r=>r.isConveyor&&!r.check.disabled),r=>r.check.checked);
       var conveyorFactors=available.filter(r=>r.isConveyor),equipmentFactors=available.filter(r=>!r.isConveyor);syncBulk(conveyorDoeAll,conveyorFactors,r=>r.doe.use.checked);syncBulk(doeAll,equipmentFactors,r=>r.doe.use.checked);conveyorDoeAll.disabled=conveyorDoeAll.disabled||!doeEnabled()||depth==='LIGHT';doeAll.disabled=doeAll.disabled||!doeEnabled()||depth==='LIGHT';
-      factorCount.hidden=suggestionPercent.hidden=!doeEnabled()||depth==='LIGHT';
-      var maximum=Math.min(searchProfile().maxFactors,available.length);if(count>maximum){factorCount.textContent=count+' selected; '+depth+' permits '+maximum+'. Uncheck factors or increase depth.';}doeAll.disabled=doeAll.disabled||!maximum;
-      factorCount.textContent=depth==='LIGHT'?'DOE unavailable at Light depth.':available.length?count+' / '+searchProfile().maxFactors+' factors selected · '+available.length+' eligible inputs'+(count>searchProfile().maxFactors?' · Reduce selection or increase depth.':''):'No eligible numeric inputs.';
+      factorCount.hidden=false;suggestionPercent.hidden=!doeEnabled()||depth==='LIGHT';
+      var maximum=Math.min(searchProfile().maxFactors,available.length),spanish=document.documentElement.lang==='es';doeAll.disabled=doeAll.disabled||!maximum;
+      factorCount.textContent=depth==='LIGHT'?configText('DOE unavailable at Light depth.'):available.length?count+' / '+searchProfile().maxFactors+(spanish?' factores seleccionados · ':' factors selected · ')+available.length+(spanish?' variables elegibles':' eligible inputs')+(count>searchProfile().maxFactors?(spanish?' · Reduce la selección o aumenta la profundidad.':' · Reduce selection or increase depth.'):''):configText('No eligible numeric inputs.');
       rows.filter(r=>r.doe).forEach(r=>{var eligible=eligibleForDOE(r);if(!r.check.checked||!eligible)r.doe.use.checked=false;r.row.dataset.doeEvaluated=String(eligible);r.doe.use.disabled=!doeEnabled()||!eligible||depth==='LIGHT';r.doe.use.title=eligible?'Choose this factor; up to 4 variables':r.change.disabledReason||'Set a numeric baseline in Equipment first.';r.doe.low.disabled=r.doe.high.disabled=!doeEnabled()||!r.doe.use.checked||!eligible||depth==='LIGHT';});
     }
     function applyScope(changedScope){rows.forEach(function(r){var allowed=scopeAllowed(r.change),wasAllowed=r.row.dataset.scopeAllowed!=='false';r.row.dataset.scopeAllowed=String(allowed);r.row.hidden=!allowed;r.check.disabled=!!r.change.disabledReason||!allowed;var target=r.row.querySelector('.scenario-target');if(target)target.disabled=r.check.disabled;if(!allowed){r.check.checked=false;if(r.doe)r.doe.use.checked=false;}else if(changedScope&&!wasAllowed&&!r.change.disabledReason)r.check.checked=true;});syncConfigTabs();}
     applyScope(false);refreshFactors();
-    function refreshDOE(){exploreReliability.disabled=primaryTier!=='HIGH'||source.dynamicConfig?.reliabilityEnabled===false||depth==='LIGHT';doeToggle.checked=doeEnabled();doeToggle.disabled=depth==='LIGHT';doeGroup.section.hidden=depth==='LIGHT'||!rows.some(r=>eligibleForDOE(r));doeContent.hidden=!doeEnabled();syncConfigTabs();dialog.querySelectorAll('[data-doe-column]').forEach(function(cell){cell.hidden=!doeEnabled()||depth==='LIGHT';});refreshFactors();suggestFactors.hidden=!doeEnabled();suggestFactors.disabled=!doeEnabled()||depth==='LIGHT'||!sourceReadiness().ready;}
+    function refreshDOE(){
+      var eligible=rows.some(r=>eligibleForDOE(r)),enabled=doeEnabled()&&depth!=='LIGHT';
+      exploreReliability.disabled=primaryTier!=='HIGH'||source.dynamicConfig?.reliabilityEnabled===false||depth==='LIGHT';doeToggle.checked=doeEnabled();doeToggle.disabled=depth==='LIGHT'||!eligible;doeContent.hidden=false;syncConfigTabs();
+      dialog.querySelectorAll('[data-doe-column]').forEach(function(cell){cell.hidden=!cell.closest('.scenario-conveyor-parameters')&&!enabled;});
+      refreshFactors();suggestFactors.hidden=false;suggestFactors.disabled=!enabled||!eligible||!sourceReadiness().ready;
+      var note=depth==='LIGHT'?'Choose Medium or High depth to use DOE.':!eligible?'No eligible numeric inputs.':!enabled?'Enable DOE to choose factors and edit Low / High levels.':'';
+      doeState.textContent=configText(note);doeState.hidden=!note;
+    }
     var screeningActivity=el('div','','request-progress dialog-request-progress scenario-screening-activity');screeningActivity.hidden=true;screeningActivity.setAttribute('role','progressbar');screeningActivity.setAttribute('aria-label','DOE suggestion simulation progress');screeningActivity.setAttribute('aria-valuemin','0');screeningActivity.setAttribute('aria-valuemax','100');screeningActivity.append(el('span'));heading.append(screeningActivity);
     var screening=false,screeningCancelled=false,sensitivityEvidence=restoredCurrent?restored.sensitivityScreening||null:null;
     var suggestionReport=el('div','','scenario-suggestion-report');suggestionReport.hidden=true;doeContent.append(suggestionReport);

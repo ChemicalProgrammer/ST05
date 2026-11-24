@@ -143,7 +143,10 @@ html[data-ui-mode=advance] :is(.analysis-attention,.scenario-audit-warnings,.rou
 #basic-run-options > h3 { display:flex; align-items:center; min-height:var(--control-height); margin-bottom:var(--section-gap); }
 .section-heading .export-menu,.editor-subheading .export-menu,.simulation-analysis-heading .export-menu { margin:0; vertical-align:middle; }
 .editor-subheading > .button-row { align-items:center; }
-html[data-ui-mode=basic] .scenario-tier-grid { grid-template-columns:repeat(4,minmax(210px,1fr)); align-items:stretch; overflow-x:auto; padding-bottom:var(--space-2); }
+/* Horizontal scrolling also clips vertical overflow. Reserve room inside
+   the scrollport for the shared card lift/shadow; compensate inline padding
+   so the cards still align with the surrounding subsection content. */
+html[data-ui-mode=basic] .scenario-tier-grid { grid-template-columns:repeat(4,minmax(210px,1fr)); align-items:stretch; overflow-x:auto; padding:var(--space-3); margin-inline:calc(-1 * var(--space-3)); }
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation { min-width:0; display:flex; flex-direction:column; padding:var(--space-3); }
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > .scenario-card-header,
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > h4 { margin:0 0 var(--space-4); min-height:var(--control-height); align-content:center; font-size:var(--font-card); }

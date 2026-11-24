@@ -102,7 +102,7 @@ test('restored capsules use the saved total ahead of step sums and keep one acce
   try{
     capsule(h.activity,{percent:100,time:'2m 00s',state:'Completed'});
     const panel=openTrace(h);
-    capsule(panel.querySelector('.scenario-trace-overall'),{percent:100,time:'2m 00s',state:'Completed'});
+    assert.equal(panel.querySelector('.scenario-trace-overall'),null,'Step view must not duplicate the main progress bar.');
     const bars=[...panel.querySelectorAll('.scenario-trace-step-bar')];
     assert.equal(bars.length,2);
     capsule(bars[0],{percent:100,time:'0m 03s',state:'Completed'});
@@ -124,7 +124,7 @@ test('legacy elapsed totals sum only valid nonnegative step times and respect an
     const before=JSON.stringify(record),h=browser(record);
     try{
       capsule(h.activity,{percent:100,time,state:'Completed'});
-      capsule(openTrace(h).querySelector('.scenario-trace-overall'),{percent:100,time,state:'Completed'});
+      assert.equal(openTrace(h).querySelector('.scenario-trace-overall'),null);
       assert.doesNotMatch(h.panel.textContent,/NaN|undefined|Infinity/);
       assert.equal(JSON.stringify(record),before);
     }finally{h.close();}
@@ -190,7 +190,7 @@ test('deleting and undoing a result restores the same saved progress total witho
     h.advance(1800000);h.host.querySelector('.scenario-clear-notice button').click();
     assert.equal(JSON.stringify(h.sim.whatIf.evaluations),before);
     assert.equal(h.activity.hidden,false);capsule(h.activity,{percent:100,time:'2m 00s',state:'Completed'});
-    capsule(openTrace(h).querySelector('.scenario-trace-overall'),{percent:100,time:'2m 00s',state:'Completed'});
+    assert.equal(openTrace(h).querySelector('.scenario-trace-overall'),null);
     assert.equal(h.host.querySelector(':scope > .scenario-card-header'),header);
     assert.equal(h.intervals(),0);assert.equal(h.simulationCalls(),0);
   }finally{h.close();}
@@ -226,4 +226,16 @@ test('a live stalled batch advances elapsed time and freezes the saved clock on 
       assert.equal(restored.simulationCalls(),0);
     }finally{restored?.close();h.close();}
   }
+});
+
+test('scenario progress stays flat and scrollable cards have room for the shared hover effect',()=>{
+  const explorer=fs.readFileSync('apps-script/ScenarioExplorer.html','utf8');
+  const css=explorer.match(/\.analysis-recommendation \.scenario-progress-capsule\{([^}]+)\}/)[1];
+  assert.match(css,/(?:^|;)border:0;/);
+  assert.match(css,/box-shadow:none!important/);
+  assert.match(css,/border-radius:var\(--radius-pill/);
+  const standards=fs.readFileSync('apps-script/UiStandards.html','utf8');
+  const grid=standards.match(/html\[data-ui-mode=basic\] \.scenario-tier-grid \{[^}]*overflow-x:auto;[^}]*\}/)[0];
+  assert.match(grid,/padding:var\(--space-3\)/);
+  assert.match(grid,/margin-inline:calc\(-1 \* var\(--space-3\)\)/);
 });

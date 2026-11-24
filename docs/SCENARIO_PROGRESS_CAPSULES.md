@@ -1,14 +1,15 @@
 # Scenario progress capsules
 
-The scenario card, the total in its step view, and each individual step use
-the same capsule renderer in `apps-script/ScenarioExplorer.html`.
+The scenario card and each individual step use the same capsule renderer
+in `apps-script/ScenarioExplorer.html`. The step view does not repeat the
+main progress bar.
 
 ## Presentation
 
 Each capsule displays the percentage and elapsed time inside the track, for
-example `42.0% · 1m 05s`. Text uses `--font-caption`, the smallest shared font
-token (11 px at the default interface scale). The track is 1.5 rem high and
-has pill-shaped ends.
+example `42.0% · 1m 05s`. Text uses `--font-micro` (9 px at the default
+interface scale). The track uses `--progress-capsule-height` (16 px), with
+pill-shaped ends, no border or shadow, and a solid colored fill.
 
 The unfilled track is light in both themes so its black text remains readable.
 A full-width colored layer contains a second copy of the text in white. One
@@ -77,5 +78,7 @@ CSS. A rendered screenshot review was unavailable: the local Chromium process
 could not create its socket and the available browser rejected local preview
 files. These checks do not claim a deployed browser inspection.
 
-Only `apps-script/ScenarioExplorer.html` needs Apps Script synchronization for
-this progress update. No engine bundle regeneration is required.
+For the borderless progress and hover-spacing update, synchronize
+`apps-script/ScenarioExplorer.html` and `apps-script/UiStandards.html`.
+Basic mode retains horizontal scrolling and reserves shared spacing inside
+the scrollport for card hover. No engine bundle regeneration is required.

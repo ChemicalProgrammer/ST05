@@ -105,7 +105,7 @@ test('opening, saving and reopening a completed negative CAPEX search preserves 
       assert.equal(card.querySelector(':scope > .scenario-card-header'),header);
       assert.equal(header.querySelector('.analysis-capex'),badge);
       assert.equal(card.querySelectorAll('.analysis-capex').length,1);
-      assert.equal(card.querySelector('.scenario-trace-overall .scenario-progress-text').textContent,'100.0% · 2m 00s');
+      assert.equal(card.querySelector('.scenario-trace-overall'),null,'Only individual step progress is shown in the trace view.');
       const steps=[...card.querySelectorAll('.scenario-trace-step')];assert.equal(steps.length,8);
       assert.deepEqual(steps.map(step=>step.querySelector('.scenario-trace-step-name').textContent),original.whatIf.evaluations[0].progressTrace.steps.map(step=>step.name));
       assert(steps.every(step=>step.querySelector('[role=progressbar]').getAttribute('aria-valuenow')==='100'));

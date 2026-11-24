@@ -54,7 +54,7 @@ window.STShell = function(state,actions) {
     caseTitle.textContent=active?state.activeCase.name:__ST_TEXT__('shell.workspace');
     caseTitle.disabled=!active;
     caseTitle.title=active?__ST_TEXT__('view.case_name'):'';
-    document.getElementById('breadcrumb-view').textContent={cases:__ST_TEXT__('shell.cases'),editor:__ST_TEXT__('shell.line_setup'),simulation:__ST_TEXT__('shell.simulation'),simulation2d:'Simulation 2D',products:'Formats',results:__ST_TEXT__('shell.results'),realdata:'Real data',whatif:__ST_TEXT__('shell.what_if'),comparison:__ST_TEXT__('client.compare_simulations')}[view];
+    document.getElementById('breadcrumb-view').textContent={cases:(state.bootstrap?.cases||[]).length+' '+(document.documentElement.lang==='es'?((state.bootstrap?.cases||[]).length===1?'caso':'casos'):((state.bootstrap?.cases||[]).length===1?'case':'cases')),editor:__ST_TEXT__('shell.line_setup'),simulation:__ST_TEXT__('shell.simulation'),simulation2d:'Simulation 2D',products:'Formats',results:__ST_TEXT__('shell.results'),realdata:'Real data',whatif:__ST_TEXT__('shell.what_if'),comparison:__ST_TEXT__('client.compare_simulations')}[view];
     document.getElementById('save-case').classList.toggle('hidden',!active||(['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode).toUpperCase())&&STPreferences.caseOptions().autosaveEnabled));
     document.getElementById('autosave-indicator').classList.toggle('hidden',!active);
     document.getElementById('settings-case-section').classList.toggle('hidden',!active);

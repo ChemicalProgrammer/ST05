@@ -4424,9 +4424,54 @@ function scenarioSourceReadiness(simulation) {
   const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
   if(provenance.run?.engineId!==expected.run.engineId)return fail('ENGINE_MISMATCH','STALE');
   if(expected.run.engineId!=='ST_CURRENT')return fail('UNVALIDATED_SCENARIO_ENGINE');
-  if(!equal(provenance.equipment,expected.equipment))return fail('EQUIPMENT_CHANGED','STALE');
+  // Storage fills empty object fields and trims display labels. These do not
+  // change equipment physics; all nested parameters, units and order remain exact.
+  function storedEquipment(items){
+    return Array.isArray(items)?items.map(unit=>{
+      const copy={...unit};delete copy.uiExpanded;
+      if(typeof copy.name==='string')copy.name=copy.name.trim();
+      if(typeof copy.unitOfFlow==='string')copy.unitOfFlow=copy.unitOfFlow.trim()||undefined;
+      for(const key of ['characteristics','noiseProfile','processData'])if(copy[key]===undefined)copy[key]={};
+      return copy;
+    }):items;
+  }
+  function difference(a,b,path){
+    if(equal(a,b))return null;
+    if(a&&b&&typeof a==='object'&&typeof b==='object'&&Array.isArray(a)===Array.isArray(b)){
+      for(const key of new Set([...Object.keys(a),...Object.keys(b)])){
+        const next=difference(a[key],b[key],Array.isArray(a)?path+'['+key+']':path+'.'+key);
+        if(next)return next;
+      }
+    }
+    return path;
+  }
+  const equipmentDifference=difference(storedEquipment(provenance.equipment),storedEquipment(expected.equipment),'equipment');
+  if(equipmentDifference)return fail('EQUIPMENT_CHANGED','STALE',{differencePath:equipmentDifference});
   if(provenance.unitOfFlow!==expected.unitOfFlow)return fail('FLOW_UNIT_CHANGED','STALE');
-  if(!equal(provenance.run,expected.run))return fail('RUN_CONFIGURATION_CHANGED','STALE');
+  function comparableRun(value){
+    const copy={...value};
+    for(const key of ['sampleDisplayUnit','displayRefreshFps','chartWindow'])delete copy[key];
+    return copy;
+  }
+  // Numerical execution expands scheduled calendar stops and excludes disabled
+  // manual events. The stored config is intentionally the editable unexpanded
+  // representation. Reproduce that deterministic transformation, not its result.
+  function preparedRun(value){
+    const copy={...value,machineResidenceEnabled:value.machineResidenceEnabled??true};
+    const calendar=copy.includePlantCalendar===false?{...copy.plantCalendar,enabled:false}:copy.plantCalendar;
+    const manualEnabled=copy.eventsEnabled!==false;
+    const manualStops=manualEnabled?(copy.plannedStops||[]).filter(event=>event?.source!=='PLANT_CALENDAR'):[];
+    const commands=manualEnabled?copy.commands||[]:[];
+    if(!calendar?.enabled||calendar.mode!=='SCHEDULED')return {...copy,plantCalendar:calendar,commands,plannedStops:manualStops};
+    const schedule=plantCalendarSchedule(calendar,copy.tickSeconds);
+    return {...copy,eventsEnabled:true,commands,plannedStops:manualStops.concat(schedule.events.map(event=>({...event,restartPolicy:schedule.restartPolicy,source:'PLANT_CALENDAR'}))),plantCalendar:{...calendar,application:'EVENTS',appliedHorizonSeconds:copy.durationSeconds}};
+  }
+  const observedRun=comparableRun(provenance.run),currentRun=comparableRun(expected.run);
+  if(!equal(observedRun,currentRun)){
+    let executionRun;
+    try{executionRun=comparableRun(preparedRun(expected.run));}catch(_){}
+    if(!executionRun||!equal(observedRun,executionRun))return fail('RUN_CONFIGURATION_CHANGED','STALE',{differencePath:difference(observedRun,executionRun||currentRun,'run')});
+  }
   const rounds=expected.run.rounds,baseSeed=expected.run.seed>>>0;
   if(!Number.isInteger(rounds)||rounds<1||rounds>100)return fail('INVALID_REPLICATION_COUNT','INCOMPLETE');
   if(result.replicationStatus.rounds!==undefined&&result.replicationStatus.rounds!==rounds||result.batch&&result.batch.rounds!==rounds)return fail('REPLICATION_COUNT_MISMATCH','INCOMPLETE');

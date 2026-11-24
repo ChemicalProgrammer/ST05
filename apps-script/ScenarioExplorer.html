@@ -79,7 +79,7 @@ window.STScenarioExplorer=(function(){
     var cardId=JSON.stringify([source.id,project.explore?'CAPEX':project.id||project.kind,project.searchScope||project.tier]);
     host.dataset.motionKey=cardId;
     function sourceReadiness(){var live=(caseProvider?.()?.simulations||[]).find(s=>s.id===simulation.id)||simulation;if(STScenarios.signature(live)!==sourceSignature)return {ready:false,reason:'SOURCE_INPUTS_CHANGED'};return STScenarios.readiness?.(live)||{ready:false,reason:'SOURCE_VALIDATION_UNAVAILABLE'};}
-    function requireCompletedSource(){var readiness=sourceReadiness();if(readiness.ready)return true;var text='Complete the numerical simulation to 100% with the current inputs before generating CAPEX scenarios.';status.textContent=(window.STLanguage?.translate(text)||text)+' ('+readiness.reason+')';status.dataset.state='unavailable';run.disabled=true;save.disabled=true;suggestFactors.disabled=true;return false;}
+    function requireCompletedSource(){var readiness=sourceReadiness();if(readiness.ready)return true;var text='Complete the numerical simulation to 100% with the current inputs before generating CAPEX scenarios.';status.textContent=(window.STLanguage?.translate(text)||text)+' ('+readiness.reason+(readiness.differencePath?' · '+readiness.differencePath:'')+')';status.dataset.state='unavailable';run.disabled=true;save.disabled=true;suggestFactors.disabled=true;return false;}
     function sameCard(entry){
       if(entry.cardId)return entry.cardId===cardId;
       if(entry.sourceSimulationId!==source.id||(entry.searchScope||entry.tier)!==(project.searchScope||project.tier))return false;

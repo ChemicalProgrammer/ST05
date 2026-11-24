@@ -538,6 +538,9 @@ function numericInputValue(input) {
       if(!nameField.value.trim()&&state.activeCase.name?.trim())nameField.value=state.activeCase.name;
       if(!nameField.value.trim())return null;
       state.activeCase.name = nameField.value.trim();
+      return caseEditorSnapshot();
+    }
+    function caseEditorSnapshot(){
       return {
         id: state.activeCase.id,
         expectedRevision: state.activeCase.revision,
@@ -555,7 +558,7 @@ function numericInputValue(input) {
       // El editor puede estar desmontado mientras se simula: usar el modelo,
       // sin interpretar la ausencia visual como una línea sin equipos.
       if(!cards.length&&state.activeCase?.equipment?.length)return cloneJson(state.activeCase.equipment);
-      return cards.map(function(card){
+      var preview=cards.map(function(card){
         var type=equipmentField(card,'.equipment-type').value,data=parseJsonForPreview(equipmentField(card,'.equipment-process-data').value);
         var characteristics=parseJsonForPreview(equipmentField(card,'.equipment-characteristics').value),noise=parseJsonForPreview(equipmentField(card,'.equipment-noise-profile').value);
         var critical=type!=='CONVEYOR'&&equipmentField(card,'.equipment-pacemaker').checked;
@@ -577,6 +580,9 @@ function numericInputValue(input) {
         return {id:card.dataset.equipmentId,type:type,name:equipmentField(card,'.equipment-name').value,
           nominalRatePerSecond:readEquipmentRate(card),characteristics:characteristics,processData:data,noiseProfile:noise};
       });
+      var byId=new Map(preview.map(e=>[e.id,e])),base=state.activeCase?.equipment||[];
+      if(preview.length<base.length)return base.map(e=>byId.get(e.id)||cloneJson(e)).concat(preview.filter(e=>!base.some(b=>b.id===e.id)));
+      return preview;
     }
     function refreshDesignGraph(){if(state.activeCase)STLinePerformance.render(null,basicEquipmentPreview());}
     function readEquipmentRate(card){

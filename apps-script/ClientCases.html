@@ -1,6 +1,9 @@
     window.ST_CASE_SAVE_LIMITS={maxBytes:3*1024*1024};
     var localCalculations=0;
-    function activity(){document.getElementById('request-progress').classList.toggle('hidden',!(Math.max(0,state.pendingRequests-STDialog.localizedRequests())||localCalculations));}
+    function activity(){
+      var running=Boolean(state.run?.playing||roundSession&&(roundSession.pending||roundSession.firstUpdating||roundSession.dirty)||window.STSimulation2D?.isRunning?.());
+      document.getElementById('request-progress')?.classList.toggle('hidden',!(Math.max(0,state.pendingRequests-STDialog.localizedRequests())||localCalculations||running));
+    }
     window.addEventListener('st-dialog-activity',activity);
     window.addEventListener('st-calculation-activity',function(event){localCalculations=Math.max(0,localCalculations+(event.detail.active?1:-1));activity();});
     var whatIfOnlySave=false;
@@ -377,10 +380,12 @@ async function openCase(caseId, initialView) {
         if(diagramOwner)diagramOwner.simulation2d=diagram;
       }
       if(whatIfOnlySave&&state.activeCase){var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(evidenceDraft);}
-      var next=collectCaseEditor();if(!next)return null;
+      var simulation=activePersistentSimulation(),preserve=preserveCommittedSimulationInputs(simulation);
+      var next=preserve?caseEditorSnapshot():collectCaseEditor();if(!next)return null;
       if(!next.name.trim()||next.equipment.some(function(e){return !e.id||!e.name||!(e.nominalRatePerSecond>0);}))throw new Error(__ST_TEXT__('autosave.invalid'));
-      var simulation=activePersistentSimulation(),run=readRunConfiguration();if(!run)return null;
-      if(simulation){var before=JSON.stringify([simulation.equipment,simulation.dynamicConfig]);simulation.equipment=cloneJson(next.equipment);simulation.dynamicConfig=cloneJson(run);if(before!==JSON.stringify([simulation.equipment,simulation.dynamicConfig]))simulation.updatedAt=new Date().toISOString();captureSimulationView();}
+      var run=preserve?simulation.dynamicConfig:readRunConfiguration();if(!run)return null;
+      if(preserve){next.equipment=cloneJson(simulation.equipment);captureSimulationView();}
+      else if(simulation){var before=JSON.stringify([simulation.equipment,simulation.dynamicConfig]);simulation.equipment=cloneJson(next.equipment);simulation.dynamicConfig=cloneJson(run);if(before!==JSON.stringify([simulation.equipment,simulation.dynamicConfig]))simulation.updatedAt=new Date().toISOString();captureSimulationView();}
       next.simulations=state.activeCase.simulations;
       return fitCaseSave(cloneJson(next));
     }

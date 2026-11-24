@@ -166,10 +166,12 @@ window.STBasicMode=(function(){
   }
   function refreshData(){
     if(!state.activeCase||!basicMounted&&!splitMounted)return;
-    var equipment=actions.preview?.()||state.activeCase.equipment||[],simulation=(state.activeCase.simulations||[]).find(function(s){return s.id===state.activeSimulationId;});
+    var preview=actions.preview?.()||[],committed=state.activeCase.equipment||[];
+    var byId=new Map(preview.map(e=>[e.id,e]));
+    var equipment=committed.map(e=>byId.get(e.id)||e).concat(preview.filter(e=>!committed.some(b=>b.id===e.id))),simulation=(state.activeCase.simulations||[]).find(function(s){return s.id===state.activeSimulationId;});
     var audits=STScenarios.audit({equipment:equipment}),machines=equipment.filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR'),availability=machines.length?machines.reduce((a,e)=>a*theoreticalAvailability(e),1):NaN;
     Array.from(list.querySelectorAll('.equipment-card')).forEach(function(card,index){
-      var e=equipment[index];if(!e)return;var machine=e.type!=='CONVEYOR';
+      var e=equipment.find(item=>item.id===card.dataset.equipmentId);if(!e)return;var machine=e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR';
       if(splitMounted)card.querySelector('.equipment-header strong').textContent=e.name;
       var a=theoreticalAvailability(e);
       if(!splitMounted)return;
@@ -185,7 +187,16 @@ window.STBasicMode=(function(){
     });
     var simulatedEfficiency=state.run.result?.provisional?null:state.run.result?.summary?.lineOeePercent;
     efficiencies.replaceChildren();metric(efficiencies,'Theoretical equipment efficiency',number(availability*100,1),Number.isFinite(availability)?'%':'');
-    efficiencies.lastElementChild.title='Product of modeled machine availabilities (MTBF / (MTBF + MTTR)); no modeled own failures = 100%.\n'+machines.map(e=>e.name+': '+number(theoreticalAvailability(e)*100,2)+'%').join('\n');metric(efficiencies,'Simulated efficiency',number(simulatedEfficiency,1),Number.isFinite(simulatedEfficiency)?'%':'');
+    var es=document.documentElement.lang==='es',tip=efficiencies.lastElementChild;
+    var details=equipment.map(e=>{
+      if(!machines.includes(e))return e.name+': '+(es?'Excluido (conveyor)':'Excluded (conveyor)');
+      var r=e.noiseProfile?.reliability,a=theoreticalAvailability(e);
+      return e.name+': '+(r?'MTBF '+number(r.mtbfMinutes,3)+' min / MTTR '+number(r.mttrMinutes,3)+' min → ':es?'Sin fallas propias modeladas → ':'No modeled own failures → ')+number(a*100,2)+'%';
+    });
+    tip.title=(es?'Eficiencia teórica = 100 × producto de MTBF / (MTBF + MTTR). Máquinas incluidas: ':'Theoretical efficiency = 100 × product of MTBF / (MTBF + MTTR). Included machines: ')+machines.length+' / '+equipment.length+'\n'+details.join('\n')+'\n'+(es?'No incluye pérdidas de flujo, velocidad ni calendario.':'Excludes flow, speed and calendar losses.');
+    tip.setAttribute('aria-description',tip.title);tip.tabIndex=0;
+    metric(efficiencies,'Simulated efficiency',number(simulatedEfficiency,1),Number.isFinite(simulatedEfficiency)?'%':'');
+    var simTip=efficiencies.lastElementChild;simTip.title=es?'OEE = 100 × producción buena / producción ideal del equipo crítico durante el horizonte.':'OEE = 100 × good output / ideal pacemaker output over the horizon.';simTip.setAttribute('aria-description',simTip.title);simTip.tabIndex=0;
     if(!splitMounted)return;
     var chosen=list.querySelector('.equipment-selected'),id=chosen?.dataset.equipmentId,audit=audits.find(function(x){return x.equipmentId===id;});
     if(chosen)title.textContent=chosen.querySelector('.equipment-header strong').textContent;

@@ -81,11 +81,16 @@
       return (state.activeCase?.simulations || []).find(function(item) { return item.id === state.activeSimulationId; });
     }
 
+    // Save results and presentation without re-reading the physical editor.
+    function preserveCommittedSimulationInputs(simulation){
+      return Boolean(simulation&&(simulation.results||state.run.result||roundSession&&roundSessionActive(roundSession)&&(roundSession.pending||roundSession.firstUpdating||roundSession.dirty)));
+    }
     function syncPersistentSimulation() {
       // Rendering and navigation are read-only until an explicit edit is queued.
       if (!autosave.pending()||whatIfOnlySave) return true;
       var simulation = activePersistentSimulation();
       if (!simulation || !state.activeCase) return false;
+      if(preserveCommittedSimulationInputs(simulation))return true;
       var before=JSON.stringify([simulation.equipment,simulation.dynamicConfig]);
       var editor = collectCaseEditor();
       if (!editor) return false;
@@ -358,9 +363,23 @@
     }
     function runControlsLocked(){return Boolean(state.run.active||state.run.playing||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty);}
     var last2DLockState=null;
+    function syncBatchProgress(){
+      var pending=Boolean(roundSession&&(roundSession.pending||roundSession.firstUpdating||roundSession.dirty));
+      var result=state.run.representative||state.run.result,status=result?.replicationStatus;
+      var rounds=status?.rounds??result?.batch?.rounds??1;
+      var completed=!pending&&status?.state==='COMPLETE'&&rounds>1;
+      toggle('batch-dialog',pending||completed);
+      document.getElementById('batch-cancel').hidden=!pending;
+      if(completed){
+        document.getElementById('batch-progress').value=1;
+        document.getElementById('batch-status').textContent=rounds+' / '+rounds+' · 100%';
+      }
+    }
     function syncRunControls(){
-      // Batch visibility follows the calculation session, not playback state.
-      toggle('batch-dialog',Boolean(roundSession&&(roundSession.pending||roundSession.firstUpdating||roundSession.dirty)));
+      // Keep a visible terminal summary for multi-round runs too: fast
+      // background calculation may finish before the user opens playback.
+      syncBatchProgress();
+      if(typeof activity==='function')activity();
       var numericalLocked=runControlsLocked();
       var twoDRunning=Boolean(window.STSimulation2D?.isRunning?.());
       var locked=numericalLocked||twoDRunning;
@@ -711,7 +730,9 @@
       if(previousFrame&&session.run.calculationMode==='LIVE')state.run._resumeVirtualSecond=previousFrame.virtualSecond;
       syncPlaybackRounds();toggle('simulation-results',true);
       renderResultJsonPreview(result);shell.sync();renderPlaybackFrame();
-      var tab=activePersistentSimulation();if(tab){tab.dynamicConfig=cloneJson(session.run);tab.run=cloneJson(session.run);tab.results=createStoredSimulationResult(result,session.run);captureSimulationView();state.isDirty=true;saveActiveCase();}
+      var tab=activePersistentSimulation();if(tab){tab.equipment=cloneJson(session.caseModel.equipment);tab.dynamicConfig=cloneJson(session.run);tab.run=cloneJson(session.run);tab.results=createStoredSimulationResult(result,session.run);captureSimulationView();state.isDirty=true;saveActiveCase();}
+      syncBatchProgress();
+      if(status==='COMPLETE')renderSimulationAnalysis();
     }
     function computeRoundSession(session,firstResult,execution){
       execution=execution||prepareCalendarRun(session.run);
@@ -758,6 +779,7 @@
       },onFirstRound:firstResult?undefined:function(result){
         if(!roundSessionActive(session)||generation!==session.generation)return;
         var streaming=session.streaming;session.streaming=false;
+        result.inputSignature=SimulatorEngine.inputSignature(input);
         result.replicationStatus={state:'PENDING',rounds:session.run.rounds,baseSeed:session.run.seed};
         if(Array.isArray(result.liveTelemetry)){
           state.run.liveTelemetry=result.liveTelemetry;
@@ -788,7 +810,7 @@
         if(session.resolveFirst){state.run.result=response.result;state.run.representative=response.result;state.run.roundIndex=0;state.run.sampleIndex=0;session.first=response.result;session.resolveFirst(true);session.resolveFirst=null;}
         if(session.dirty||session.version!==version){document.getElementById('batch-status').textContent=__ST_TEXT__('batch.wait_for_events');return;}
         if(session.run.rounds===1&&!session.run.shiftSeconds)delete response.result.batch;
-        persistRoundResult(session,response.result,'COMPLETE');session.first=response.result;toggle('batch-dialog',false);
+        persistRoundResult(session,response.result,'COMPLETE');session.first=response.result;syncBatchProgress();
         if(session.run.calculationMode!=='LIVE')setStatus('Calculation complete. Results are ready; playback is optional.');
         if(firstResult)document.getElementById('rounds-warning').textContent=__ST_TEXT__('batch.events_recalculated');
       }).catch(function(error){
@@ -824,7 +846,7 @@
         showError({message:'Pause or stop Simulation 2D before starting the numerical simulation.'});
         return;
       }
-      if ((state.isDirty || window.STBasicMode?.isBasic()) && !collectCaseEditor()) return;
+      if (!collectCaseEditor()) return;
       var run = readRunConfiguration();
       if (!run) return;
       state.run.calculationWallMs=null;
@@ -833,6 +855,8 @@
       try{execution=prepareCalendarRun(run);}catch(error){showError(error);return;}
       if(STPreferences.caseOptions().seedPolicy==='RANDOM'){var seedArray=new Uint32Array(1);if(window.crypto?.getRandomValues)window.crypto.getRandomValues(seedArray);else seedArray[0]=Math.floor(Math.random()*4294967296);run.seed=seedArray[0];document.getElementById('run-seed').value=run.seed;}
       invalidateActiveResult();
+      var committed=activePersistentSimulation();
+      if(committed){committed.equipment=cloneJson(state.activeCase.equipment);committed.dynamicConfig=cloneJson(run);}
       shell.sync();
       state.run.configuration = copyRunConfiguration(run);
       state.run.equipmentControlActions={};
@@ -845,6 +869,7 @@
       if(!ready){state.run.active=false;syncRunControls();return;}
       var tab = activePersistentSimulation();
       if (tab) {
+        tab.equipment=cloneJson(session.caseModel.equipment);
         tab.dynamicConfig=cloneJson(run);
         tab.run = cloneJson(run);
         tab.results = state.run.result.provisional?null:createStoredSimulationResult(state.run.result, run);

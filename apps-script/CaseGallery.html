@@ -11,7 +11,8 @@ window.STCaseGallery = (function() {
     items.sort(function(a,b){return sort==='name'?String(a.name).localeCompare(String(b.name)):new Date(b.updatedAt)-new Date(a.updatedAt);});
     page=Math.min(page,Math.max(0,Math.ceil(items.length/pageSize)-1));
     target.textContent=''; pagination.textContent=''; target.classList.toggle('grid',grid);
-    document.getElementById('case-count').textContent=items.length+' '+(items.length===1?'case':'cases');
+    var count=(cases||[]).length,header=document.getElementById('breadcrumb-view');
+    if(header&&!document.getElementById('application')?.classList.contains('case-open'))header.textContent=count+' '+(document.documentElement.lang==='es'?(count===1?'caso':'casos'):(count===1?'case':'cases'));
     var layout=document.getElementById('case-layout'); layout.innerHTML=STIcons.svg(grid?'list':'grid'); layout.setAttribute('aria-label',__ST_TEXT__('casegallery.switch_to')+(grid?'list':'grid')+__ST_TEXT__('casegallery.view'));layout.title=layout.getAttribute('aria-label');
     layout.onclick=function(){grid=!grid;STPreferences.write('caseLayout',grid?'grid':'list');render(cases,openCase,requestCaseClone,options);};
     if(!items.length) {

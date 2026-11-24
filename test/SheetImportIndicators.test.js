@@ -130,6 +130,45 @@ test('import cards show accessible right-edge success, warning and error indicat
  }finally{h.dom.window.close();}
 });
 
+test('machine destination and type selects share a responsive row',()=>{
+ const h=setup();try{
+  const card=h.d.querySelector('.sheet-equipment-choice');
+  const row=card.querySelector(':scope > .sheet-equipment-mapping-row');
+  assert(row);
+  const controls=[...row.querySelectorAll(':scope > .sheet-equipment-mapping-field > select')];
+  assert.equal(controls.length,2);
+  assert(controls[0].classList.contains('sheet-target'));
+  assert(controls[1].classList.contains('sheet-machine-type'));
+  assert.equal(row.querySelectorAll('.sheet-equipment-target-reason').length,0);
+  const reason=card.querySelector(':scope > .sheet-equipment-target-reason');
+  assert(reason);
+  assert.match(reason.textContent,/appended|equipment|Equipment/i);
+  assert.equal(controls[0].getAttribute('aria-describedby'),reason.id);
+  assert.equal(controls[0].value,'new');
+  assert.equal(controls[1].value,'CUSTOM');
+  const styles=fs.readFileSync('apps-script/SheetImportStyles.html','utf8');
+  assert.match(styles,/\.sheet-equipment-mapping-row\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(styles,/@media\(max-width:650px\)[\s\S]*\.sheet-equipment-mapping-row\s*\{\s*grid-template-columns:minmax\(0,1fr\)/);
+ }finally{h.dom.window.close();}
+});
+
+test('conveyor destination occupies the full row without a machine-type select',()=>{
+ const h=setup();try{
+  h.preview.equipment[0].type='CONVEYOR';
+  h.preview.equipment[0].processData.role='CONVEYOR';
+  h.d.getElementById('sheet-import-form').dispatchEvent(new h.w.Event('submit',{cancelable:true}));
+  const card=h.d.querySelector('.sheet-equipment-choice');
+  const row=card.querySelector(':scope > .sheet-equipment-mapping-row');
+  assert(row);
+  assert.equal(row.querySelectorAll('select').length,1);
+  assert.equal(row.querySelectorAll('.sheet-machine-type').length,0);
+  const label=row.querySelector('.sheet-equipment-mapping-field');
+  assert(label);
+  const styles=fs.readFileSync('apps-script/SheetImportStyles.html','utf8');
+  assert.match(styles,/\.sheet-equipment-mapping-field:only-child\s*\{\s*grid-column:1\s*\/\s*-1/);
+ }finally{h.dom.window.close();}
+});
+
 test('import indicators refresh when selection or target changes without losing source warnings',()=>{
  const h=setup();try{
   h.setModelReview(false);h.d.getElementById('sheet-import-ack').click();assert.equal(h.d.querySelector('[data-source-index="3"]').dataset.importStatus,'ok');

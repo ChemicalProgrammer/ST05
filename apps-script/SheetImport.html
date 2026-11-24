@@ -244,7 +244,12 @@ window.STSheetImport=function(state,actions){
       summaryText.className='sheet-equipment-summary-text';indicator.className='sheet-import-row-status';
       indicator.setAttribute('role','img');issues.className='sheet-equipment-issues';issues.id='sheet-import-row-issues-'+record.index;
       indicator.setAttribute('aria-describedby',issues.id);summary.append(summaryText,indicator);section.append(summary,issues);
-      var label=node('label',__ST_TEXT__('sheetimport.import_into')),select=document.createElement('select');select.className='sheet-target';
+      // One compact input row: destination and machine type are peer fields.
+      // Transporters only have a destination, which spans the full row.
+      var mappingRow=node('div','','sheet-equipment-mapping-row');
+      var label=node('label',__ST_TEXT__('sheetimport.import_into')),select=document.createElement('select');
+      label.className='sheet-equipment-mapping-field';
+      select.className='sheet-target';
       select.setAttribute('aria-label',__ST_TEXT__('sheetimport.import_target_for_row')+record.row);
       [['skip',__ST_TEXT__('sheetimport.skip_this_equipment')],['new',__ST_TEXT__('sheetimport.add_as_new_equipment')]].concat(snapshot.equipment.map(function(e){return [e.id,__ST_TEXT__('sheetimport.update_2')+e.name+' ('+e.id+')'];})).forEach(function(option){select.add(new Option(option[1],option[0]));});
       select.value=record.target;
@@ -252,15 +257,20 @@ window.STSheetImport=function(state,actions){
         record.target=select.value;merge.defaults(data,record,snapshot.equipment);render();
         var next=host.querySelector('[data-source-index="'+record.index+'"]');next.open=true;next.querySelector('select').focus();
       };
-      label.append(select);section.append(label,node('p',record.reason));
+      var reason=node('p',record.reason,'sheet-equipment-target-reason');
+      reason.id='sheet-import-target-reason-'+record.index;
+      select.setAttribute('aria-describedby',reason.id);
+      label.append(select);mappingRow.append(label);
       if(unit.type!=='CONVEYOR'){
         var typeLabel=node('label',__ST_TEXT__('sheetimport.machine_type')),typeSelect=document.createElement('select');
         typeSelect.className='sheet-machine-type';typeSelect.setAttribute('aria-label',__ST_TEXT__('sheetimport.machine_type')+' '+unit.name);
         ['CUSTOM','BLOWER','BLOWMOLDER','PUCKER','FILLER','CAPPER','FEEDER','DEPUCKER','SLEEVER','CASE_PACKER','PALLETIZER'].forEach(function(type){typeSelect.add(new Option(type.replace(/_/g,' '),type));});
         typeSelect.value=unit.type;typeSelect.disabled=record.target==='skip';
         typeSelect.onchange=function(){unit.type=typeSelect.value;record.selected.type=true;render();host.querySelector('[data-source-index="'+record.index+'"]').open=true;};
-        typeLabel.append(typeSelect);section.append(typeLabel);
+        typeLabel.classList.add('sheet-equipment-mapping-field');
+        typeLabel.append(typeSelect);mappingRow.append(typeLabel);
       }
+      section.append(mappingRow,reason);
       var table=header();merge.fieldsFor(data).forEach(function(f){
         var before=current?f.read(current):null,after=merge.incomingValue(data,record,f),
           errors=merge.errorsFor(data,f.col,record.row);

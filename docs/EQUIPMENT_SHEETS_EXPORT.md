@@ -47,3 +47,7 @@ The verbose footer summary and routine confirmation hint are removed; the footer
 - The Spreadsheet subsection contains only one instruction in its header, and equipment audit row titles align vertically with the disclosure chevron and status badge.
 - The Format subsection uses a compact Import/Create checkbox **in its own toolbar**. When Products & Formats records are present, the record list appears directly in the subsection content without a nested Review catalog records disclosure. The same toolbar toggle enables or disables the packing proposal fields for older worksheets.
 - Informational source notes display directly in **Import details**; the nested Source information disclosure was removed. Warnings, validation errors, and Real Data controls remain available in that subsection.
+
+## Equipment import field layout
+
+In each Equipment audit card, **Import into** and **Machine type** are peer controls in a two-column row. The explanatory destination note remains immediately below the row and is associated with the destination select for accessibility. Conveyors show only **Import into**, spanning the available width. On narrow screens the two controls stack vertically without changing import selection or re-import behavior.

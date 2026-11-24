@@ -38,8 +38,27 @@ function prepareScenarioFromRecord_(request,record,user) {
     copy.name=proposal.title.slice(0,120);copy.clonedFromSimulationId=source.id;copy.results=null;copy.geminiHistory=[];delete copy.whatIf;
     copy.createdAt=new Date().toISOString();copy.updatedAt=copy.createdAt;
     copy.scenario={analysisOnly:proposal.analysisOnly,classification:proposal.analysisOnly?'UNASSIGNED':'INTERVENTION_SCOPE',kind:proposal.kind,title:proposal.title,capex:proposal.analysisOnly?null:proposal.tier,evidenceBasis:proposal.basis,sourceSimulationId:source.id,sourceSimulationName:source.name,sourceSignature:sourceSignature,changes:proposal.changes,evidence:proposal.evidence,origin:request.origin,plantValidated:false,validation:proposal.analysisOnly?'EXPLORATORY_TARGETS_REQUIRE_FEASIBILITY_REVIEW':proposal.evidence.engineeringReview?'ENGINEERING_REVIEW_REQUIRED':proposal.evidence.independentValidation==='NOT_REPRODUCED_REQUIRES_VALIDATION'?'NOT_REPRODUCED_REQUIRES_VALIDATION':copy.scenarioWarnings?.length?'ENGINEERING_REVIEW_REQUIRED':'INPUTS_VALIDATED_NOT_SIMULATED',engineeringWarnings:copy.scenarioWarnings||[],createdAt:copy.createdAt};
+    // Rebuild background evidence from the exact saved experiment. Never accept
+    // a client/agent-authored study or transfer another package's economics.
+    if(STScenarioEngine_.study)copy.scenario.study=buildSavedScenarioStudy_(source,proposal,sourceSignature,copy.scenarioWarnings||[]);
     record.simulations.push(copy);record.revision++;record.updatedAt=copy.createdAt;
     return {case:record,simulationId:copy.id};
+}
+
+function buildSavedScenarioStudy_(source,proposal,sourceSignature,warnings) {
+  function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.keys(value).sort().reduce(function(copy,key){if(value[key]!==undefined)copy[key]=canonical(value[key]);return copy;},{});return value;}
+  function changesKey(changes){return JSON.stringify((changes||[]).map(function(c){return canonical({equipmentId:c.equipmentId,path:c.path,before:c.before,after:c.after,replacementMaximumBpm:c.replacementMaximumBpm,analysisOnly:c.analysisOnly===true,external:c.external===true,interventionType:c.interventionType,originTier:c.originTier});}).sort(function(a,b){return (a.equipmentId+':'+a.path).localeCompare(b.equipmentId+':'+b.path);}));}
+  var key=changesKey(proposal.changes),methodologySignature=JSON.stringify(canonical(source.whatIf?.methodology||{}));
+  var matched=(source.whatIf?.evaluations||[]).filter(function(entry){return entry.sourceSimulationId===source.id&&entry.sourceSignature===sourceSignature&&entry.searchPolicyVersion==='MATCHED_CAPEX_V10'&&entry.methodologySignature===methodologySignature&&changesKey(entry.evaluatedChanges)===key&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(entry.status);}).sort(function(a,b){return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));})[0];
+  var evidence=matched?JSON.parse(JSON.stringify(matched)):{sourceSimulationId:source.id,sourceSignature:sourceSignature,unitOfFlow:source.unitOfFlow||'units',evaluatedChanges:proposal.changes,analysisOnly:proposal.analysisOnly,status:'NO_MATCHING_CURRENT_EVALUATION'};
+  evidence.warnings=(evidence.warnings||[]).concat(warnings);
+  if(evidence.independentCheck){
+    var check=evidence.independentCheck,confirmation=STScenarioEngine_.confirm(check.baseline,check.candidate,evidence.confirmationPlan,source.whatIf?.methodology||{});
+    check.passed=confirmation.passed&&check.passed===true;check.confirmationKind=confirmation.kind;check.statisticalEvidence=confirmation.statisticalEvidence;check.precision=confirmation.precision;check.reason=confirmation.reason;
+    check.oeeGuard=confirmation.oeeGuard;check.practicalThreshold=confirmation.threshold;
+    if(check.durationSeconds!==check.baseline?.durationSeconds||check.rounds!==evidence.confirmationPlan?.rounds||check.unitOfFlow!==(source.unitOfFlow||source.results?.unitOfFlow||source.results?.replay?.unitOfFlow||'units')||check.unitOfFlow!==check.baseline?.unitOfFlow){check.passed=false;check.reason='CONFIRMATION_METADATA_MISMATCH';}
+  }
+  return STScenarioEngine_.study(source,evidence);
 }
 function resolveLocalScenarioProposal_(proposal,source) {
   if(!proposal||proposal.sourceSimulationId!==source.id||!Array.isArray(proposal.changes)||!proposal.changes.length)throw createSimulatorError_('INVALID_SCENARIO','The local scenario source or changes are invalid.');

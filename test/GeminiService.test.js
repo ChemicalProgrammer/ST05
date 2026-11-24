@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {simulatedEvidence} from './helpers/ScenarioEvidenceFixture.js';
 function setup({status=200,denied=false,answer='Observed throughput: 42.'}={}) {
  const values={GEMINI_API_KEY:'private-test-key'},calls=[];
  let record;
@@ -275,10 +276,9 @@ test('Product-support role survives restrictive saved prompts and earlier assist
 });
 
 
-test('Gemini context includes compatible replication loss diagnosis and intervention definitions',()=>{
- const h=setup(),s=h.record.simulations[0],run={durationSeconds:300,tickSeconds:.25,sampleEverySeconds:5,seed:1,commands:[],rounds:1,engineId:'ST_CURRENT',...s.dynamicConfig};
- s.results={summary:{lineOeePercent:40},durationSeconds:60,unitOfFlow:'units',replicationStatus:{state:'COMPLETE'},inputSignature:JSON.stringify({version:'ST_CURRENT:0.13.0/DES:0.4.0/cache:2',equipment:s.equipment,run,unitOfFlow:'units'}),equipmentMetrics:{},batch:{rounds:3,equipmentStatistics:{[s.equipment[0].id]:{failureSeconds:{mean:10},starvedSeconds:{mean:0},blockedSeconds:{mean:0}}}}};
- const context=JSON.parse(h.ctx.buildGeminiContext_(h.record,'a').json);assert.equal(context.lossDiagnosis.status,'OBSERVED');assert.equal(context.lossDiagnosis.equipment[0].failureSeconds,10);assert(context.scenarioDefinitions.HIGH.reliability.includes('Replacement'));assert(context.reliabilityOpportunities.length>0);
+test('Gemini context includes compatible replication loss diagnosis and intervention definitions',async()=>{
+ const h=setup(),s=await simulatedEvidence();s.id='a';h.record.simulations=[s];h.record.unitOfFlow=s.unitOfFlow;
+ const context=JSON.parse(h.ctx.buildGeminiContext_(h.record,'a').json);assert.equal(context.lossDiagnosis.status,'OBSERVED');assert.equal(context.lossDiagnosis.equipment[0].failureSeconds,s.results.batch.equipmentStatistics[s.equipment[0].id].failureSeconds.mean);assert(context.scenarioDefinitions.HIGH.reliability.includes('Replacement'));assert(context.reliabilityOpportunities.length>0);
  s.dynamicConfig.seed++;assert.equal(JSON.parse(h.ctx.buildGeminiContext_(h.record,'a').json).lossDiagnosis.status,'NO_COMPATIBLE_RESULTS');
 });
 test('Gemini cannot label a replacement reliability target as Medium or submit exploratory levels',()=>{

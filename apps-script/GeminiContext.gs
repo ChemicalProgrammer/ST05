@@ -17,17 +17,49 @@ function compactSearchEvidence_(simulation) {
   function changes(items){return (items||[]).slice(0,GEMINI_CONTEXT_BUDGET_.maxEvidenceChanges).map(function(c){return {equipmentId:c.equipmentId,path:c.path,before:c.before,after:c.after,external:!!c.external,interventionType:c.interventionType,originTier:c.originTier,justification:typeof c.justification==='string'?c.justification.slice(0,240):undefined};});}
   function metrics(m){return m?{oee:m.oee,throughput:m.throughput}:undefined;}
   var entries=current.slice(0,GEMINI_CONTEXT_BUDGET_.maxSearchEvaluations).map(function(e){
-    var trials=e.trialHistory||[],selected=(e.selections||[]).filter(function(c){return c.selected;});
+    var trials=e.trialHistory||[],selected=(e.selections||[]).filter(function(c){return c.selected;}),study=compactScenarioStudyEvidence_(simulation,e);
     return {title:String(e.title||'').slice(0,160),scope:e.searchScope,status:e.status,method:e.method,updatedAt:e.updatedAt,run:compactValues_(e.run,0),searchStoppedEarly:!!e.searchStoppedEarly,trials:e.trials,infeasibleTrials:e.infeasibleTrials,
       baseline:metrics(e.baseline),best:metrics(e.candidate),changes:changes(e.evaluatedChanges),changesOmitted:Math.max(0,(e.evaluatedChanges||[]).length-GEMINI_CONTEXT_BUDGET_.maxEvidenceChanges),
       limits:selected.slice(0,GEMINI_CONTEXT_BUDGET_.maxEvidenceChanges).map(function(c){return {equipmentId:c.equipmentId,path:c.path,limit:c.limit,direction:c.limitDirection,unit:c.unit};}),limitsOmitted:Math.max(0,selected.length-GEMINI_CONTEXT_BUDGET_.maxEvidenceChanges),
-      independentCheck:e.independentCheck?{passed:e.independentCheck.passed,seed:e.independentCheck.seed,rounds:e.independentCheck.rounds,baseline:metrics(e.independentCheck.baseline),candidate:metrics(e.independentCheck.candidate)}:undefined,
+      independentCheck:e.independentCheck?{passed:study?.confirmation.status==='MODEL_REPRODUCED',reportedPassed:e.independentCheck.passed,seed:e.independentCheck.seed,rounds:e.independentCheck.rounds,baseline:metrics(e.independentCheck.baseline),candidate:metrics(e.independentCheck.candidate)}:undefined,
+      study:study,
       warningCount:(e.warnings||[]).length,doe:e.doe?{combinations:e.doe.combinations,completed:(e.doe.observations||[]).length,complete:!!e.doe.analysis?.complete}:undefined,
       tested:trials.slice(-GEMINI_CONTEXT_BUDGET_.maxSearchTrials).map(function(t){return {changes:changes(t.changes),changesOmitted:Math.max(0,(t.changes||[]).length-GEMINI_CONTEXT_BUDGET_.maxEvidenceChanges),feasible:t.feasible,oee:t.oee,throughput:t.throughput,warningCount:t.warningCount};}),
       testedOmitted:Math.max(0,trials.length-GEMINI_CONTEXT_BUDGET_.maxSearchTrials)+(e.trialHistoryOmitted||0),trialHistoryAvailable:Array.isArray(e.trialHistory)};
   });
   while(entries.length&&JSON.stringify(entries).length>GEMINI_CONTEXT_BUDGET_.searchEvidenceCharacters)entries.pop();
   return {evaluations:entries,totalCurrent:current.length,omitted:current.length-entries.length,staleExcluded:all.length-current.length,details:'Bounded saved search evidence only; tested is a partial history, not all combinations. Missing trial history on older evaluations is unknown. Running/cancelled results are provisional. No plant validation.'};
+}
+// Background methodology is advisory context. Rebuild it from current source
+// data; keep the bounded summary free of replay, full signatures and raw rows.
+function compactScenarioStudyEvidence_(simulation,evaluation) {
+  if(!STScenarioEngine_.study)return undefined;
+  function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.keys(value).sort().reduce(function(copy,key){if(value[key]!==undefined)copy[key]=canonical(value[key]);return copy;},{});return value;}
+  var evidence=Object.assign({},evaluation),original=evaluation.independentCheck;
+  if(original){
+    var check=Object.assign({},original),current=evaluation.sourceSimulationId===simulation.id&&evaluation.sourceSignature===STScenarioEngine_.signature(simulation)&&evaluation.searchPolicyVersion==='MATCHED_CAPEX_V10'&&evaluation.methodologySignature===JSON.stringify(canonical(simulation.whatIf?.methodology||{}))&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(evaluation.status);
+    evidence.independentCheck=check;
+    if(current&&STScenarioEngine_.confirm){
+      var verified=STScenarioEngine_.confirm(check.baseline,check.candidate,evaluation.confirmationPlan,simulation.whatIf?.methodology||{});
+      check.passed=original.passed===true&&verified.passed;check.confirmationKind=verified.kind;check.statisticalEvidence=verified.statisticalEvidence;check.precision=verified.precision;check.oeeGuard=verified.oeeGuard;check.practicalThreshold=verified.threshold;check.reason=verified.reason;
+      if(check.durationSeconds!==check.baseline?.durationSeconds||check.rounds!==evaluation.confirmationPlan?.rounds||check.unitOfFlow!==(simulation.unitOfFlow||simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||'units')||check.unitOfFlow!==check.baseline?.unitOfFlow){check.passed=false;check.reason='CONFIRMATION_METADATA_MISMATCH';}
+    }else{check.passed=false;check.reason='CURRENT_CONFIRMATION_REQUIRED';delete check.statisticalEvidence;}
+  }
+  var study=STScenarioEngine_.study(simulation,evidence),confirmation=study.evidence.confirmation;
+  return {version:study.version,packageId:study.evaluatedPackage.id,sourceStatus:study.source.status,
+    objective:study.objective,confirmation:{status:confirmation.status,kind:confirmation.kind,
+      practicalThreshold:confirmation.practicalThreshold,precision:confirmation.precision,reason:confirmation.reason,
+      n:confirmation.statisticalEvidence?.n,confidenceLevel:confirmation.statisticalEvidence?.confidenceLevel,
+      throughput:compactValues_(confirmation.statisticalEvidence?.metrics?.throughput,0),
+      interpretation:confirmation.interpretation},
+    hypotheses:study.hypotheses.slice(0,6).map(function(h){return {equipmentId:h.equipmentId,classification:h.classification,costClass:h.costClass,targetSourceStatus:h.targetSource.status,sourceReference:typeof h.targetSource.sourceReference==='string'?h.targetSource.sourceReference.slice(0,120):undefined,rootCauseVerified:false,targetAchievabilityVerified:false};}),
+    hypothesesOmitted:Math.max(0,study.hypotheses.length-6),
+    experiment:{status:study.evidence.experiment.status,fixedChanges:study.evidence.experiment.fixedChanges?.slice(0,6),
+      inference:study.evidence.experiment.anova?.primaryInference,multiplicity:study.evidence.experiment.anova?.multiplicity},
+    feasibility:{status:study.feasibility.status,verified:false},
+    economics:{status:study.economics.status,currency:study.economics.currency,npv:study.economics.npv,simplePaybackYears:study.economics.simplePaybackYears,npvPositive:study.economics.npvPositive,
+      missingInputs:study.economics.missingInputs?.slice(0,12),invalidInputs:study.economics.invalidInputs?.slice(0,12),blockers:study.economics.blockers?.slice(0,8)},
+    plantValidation:{status:study.plantValidation.status,verified:false}};
 }
 function buildGeminiContext_(caseData,simulationId) {
   var simulation=(caseData.simulations||[]).find(function(s){return s.id===simulationId;});

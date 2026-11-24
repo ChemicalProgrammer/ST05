@@ -1,4 +1,31 @@
 var STScenarioEngine_ = (function(){
+// One namespace for cached simulation outputs and consumers of their evidence.
+// Bump it when simulation mathematics or the serialized result contract changes.
+const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.1/DES:0.5.0/cache:30';
+
+function canonicalSimulationInputSignature(input) {
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') return Object.fromEntries(
+      Object.keys(value).sort().filter(key => value[key] !== undefined)
+        .map(key => [key, canonical(value[key])])
+    );
+    return value;
+  }
+  const run = {...input.run};
+  // Enabled/default reliability are equivalent; disabled reliability is not.
+  if (run.reliabilityEnabled !== false) delete run.reliabilityEnabled;
+  return JSON.stringify(canonical({
+    version: SIMULATION_PROVENANCE_VERSION,
+    unitOfFlow: input.case.unitOfFlow || 'units',
+    equipment: input.case.equipment,
+    run: {
+      durationSeconds: 300, tickSeconds: .25, sampleEverySeconds: 5,
+      seed: 1, commands: [], rounds: 1, engineId: 'ST_CURRENT', ...run
+    }
+  }));
+}
+
 const productVolumeUnits = Object.freeze({mL:1,L:1000,'fl oz (US)':29.5735295625,'fl oz (UK)':28.4130625});
 
 // Relational authoring catalog; simulation receives immutable resolved format snapshots.
@@ -1509,7 +1536,8 @@ function scenarioSignature(simulation){
   }));
   const config=simulation.dynamicConfig&&typeof simulation.dynamicConfig==='object'&&!Array.isArray(simulation.dynamicConfig)?{...simulation.dynamicConfig}:{};
   delete config.chartWindow;
-  const text=JSON.stringify(stableScenarioValue(["SCENARIO_STREAMS_V4",simulation.id,equipment,config]));
+  const unitOfFlow=simulation.unitOfFlow||simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||'units';
+  const text=JSON.stringify(stableScenarioValue(["SCENARIO_STREAMS_V5",SIMULATION_PROVENANCE_VERSION,simulation.id,unitOfFlow,equipment,config]));
   let hash=2166136261;for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
   return (hash>>>0).toString(16)+':'+text.length;
 }
@@ -1600,23 +1628,61 @@ function scenarioRecoveryPlan(engineering,requiredSeconds=0){
 }
 // Losses describe observed states, not proven causal attribution.
 function diagnoseScenarioLosses(simulation){
-  const result=simulation.results,empty={status:'NO_COMPATIBLE_RESULTS',equipment:[],referenceId:null};
-  if(!result?.summary||!(result.durationSeconds>0)||result.replicationStatus?.state!=='COMPLETE')return empty;
-  let provenance;try{provenance=JSON.parse(result.inputSignature);}catch(_){return empty;}
+  const result=simulation.results;
+  const unavailable=(reason,sourceStatus='UNAVAILABLE',extra={})=>({status:'NO_COMPATIBLE_RESULTS',reason,sourceStatus,equipment:[],referenceId:null,rankings:{},opportunities:[],...extra});
+  if(!result?.summary)return unavailable('NO_RESULTS');
+  if(!(result.durationSeconds>0))return unavailable('INVALID_RESULT_DURATION');
+  if(result.replicationStatus?.state!=='COMPLETE')return unavailable('INCOMPLETE_REPLICATIONS','INCOMPLETE');
+  if(!result.inputSignature)return unavailable('MISSING_INPUT_SIGNATURE');
+  let provenance;try{provenance=JSON.parse(result.inputSignature);}catch(_){return unavailable('INVALID_INPUT_SIGNATURE');}
+  if(!provenance||typeof provenance!=='object')return unavailable('INVALID_INPUT_SIGNATURE');
+  if(provenance.version!==SIMULATION_PROVENANCE_VERSION)return unavailable('PROVENANCE_VERSION_MISMATCH','HISTORICAL',{provenance:{recordedVersion:provenance.version??null,currentVersion:SIMULATION_PROVENANCE_VERSION}});
   const equal=(a,b)=>JSON.stringify(stableScenarioValue(a))===JSON.stringify(stableScenarioValue(b));
-  const run={durationSeconds:300,tickSeconds:.25,sampleEverySeconds:5,seed:1,commands:[],rounds:1,engineId:'ST_CURRENT',...simulation.dynamicConfig};
-  if(run.reliabilityEnabled!==false)delete run.reliabilityEnabled;
+  const run={...simulation.dynamicConfig};
   if(run.durationMode==='SHIFTS')run.durationSeconds=(run.shiftHours||8)*(run.shiftCount||1)*3600;
-  if(provenance.version!=='ST_CURRENT:0.13.0/DES:0.4.0/cache:2'||!equal(provenance.equipment,simulation.equipment)||!equal(provenance.run,run)||provenance.unitOfFlow!==(simulation.unitOfFlow||result.unitOfFlow||'units'))return empty;
+  const expected=JSON.parse(canonicalSimulationInputSignature({case:{equipment:simulation.equipment,unitOfFlow:simulation.unitOfFlow||result.unitOfFlow||'units'},run}));
+  if(provenance.run?.engineId!==expected.run.engineId)return unavailable('ENGINE_MISMATCH','STALE');
+  if(expected.run.engineId!=='ST_CURRENT')return unavailable('UNVALIDATED_SCENARIO_ENGINE');
+  if(!equal(provenance.equipment,expected.equipment))return unavailable('EQUIPMENT_CHANGED','STALE');
+  if(provenance.unitOfFlow!==expected.unitOfFlow)return unavailable('FLOW_UNIT_CHANGED','STALE');
+  if(!equal(provenance.run,expected.run))return unavailable('RUN_CONFIGURATION_CHANGED','STALE');
+  if(result.batch?.rounds!==undefined&&result.batch.rounds!==expected.run.rounds)return unavailable('REPLICATION_COUNT_MISMATCH','INCOMPLETE');
   const referenceId=analyzeLinePerformance(simulation.equipment,result).referenceId;
+  const rounds=result.batch?.rounds||1,replications=result.batch?.rows;
+  const hasActualDurations=Array.isArray(replications)&&replications.length===rounds&&replications.every(r=>Number.isFinite(r.durationSeconds)&&r.durationSeconds>0);
+  const durationSeconds=hasActualDurations?replications.reduce((sum,r)=>sum+r.durationSeconds,0)/rounds:result.durationSeconds;
+  const durationBasis=hasActualDurations?'MEAN_ACTUAL_REPLICATION_DURATION':'RECORDED_RESULT_DURATION';
   const rows=(simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR').map(e=>{
     const stats=result.batch?.equipmentStatistics?.[e.id],metrics=result.equipmentMetrics?.[e.id];
-    const read=key=>{const value=stats?.[key]?.mean??metrics?.[key];return Number.isFinite(value)&&value>=0?value:null;};
+    // A replicated report must not silently substitute round one's observation
+    // when a replication mean is missing.
+    const read=key=>{const value=rounds>1?stats?.[key]?.mean:stats?.[key]?.mean??metrics?.[key];return Number.isFinite(value)&&value>=0?value:null;};
     const failureSeconds=read('failureSeconds'),microStopSeconds=read('microStopSeconds'),starvedSeconds=read('starvedSeconds'),blockedSeconds=read('blockedSeconds');
+    const ownStopSeconds=failureSeconds!==null&&microStopSeconds!==null?failureSeconds+microStopSeconds:null;
+    const failureCount=read('failureCount'),microStopCount=read('microStopCount');
     const causes=[['FAILURE',failureSeconds],['MICROSTOP',microStopSeconds],['STARVATION',starvedSeconds],['BLOCKING',blockedSeconds]].filter(x=>x[1]!==null).sort((a,b)=>b[1]-a[1]);
-    return {equipmentId:e.id,name:e.name,isReference:e.id===referenceId,failureSeconds,microStopSeconds,starvedSeconds,blockedSeconds,waitingForPrimeSeconds:read('waitingForPrimeSeconds'),dominantLoss:causes[0]?.[1]>0?causes[0][0]:'NONE',ownStopPercent:failureSeconds===null&&microStopSeconds===null?null:100*((failureSeconds||0)+(microStopSeconds||0))/result.durationSeconds};
+    return {equipmentId:e.id,name:e.name,isReference:e.id===referenceId,failureSeconds,microStopSeconds,ownStopSeconds,starvedSeconds,blockedSeconds,
+      failureCount,microStopCount,countBasis:rounds>1?'MEAN_PER_REPLICATION':'RECORDED_RUN',
+      failureCategories:['general','minor','major'].map(kind=>({kind:kind.toUpperCase(),count:read(kind+'FailureCount'),seconds:read(kind+'FailureSeconds')})),
+      reliabilityExposureSeconds:read('reliabilityExposureSeconds'),
+      waitingForPrimeSeconds:read('waitingForPrimeSeconds'),dominantLoss:causes[0]?.[1]>0?causes[0][0]:'NONE',
+      ownStopPercent:ownStopSeconds===null?null:100*ownStopSeconds/durationSeconds,
+      starvationPercent:starvedSeconds===null?null:100*starvedSeconds/durationSeconds,
+      blockingPercent:blockedSeconds===null?null:100*blockedSeconds/durationSeconds,
+      dataCoverage:{ownStopDuration:ownStopSeconds!==null,failureCount:failureCount!==null,microStopCount:microStopCount!==null}};
   });
-  return {status:rows.some(r=>r.failureSeconds!==null||r.starvedSeconds!==null||r.blockedSeconds!==null)?'OBSERVED':'MISSING_METRICS',referenceId,durationSeconds:result.durationSeconds,rounds:result.batch?.rounds||1,equipment:rows,interpretation:'Observed losses and possible propagation paths; inactivity alone does not establish a line bottleneck.'};
+  function rank(field,basis){return rows.filter(row=>row[field]!==null).slice().sort((a,b)=>b[field]-a[field]||a.equipmentId.localeCompare(b.equipmentId)).map((row,index)=>({rank:index+1,equipmentId:row.equipmentId,name:row.name,value:row[field],basis,...(basis==='DURATION_SECONDS'?{percentOfRun:100*row[field]/durationSeconds}:{countBasis:row.countBasis})}));}
+  const rankings={ownStopDuration:rank('ownStopSeconds','DURATION_SECONDS'),failureDuration:rank('failureSeconds','DURATION_SECONDS'),microStopDuration:rank('microStopSeconds','DURATION_SECONDS'),starvationDuration:rank('starvedSeconds','DURATION_SECONDS'),blockingDuration:rank('blockedSeconds','DURATION_SECONDS'),failureFrequency:rank('failureCount','OBSERVED_EVENT_COUNT'),microStopFrequency:rank('microStopCount','OBSERVED_EVENT_COUNT')};
+  const opportunities=[];
+  for(const row of rows){
+    const base={equipmentId:row.equipmentId,name:row.name,evidenceLevel:'HYPOTHESIS',causalStatus:'NOT_ESTABLISHED'};
+    if((row.failureSeconds||0)+(row.microStopSeconds||0)>0)opportunities.push({...base,kind:'INTERNAL_STOP_REDUCTION',observed:{failureSeconds:row.failureSeconds,microStopSeconds:row.microStopSeconds,failureCount:row.failureCount,microStopCount:row.microStopCount},mechanismsToTest:['MTBF','MTTR'],requiredEvidence:['Failure-mode history','Paired line-output counterfactual','Achievable intervention target'],interpretation:'Internal stop exposure identifies a sensitivity hypothesis; it does not choose maintenance, retrofit or replacement.'});
+    if(row.starvedSeconds>0)opportunities.push({...base,kind:'UPSTREAM_SUPPLY_OR_BUFFER',observedSeconds:row.starvedSeconds,mechanismsToTest:['UPSTREAM_CAPACITY','UPSTREAM_RELIABILITY','BUFFER_RECOVERY','SENSOR_CONTROL'],interpretation:'Missing input may be propagated from upstream. Starvation does not prove a fault in this equipment.'});
+    if(row.blockedSeconds>0)opportunities.push({...base,kind:'DOWNSTREAM_CAPACITY_OR_BUFFER',observedSeconds:row.blockedSeconds,mechanismsToTest:['DOWNSTREAM_CAPACITY','DOWNSTREAM_RELIABILITY','BUFFER_RECOVERY','SENSOR_CONTROL'],interpretation:'Restricted discharge may be propagated from downstream. Blocking does not prove a fault in this equipment.'});
+  }
+  return {status:rows.some(r=>r.failureSeconds!==null||r.microStopSeconds!==null||r.starvedSeconds!==null||r.blockedSeconds!==null)?'OBSERVED':'MISSING_METRICS',sourceStatus:'CURRENT',referenceId,durationSeconds,durationBasis,rounds,equipment:rows,rankings,opportunities,
+    attribution:{additive:false,basis:'OBSERVED_EQUIPMENT_STATES',causalStatus:'NOT_ESTABLISHED',countsInferred:false},
+    interpretation:'Observed losses and possible propagation paths; inactivity alone does not establish a line bottleneck. Equipment losses overlap and are not additive global OEE contributions. Event counts are reported only when recorded.'};
 }
 function scenarioLossEvidence(simulation,diagnosis,equipment,kind){
   if(diagnosis.status!=='OBSERVED')return {priorityBonus:0};
@@ -1722,5 +1788,678 @@ function planScenarios(simulation){
 
 
 
-return {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates};
+// Dependency-free statistics for independent seed replications, not simulation ticks.
+// Student intervals invert the incomplete-beta t distribution (no normal approximation).
+// A repeated deterministic result is descriptive evidence; zero sample variance does
+// not identify the stochastic variance and therefore does not yield a p-value or CI.
+
+function scenarioLogGamma(value) {
+  const coefficients=[676.5203681218851,-1259.1392167224028,771.3234287776531,-176.6150291621406,12.507343278686905,-.13857109526572012,9.984369578019572e-6,1.5056327351493116e-7];
+  if(value<.5)return Math.log(Math.PI)-Math.log(Math.sin(Math.PI*value))-scenarioLogGamma(1-value);
+  const z=value-1;
+  let sum=.9999999999998099;
+  for(let i=0;i<coefficients.length;i++)sum+=coefficients[i]/(z+i+1);
+  const t=z+7.5;
+  return .5*Math.log(2*Math.PI)+(z+.5)*Math.log(t)-t+Math.log(sum);
+}
+
+function scenarioBetaFraction(a,b,x) {
+  const tiny=1e-300;
+  let c=1,d=1-(a+b)*x/(a+1);
+  if(Math.abs(d)<tiny)d=tiny;
+  d=1/d;
+  let h=d;
+  for(let m=1;m<=500;m++) {
+    let term=m*(b-m)*x/((a+2*m-1)*(a+2*m));
+    d=1+term*d;if(Math.abs(d)<tiny)d=tiny;
+    c=1+term/c;if(Math.abs(c)<tiny)c=tiny;
+    d=1/d;h*=d*c;
+    term=-(a+m)*(a+b+m)*x/((a+2*m)*(a+2*m+1));
+    d=1+term*d;if(Math.abs(d)<tiny)d=tiny;
+    c=1+term/c;if(Math.abs(c)<tiny)c=tiny;
+    d=1/d;
+    const delta=d*c;h*=delta;
+    if(Math.abs(delta-1)<2e-14)break;
+  }
+  return h;
+}
+
+function scenarioRegularizedBeta(x,a,b) {
+  if(x<=0)return 0;
+  if(x>=1)return 1;
+  const front=Math.exp(scenarioLogGamma(a+b)-scenarioLogGamma(a)-scenarioLogGamma(b)+a*Math.log(x)+b*Math.log1p(-x));
+  const value=x<(a+1)/(a+b+2)?front*scenarioBetaFraction(a,b,x)/a:1-front*scenarioBetaFraction(b,a,1-x)/b;
+  return Math.max(0,Math.min(1,value));
+}
+
+function scenarioFDistributionSurvival(f,df1,df2) {
+  if(!(typeof f==='number'&&f>=0&&Number.isFinite(df1)&&df1>0&&Number.isFinite(df2)&&df2>0))return null;
+  if(f===0)return 1;
+  if(f===Infinity)return 0;
+  return scenarioRegularizedBeta(df2/(df2+df1*f),df2/2,df1/2);
+}
+
+function scenarioStudentTPValue(t,df) {
+  if(typeof t!=='number'||Number.isNaN(t)||!Number.isFinite(df)||df<=0)return null;
+  if(t===0)return 1;
+  return scenarioRegularizedBeta(df/(df+t*t),df/2,.5);
+}
+
+function scenarioStudentTCritical(confidenceLevel=.95,df) {
+  if(!Number.isFinite(confidenceLevel)||confidenceLevel<=0||confidenceLevel>=1||!Number.isFinite(df)||df<=0)return null;
+  const tail=1-confidenceLevel;
+  let low=0,high=1;
+  while(scenarioStudentTPValue(high,df)>tail&&high<1e150)high*=2;
+  if(scenarioStudentTPValue(high,df)>tail)return null;
+  for(let iteration=0;iteration<100;iteration++) {
+    const mid=(low+high)/2;
+    if(scenarioStudentTPValue(mid,df)>tail)low=mid;else high=mid;
+    if(high-low<=2e-14*Math.max(1,mid))break;
+  }
+  return (low+high)/2;
+}
+
+function scenarioMeanSummary(values,options={}) {
+  const confidenceLevel=options.confidenceLevel??options.confidence??.95;
+  if(!Array.isArray(values)||values.length<2||values.some(value=>!Number.isFinite(value)))return null;
+  const n=values.length,df=n-1,tCritical=scenarioStudentTCritical(confidenceLevel,df);
+  if(tCritical===null)return null;
+  // Center first to keep small differences accurate beside a large throughput offset.
+  const origin=values[0],offset=values.reduce((sum,value)=>sum+(value-origin)/n,0),mean=origin+offset;
+  const roundingFloor=32*Number.EPSILON*Math.max(1,...values.map(value=>Math.abs(value)));
+  const zeroVariance=values.every(value=>Math.abs((value-origin)-offset)<=roundingFloor);
+  const sumSquares=zeroVariance?0:values.reduce((sum,value)=>sum+((value-origin)-offset)**2,0);
+  const standardDeviation=Math.sqrt(sumSquares/df),standardError=standardDeviation/Math.sqrt(n);
+  if(!Number.isFinite(mean)||!Number.isFinite(standardDeviation))return null;
+  const halfWidth=zeroVariance?null:tCritical*standardError;
+  return {n,mean,standardDeviation,standardError,lower:halfWidth===null?null:mean-halfWidth,upper:halfWidth===null?null:mean+halfWidth,df,halfWidth,tCritical,confidenceLevel,zeroVariance,inferenceAvailable:!zeroVariance,reason:zeroVariance?'ZERO_OBSERVED_VARIANCE':null};
+}
+
+// Missing/untestable hypotheses retain their place in the planned family. Holm
+// remains valid with correlated contrasts and does not claim simultaneous CIs.
+function scenarioHolmAdjust(pValues) {
+  if(!Array.isArray(pValues))return [];
+  const result=pValues.map(()=>null),familySize=pValues.length;
+  const ordered=pValues.map((p,index)=>({p,index})).filter(row=>Number.isFinite(row.p)&&row.p>=0&&row.p<=1).sort((a,b)=>a.p-b.p);
+  let previous=0;
+  ordered.forEach((row,index)=>{previous=Math.max(previous,Math.min(1,(familySize-index)*row.p));result[row.index]=previous;});
+  return result;
+}
+
+function scenarioPairedSummary(base,candidate,options={}) {
+  const confidenceLevel=options.confidenceLevel??options.confidence??.95;
+  const a=base?.roundMetrics,b=candidate?.roundMetrics;
+  const result={available:false,reason:null,n:Array.isArray(a)?a.length:0,metrics:{throughput:null,oee:null},metricReasons:{throughput:null,oee:null},confidenceLevel,seedIds:[],method:'PAIRED_SEED_DIFFERENCES',interpretation:'Intervals describe simulation replication uncertainty conditional on the model and inputs; independent seed streams and approximately normal mean differences are assumed.'};
+  if(!Number.isFinite(confidenceLevel)||confidenceLevel<=0||confidenceLevel>=1)return {...result,reason:'INVALID_CONFIDENCE_LEVEL'};
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length||a.length<2)return {...result,reason:'MATCHED_REPLICATIONS_REQUIRED'};
+  if(a.some(row=>!Number.isFinite(row?.seed))||b.some(row=>!Number.isFinite(row?.seed)))return {...result,reason:'INVALID_SEED_IDS'};
+  if(new Set(a.map(row=>row.seed)).size!==a.length||new Set(b.map(row=>row.seed)).size!==b.length)return {...result,reason:'DUPLICATE_SEED_IDS'};
+  const bySeed=new Map(b.map(row=>[row.seed,row]));
+  if(a.some(row=>!bySeed.has(row.seed)))return {...result,reason:'SEED_IDS_DO_NOT_MATCH'};
+  result.seedIds=a.map(row=>row.seed);
+  for(const metric of ['throughput','oee']) {
+    if(a.some(row=>!Number.isFinite(row[metric])||!Number.isFinite(bySeed.get(row.seed)[metric]))) {
+      result.metricReasons[metric]='MISSING_OR_NONFINITE_METRICS';
+      continue;
+    }
+    const summary=scenarioMeanSummary(a.map(row=>bySeed.get(row.seed)[metric]-row[metric]),{confidenceLevel});
+    result.metrics[metric]=summary;
+    result.metricReasons[metric]=summary?.reason??(summary?null:'NONFINITE_DIFFERENCES');
+  }
+  result.available=Object.values(result.metrics).some(value=>value!==null);
+  result.reason=result.available?null:'MISSING_OR_NONFINITE_METRICS';
+  return result;
+}
+
+function planScenarioReplications(base,candidate,options={}) {
+  const confidenceLevel=options.confidenceLevel??options.confidence??.95;
+  const minRounds=options.minRounds??3,maxRounds=options.maxRounds??30,relativePrecision=options.relativePrecision??.005;
+  const result={rounds:null,requiredRounds:null,capped:false,status:null,targetHalfWidth:null,pilotSeeds:[],pilotRounds:0,confidenceLevel,minRounds,maxRounds,confirmationMustExcludePilotSeeds:true,method:'FIXED_SAMPLE_SIZE_FROM_SEPARATE_PILOT',interpretation:'Fix the confirmation size before examining its outcomes and use new seeds. Precision is planned from pilot variance; it is not guaranteed, and no optional significance stopping is allowed.'};
+  if(!Number.isInteger(minRounds)||minRounds<3||!Number.isInteger(maxRounds)||maxRounds<minRounds||!Number.isFinite(confidenceLevel)||confidenceLevel<=0||confidenceLevel>=1)return {...result,status:'INVALID_OPTIONS'};
+  const paired=scenarioPairedSummary(base,candidate,{confidenceLevel});
+  result.pilotSeeds=paired.seedIds;result.pilotRounds=paired.n;
+  if(Array.isArray(options.confirmationSeeds)&&options.confirmationSeeds.some(seed=>result.pilotSeeds.includes(seed)))return {...result,status:'PILOT_CONFIRMATION_SEEDS_OVERLAP'};
+  const baselineValues=Array.isArray(base?.roundMetrics)?base.roundMetrics.map(row=>row?.throughput):null;
+  const baselineMean=baselineValues?.length&&baselineValues.every(Number.isFinite)?baselineValues.reduce((sum,value)=>sum+value/baselineValues.length,0):null;
+  result.baselineMeanThroughput=baselineMean;
+  const target=options.absolutePrecision!==undefined?options.absolutePrecision:(Number.isFinite(relativePrecision)&&relativePrecision>0&&Number.isFinite(baselineMean)?Math.abs(baselineMean)*relativePrecision:null);
+  if(!Number.isFinite(target)||target<=0)return {...result,status:'POSITIVE_PRECISION_REQUIRED'};
+  result.targetHalfWidth=target;
+  if(!paired.available||!paired.metrics.throughput||paired.n<3)return {...result,rounds:maxRounds,status:'INSUFFICIENT_PILOT_EVIDENCE',reason:paired.reason??paired.metricReasons.throughput??'THREE_PILOT_ROUNDS_REQUIRED'};
+  const sd=paired.metrics.throughput.standardDeviation;
+  result.pilotStandardDeviation=sd;
+  if(sd===0)return {...result,rounds:Math.min(maxRounds,Math.max(minRounds,6)),status:'ZERO_PILOT_VARIANCE',reason:'Zero observed pilot variance does not establish absence of stochastic noise; confirm descriptively with new seeds.'};
+  const halfWidth=rounds=>scenarioStudentTCritical(confidenceLevel,rounds-1)*sd/Math.sqrt(rounds);
+  let low=minRounds-1,high=minRounds;
+  // The cap is numerical, not a claim that a larger design has been calculated.
+  const numericalLimit=Math.max(1000000,maxRounds);
+  while(halfWidth(high)>target&&high<numericalLimit)high=Math.min(numericalLimit,high*2);
+  if(halfWidth(high)>target)return {...result,rounds:maxRounds,capped:true,status:'PRECISION_TARGET_EXCEEDS_CAP',requiredRoundsLowerBound:numericalLimit+1,plannedHalfWidth:halfWidth(maxRounds)};
+  while(high-low>1) {
+    const mid=Math.floor((low+high)/2);
+    if(halfWidth(mid)<=target)high=mid;else low=mid;
+  }
+  const rounds=Math.min(maxRounds,high);
+  return {...result,rounds,requiredRounds:high,capped:high>maxRounds,status:high>maxRounds?'PRECISION_TARGET_EXCEEDS_CAP':'PLANNED',plannedHalfWidth:halfWidth(rounds)};
+}
+
+
+const SCENARIO_SEARCH_PROFILES = Object.freeze({
+  LIGHT: {explorationSeconds:300,confirmationSeconds:1800,maxCandidates:48,maxSearchMs:120000,maxWithoutImprovement:16,maxFactors:0,passes:1,finalists:4},
+  MEDIUM: {explorationSeconds:600,confirmationSeconds:1800,maxCandidates:128,maxSearchMs:300000,maxWithoutImprovement:32,maxFactors:3,passes:2,finalists:6},
+  HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6}
+});
+function scenarioSearchProfile(level) { return SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM; }
+function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
+  const profile=scenarioSearchProfile(level);
+  // Independent What-If horizons; replay configuration and scheduled commands stay intact.
+  const copy={...run,durationMode:'FIXED',durationSeconds:confirmation==='validation'?Math.max(1800,Number(run.durationSeconds)||0):confirmation?profile.confirmationSeconds:profile.explorationSeconds,rounds};
+  delete copy.shiftSeconds;delete copy.shiftHours;delete copy.shiftCount;
+  // A runtime-target stop changes calendar exposure as the candidate improves.
+  // What-If compares complete equal calendar horizons and records that choice.
+  delete copy.effectiveRuntimeTargetSeconds;
+  return copy;
+}
+function scenarioConfirmationNeedsMore(base,candidate) {
+  const a=base?.roundMetrics,b=candidate?.roundMetrics;
+  if(!a||!b||a.length!==3||b.length!==3)return false;
+  const differences=b.map((row,i)=>row.throughput-a[i].throughput);
+  const mean=differences.reduce((sum,value)=>sum+value,0)/3;
+  const sd=Math.sqrt(differences.reduce((sum,value)=>sum+(value-mean)**2,0)/2);
+  // Paired 95% t interval, df=2. Extra rounds are confirmation, never winner selection.
+  return mean-4.3026527299*sd/Math.sqrt(3)<=Math.max(.001,Math.abs(base.throughput)*.001);
+}
+
+function scenarioPairedEvidence(base,candidate) {
+  const a=base?.roundMetrics,b=candidate?.roundMetrics;
+  if(!a||!b||a.length!==b.length||a.length<6||a.some((r,i)=>r.seed!==b[i].seed))return {stable:false,reason:'MATCHED_SIX_ROUNDS_REQUIRED'};
+  const deltas=b.map((r,i)=>r.throughput-a[i].throughput);
+  if(deltas.some(x=>!Number.isFinite(x)))return {stable:false,reason:'INVALID_METRICS'};
+  const mean=deltas.reduce((s,x)=>s+x,0)/deltas.length;
+  const sd=Math.sqrt(deltas.reduce((s,x)=>s+(x-mean)**2,0)/(deltas.length-1));
+  // Six paired replications; conservative t critical also for larger sample counts.
+  const lower=mean-2.5705818366*sd/Math.sqrt(deltas.length),split=Math.floor(deltas.length/2);
+  const blockMeans=[deltas.slice(0,split),deltas.slice(split)].map(v=>v.reduce((s,x)=>s+x,0)/v.length);
+  const threshold=Math.max(.001,Math.abs(base.throughput)*.001);
+  return {mean,lower,blockMeans,threshold,rounds:deltas.length,stable:lower>threshold&&blockMeans.every(x=>x>threshold)&&candidate.oee>=base.oee-1e-9,interpretation:'Exploratory paired interval and two seed blocks; no multiple-comparison adjustment or plant guarantee.'};
+}
+
+// Decide the confirmation sample size from the finalist-ranking pilot before
+// looking at the independent confirmation. No optional stopping on its p-value.
+function planScenarioConfirmation(base,candidate,methodology={}) {
+  const issue=scenarioComparisonEvidenceIssue(base,candidate);
+  if(issue)return {rounds:null,status:issue,policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
+  const baseSeeds=base.roundMetrics.map(row=>row.seed),candidateSeeds=candidate.roundMetrics.map(row=>row.seed);
+  if(!scenarioValidConfirmationPilotSeeds(baseSeeds)||!scenarioValidConfirmationPilotSeeds(candidateSeeds)||baseSeeds.length!==candidateSeeds.length||baseSeeds.some(seed=>!candidateSeeds.includes(seed)))return {rounds:null,status:'INVALID_PILOT_REPLICATIONS',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
+  const settings=methodology?.replications||{};
+  const options={minRounds:settings.minimum??3,maxRounds:settings.maximum??30,
+    confidenceLevel:settings.confidenceLevel??.95,relativePrecision:settings.relativePrecision??.005};
+  if(settings.absolutePrecision!==undefined)options.absolutePrecision=settings.absolutePrecision;
+  const plan=planScenarioReplications(base,candidate,options);
+  let minimumPracticalGain;
+  try{minimumPracticalGain=scenarioPracticalGain({throughput:plan.baselineMeanThroughput,unitOfFlow:base.unitOfFlow},methodology||{});}catch(error){return {...plan,rounds:null,status:error.message||'INVALID_CONFIRMATION_OBJECTIVE',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};}
+  return {...plan,policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION',comparisonDurationSeconds:base.durationSeconds,comparisonUnitOfFlow:base.unitOfFlow,
+    pilotRole:'FINALIST_RANKING_ONLY',minimumPracticalGain,
+    interpretation:'Sample size is fixed using separate pilot seeds. A capped plan may not achieve the requested precision; input and model uncertainty are not estimated by replication.'};
+}
+
+function scenarioPracticalGain(base,methodology={}) {
+  const objective=methodology.objective||{},supplied=objective.minimumPracticalGain;
+  if(supplied!==undefined&&(!Number.isFinite(supplied)||supplied<0))throw Error('SCENARIO_INVALID_PRACTICAL_GAIN');
+  // OEE targets are in percentage points and must never become flow-rate limits.
+  if(objective.metric&& !['throughput','oee'].includes(objective.metric))throw Error('SCENARIO_INVALID_OBJECTIVE_METRIC');
+  if(supplied!==undefined&&objective.metric!=='oee'&&objective.unit){
+    const unit=base?.unitOfFlow||'units';
+    if(objective.unit!==unit+'/min'&&!(unit==='bottles'&&objective.unit==='bpm'))throw Error('SCENARIO_INVALID_OBJECTIVE_UNIT');
+  }
+  return Math.max(.001,Math.abs(base?.throughput||0)*.001,objective.metric==='oee'?0:supplied??0);
+}
+
+function assessScenarioConfirmation(base,candidate,plan,methodology={}) {
+  const planIssue=scenarioConfirmationPlanIssue(plan,methodology);
+  const evidenceIssue=scenarioComparisonEvidenceIssue(base,candidate,plan);
+  const statisticalEvidence=scenarioPairedSummary(base,candidate,{confidenceLevel:plan?.confidenceLevel??methodology?.replications?.confidenceLevel??.95});
+  const threshold=planIssue?null:plan.minimumPracticalGain,throughput=statisticalEvidence.metrics?.throughput,oee=statisticalEvidence.metrics?.oee;
+  const pilotSeeds=Array.isArray(plan?.pilotSeeds)?plan.pilotSeeds:[];
+  const independent=statisticalEvidence.available&&!(statisticalEvidence.seedIds||[]).some(seed=>pilotSeeds.includes(seed));
+  const complete=!planIssue&&!evidenceIssue&&statisticalEvidence.available&&statisticalEvidence.n===plan?.rounds&&independent;
+  const inference=throughput?.inferenceAvailable!==false&&Number.isFinite(throughput?.lower)&&Number.isFinite(throughput?.upper);
+  const descriptive=throughput?.reason==='ZERO_OBSERVED_VARIANCE'&&statisticalEvidence.n>=Math.min(6,plan?.rounds||6);
+  const nonRegression=Number.isFinite(oee?.mean)&&oee.mean>=-1e-9;
+  const passed=!!(complete&&nonRegression&&(inference?throughput.lower>threshold:descriptive&&throughput.mean>threshold));
+  const halfWidth=inference?(throughput.upper-throughput.lower)/2:null;
+  return {passed,kind:inference?'PAIRED_CONFIDENCE_INTERVAL':descriptive?'DESCRIPTIVE_REPRODUCTION':'INFERENCE_UNAVAILABLE',
+    reason:planIssue||evidenceIssue||(!independent?'INDEPENDENT_SEEDS_REQUIRED':!complete?'INCOMPLETE_CONFIRMATION':!nonRegression?'OEE_REGRESSION':passed?null:inference?'PRACTICAL_GAIN_NOT_ESTABLISHED':'INFERENCE_UNAVAILABLE'),
+    threshold,statisticalEvidence,oeeGuard:{observedMeanDelta:oee?.mean??null,passed:nonRegression,statisticalNonInferiorityEstablished:false},precision:{targetHalfWidth:plan?.targetHalfWidth??null,achievedHalfWidth:halfWidth,
+      met:halfWidth===null||!Number.isFinite(plan?.targetHalfWidth)||plan.targetHalfWidth<=0?null:halfWidth<=plan.targetHalfWidth,plannedRounds:plan?.rounds??null,requiredRounds:plan?.requiredRounds??null,capped:plan?.capped===true},
+    interpretation:descriptive?'The gain repeated without observed variance; no confidence interval or statistical certainty is claimed.':
+      'Paired independent confirmation applies to the simulated model and recorded conditions; it does not establish intervention feasibility, economic value or plant validation.'};
+}
+
+function scenarioValidConfirmationPilotSeeds(seeds) {
+  return Array.isArray(seeds)&&seeds.length>=3&&seeds.every(Number.isInteger)&&new Set(seeds).size===seeds.length;
+}
+
+// A saved plan is evidence, not authority to reduce its own acceptance threshold.
+// Reconstruct the minimum from its recorded pilot mean and current methodology;
+// never derive a new threshold from the already-observed confirmation baseline.
+function scenarioConfirmationPlanIssue(plan,methodology) {
+  if(!plan||typeof plan!=='object'||Array.isArray(plan))return 'CONFIRMATION_PLAN_REQUIRED';
+  if(plan.policy!=='FIXED_SAMPLE_INDEPENDENT_CONFIRMATION')return 'INVALID_CONFIRMATION_POLICY';
+  if(!Number.isFinite(plan.baselineMeanThroughput)||plan.baselineMeanThroughput<0||!scenarioValidConfirmationPilotSeeds(plan.pilotSeeds))return 'INVALID_CONFIRMATION_PILOT';
+  if(!Number.isInteger(plan.rounds)||plan.rounds<3)return 'INVALID_CONFIRMATION_SAMPLE_SIZE';
+  if(!Number.isFinite(plan.confidenceLevel)||plan.confidenceLevel<=0||plan.confidenceLevel>=1)return 'INVALID_CONFIRMATION_CONFIDENCE';
+  if(!Number.isFinite(plan.comparisonDurationSeconds)||plan.comparisonDurationSeconds<=0||typeof plan.comparisonUnitOfFlow!=='string'||!plan.comparisonUnitOfFlow.trim())return 'INVALID_CONFIRMATION_COMPARISON';
+  if(!Number.isFinite(plan.minimumPracticalGain)||plan.minimumPracticalGain<0)return 'INVALID_PRACTICAL_GAIN_THRESHOLD';
+  let minimum;
+  try{minimum=scenarioPracticalGain({throughput:plan.baselineMeanThroughput,unitOfFlow:plan.comparisonUnitOfFlow},methodology||{});}catch(error){return error.message||'INVALID_CONFIRMATION_OBJECTIVE';}
+  if(plan.minimumPracticalGain<minimum)return 'PRACTICAL_GAIN_THRESHOLD_REDUCED';
+  return null;
+}
+
+// Shared by browser confirmation and the saved-evidence server path. Aggregates
+// used in economics must describe the same complete observations as the tests.
+function scenarioComparisonEvidenceIssue(base,candidate,plan) {
+  if(!base||!candidate||!Number.isFinite(base.durationSeconds)||base.durationSeconds<=0||candidate.durationSeconds!==base.durationSeconds)return 'INCOMPATIBLE_CALENDAR_HORIZONS';
+  if(typeof base.unitOfFlow!=='string'||!base.unitOfFlow||candidate.unitOfFlow!==base.unitOfFlow)return 'INCOMPATIBLE_FLOW_UNITS';
+  if(plan?.comparisonDurationSeconds!==undefined&&plan.comparisonDurationSeconds!==base.durationSeconds)return 'CONFIRMATION_HORIZON_CHANGED';
+  if(plan?.comparisonUnitOfFlow!==undefined&&plan.comparisonUnitOfFlow!==base.unitOfFlow)return 'CONFIRMATION_UNIT_CHANGED';
+  for(const value of [base,candidate]){
+    if(!Array.isArray(value.roundMetrics)||!value.roundMetrics.length)return 'MISSING_REPLICATION_METRICS';
+    if(value.roundMetrics.some(row=>row?.durationSeconds!==value.durationSeconds))return 'INCOMPATIBLE_REPLICATION_HORIZONS';
+    for(const metric of ['throughput','oee']){
+      if(!Number.isFinite(value[metric])||value[metric]<0||value.roundMetrics.some(row=>!Number.isFinite(row[metric])||row[metric]<0))return 'INVALID_REPLICATION_METRICS';
+      const mean=value.roundMetrics.reduce((sum,row)=>sum+row[metric],0)/value.roundMetrics.length;
+      if(Math.abs(mean-value[metric])>1e-7*Math.max(1,Math.abs(mean)))return 'AGGREGATES_DO_NOT_MATCH_REPLICATIONS';
+    }
+  }
+  return null;
+}
+
+// Scenario evidence is conditional on the model. Reported sources, quotations
+// and pilots never become verified causes, feasible targets or plant validation.
+// All economics concern the complete independently checked package of changes.
+
+const scenarioStudyEconomicNumbers = Object.freeze({
+  investment: [0, Infinity], installationCost: [0, Infinity], implementationLoss: [0, Infinity],
+  lifeYears: [1, 100], discountRate: [0, 1], annualOperatingMinutes: [0, 527040],
+  contributionMarginPerUnit: [0, Infinity], annualIncrementalDemand: [0, Infinity],
+  annualAvoidableSavings: [0, Infinity], annualIncrementalOpex: [0, Infinity], residualValue: [0, Infinity]
+});
+const scenarioStudyExcludedKeys = new Set(['__proto__', 'constructor', 'prototype', 'replay', 'study', 'trialHistory', 'roundMetrics', 'inputSignature']);
+
+function scenarioStudyText(value, limit = 2000) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null;
+}
+function scenarioStudyNumber(value) { return typeof value === 'number' && Number.isFinite(value) ? value : null; }
+function scenarioStudyRecord(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+// Bounded, JSON-safe copies also make externally supplied evidence non-recursive.
+function scenarioStudyCopy(value, depth = 0, ancestors = new Set()) {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.slice(0, 4000);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (!value || typeof value !== 'object' || depth > 5 || ancestors.has(value)) return null;
+  const next = new Set(ancestors); next.add(value);
+  if (Array.isArray(value)) return value.slice(0, 64).map(item => scenarioStudyCopy(item, depth + 1, next));
+  const copy = {};
+  Object.keys(value).filter(key => !scenarioStudyExcludedKeys.has(key)).slice(0, 48).forEach(key => {
+    copy[key] = scenarioStudyCopy(value[key], depth + 1, next);
+  });
+  return copy;
+}
+function scenarioStudyPick(value, keys) {
+  const result = {};
+  if (scenarioStudyRecord(value)) keys.forEach(key => {
+    if (Object.hasOwn(value, key)) result[key] = scenarioStudyCopy(value[key]);
+  });
+  return result;
+}
+function scenarioStudyFlowUnit(value) {
+  const unit = scenarioStudyText(value)?.toLowerCase();
+  return { bottle: 'bottles', bottles: 'bottles', case: 'cases', cases: 'cases', pallet: 'pallets', pallets: 'pallets', unit: 'units', units: 'units' }[unit] || null;
+}
+function scenarioStudyGet(value, path) {
+  if (typeof path !== 'string' || path.split('.').some(key => scenarioStudyExcludedKeys.has(key))) return undefined;
+  return path.split('.').reduce((current, key) => current?.[key], value);
+}
+function scenarioStudyMetrics(value) {
+  return { throughput: scenarioStudyNumber(value?.throughput), oee: scenarioStudyNumber(value?.oee) };
+}
+function scenarioStudyConfirmationPlan(value) {
+  if (!scenarioStudyRecord(value)) return null;
+  const plan = scenarioStudyPick(value, ['status', 'reason', 'rounds', 'requiredRounds', 'requiredRoundsLowerBound', 'capped',
+    'targetHalfWidth', 'plannedHalfWidth', 'pilotSeeds', 'pilotRounds', 'confidenceLevel', 'minRounds', 'maxRounds',
+    'confirmationMustExcludePilotSeeds', 'method', 'policy', 'pilotRole', 'minimumPracticalGain', 'comparisonBasis',
+    'comparisonDurationSeconds', 'comparisonUnitOfFlow', 'baselineMeanThroughput', 'pilotStandardDeviation',
+    'sourceEffectiveRuntimeTargetSeconds', 'interpretation']);
+  if (value.pilotRun) plan.pilotRun = scenarioStudyPick(value.pilotRun, ['durationSeconds', 'rounds', 'seed', 'durationMode', 'engineId']);
+  return plan;
+}
+function scenarioStudyDOEObservations(value) {
+  const observations = Array.isArray(value) ? value : [];
+  return observations.slice(0, 16).map(observation => {
+    const responses = Array.isArray(observation?.roundMetrics) ? observation.roundMetrics :
+      Array.isArray(observation?.roundResponses) ? observation.roundResponses : [];
+    return {
+      index: scenarioStudyNumber(observation?.index),
+      levels: Array.isArray(observation?.levels) ? observation.levels.slice(0, 4).map(scenarioStudyNumber) : [],
+      feasible: typeof observation?.feasible === 'boolean' ? observation.feasible : null,
+      roundResponses: responses.slice(0, 100).map(response => ({ seed: scenarioStudyNumber(response?.seed),
+        oee: scenarioStudyNumber(response?.oee), throughput: scenarioStudyNumber(response?.throughput) })),
+      roundResponsesOmitted: Math.max(0, responses.length - 100)
+    };
+  });
+}
+function scenarioStudyChanges(evaluation) {
+  return Array.isArray(evaluation?.evaluatedChanges) ? evaluation.evaluatedChanges : [];
+}
+function scenarioStudyPackageIdentity(evaluation) {
+  const changes = scenarioStudyChanges(evaluation).map(change => ({
+    equipmentId: scenarioStudyText(change?.equipmentId), path: scenarioStudyText(change?.path),
+    before: scenarioStudyNumber(change?.before), after: scenarioStudyNumber(change?.after),
+    unit: scenarioStudyText(change?.unit), interventionType: scenarioStudyText(change?.interventionType),
+    external: change?.external === true, analysisOnly: change?.analysisOnly === true,
+    replacementMaximumBpm: scenarioStudyNumber(change?.replacementMaximumBpm)
+  })).sort((a, b) => {
+    const left = JSON.stringify([a.equipmentId, a.path]), right = JSON.stringify([b.equipmentId, b.path]);
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
+  const text = JSON.stringify(['ST_SCENARIO_PACKAGE_V1', scenarioStudyText(evaluation?.sourceSimulationId), scenarioStudyText(evaluation?.sourceSignature), changes]);
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+  return { id: 'scenario-package-' + (hash >>> 0).toString(16), signature: text };
+}
+function scenarioStudySourceIssues(simulation, evaluation) {
+  const missingInputs = [], invalidInputs = [];
+  if (!scenarioStudyText(evaluation?.sourceSignature)) missingInputs.push('evaluation.sourceSignature');
+  if (!scenarioStudyText(evaluation?.sourceSimulationId)) missingInputs.push('evaluation.sourceSimulationId');
+  else if (evaluation.sourceSimulationId !== simulation?.id) invalidInputs.push('evaluation.sourceSimulationId');
+  const changes = scenarioStudyChanges(evaluation);
+  if (!changes.length) missingInputs.push('evaluation.evaluatedChanges');
+  if (changes.length > 64) invalidInputs.push('evaluation.evaluatedChanges');
+  const seen = new Set();
+  changes.forEach((change, index) => {
+    const key = 'evaluation.evaluatedChanges[' + index + ']';
+    const identity = change?.equipmentId + ':' + change?.path;
+    if (!scenarioStudyText(change?.equipmentId) || !scenarioStudyText(change?.path) || seen.has(identity) ||
+        scenarioStudyNumber(change?.before) === null || scenarioStudyNumber(change?.after) === null || change.before === change.after) {
+      invalidInputs.push(key); return;
+    }
+    seen.add(identity);
+    const equipment = (Array.isArray(simulation?.equipment) ? simulation.equipment : []).find(item => item?.id === change.equipmentId);
+    if (!equipment || scenarioStudyGet(equipment, change.path) !== change.before) invalidInputs.push(key + '.baseline');
+  });
+  return { missingInputs, invalidInputs };
+}
+function scenarioStudyFinancialCase(deltaThroughput, config) {
+  if (!Number.isFinite(deltaThroughput) || deltaThroughput < 0) return {
+    status: 'NOT_EVALUATED', reason: 'NEGATIVE_THROUGHPUT_BOUND_REQUIRES_BASELINE_DEMAND', deltaThroughputPerMinute: deltaThroughput
+  };
+  const annualCapacityGain = deltaThroughput * config.annualOperatingMinutes;
+  const annualUtilizedIncrement = Math.min(annualCapacityGain, config.annualIncrementalDemand);
+  const annualProductionContribution = annualUtilizedIncrement * config.contributionMarginPerUnit;
+  const annualNetBenefit = annualProductionContribution + config.annualAvoidableSavings - config.annualIncrementalOpex;
+  const initialOutlay = config.investment + config.installationCost + config.implementationLoss;
+  const cashFlows = [{ year: 0, amount: -initialOutlay, discountedAmount: -initialOutlay }];
+  let npv = -initialOutlay;
+  for (let year = 1; year <= config.lifeYears; year++) {
+    const amount = annualNetBenefit + (year === config.lifeYears ? config.residualValue : 0);
+    const discountedAmount = amount / (1 + config.discountRate) ** year;
+    cashFlows.push({ year, amount, discountedAmount }); npv += discountedAmount;
+  }
+  const simplePaybackYears = initialOutlay > 0 && annualNetBenefit > 0 ? initialOutlay / annualNetBenefit : null;
+  const simpleLifetimeRoi = initialOutlay > 0 ? (annualNetBenefit * config.lifeYears + config.residualValue - initialOutlay) / initialOutlay : null;
+  const numbers = [annualCapacityGain, annualUtilizedIncrement, annualProductionContribution, annualNetBenefit, initialOutlay, npv,
+    ...cashFlows.flatMap(row => [row.amount, row.discountedAmount])];
+  if (numbers.some(value => !Number.isFinite(value)) || simplePaybackYears !== null && !Number.isFinite(simplePaybackYears) ||
+      simpleLifetimeRoi !== null && !Number.isFinite(simpleLifetimeRoi)) return { status: 'NOT_EVALUATED', reason: 'NON_FINITE_CALCULATION' };
+  return {
+    status: 'ESTIMATED', deltaThroughputPerMinute: deltaThroughput, annualCapacityGain, annualUtilizedIncrement,
+    annualUnutilizedCapacityGain: annualCapacityGain - annualUtilizedIncrement,
+    annualProductionContribution, annualAvoidableSavings: config.annualAvoidableSavings,
+    annualIncrementalOpex: config.annualIncrementalOpex, annualNetBenefit, initialOutlay, npv, cashFlows,
+    simplePaybackYears, paybackWithinHorizon: simplePaybackYears === null ? null : simplePaybackYears <= config.lifeYears,
+    simpleLifetimeRoi, npvPositive: npv > 0
+  };
+}
+
+/**
+ * Optional config is simulation.whatIf.methodology.economics by default.
+ * Monetary inputs share `currency`; throughput and margin share `unitOfFlow`.
+ * Costs/savings/residual and demand are explicit numbers, including zero.
+ * packageSignature must equal buildScenarioStudy(...).evaluatedPackage.signature;
+ * packageId may additionally be supplied and must match. Full canonical equality
+ * prevents both hash collisions and inherited costs for a different package.
+ * discountRate is a fraction, lifeYears an integer, all annual amounts are constant.
+ * annualIncrementalDemand is unmet usable demand, not total plant demand.
+ * contributionMarginPerUnit excludes incremental unit costs; annualAvoidableSavings
+ * must exclude those costs and the added contribution, and OPEX must not be counted
+ * again in margin or savings. Initial costs must not be counted in annual cash flow.
+ */
+function evaluateScenarioEconomics(simulation, evaluation, config) {
+  const supplied = config === undefined ? simulation?.whatIf?.methodology?.economics : config;
+  const economics = scenarioStudyRecord(supplied) ? supplied : {};
+  const identity = scenarioStudyPackageIdentity(evaluation);
+  const sourceIssues = scenarioStudySourceIssues(simulation, evaluation);
+  const missingInputs = [...sourceIssues.missingInputs], invalidInputs = [...sourceIssues.invalidInputs];
+  const check = evaluation?.independentCheck;
+  const blockers = [];
+  if (!scenarioStudyRecord(supplied)) missingInputs.push('economics');
+  if (!scenarioStudyText(economics.packageSignature)) missingInputs.push('economics.packageSignature');
+  else if (economics.packageSignature !== identity.signature) invalidInputs.push('economics.packageSignature');
+  if (economics.packageId !== undefined && economics.packageId !== identity.id) invalidInputs.push('economics.packageId');
+  for (const [key, [minimum, maximum]] of Object.entries(scenarioStudyEconomicNumbers)) {
+    const value = economics[key];
+    if (value === undefined || value === null || value === '') missingInputs.push('economics.' + key);
+    else if (scenarioStudyNumber(value) === null || value < minimum || value > maximum || key === 'lifeYears' && !Number.isInteger(value)) invalidInputs.push('economics.' + key);
+  }
+  if (economics.annualOperatingMinutes === 0) invalidInputs.push('economics.annualOperatingMinutes');
+  const currency = scenarioStudyText(economics.currency);
+  if (!currency) missingInputs.push('economics.currency');
+  else if (!/^[A-Z]{3}$/.test(currency)) invalidInputs.push('economics.currency');
+  const unitOfFlow = scenarioStudyFlowUnit(economics.unitOfFlow);
+  if (!scenarioStudyText(economics.unitOfFlow)) missingInputs.push('economics.unitOfFlow');
+  else if (!unitOfFlow) invalidInputs.push('economics.unitOfFlow');
+  const sourceUnit = scenarioStudyFlowUnit(evaluation?.unitOfFlow || simulation?.unitOfFlow);
+  if (!sourceUnit) missingInputs.push('evaluation.unitOfFlow');
+  else if (unitOfFlow && unitOfFlow !== sourceUnit) invalidInputs.push('economics.unitOfFlow');
+  const providedUnits = [evaluation?.unitOfFlow, simulation?.unitOfFlow, check?.unitOfFlow, check?.baseline?.unitOfFlow, check?.candidate?.unitOfFlow].filter(value => value !== undefined && value !== null);
+  if (providedUnits.some(value => !scenarioStudyFlowUnit(value) || scenarioStudyFlowUnit(value) !== sourceUnit)) invalidInputs.push('evaluation.unitOfFlow');
+  for (const [key, required] of [['benefitBasis', 'INCREMENTAL_NON_OVERLAPPING'], ['annualizationBasis', 'REPRESENTATIVE_CONFIRMATION_RATE']]) {
+    if (!scenarioStudyText(economics[key])) missingInputs.push('economics.' + key);
+    else if (economics[key] !== required) invalidInputs.push('economics.' + key);
+  }
+  if (!check) missingInputs.push('evaluation.independentCheck');
+  if (check?.passed !== true) blockers.push('INDEPENDENT_CONFIRMATION_NOT_PASSED');
+  for (const key of ['baseline', 'candidate']) {
+    const metric = scenarioStudyNumber(check?.[key]?.throughput);
+    if (metric === null) missingInputs.push('evaluation.independentCheck.' + key + '.throughput');
+    else if (metric < 0) invalidInputs.push('evaluation.independentCheck.' + key + '.throughput');
+    const oee = scenarioStudyNumber(check?.[key]?.oee);
+    if (oee === null) missingInputs.push('evaluation.independentCheck.' + key + '.oee');
+    else if (oee < 0) invalidInputs.push('evaluation.independentCheck.' + key + '.oee');
+    const rateUnit = check?.[key]?.throughputUnit || check?.throughputUnit;
+    if (rateUnit !== undefined && !['per_minute', 'units/min', unitOfFlow + '/min', unitOfFlow === 'bottles' ? 'bpm' : null].includes(rateUnit)) invalidInputs.push('evaluation.independentCheck.' + key + '.throughputUnit');
+  }
+  if (!(scenarioStudyNumber(check?.durationSeconds) > 0)) missingInputs.push('evaluation.independentCheck.durationSeconds');
+  if (!(Number.isInteger(check?.rounds) && check.rounds > 0)) missingInputs.push('evaluation.independentCheck.rounds');
+  if (scenarioStudyNumber(check?.baseline?.oee) !== null && scenarioStudyNumber(check?.candidate?.oee) !== null && check.candidate.oee < check.baseline.oee - 1e-9) blockers.push('CONFIRMED_OEE_REGRESSION');
+  const baselineThroughput = scenarioStudyNumber(check?.baseline?.throughput), candidateThroughput = scenarioStudyNumber(check?.candidate?.throughput);
+  const delta = baselineThroughput !== null && candidateThroughput !== null ? candidateThroughput - baselineThroughput : null;
+  if (delta !== null && delta < 0) blockers.push('CONFIRMED_THROUGHPUT_REGRESSION');
+  const output = {
+    version: 1, status: 'NOT_EVALUATED', scope: 'EVALUATED_PACKAGE', packageId: identity.id, packageSignature: identity.signature,
+    missingInputs: [...new Set(missingInputs)], invalidInputs: [...new Set(invalidInputs)], blockers,
+    currency, unitOfFlow, sourceSignature: scenarioStudyText(evaluation?.sourceSignature),
+    basis: 'INDEPENDENT_CONFIRMATION_THROUGHPUT', inputs: scenarioStudyPick(economics, [...Object.keys(scenarioStudyEconomicNumbers), 'currency', 'unitOfFlow', 'benefitBasis', 'annualizationBasis']),
+    inputEvidence: 'REPORTED_NOT_VERIFIED', plantValidated: false,
+    contract: {
+      annualization: 'Constant annual operating time and incremental unmet demand; confirmation rate is explicitly reported representative.',
+      benefits: 'Incremental utilized output times contribution margin, plus separately avoidable savings, less non-overlapping incremental OPEX.',
+      cashFlow: 'Initial investment, installation and implementation loss at year zero; constant annual net benefit at year end; residual at final year.',
+      payback: 'Initial outlay divided by positive annual net benefit, undiscounted and excluding terminal residual; null for zero outlay or non-positive benefit.',
+      roi: 'Undiscounted net benefit over the full life including residual, less initial outlay, divided by initial outlay; a fraction, not an annualized return.',
+      limitations: 'No inferred sale of unused capacity, taxes, financing or inflation. Positive NPV is a conditional estimate, not investment approval or plant validation.'
+    }
+  };
+  if (output.missingInputs.length || output.invalidInputs.length || blockers.length) return output;
+  const estimate = scenarioStudyFinancialCase(delta, economics);
+  Object.assign(output, estimate);
+  if (estimate.status !== 'ESTIMATED') return output;
+  output.confirmation = { baselineThroughput, candidateThroughput, durationSeconds: check.durationSeconds, rounds: check.rounds,
+    kind: scenarioStudyText(check.confirmationKind || evaluation?.confirmationKind) || 'MODEL_REPRODUCTION' };
+  const statistics = check.statisticalEvidence;
+  const interval = statistics?.metrics?.throughput;
+  output.sensitivity = { status: 'NOT_EVALUATED', reason: 'CONFIRMATION_INTERVAL_UNAVAILABLE' };
+  if (statistics?.available === true && interval?.inferenceAvailable === true &&
+      scenarioStudyNumber(interval.lower) !== null && scenarioStudyNumber(interval.upper) !== null &&
+      interval.lower <= interval.upper && scenarioStudyNumber(interval.mean) !== null &&
+      Math.abs(interval.mean - delta) <= Math.max(1e-8, Math.abs(delta) * 1e-8) && interval.lower <= delta && interval.upper >= delta &&
+      scenarioStudyNumber(statistics.confidenceLevel) > 0 && statistics.confidenceLevel < 1) {
+    output.sensitivity = {
+      status: 'ESTIMATED', basis: 'CONFIRMATION_MEAN_THROUGHPUT_INTERVAL', confidenceLevel: statistics.confidenceLevel,
+      lower: scenarioStudyFinancialCase(interval.lower, economics), upper: scenarioStudyFinancialCase(interval.upper, economics),
+      interpretation: 'Only simulation mean uncertainty is propagated; input, engineering, demand, cost and plant-model uncertainty are not included.'
+    };
+  } else if (interval?.inferenceAvailable === true) output.sensitivity.reason = 'INVALID_OR_INCONSISTENT_CONFIRMATION_INTERVAL';
+  return output;
+}
+
+function scenarioStudyHypotheses(simulation, evaluation, metadata) {
+  const groups = new Map(), reported = Array.isArray(metadata?.interventions) ? metadata.interventions : [];
+  scenarioStudyChanges(evaluation).slice(0, 64).forEach(change => {
+    if (!scenarioStudyRecord(change) || !scenarioStudyText(change.equipmentId) || !scenarioStudyText(change.path)) return;
+    const record = reported.find(item => item?.equipmentId === change.equipmentId && (!Array.isArray(item.paths) || item.paths.includes(change.path)));
+    const exploratory = change.analysisOnly === true || change.interventionType === 'SENSITIVITY';
+    const explicitType = scenarioStudyText(record?.type || change.interventionType);
+    const classification = exploratory ? 'EXPLORATORY_SENSITIVITY' : explicitType ||
+      (change.path?.startsWith('noiseProfile.reliability.') ? 'INTERVENTION_UNSPECIFIED' :
+        change.path?.includes('geometry.') ? 'PHYSICAL_CHANGE_UNSPECIFIED' : 'OPERATING_PARAMETER_ADJUSTMENT');
+    const key = change.equipmentId + ':' + classification + ':' + (record?.id || '');
+    if (!groups.has(key)) {
+      const equipment = (Array.isArray(simulation?.equipment) ? simulation.equipment : []).find(item => item?.id === change.equipmentId);
+      groups.set(key, {
+        id: key, equipmentId: change.equipmentId, equipmentName: scenarioStudyText(equipment?.name), classification,
+        classificationBasis: exploratory ? 'EXPLORATORY_TARGET' : explicitType ? 'REPORTED_INTERVENTION' : 'PARAMETER_TYPE_ONLY',
+        costClass: ({ OPERATIONAL: 'NONE', MAINTENANCE: 'OPEX', RETROFIT: 'CAPEX', REPLACEMENT: 'CAPEX' })[classification] || 'UNASSIGNED',
+        description: scenarioStudyText(record?.description || change.justification),
+        diagnosticEvidence: (Array.isArray(evaluation?.lossDiagnosis?.equipment) ? evaluation.lossDiagnosis.equipment : []).filter(item => item?.equipmentId === change.equipmentId).slice(0, 1).map(item =>
+          scenarioStudyPick(item, ['equipmentId', 'failureSeconds', 'microStopSeconds', 'starvedSeconds', 'blockedSeconds', 'dominantLoss', 'ownStopPercent'])),
+        capacityEvidence: (Array.isArray(evaluation?.capacityDiagnosis?.limitingEquipment) ? evaluation.capacityDiagnosis.limitingEquipment : []).filter(item => item?.id === change.equipmentId).slice(0, 1).map(item =>
+          scenarioStudyPick(item, ['id', 'name', 'bpm', 'maximumBpm'])),
+        targetSource: { status: record?.targetSource || record?.sourceReference || change.targetSource || change.justification ? 'REPORTED_NOT_VERIFIED' : 'NOT_PROVIDED',
+          reported: scenarioStudyCopy(record?.targetSource || change.targetSource || null), sourceReference: scenarioStudyCopy(record?.sourceReference || null) },
+        rootCauseVerified: false, targetAchievabilityVerified: false, changes: [],
+        reportedFeasibility: record?.feasibility === undefined ? null : { status: 'REPORTED_NOT_VERIFIED', reported: scenarioStudyCopy(record.feasibility) },
+        reportedPilot: record?.pilot === undefined ? null : { status: 'REPORTED_NOT_VERIFIED', reported: scenarioStudyCopy(record.pilot) }
+      });
+    }
+    groups.get(key).changes.push(scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'replacementMaximumBpm']));
+  });
+  return [...groups.values()];
+}
+
+/** Compact, immutable evidence chain for persisted evaluations and scenarios. */
+function buildScenarioStudy(simulation, evaluation) {
+  const metadata = scenarioStudyRecord(simulation?.whatIf?.methodology) ? simulation.whatIf.methodology : {};
+  const check = evaluation?.independentCheck;
+  const issues = scenarioStudySourceIssues(simulation, evaluation);
+  const traceable = !issues.missingInputs.length && !issues.invalidInputs.length;
+  const hypotheses = scenarioStudyHypotheses(simulation, evaluation, metadata);
+  const pilots = hypotheses.filter(item => item.reportedPilot).map(item => ({ interventionId: item.id, ...item.reportedPilot }));
+  const actualBase = scenarioStudyMetrics(check?.baseline), actualCandidate = scenarioStudyMetrics(check?.candidate);
+  const validConfirmation = actualBase.throughput !== null && actualBase.throughput >= 0 && actualCandidate.throughput !== null &&
+    actualCandidate.throughput >= actualBase.throughput && scenarioStudyNumber(check?.durationSeconds) > 0 &&
+    Number.isInteger(check?.rounds) && check.rounds > 0 &&
+    actualBase.oee !== null && actualBase.oee >= 0 && actualCandidate.oee !== null && actualCandidate.oee >= 0 &&
+    actualCandidate.oee >= actualBase.oee - 1e-9;
+  const stats = scenarioStudyPick(check?.statisticalEvidence, ['available', 'n', 'seedIds', 'confidenceLevel', 'metrics', 'reason']);
+  const confirmationPlan = scenarioStudyConfirmationPlan(evaluation?.confirmationPlan);
+  const doe = evaluation?.doe;
+  const fixedChanges = (Array.isArray(doe?.fixedChanges) ? doe.fixedChanges : []).slice(0, 64).map(change =>
+    scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'interventionType', 'replacementMaximumBpm']));
+  const objective = scenarioStudyRecord(metadata.objective) ? scenarioStudyPick(metadata.objective, ['metric', 'target', 'unit', 'minimumPracticalGain', 'description']) : null;
+  const objectiveMetric = objective?.metric === 'throughput' ? 'throughput' : objective?.metric === 'oee' ? 'oee' : null;
+  const flowUnit = scenarioStudyFlowUnit(evaluation?.unitOfFlow || simulation?.unitOfFlow);
+  const objectiveUnits = objectiveMetric === 'oee' ? ['%', 'percent'] : [flowUnit + '/min', ...(flowUnit === 'bottles' ? ['bpm'] : [])];
+  const objectiveValid = objectiveMetric && scenarioStudyNumber(objective?.target) !== null && objective.target >= 0 &&
+    (objectiveMetric !== 'oee' || objective.target <= 100) && objectiveUnits.includes(objective.unit) &&
+    (objective.minimumPracticalGain === undefined || scenarioStudyNumber(objective.minimumPracticalGain) !== null && objective.minimumPracticalGain >= 0);
+  const objectiveEvaluable = traceable && check?.passed === true && validConfirmation && objectiveValid && actualCandidate[objectiveMetric] !== null;
+  const changes = scenarioStudyChanges(evaluation);
+  const identity = scenarioStudyPackageIdentity(evaluation);
+  const constraints = [
+    'Observed equipment downtime and propagated starvation/blocking are not additive causal line losses.',
+    'A simulated target does not establish the physical intervention, attainable reliability or supplier performance.',
+    'DOE and independent confirmation support this model and evaluated package; they do not prove a global optimum or plant outcome.',
+    'Reported financial inputs and source references are not independently verified.'
+  ];
+  const confirmationStatus = !check ? 'NOT_EVALUATED' : !traceable ? 'UNTRACEABLE_EVIDENCE' : check.passed !== true ? 'NOT_REPRODUCED' :
+    validConfirmation ? 'MODEL_REPRODUCED' : 'INVALID_OR_INCOMPLETE_CONFIRMATION';
+  return {
+    version: 1,
+    source: {
+      simulationId: scenarioStudyText(simulation?.id), sourceSimulationId: scenarioStudyText(evaluation?.sourceSimulationId),
+      sourceSignature: scenarioStudyText(evaluation?.sourceSignature), status: traceable ? 'RECORDED' : 'INCOMPLETE_OR_MISMATCHED',
+      signatureVerification: 'CALLER_MUST_VERIFY_CURRENT_SIGNATURE', missingInputs: issues.missingInputs, invalidInputs: issues.invalidInputs
+    },
+    evaluatedPackage: { ...identity, changeCount: changes.length, equipmentIds: [...new Set(changes.map(change => change?.equipmentId).filter(value => typeof value === 'string'))].slice(0, 64), scope: 'WHOLE_PACKAGE' },
+    objective: { status: objective ? 'REPORTED' : 'NOT_DEFINED', reported: objective,
+      assessment: objectiveEvaluable ? { status: 'MODEL_COMPARISON', achieved: actualCandidate[objectiveMetric], target: objective.target,
+        targetMet: actualCandidate[objectiveMetric] >= objective.target,
+        minimumPracticalGainMet: scenarioStudyNumber(objective.minimumPracticalGain) !== null && actualBase[objectiveMetric] !== null ? actualCandidate[objectiveMetric] - actualBase[objectiveMetric] >= objective.minimumPracticalGain : null } : { status: 'NOT_EVALUATED', reason: objective && !objectiveValid ? 'INVALID_OBJECTIVE_OR_UNIT' : 'OBJECTIVE_OR_CONFIRMATION_MISSING' } },
+    baseline: { status: check?.baseline ? 'CONFIRMATION_BASELINE' : evaluation?.baseline ? 'SCREENING_BASELINE' : 'MISSING',
+      metrics: check?.baseline ? actualBase : scenarioStudyMetrics(evaluation?.baseline), unitOfFlow: scenarioStudyFlowUnit(evaluation?.unitOfFlow || simulation?.unitOfFlow),
+      run: scenarioStudyPick(check || evaluation?.run, ['durationSeconds', 'rounds', 'seed']) },
+    diagnosis: {
+      causalStatus: 'HYPOTHESES_ONLY',
+      observedLosses: scenarioStudyPick(evaluation?.lossDiagnosis, ['status', 'reason', 'sourceStatus', 'provenance', 'referenceId', 'durationSeconds', 'durationBasis',
+        'rounds', 'equipment', 'rankings', 'opportunities', 'attribution', 'interpretation']),
+      capacity: scenarioStudyPick(evaluation?.capacityDiagnosis, ['reason', 'sourceStatus', 'referenceId', 'referenceBpm', 'minimumBpm', 'capacityCeilingPercent', 'limitingEquipment', 'achievedPercent', 'capacityGapPp', 'residualLossPp', 'accountingAvailable', 'interpretation']),
+      reliabilitySensitivity: scenarioStudyPick(evaluation?.reliabilityTargetSearch, ['status', 'analysisOnly', 'classification', 'conditionalReliabilityGain', 'coverage', 'ranking', 'interpretation'])
+    },
+    hypotheses,
+    evidence: {
+      screening: { baseline: scenarioStudyMetrics(evaluation?.baseline), candidate: scenarioStudyMetrics(evaluation?.candidate), role: 'EXPLORATION_ONLY' },
+      experiment: {
+        status: doe ? doe.analysis?.complete === true ? 'COMPLETE_DESIGN' : 'INCOMPLETE_DESIGN' : 'NOT_PERFORMED',
+        type: scenarioStudyText(doe?.type || doe?.design?.type),
+        factors: scenarioStudyCopy(doe?.factors || doe?.design?.factors || []),
+        fixedChanges,
+        effectScope: { conditionalOnFixedChanges: fixedChanges.length > 0,
+          interpretation: 'Effects apply to the tested factor region conditional on these fixed changes and the saved baseline; they are not isolated causal shares or guarantees outside that region.' },
+        combinations: scenarioStudyNumber(doe?.combinations) ?? (Array.isArray(doe?.observations) ? doe.observations.length : null),
+        roundsPerCombination: scenarioStudyNumber(doe?.roundsPerCombination),
+        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds']) : {},
+        observations: scenarioStudyDOEObservations(doe?.observations),
+        observationsOmitted: Math.max(0, (Array.isArray(doe?.observations) ? doe.observations.length : 0) - 16),
+        analysis: scenarioStudyPick(doe?.analysis, ['complete', 'reason', 'effects', 'interpretation']),
+        anova: scenarioStudyPick(doe?.anova, ['complete', 'model', 'primaryInference', 'alpha', 'confidenceLevel', 'seedIds', 'replications', 'multiplicity', 'metrics', 'reason', 'interpretation']),
+        replicationPlan: { status: metadata.replications ? 'REPORTED' : 'NOT_PROVIDED', reported: scenarioStudyPick(metadata.replications, ['minimum', 'maximum', 'confidenceLevel', 'relativePrecision', 'absolutePrecision']),
+          actual: confirmationPlan ? { role: 'CONFIRMATION_NOT_DOE', source: 'evaluation.confirmationPlan', plan: confirmationPlan } : null }
+      },
+      confirmation: { status: confirmationStatus, reportedPassed: check?.passed === true,
+        kind: scenarioStudyText(check?.confirmationKind || evaluation?.confirmationKind),
+        baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed']),
+        confirmationPlan,
+        precision: scenarioStudyPick(check?.precision, ['targetHalfWidth', 'achievedHalfWidth', 'met', 'plannedRounds', 'requiredRounds', 'capped']),
+        practicalThreshold: scenarioStudyNumber(check?.practicalThreshold), reason: scenarioStudyText(check?.reason),
+        oeeGuard: scenarioStudyPick(check?.oeeGuard, ['observedMeanDelta', 'passed', 'statisticalNonInferiorityEstablished']),
+        delta: { throughputPerMinute: actualBase.throughput !== null && actualCandidate.throughput !== null ? actualCandidate.throughput - actualBase.throughput : null,
+          oeePercentagePoints: actualBase.oee !== null && actualCandidate.oee !== null ? actualCandidate.oee - actualBase.oee : null },
+        statisticalEvidence: stats,
+        interpretation: 'Independent simulation evidence; descriptive reproduction is distinct from statistical inference and plant validation.' }
+    },
+    feasibility: { status: 'REQUIRES_ENGINEERING_REVIEW', verified: false,
+      exploratoryTargets: hypotheses.some(item => item.classification === 'EXPLORATORY_SENSITIVITY'),
+      warnings: scenarioStudyCopy(evaluation?.warnings || []),
+      reportedAcknowledgement: evaluation?.engineeringReviewAcknowledged === true,
+      interpretation: 'Parameter checks or reported acknowledgement do not establish engineering feasibility, installation scope or target achievability.' },
+    economics: evaluateScenarioEconomics(simulation, evaluation),
+    plantValidation: { status: pilots.length ? 'REPORTED_NOT_VERIFIED' : 'NOT_EVALUATED', verified: false, reports: pilots },
+    limitations: constraints
+  };
+}
+
+return {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary};
 })();

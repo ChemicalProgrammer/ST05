@@ -68,14 +68,14 @@ test('scenario RPC errors identify the responding version without exposing input
  vm.runInContext(fs.readFileSync('apps-script/Main.gs','utf8'),h.ctx);
  h.ctx.requireCurrentUser_=()=>({email:'owner@test'});
  const response=h.ctx.createScenario({...h.request,expectedRevision:0});
- assert.equal(response.ok,false);assert.equal(response.scenarioVersion,'whatif-20260925-3');
- assert.match(response.error.message,/\[whatif-20260925-3 \/ CASE_CONFLICT\]/);
+ assert.equal(response.ok,false);assert.equal(response.scenarioVersion,'whatif-20261014-2');
+ assert.match(response.error.message,/\[whatif-20261014-2 \/ CASE_CONFLICT\]/);
  assert.doesNotMatch(JSON.stringify(response),/equipment|noiseProfile/);
 });
 
 test('reviewed external interventions retain evidence and reject stale source signatures',()=>{
  const h=setup(),source=h.record().simulations[0],e=source.equipment[0],before=e.noiseProfile.reliability.mttrMinutes;
- const proposal={...h.request.proposal,tier:'MEDIUM',changes:[{equipmentId:e.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true,justification:'Dedicated repair crew and validated repair trial target'}]};
+ const proposal={...h.request.proposal,tier:'MEDIUM',changes:[{equipmentId:e.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true,interventionType:'RETROFIT',justification:'Local retrofit with crew access and repair trial target'}]};
  assert.throws(()=>h.ctx.createScenario_({...h.request,origin:'REVIEWED',sourceSignature:'stale',proposal},{email:'owner@test'}),e=>e.code==='SCENARIO_STALE');
  const result=h.ctx.createScenario_({...h.request,origin:'REVIEWED',proposal},{email:'owner@test'});
  assert.equal(result.case.simulations[1].scenario.changes[0].external,true);assert.match(result.case.simulations[1].scenario.changes[0].justification,/crew/);assert.equal(result.case.simulations[0].equipment[0].noiseProfile.reliability.mttrMinutes,before);
@@ -99,13 +99,12 @@ test('reviewed validation drafts retain failed independent confirmation without 
  assert.equal(draft.scenario.validation,'NOT_REPRODUCED_REQUIRES_VALIDATION');assert.equal(draft.scenario.evidence.independentValidation,'NOT_REPRODUCED_REQUIRES_VALIDATION');assert.equal(draft.results,null);assert.equal(JSON.stringify(response.case.simulations[0]),baseline);assert.equal(h.writes(),1);
 });
 
-test('reviewed reliability targets can be created without intervention text',()=>{
+test('reviewed reliability targets require an intervention and its documented target',()=>{
  const h=setup(),source=h.record().simulations[0],e=source.equipment[0],before=e.noiseProfile.reliability.mttrMinutes;
  const proposal={...h.request.proposal,tier:'MEDIUM',changes:[{equipmentId:e.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true}]};
- const result=h.ctx.createScenario_({...h.request,origin:'REVIEWED',proposal},{email:'owner@test'});
- const change=result.case.simulations[1].scenario.changes[0];
- assert.equal(change.after,before*.8);assert.equal(change.justification,undefined);
- assert.equal(result.case.simulations[0].equipment[0].noiseProfile.reliability.mttrMinutes,before);
+ assert.throws(()=>h.ctx.createScenario_({...h.request,origin:'REVIEWED',proposal},{email:'owner@test'}),error=>error.code==='INVALID_SCENARIO'&&error.details.includes('SCENARIO_EXTERNAL_EVIDENCE_REQUIRED'));
+ assert.equal(h.writes(),0);assert.equal(h.record().simulations.length,1);
+ assert.equal(h.record().simulations[0].equipment[0].noiseProfile.reliability.mttrMinutes,before);
 });
 
 test('local scenario preparation applies the same validation without any Drive write',()=>{

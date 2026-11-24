@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {JSDOM} from 'jsdom';
-import {scenarioSearchRun,scenarioSearchProfile,scenarioConfirmationNeedsMore,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence} from '../src/analysis/ScenarioSearch.js';
+import {scenarioSearchRun,scenarioSearchProfile,scenarioConfirmationNeedsMore,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence,planScenarioConfirmation,assessScenarioConfirmation,scenarioPracticalGain} from '../src/analysis/ScenarioSearch.js';
+import {buildScenarioStudy} from '../src/analysis/ScenarioMethodology.js';
 import {screenFlowFactors} from '../src/analysis/FlowFactorScreening.js';
 import {createScenarioDOE,analyzeScenarioDOE,analyzeScenarioANOVA,scenarioFSurvival} from '../src/analysis/ScenarioDOE.js';
 
@@ -33,9 +34,9 @@ function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=
  const dom=new JSDOM('<article class="analysis-recommendation"></article>',{runScripts:'outside-only'}),w=dom.window,calls=[];
  w.HTMLDialogElement.prototype.close=function(){};w.HTMLDialogElement.prototype.showModal=function(){};
  w.STPreferences={read(){return '';},write(){return true;}};w.STIcons={svg(){return '<svg></svg>';}};w.STErrors={register(){},capture(){}};w.STScenarioText={HIGH:'High'};
- w.STScenarioSearch={screenFlow:screenFlowFactors,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
+ w.STScenarioSearch={screenFlow:screenFlowFactors,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
  w.STWhatIf={changeInfo(c){return {equipment:'Unit',parameter:c.path,before:c.before,after:c.after};}};
- w.STScenarios={fields:{speed:[1,100,'u/s'],sensor:[1,100,'m']},signature(){return 'same';},plan(){return {candidates:[]};},apply(source,changes){const copy=JSON.parse(JSON.stringify(source));for(const c of changes)copy.equipment[0][c.path]=c.after;return copy;}};
+ w.STScenarios={study:buildScenarioStudy,fields:{speed:[1,100,'u/s'],sensor:[1,100,'m']},signature(){return 'same';},plan(){return {candidates:[]};},apply(source,changes){const copy=JSON.parse(JSON.stringify(source));for(const c of changes)copy.equipment[0][c.path]=c.after;return copy;}};
  w.SimulatorEngine={validateSimulationInput(){return {ok:true};},inputSignature(input){return JSON.stringify(input);},async simulateBatch(input){calls.push(JSON.parse(JSON.stringify(input)));const gain=(input.case.equipment[0].speed-10)+(input.case.equipment[0].sensor-10);const rows=Array.from({length:input.run.rounds},(_,j)=>{const noise=uncertain&&input.run.seed>1000000&&gain>0?[0,-20,20,0,0,0][j]:0;return {seed:input.run.seed+j,summary:{lineOeePercent:50+gain/10,outputCount:(100+gain+noise)*input.run.durationSeconds/60}};});return {ok:true,result:{durationSeconds:input.run.durationSeconds,summary:rows[0].summary,batch:{rows,statistics:{lineOeePercent:{mean:50+gain/10},throughputPerMinute:{mean:rows.reduce((sum,row)=>sum+row.summary.outputCount/input.run.durationSeconds*60,0)/rows.length}}}}};}};
  const sim={id:'sim',equipment:[{id:'e',speed:10,sensor:10}],dynamicConfig:{durationSeconds:durationSeconds,rounds:40,seed:1},whatIf:{searchDepth:depth}},record={metadata:{includeDOE:doe},simulations:[sim]};
  w.eval(fs.readFileSync('apps-script/ScenarioExplorer.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1]);w.STScenarioExplorer.connectCase(()=>record,()=>{});w.ST_SCENARIO_SEARCH_LIMITS.maxCandidates=1;
@@ -45,12 +46,12 @@ function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=
 }
 async function search(h){h.host.querySelector('.scenario-search').click();for(let i=0;i<200;i++){if(h.sim.whatIf.evaluations?.[0]&&!['RUNNING','VALIDATING'].includes(h.sim.whatIf.evaluations[0].status))return h.sim.whatIf.evaluations[0];await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Search did not finish');}
 test('reserved DOE completes after exploration exhausts its budget; confirmation uses common horizons',async()=>{
- const h=harness(true);try{const result=await search(h);assert.equal(result.status,'IMPROVEMENT_REPRODUCED',result.message);assert(result.doe.analysis.complete);assert.equal(result.doe.observations.length,4);assert.equal(result.independentCheck.durationSeconds,1800);assert.equal(result.independentCheck.rounds,3);assert(h.calls.some(call=>call.run.durationSeconds===600));assert(h.calls.some(call=>call.run.durationSeconds===1800));assert.equal(h.sim.dynamicConfig.durationSeconds,99);assert.equal(h.sim.dynamicConfig.rounds,40);assert.equal(h.host.querySelector('.scenario-create').disabled,false);}finally{h.dom.window.close();}
+ const h=harness(true);try{const result=await search(h);assert.equal(result.status,'IMPROVEMENT_REPRODUCED',result.message);assert(result.doe.analysis.complete);assert.equal(result.doe.observations.length,4);assert.equal(result.independentCheck.durationSeconds,1800);assert.equal(result.independentCheck.rounds,6);assert(h.calls.some(call=>call.run.durationSeconds===600));assert(h.calls.some(call=>call.run.durationSeconds===1800));assert.equal(h.sim.dynamicConfig.durationSeconds,99);assert.equal(h.sim.dynamicConfig.rounds,40);assert.equal(h.host.querySelector('.scenario-create').disabled,false);}finally{h.dom.window.close();}
 });
 test('without DOE the winner is independently confirmed and no factorial stage is created',async()=>{
- const h=harness(false,'LIGHT');try{const result=await search(h);assert.equal(result.status,'IMPROVEMENT_REPRODUCED',result.message);assert.equal(result.doe,undefined);assert.equal(result.independentCheck.durationSeconds,1800);assert(h.calls.every(call=>call.run.rounds===3));}finally{h.dom.window.close();}
+ const h=harness(false,'LIGHT');try{const result=await search(h);assert.equal(result.status,'IMPROVEMENT_REPRODUCED',result.message);assert.equal(result.doe,undefined);assert.equal(result.independentCheck.durationSeconds,1800);assert(h.calls.filter(call=>call.run.seed<1000000).every(call=>call.run.rounds===3));assert(h.calls.filter(call=>call.run.seed>=1000000).every(call=>call.run.rounds===result.confirmationPlan.rounds));}finally{h.dom.window.close();}
 });
-test('High retains blocked ANOVA internally and expands uncertain confirmation to six rounds',async()=>{
+test('High retains ANOVA internally and fixes confirmation size from an independent pilot',async()=>{
  const h=harness(true,'HIGH',true);try{const result=await search(h);assert.equal(result.status,'IMPROVEMENT_REPRODUCED',result.message);assert(result.doe.anova.complete);assert.equal(result.independentCheck.rounds,6);assert.equal(h.host.querySelector('.scenario-doe-results'),null);assert(!h.host.textContent.includes('ANOVA with seed blocks'));}finally{h.dom.window.close();}
 });
 

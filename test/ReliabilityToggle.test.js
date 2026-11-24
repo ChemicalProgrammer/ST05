@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {canonicalSimulationInputSignature} from '../src/simulation/SimulationProvenance.js';
 import {simulateLine} from '../src/simulation/LineSimulationEngine.js';
 import {adaptSimPyInput} from '../src/simulation/SimPyBrowserEngine.js';
 import {reliabilitySensitivityCandidates,planScenarios} from '../src/analysis/ScenarioPlanner.js';
@@ -20,6 +21,6 @@ test('DES adapter and CAPEX planner respect disabled reliability',()=>{
 
 test('cache signature separates failure-free runs and preserves enabled/default equivalence',async()=>{
  const {default:vm}=await import('node:vm');const source=fs.readFileSync('apps-script/SimulationEngine.html','utf8');const fn=source.slice(source.indexOf('function simulationInputSignature(input){'),source.indexOf('async function simulateBrowserBatch('));
- const a=input(),signature=run=>vm.runInNewContext(fn+'simulationInputSignature(input)',{input:{...a,run},CURRENT_ENGINE_ID:'ST_CURRENT'});
+ const a=input(),signature=run=>vm.runInNewContext(fn+'simulationInputSignature(input)',{input:{...a,run},CURRENT_ENGINE_ID:'ST_CURRENT',canonicalSimulationInputSignature});
  assert.equal(signature(a.run),signature({...a.run,reliabilityEnabled:true}));assert.notEqual(signature(a.run),signature({...a.run,reliabilityEnabled:false}));
 });

@@ -1,12 +1,13 @@
-import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';import {JSDOM} from 'jsdom';
+import fs from 'node:fs';import assert from 'node:assert/strict';import {JSDOM} from 'jsdom';
 import {screenFlowFactors} from '../src/analysis/FlowFactorScreening.js';
 import {searchReliabilityTargets} from '../src/analysis/ReliabilityTargetSearch.js';
 import {simulateBatch} from '../src/simulation/SimulationBatch.js';
+import {canonicalSimulationInputSignature} from '../src/simulation/SimulationProvenance.js';
 import {planScenarios,applyScenarioChanges,scenarioSignature,SCENARIO_FIELDS,reliabilitySensitivityCandidates,SCENARIO_DEFINITIONS,SCENARIO_INTERVENTIONS,scenarioCategoryAllows} from '../src/analysis/ScenarioPlanner.js';
-import {scenarioSearchRun,scenarioSearchProfile,scenarioConfirmationNeedsMore,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence} from '../src/analysis/ScenarioSearch.js';
+import {scenarioSearchRun,scenarioSearchProfile,scenarioConfirmationNeedsMore,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence,planScenarioConfirmation,assessScenarioConfirmation,scenarioPracticalGain} from '../src/analysis/ScenarioSearch.js';
+import {buildScenarioStudy} from '../src/analysis/ScenarioMethodology.js';
 import {createScenarioDOE,analyzeScenarioDOE,analyzeScenarioANOVA} from '../src/analysis/ScenarioDOE.js';
 const original=JSON.parse(fs.readFileSync('test/fixtures/demo-b-case.json','utf8'));
-const code=fs.readFileSync('apps-script/SimulationEngine.html','utf8');const ctx=vm.createContext({CURRENT_ENGINE_ID:'ST_CURRENT'});vm.runInContext(code.slice(code.indexOf('function simulationInputSignature('),code.indexOf('async function simulateBrowserBatch(')),ctx);
 async function search(parallel,clockScale,included=[],doe=false,suggestion=false){
  const record=structuredClone(original),sim=record.simulations[0];sim.unitOfFlow='units';sim.whatIf={searchDepth:'HIGH'};record.metadata.includeDOE=doe;
  const dom=new JSDOM('<article class="analysis-recommendation"></article>',{runScripts:'outside-only'}),w=dom.window;
@@ -14,9 +15,9 @@ async function search(parallel,clockScale,included=[],doe=false,suggestion=false
  w.STErrors={register(){},capture(_,error){console.error(error.message);}};w.STScenarioText={};
  w.STPreferences={read(){return '';},write(){return true;}};w.STIcons={svg(){return '';}};
  w.STWhatIf={changeInfo(c){return {equipment:c.equipmentId,parameter:c.path,before:c.before,after:c.after};}};
- w.STScenarios={plan:planScenarios,apply:applyScenarioChanges,signature:scenarioSignature,fields:SCENARIO_FIELDS,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates};
- w.STScenarioSearch={screenFlow:screenFlowFactors,reliabilityTargets:searchReliabilityTargets,profiles:SCENARIO_SEARCH_PROFILES,run:scenarioSearchRun,profile:scenarioSearchProfile,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,SCENARIO_SEARCH_PROFILES};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
- let batches=0;w.SimulatorEngine={inputSignature:ctx.simulationInputSignature,async simulateBatch(input,options){batches++;return simulateBatch(JSON.parse(JSON.stringify(input)),{...options,summaryOnly:true,yieldControl:()=>Promise.resolve()});}};
+ w.STScenarios={plan:planScenarios,apply:applyScenarioChanges,signature:scenarioSignature,fields:SCENARIO_FIELDS,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy};
+ w.STScenarioSearch={screenFlow:screenFlowFactors,reliabilityTargets:searchReliabilityTargets,profiles:SCENARIO_SEARCH_PROFILES,run:scenarioSearchRun,profile:scenarioSearchProfile,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain,SCENARIO_SEARCH_PROFILES};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
+ let batches=0;w.SimulatorEngine={inputSignature:canonicalSimulationInputSignature,async simulateBatch(input,options){batches++;return simulateBatch(JSON.parse(JSON.stringify(input)),{...options,summaryOnly:true,yieldControl:()=>Promise.resolve()});}};
  const now=Date.now.bind(Date);w.Date.now=()=>now()*clockScale;
  w.eval(fs.readFileSync('apps-script/ScenarioExplorer.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1]);w.STScenarioExplorer.connectCase(()=>record,()=>{});
  Object.assign(w.ST_SCENARIO_SEARCH_LIMITS,{parallelCandidates:parallel,maxCandidates:12,maxSearchMs:1});

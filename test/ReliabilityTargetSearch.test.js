@@ -1,6 +1,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import {searchReliabilityTargets} from '../src/analysis/ReliabilityTargetSearch.js';
 import {applyScenarioChanges} from '../src/analysis/ScenarioPlanner.js';
+import {simulateBatch} from '../src/simulation/SimulationBatch.js';
+import {scenarioEvidenceInput,simulatedEvidence} from './helpers/ScenarioEvidenceFixture.js';
 const fixture=()=>structuredClone(JSON.parse(fs.readFileSync('test/fixtures/demo-b-case.json','utf8')).simulations[0]);
 function synthetic(simulation,changes){const s=changes.length?applyScenarioChanges(simulation,changes):simulation;const losses=s.dynamicConfig?.reliabilityEnabled===false?0:s.equipment.filter(e=>e.type!=='CONVEYOR').reduce((sum,e,index)=>{const r=e.noiseProfile.reliability;return sum+(r?[50,30,10,5,4,2,1][index]*r.mttrMinutes/(r.mtbfMinutes+r.mttrMinutes):0);},0);return {throughput:150-losses,oee:(150-losses)/2,warnings:[]};}
 test('inverse reliability search uses conditional removal, bounded targets and explicit joint packages without changing the source',async()=>{
@@ -37,4 +39,54 @@ test('invalid scope, empty manual selections and physically inconsistent limits 
  const s=fixture(),e=s.equipment.find(e=>e.type!=='CONVEYOR');let calls=0;const measure=()=>{calls++;return synthetic(s,[]);};
  for(const options of [{scope:'MANUAL',equipmentIds:[]},{scope:'MANUAL',equipmentIds:['missing']},{equipmentLimits:{[e.id]:{mttrMinimum:0}}},{equipmentLimits:{[e.id]:{mtbfMaximum:e.noiseProfile.reliability.mtbfMinutes/2}}}])await assert.rejects(()=>searchReliabilityTargets(s,{...options,measure}),/SCENARIO_RELIABILITY/);
  assert.equal(calls,0);
+});
+
+test('automatic bounded screening prioritizes nominal constraints instead of the first equipment IDs',async()=>{
+ const s=scenarioEvidenceInput(),template=s.equipment[0];
+ // Synthetic policy fixture: only selection is tested; no physical production
+ // outcome is claimed for this deliberately simplified equipment list.
+ s.equipment=Array.from({length:15},(_,index)=>({...structuredClone(template),id:'machine-'+String(index).padStart(2,'0'),name:'Machine '+index,type:index===14?'FILLER':'BLOWMOLDER',nominalRatePerSecond:index===14?1:2}));
+ const report=await searchReliabilityTargets(s,{run:s.dynamicConfig,maximumTargets:1,measure:async(model,changes)=>({throughput:100+changes.length,oee:50+changes.length/2,warnings:[]})});
+ assert.equal(report.coverage.screened,12);assert.equal(report.coverage.omitted,3);
+ assert(report.equipmentIds.includes('machine-14'),'the final nominal constraint is not crowded out by alphabetical IDs');
+ assert.equal(report.coverage.selectionEvidence[0].equipmentId,'machine-14');
+ assert.equal(report.coverage.selectionEvidence[0].nominalConstraint,true);
+ assert.equal(report.coverage.diagnosisReason,'NO_RESULTS');
+ assert(report.coverage.selectionEvidence.every(row=>row.causalStatus==='NOT_ESTABLISHED'));
+ assert.equal(report.ranking[0].pairedEvidence.available,false,'summary-only synthetic responses have no independent seed evidence');
+});
+
+test('compatible own-stop evidence affects AUTO priority, while historical observations do not',async()=>{
+ const s=await simulatedEvidence();
+ // Controlled observed-loss report isolates priority from the stochastic run.
+ for(const [id,seconds] of [['upstream',60],['reference',0]]){
+  s.results.batch.equipmentStatistics[id].failureSeconds.mean=seconds;
+  s.results.batch.equipmentStatistics[id].microStopSeconds.mean=0;
+ }
+ const options={run:s.dynamicConfig,maximumMachines:1,maximumTargets:1,measure:async(model,changes)=>({throughput:100+changes.length,oee:50+changes.length/2,warnings:[]})};
+ const current=await searchReliabilityTargets(s,options);assert.deepEqual(current.equipmentIds,['upstream']);assert.equal(current.coverage.diagnosisStatus,'OBSERVED');
+ const old=JSON.parse(s.results.inputSignature);old.version='historical-engine';s.results.inputSignature=JSON.stringify(old);
+ const historical=await searchReliabilityTargets(s,options);assert.deepEqual(historical.equipmentIds,['reference']);assert.equal(historical.coverage.diagnosisReason,'PROVENANCE_VERSION_MISMATCH');
+ assert(historical.coverage.selectionEvidence.every(row=>row.observedOwnStopSeconds===null));
+});
+
+test('conditional reliability gains retain matched per-run uncertainty from the real simulator',async()=>{
+ const s=scenarioEvidenceInput(),before=structuredClone(s);
+ const report=await searchReliabilityTargets(s,{run:s.dynamicConfig,maximumTargets:1,measure:async(model,changes,run)=>{
+  const candidate=changes.length?applyScenarioChanges(model,changes):model;
+  const response=await simulateBatch({case:candidate,run},{summaryOnly:true});assert(response.ok,JSON.stringify(response.error));
+  const result=response.result;
+  return {throughput:result.batch.statistics.throughputPerMinute.mean,oee:result.batch.statistics.lineOeePercent.mean,warnings:candidate.scenarioWarnings||[],roundMetrics:result.batch.rows.map(row=>({seed:row.seed,throughput:row.summary.outputCount/(row.durationSeconds??run.durationSeconds)*60,oee:row.summary.lineOeePercent}))};
+ }});
+ assert.deepEqual(s,before);assert.equal(report.analysisOnly,true);assert.equal(report.classification,'UNASSIGNED');
+ assert.equal(report.conditionalReliabilityGain.additive,false);
+ for(const row of report.ranking){
+  assert.equal(row.pairedEvidence.available,true);assert.equal(row.pairedEvidence.n,3);
+  assert.deepEqual(row.pairedEvidence.seedIds,[51,52,53]);
+  const deltas=row.candidate.roundMetrics.map((r,index)=>r.throughput-report.baseline.roundMetrics[index].throughput);
+  assert(Math.abs(row.pairedEvidence.metrics.throughput.mean-deltas.reduce((sum,value)=>sum+value,0)/3)<1e-9);
+ }
+ assert(report.ranking.some(row=>Number.isFinite(row.pairedEvidence.metrics.throughput.lower)));
+ assert(report.targetTests.every(row=>row.pairedEvidence.available));
+ assert.equal(report.uncertainty.confirmationRequired,true);assert.equal(report.uncertainty.selectionIsExploratory,true);
 });

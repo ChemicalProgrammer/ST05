@@ -26,7 +26,7 @@ test('shared What-If metrics reuse matching inputs across cards and invalidate c
 test('only complete saved batches with exact input provenance may skip baseline computation',async()=>{
  for(const state of ['COMPLETE','PENDING','CANCELLED']){
   const h=setup(),run={durationSeconds:60,seed:10,rounds:3},sim={id:'a',equipment:[{id:'m',rate:1}],unitOfFlow:'bottles'};
-  sim.results={inputSignature:h.host.SimulatorEngine.inputSignature({case:sim,run}),replicationStatus:{state},summary:{lineOeePercent:30,outputCount:80},durationSeconds:60,batch:{rows:Array.from({length:3},(_,i)=>({seed:10+i,summary:{lineOeePercent:30,outputCount:80}}))}};
+  sim.results={inputSignature:h.host.SimulatorEngine.inputSignature({case:sim,run}),replicationStatus:{state},unitOfFlow:'bottles',summary:{lineOeePercent:30,outputCount:80},durationSeconds:60,batch:{rows:Array.from({length:3},(_,i)=>({seed:10+i,summary:{lineOeePercent:30,outputCount:80}}))}};
   const value=await h.host.STScenarioExplorer.evaluate(sim,[],()=>false,0,run);assert.equal(h.calls(),state==='COMPLETE'?0:1);assert.equal(value.oee,state==='COMPLETE'?30:50);
  }
  const h=setup(),sim={equipment:[],results:{replicationStatus:{state:'COMPLETE'},summary:{lineOeePercent:90}}};
@@ -54,4 +54,20 @@ test('incomplete round metrics never qualify for saved reuse',async()=>{
  const h=setup(),run={durationSeconds:60,seed:10,rounds:3},sim={id:'a',equipment:[{id:'m',rate:1}]};
  sim.results={inputSignature:h.host.SimulatorEngine.inputSignature({case:sim,run}),replicationStatus:{state:'COMPLETE'},summary:{lineOeePercent:30,outputCount:80},durationSeconds:60};
  const value=await h.host.STScenarioExplorer.evaluate(sim,[],()=>false,0,run);assert.equal(h.calls(),1);assert.equal(value.oee,50);
+});
+
+test('saved summary reuse rejects old schemas, wrong units and incoherent replication evidence',async()=>{
+ for(const invalidate of [
+  value=>{value.overflowEvidenceVersion=1;},
+  value=>{value.unitOfFlow='cases';},
+  value=>{value.throughput=9999;},
+  value=>{value.roundMetrics[0].durationSeconds=30;},
+  value=>{value.roundMetrics[1].seed=value.roundMetrics[0].seed;}
+ ]){
+  const run={durationSeconds:60,seed:10,rounds:3},sim={id:'checked-cache',unitOfFlow:'bottles',equipment:[{id:'m',rate:1}]},first=setup();
+  await first.host.STScenarioExplorer.evaluate(sim,[],()=>false,0,run);
+  const saved=JSON.parse(JSON.stringify(sim));invalidate(saved.whatIf.measurements[0].value);
+  const reopened=setup(),result=await reopened.host.STScenarioExplorer.evaluate(saved,[],()=>false,0,run);
+  assert.equal(reopened.calls(),1);assert.equal(result.cacheSource,'CALCULATED');assert.equal(result.unitOfFlow,'bottles');assert.equal(result.throughput,100);
+ }
 });

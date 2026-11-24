@@ -1,16 +1,15 @@
 <style>
 .analysis-recommendation .scenario-search-progress,.analysis-recommendation[aria-busy=true] .scenario-preview-status{display:none}
-.analysis-recommendation .scenario-progress-label{justify-content:flex-end}
 .analysis-recommendation .scenario-activity:not([hidden]){cursor:pointer}
 .analysis-recommendation .scenario-activity:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .analysis-recommendation .scenario-result-notice{font-size:var(--font-caption);color:var(--muted)}
 .analysis-recommendation .scenario-result-notice[hidden]{display:none!important}
-.analysis-recommendation.scenario-trace-open > :not(.scenario-trace-panel):not(.scenario-actions):not(dialog){display:none!important}
+.analysis-recommendation.scenario-trace-open > :not(.scenario-card-header):not(.scenario-trace-panel):not(.scenario-actions):not(dialog){display:none!important}
 .scenario-trace-panel[hidden]{display:none!important}
 .scenario-trace-panel{min-width:0;display:grid;gap:var(--space-2)}
-.scenario-trace-header{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2)}
-.scenario-trace-header>strong{font-size:var(--font-card,var(--font-body))}
-.scenario-trace-panel .scenario-trace-total{display:block;margin:0;font-size:var(--font-caption);font-variant-numeric:tabular-nums}
+.analysis-recommendation > .scenario-card-header > .scenario-trace-back{margin:0 0 0 auto;padding:0;width:var(--control-height);height:var(--control-height);flex:none}
+.scenario-trace-back[hidden]{display:none!important}
+.analysis-recommendation .scenario-trace-panel :is(.chart-note,.scenario-trace-step-note,.scenario-trace-stats){font-size:var(--font-caption,.6875rem)}
 .scenario-trace-panel .chart-note{overflow-wrap:anywhere}
 .scenario-trace-stats{display:grid;gap:var(--space-1);font-size:var(--font-caption);margin:0}
 .scenario-trace-stats:empty{display:none}
@@ -26,11 +25,15 @@
 .scenario-trace-step[open]>.scenario-trace-step-summary .scenario-trace-step-title::before{transform:rotate(45deg)}
 .scenario-trace-step-index{flex:none;color:var(--muted);font-variant-numeric:tabular-nums}
 .scenario-trace-step-name{min-width:0;overflow-wrap:anywhere;color:var(--ink)}
-.scenario-trace-step-bar{position:relative;isolation:isolate;height:1.45rem;min-width:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:#e9ecef;overflow:hidden}
-.scenario-trace-step-fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--trace-fill,#ee8585);transition:width var(--duration-normal,180ms) ease,background-color var(--duration-normal,180ms) ease}
-.scenario-trace-step-bar[data-indeterminate=true] .scenario-trace-step-fill{width:100%!important;background:repeating-linear-gradient(120deg,#d6dce2 0,#d6dce2 6px,#e9ecef 6px,#e9ecef 12px);background-size:28px 28px;animation:scenario-trace-indeterminate 1.2s linear infinite}
-@keyframes scenario-trace-indeterminate{to{background-position:28px 0}}
-.scenario-trace-step-meta{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#17212b;font-size:var(--font-caption);font-weight:var(--weight-semibold,600);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1}
+/* One capsule serves the card, its overall trace and every individual step.
+   The white copy belongs to the full-width colored layer, so the fill and
+   contrasting glyphs share one animated mask instead of drifting apart. */
+.analysis-recommendation .scenario-progress-capsule{position:relative;isolation:isolate;box-sizing:border-box;width:100%;height:1.5rem;min-height:1.5rem;min-width:0;flex-shrink:0;padding:0;border:1px solid var(--line-strong,var(--line));border-radius:var(--radius-pill,999px);background:#f1f3f5;overflow:hidden}
+.scenario-progress-capsule > .scenario-progress-fill{position:absolute;inset:0;z-index:1;margin:0;background-color:var(--scenario-progress-color,#dc2626);background-image:linear-gradient(90deg,#0000000a,#00000000);clip-path:inset(0 calc(100% - var(--scenario-progress,0%)) 0 0 round var(--radius-pill,999px));transition:clip-path var(--duration-fast,120ms) linear,background-color var(--duration-fast,120ms) linear;pointer-events:none}
+.scenario-progress-capsule :is(.scenario-progress-text,.scenario-progress-text-fill){position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;padding:0 var(--space-1);color:#000;background:transparent;font-size:var(--font-caption,.6875rem);font-weight:var(--weight-semibold,600);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1;pointer-events:none}
+.scenario-progress-capsule .scenario-progress-text-fill{color:#fff}
+.scenario-progress-capsule[hidden]{display:none!important}
+.scenario-trace-panel .scenario-trace-overall{margin:0}
 .scenario-trace-step-details{padding:var(--space-1) var(--space-2) var(--space-2);border-top:1px solid var(--line);font-size:var(--font-caption);line-height:var(--leading-body,1.4)}
 .scenario-trace-step[open]>.scenario-trace-step-details{animation:scenario-trace-expand var(--duration-normal,180ms) ease-out}
 @keyframes scenario-trace-expand{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
@@ -39,10 +42,7 @@
 .scenario-trace-step-list>li{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-2);min-width:0;margin:0;padding:0;color:var(--muted)}
 .scenario-trace-step-list>li>span{min-width:0;overflow-wrap:anywhere}
 .scenario-trace-step-list>li>strong{flex:none;color:var(--ink);font-size:inherit;font-variant-numeric:tabular-nums;font-weight:var(--weight-semibold,600)}
-.scenario-trace-mini-progress{height:4px;border-radius:4px;overflow:hidden;background:var(--accent-soft);margin-top:var(--space-2)}
-.scenario-trace-overall{height:6px;margin-top:0}
-.scenario-trace-mini-progress>span{display:block;height:100%;background:var(--accent);transition:width .18s ease}
-@media(prefers-reduced-motion:reduce){.scenario-trace-mini-progress>span,.scenario-trace-step-fill,.scenario-trace-step-title::before{transition:none}.scenario-trace-step[open]>.scenario-trace-step-details,.scenario-trace-step-bar[data-indeterminate=true] .scenario-trace-step-fill{animation:none}}
+@media(prefers-reduced-motion:reduce){.scenario-progress-capsule > .scenario-progress-fill,.scenario-trace-step-title::before{transition:none}.scenario-trace-step[open]>.scenario-trace-step-details{animation:none}}
 .scenario-config-dialog[data-scenario-scope]>.dialog-heading{padding:var(--space-3) var(--space-4)}
 .scenario-config-dialog[data-scenario-scope]>.dialog-body{padding:var(--space-4)}
 .scenario-config-dialog[data-scenario-scope] .scenario-config-section{display:grid;gap:var(--subsection-gap);padding:0;border:0;min-width:0;align-content:start}
@@ -168,7 +168,6 @@ window.STScenarioExplorer=(function(){
       if(!latest||!(latest.baseline||latest.lastResult||latest.progressTrace?.steps?.length))return false;
       if(!status.textContent||status.textContent===latest.status||status.dataset.state==='unavailable')status.textContent=latest.message||traceText('Previous analysis completed.');
       status.dataset.state='stale';resultNotice.textContent=notice;resultNotice.hidden=false;traceHistorical=true;
-      if(progressStage)progressStage.textContent=traceText('Saved analysis');
       return true;
     }
     function requireCompletedSource(){var readiness=sourceReadiness();if(readiness.ready)return true;var text='Complete the numerical simulation to 100% with the current inputs before generating CAPEX scenarios.',notice=(window.STLanguage?.translate(text)||text)+' ('+readiness.reason+(readiness.differencePath?' · '+readiness.differencePath:'')+')';if(!preserveSavedOutcome(traceText('Saved analysis. Complete the current numerical simulation before running a new search.'))){status.textContent=notice;status.dataset.state='unavailable';}run.disabled=true;save.disabled=true;suggestFactors.disabled=true;return false;}
@@ -454,41 +453,62 @@ window.STScenarioExplorer=(function(){
     var warningSlot=el('div','','scenario-warning-slot');host.append(warningSlot);
     var progressTrace=[],tracePercent=0,traceOutcome='',traceSummary={},traceHistorical=false,lastTracePaint=0;
     var tracePanel=el('section','','scenario-trace-panel');tracePanel.hidden=true;
-    var traceHead=el('div','','scenario-trace-header'),traceBack=button('← Back',function(){showTrace(false);}),traceTitle=el('strong','Analysis progress'),traceTotal=el('p','','chart-note scenario-trace-total'),traceOverallBar=el('div','','scenario-trace-mini-progress scenario-trace-overall'),traceList=el('ol','','scenario-trace-list'),traceStats=el('div','','scenario-trace-stats chart-note'),traceMessage=el('p','','chart-note');
-    traceBack.className='ghost scenario-trace-back';traceBack.dataset.scenarioTraceControl='true';
-    traceHead.append(traceTitle,traceBack);traceOverallBar.append(el('span'));tracePanel.append(traceHead,traceTotal,traceOverallBar,traceStats,traceList,traceMessage);
+    var traceBack=iconButton(traceText('Back'),'back',function(){showTrace(false);}),traceOverallView=createProgressCapsule('scenario-trace-overall'),traceList=el('ol','','scenario-trace-list'),traceStats=el('div','','scenario-trace-stats chart-note'),traceMessage=el('p','','chart-note');
+    traceBack.classList.add('scenario-trace-back');traceBack.dataset.scenarioTraceControl='true';traceBack.hidden=true;
+    // Keep the original scenario tag in both views, including its translation
+    // and tier color. The back action joins that header instead of copying it.
+    var cardHeader=host.querySelector(':scope > .scenario-card-header');
+    if(!cardHeader){cardHeader=el('header','','scenario-card-header');var cardBadge=el('span',primaryTier==='ALL'?'All CAPEX':STScenarioText[primaryTier]||primaryTier+' CAPEX','analysis-capex');cardBadge.dataset.tier=primaryTier==='ALL'?'HIGH':primaryTier;cardHeader.append(cardBadge);host.prepend(cardHeader);}
+    cardHeader.append(traceBack);tracePanel.append(traceOverallView.bar,traceStats,traceList,traceMessage);
     function traceText(value){var es={'Search targets updated. Run a new search to evaluate them. Previous analysis retained.':'Objetivos de búsqueda actualizados. Ejecuta una nueva búsqueda para evaluarlos. Se conserva el análisis anterior.','Saved analysis. Complete the current numerical simulation before running a new search.':'Análisis guardado. Completa la simulación numérica actual antes de iniciar una nueva búsqueda.','Saved analysis':'Análisis guardado','Saved analysis progress':'Avance del análisis guardado','Previous analysis completed.':'Análisis anterior completado.','Saved result from previous inputs or search settings. Recalculate before creating a scenario.':'Resultado guardado con datos o ajustes de búsqueda anteriores. Recalcula antes de crear un escenario.','Previous result retained. Run the search again with the current full-horizon comparison policy before creating a scenario.':'Se conserva el resultado anterior. Ejecuta de nuevo la búsqueda con la política actual de comparación a horizonte completo antes de crear un escenario.','Analysis progress':'Avance del análisis','Back':'Regresar','Elapsed':'Tiempo transcurrido','View analysis progress':'Ver avance del análisis','Preparing':'Preparación','Exploratory reliability targets':'Exploración de confiabilidad','Conditional flow DOE screening':'Selección de factores DOE','Baseline':'Escenario base','Searching category':'Búsqueda de candidatos','Evaluating selection':'Evaluación de selección','Refining candidates':'Refinamiento de candidatos','Design of experiments (DOE)':'Diseño de experimentos (DOE)','Statistical analysis (ANOVA)':'Análisis estadístico (ANOVA)','Screening finalists':'Selección de finalistas','Comparing finalists':'Comparación de finalistas','Full-horizon reliability diagnostic':'Diagnóstico de confiabilidad a horizonte completo','Independent confirmation':'Confirmación independiente','Matched failure-free diagnostic':'Diagnóstico sin fallas con condiciones equivalentes','Confirmation analysis':'Análisis de confirmación','Running':'En proceso','Completed':'Completado','Cancelled':'Cancelado','Failed':'Error','Interrupted':'Interrumpido','Factors screened':'Factores evaluados','Pairs screened':'Pares evaluados','Machines screened':'Equipos evaluados','Targets tested':'Objetivos evaluados','Packages tested':'Paquetes evaluados','Candidates checked':'Candidatos evaluados','Candidate budget':'Presupuesto de candidatos','Passes':'Pasadas','Coordinates':'Variables','Combinations':'Combinaciones','Finalists':'Finalistas','Baseline batches':'Lotes base','Batches':'Lotes','Rounds':'Rondas','Rounds resolved':'Rondas resueltas','During exploration':'Durante la exploración','Reused baseline':'Escenario base reutilizado','Overall progress':'Avance general','Active batches':'Lotes activos','Reused batches':'Lotes reutilizados','Invalid candidates':'Candidatos no factibles','Factors':'Factores','Responses':'Respuestas','Contrasts':'Contrastes','Analyses':'Análisis','Avg. calculated candidate batch':'Tiempo medio por lote de candidato calculado','Since last meaningful gain':'Desde última mejora significativa','No meaningful gain yet':'Sin mejora significativa aún','Candidates without meaningful gain':'Candidatos sin mejora significativa','Budget':'Presupuesto','Finished early':'Finalizado anticipadamente','Input and search configuration':'Datos de entrada y configuración de búsqueda','Baseline and candidate':'Base y candidato','Estimated progress':'Avance estimado'};return document.documentElement.lang==='es'&&es[value]?es[value]:window.STLanguage?.translate(value)||value;}
-    function elapsedLabel(ms){var seconds=Math.max(0,Math.floor(ms/1000));return Math.floor(seconds/60)+'m '+String(seconds%60).padStart(2,'0')+'s';}
+    function elapsedLabel(ms){var seconds=Math.floor((Number.isFinite(ms)?Math.max(0,ms):0)/1000);return Math.floor(seconds/60)+'m '+String(seconds%60).padStart(2,'0')+'s';}
     function averageTimeLabel(ms){return ms<60000?(ms/1000).toFixed(2)+'s':elapsedLabel(ms);}
-    // An adaptive step without a known denominator stays indeterminate.
-    function traceBarState(step){
-      var percent=Number.isFinite(step.percent)?Math.max(0,Math.min(100,step.percent)):null;
-      var complete=step.state==='Completed'&&percent===100;
-      var stopped=['Cancelled','Failed','Interrupted'].includes(step.state);
-      var hue=complete?128:percent==null||stopped?0:percent<=50?percent*.9:45+(percent-50)*.82;
-      return {percent:percent,indeterminate:percent===null&&step.state==='Running',color:complete?'#83c99b':stopped?'#e79797':percent===null?'#d6dce2':'hsl('+hue.toFixed(1)+' 76% 72%)'};
+    function totalElapsedMs(){
+      if(Number.isFinite(traceSummary.elapsedMs)&&traceSummary.elapsedMs>=0)return traceSummary.elapsedMs;
+      return progressTrace.reduce((sum,step)=>sum+(Number.isFinite(step.elapsedMs)?Math.max(0,step.elapsedMs):0),0);
+    }
+    function progressColor(percent,state){
+      if(['Cancelled','Failed','Interrupted'].includes(state))return 'rgb(220, 38, 38)';
+      // Saturated colors with readable white text; interpolation also colors
+      // intermediate percentages. Green means the execution is complete.
+      var stops=[[0,[220,38,38]],[45,[194,65,12]],[70,[161,98,7]],[100,[21,128,61]]],amount=percent??0;
+      for(var index=1;index<stops.length;index++){if(amount<=stops[index][0]){var from=stops[index-1],to=stops[index],fraction=(amount-from[0])/(to[0]-from[0]);return 'rgb('+from[1].map((value,channel)=>Math.round(value+(to[1][channel]-value)*fraction)).join(', ')+')';}}
+      return 'rgb(21, 128, 61)';
+    }
+    function createProgressCapsule(className){
+      var bar=el('div','','scenario-progress-capsule '+className),fill=el('div','','scenario-progress-fill'),text=el('div','','scenario-progress-text'),coveredText=el('div','','scenario-progress-text-fill');
+      [fill,text,coveredText].forEach(node=>node.setAttribute('aria-hidden','true'));
+      fill.append(coveredText);bar.append(fill,text);bar.setAttribute('role','progressbar');bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','100');
+      return {bar,fill,text,coveredText};
+    }
+    function paintProgressCapsule(view,value,elapsedMs,state,label){
+      var percent=Number.isFinite(value)?Math.max(0,Math.min(100,value)):null,percentText=percent===null?'—':percent.toFixed(1)+'%',time=elapsedLabel(elapsedMs),text=percentText+' · '+time;
+      view.bar.style.setProperty('--scenario-progress',(percent??0)+'%');view.bar.style.setProperty('--scenario-progress-color',progressColor(percent,state));
+      if(view.text.textContent!==text)view.text.textContent=text;if(view.coveredText.textContent!==text)view.coveredText.textContent=text;
+      view.bar.dataset.indeterminate=String(percent===null&&state==='Running');view.bar.setAttribute('aria-label',label);
+      view.bar.setAttribute('aria-valuetext',percentText+' · '+traceText('Elapsed')+' '+time+(state?' · '+traceText(state):''));
+      if(percent===null)view.bar.removeAttribute('aria-valuenow');else view.bar.setAttribute('aria-valuenow',String(percent));
+    }
+    function paintOverallProgress(){
+      if(!activityView)return;
+      var elapsed=totalElapsedMs();paintProgressCapsule(activityView,tracePercent,elapsed,traceOutcome,traceText('View analysis progress'));paintProgressCapsule(traceOverallView,tracePercent,elapsed,traceOutcome,traceText('Overall progress'));
     }
     var traceRows=[],traceRowsSource=null;
     function createTraceRow(step,index){
-      var row=el('li','','scenario-trace-row'),details=el('details','','scenario-trace-step'),head=el('summary','','scenario-trace-step-summary'),title=el('div','','scenario-trace-step-title'),number=el('span',String(index+1)+'.','scenario-trace-step-index'),name=el('span','','scenario-trace-step-name'),bar=el('div','','scenario-trace-step-bar'),fill=el('span','','scenario-trace-step-fill'),meta=el('span','','scenario-trace-step-meta'),content=el('div','','scenario-trace-step-details'),note=el('p','','scenario-trace-step-note'),list=el('ul','','scenario-trace-step-list');
-      title.append(number,name);bar.append(fill,meta);head.append(title,bar);content.append(note,list);details.append(head,content);row.append(details);
-      bar.setAttribute('role','progressbar');bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','100');
-      var view={row,details,head,name,bar,fill,meta,note,list,manual:false,state:null,detailKey:null,stepName:step.name};
+      var row=el('li','','scenario-trace-row'),details=el('details','','scenario-trace-step'),head=el('summary','','scenario-trace-step-summary'),title=el('div','','scenario-trace-step-title'),number=el('span',String(index+1)+'.','scenario-trace-step-index'),name=el('span','','scenario-trace-step-name'),capsule=createProgressCapsule('scenario-trace-step-bar'),content=el('div','','scenario-trace-step-details'),note=el('p','','scenario-trace-step-note'),list=el('ul','','scenario-trace-step-list');
+      capsule.fill.classList.add('scenario-trace-step-fill');capsule.text.classList.add('scenario-trace-step-meta');
+      title.append(number,name);head.append(title,capsule.bar);content.append(note,list);details.append(head,content);row.append(details);
+      var view={row,details,head,name,capsule,note,list,manual:false,state:null,detailKey:null,stepName:step.name};
       head.addEventListener('click',()=>{view.manual=true;});
       return view;
     }
     function updateTraceRow(view,step){
-      var state=traceBarState(step),translatedName=traceText(step.name),percentText=state.percent===null?'—':state.percent.toFixed(1)+'%',time=elapsedLabel(step.elapsedMs);
+      var translatedName=traceText(step.name);
       view.row.dataset.traceState=step.state;
       // Preserve native details nodes and focus across live updates.
       if(view.state!==step.state&&!view.manual)view.details.open=step.state==='Running';
       view.state=step.state;view.name.textContent=translatedName;
-      view.meta.textContent=percentText+' · '+time;
-      view.bar.dataset.indeterminate=String(state.indeterminate);
-      view.fill.style.width=(state.percent??0)+'%';view.fill.style.setProperty('--trace-fill',state.color);
-      view.bar.setAttribute('aria-label',translatedName);
-      view.bar.setAttribute('aria-valuetext',percentText+' · '+time+' · '+traceText(step.state));
-      if(state.percent===null)view.bar.removeAttribute('aria-valuenow');else view.bar.setAttribute('aria-valuenow',String(state.percent));
+      paintProgressCapsule(view.capsule,step.percent,step.elapsedMs,step.state,translatedName);
       var note=traceText(step.state)+(step.detail?' · '+traceText(step.detail):'');
       if(view.note.textContent!==note)view.note.textContent=note;
       var work=Object.values(step.work||{});if(step.batchStarted>0)work.push({label:'Batches',done:step.batchCompleted||0,total:step.batchStarted},{label:'Rounds resolved',done:step.roundsCompleted||0,total:step.roundsStarted||0});
@@ -498,9 +518,8 @@ window.STScenarioExplorer=(function(){
       if(step.calculatedCandidates>0)values.push([traceText('Avg. calculated candidate batch'),averageTimeLabel(step.candidateMs/step.calculatedCandidates)]);
       var key=JSON.stringify(values);if(view.detailKey!==key){view.detailKey=key;view.list.replaceChildren();values.forEach(pair=>{var item=el('li');item.append(el('span',pair[0]),el('strong',pair[1]));view.list.append(item);});}
     }
-    function paintTrace(force){if(tracePanel.hidden)return;var now=Date.now();if(!force&&now-lastTracePaint<200)return;lastTracePaint=now;
-      traceTitle.textContent=traceText(traceHistorical?'Saved analysis progress':'Analysis progress');traceBack.textContent='← '+traceText('Back');
-      traceTotal.textContent=traceText(tracePercent===100?'Overall progress':'Estimated progress')+': '+tracePercent.toFixed(1)+'% · '+traceText('Elapsed')+' '+elapsedLabel(progressTrace.reduce((sum,p)=>sum+p.elapsedMs,0));traceOverallBar.firstChild.style.width=Math.max(0,Math.min(100,tracePercent))+'%';
+    function paintTrace(force){paintOverallProgress();if(tracePanel.hidden)return;var now=Date.now();if(!force&&now-lastTracePaint<200)return;lastTracePaint=now;
+      traceBack.title=traceText('Back');traceBack.setAttribute('aria-label',traceText('Back'));
       traceStats.replaceChildren();
       if(traceSummary.candidateBatches>0)traceStats.append(el('div',traceText('Avg. calculated candidate batch')+': '+averageTimeLabel(traceSummary.candidateMs/traceSummary.candidateBatches)+' ('+traceSummary.candidateBatches+')'));
       if(traceSummary.searchElapsedMs!=null)traceStats.append(el('div',(traceSummary.sinceGainMs==null?traceText('No meaningful gain yet')+' · '+elapsedLabel(traceSummary.searchElapsedMs):traceText('Since last meaningful gain')+': '+elapsedLabel(traceSummary.sinceGainMs))+' · '+traceText('During exploration')));
@@ -514,8 +533,8 @@ window.STScenarioExplorer=(function(){
       while(traceRows.length>progressTrace.length)traceRows.pop().row.remove();
       traceMessage.textContent=[traceOutcome?traceText(traceOutcome):'',status.textContent,resultNotice.hidden?'':resultNotice.textContent,progress.textContent].filter(Boolean).join(' · ');
     }
-    function showTrace(open){if(open&&!progressTrace.length)return;tracePanel.hidden=!open;host.classList.toggle('scenario-trace-open',open);if(open){paintTrace(true);traceBack.focus();}else{activity.focus();}var target=open?tracePanel:activity;if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)target.animate?.([{opacity:.2,transform:'translateX('+ (open?'8':'-8')+'px)'},{opacity:1,transform:'translateX(0)'}],{duration:180,easing:'ease-out'});}
-    var progress=el('p','','scenario-search-progress');progress.setAttribute('role','status');host.append(progress);var activity=el('div','','scenario-activity');activity.hidden=true;activity.setAttribute('role','progressbar');activity.setAttribute('aria-label','Analyzing scenario');activity.setAttribute('aria-valuemin','0');activity.setAttribute('aria-valuemax','100');activity.append(el('span'));var progressLabel=el('div','','scenario-progress-label'),progressStage=el('span'),progressPercent=el('span','0%');progressLabel.hidden=true;progressLabel.append(progressStage,progressPercent);host.append(progressLabel,activity,tracePanel);activity.tabIndex=0;activity.title=traceText('View analysis progress');activity.setAttribute('aria-label',traceText('View analysis progress'));activity.addEventListener('click',()=>showTrace(true));activity.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();showTrace(true);}});
+    function showTrace(open){if(open&&!progressTrace.length)return;tracePanel.hidden=!open;traceBack.hidden=!open;host.classList.toggle('scenario-trace-open',open);if(open){paintTrace(true);traceBack.focus();}else{activity.focus();}var target=open?tracePanel:activity;if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)target.animate?.([{opacity:.2,transform:'translateX('+ (open?'8':'-8')+'px)'},{opacity:1,transform:'translateX(0)'}],{duration:180,easing:'ease-out'});}
+    var progress=el('p','','scenario-search-progress');progress.setAttribute('role','status');host.append(progress);var activityView=createProgressCapsule('scenario-activity'),activity=activityView.bar;activity.hidden=true;host.append(activity,tracePanel);paintOverallProgress();activity.tabIndex=0;activity.title=traceText('View analysis progress');activity.addEventListener('click',()=>showTrace(true));activity.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();showTrace(true);}});
     var actions=el('div','','button-row scenario-actions'),run=iconButton('Find best scenario','refresh',function(){if(activeHost===host){if(searchCanFinish&&!finishRequested){finishRequested=true;setIcon(run,'Cancel evaluation','stop');status.textContent='Finishing the current batch, then validating the best candidate found…';return;}clearTimeout(timer);generation++;status.textContent='Cancelled — no final estimate. Run a new evaluation to enable creation.';save.disabled=true;last=null;record('CANCELLED',latest||{});}else preview(true);}),save=iconButton('Create selected scenario','copy',function(){if(!requireCompletedSource())return;searchSettingsChanged();if(last?.changes.length)create(Object.assign({},project,{analysisOnly:last.changes.some(c=>c.analysisOnly),evidence:Object.assign({},project.evidence,{categoryInclusions:Object.assign({},inclusions)},last.validationRequired?{independentValidation:'NOT_REPRODUCED_REQUIRES_VALIDATION',screeningOeeGain:latest?.delta?.oeePercentagePoints,screeningThroughputGain:latest?.delta?.throughputPerMinute,confirmationOeeGain:latest?.independentCheck?.delta?.oeePercentagePoints,confirmationThroughputGain:latest?.independentCheck?.delta?.throughputPerMinute}:{},last.reviewRequired?{engineeringReview:latest?.engineeringReviewAcknowledged?'ACKNOWLEDGED_REQUIRES_REVIEW':'REQUIRES_REVIEW',engineeringWarnings:latest?.warnings||[]}:{}),reviewed:!!last.validationRequired||!!last.reviewRequired||!!project.explore||JSON.stringify(last.changes)!==JSON.stringify(project.changes),title:(last.changes.some(c=>c.analysisOnly)?'Exploratory reliability targets':project.title||STScenarioText[project.titleKey]||'Selected improvements')+(last.validationRequired?' · Validation required':''),changes:last.changes,canApply:true}),save);});save.disabled=true;
     run.classList.add('scenario-search');save.classList.add('scenario-create');actions.setAttribute('role','group');actions.setAttribute('aria-label','Scenario actions');actions.append(configure,run,save);host.append(actions);
     var results=iconButton('Scenario results','list',showResults);results.classList.add('scenario-results');actions.insertBefore(results,save);
@@ -530,14 +549,14 @@ window.STScenarioExplorer=(function(){
       Object.assign(settings,{cardId:cardId,sourceSimulationId:source.id,sourceSignature:sourceSignature,depth:depth,status:'NOT_EVALUATED',message:'Result removed. Run Find best scenario to evaluate.',updatedAt:new Date().toISOString()});
       simulation.whatIf=simulation.whatIf||{};simulation.whatIf.cardConfigurations=simulation.whatIf.cardConfigurations||{};simulation.whatIf.cardConfigurations[cardId]=settings;
       simulation.whatIf.evaluations=savedEntries(simulation).filter(function(entry){return !sameCard(entry);});
-      latest=null;last=null;baseline=null;baselineRun=null;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;resultNotice.hidden=true;resultNotice.textContent='';showTrace(false);activity.hidden=true;progressLabel.hidden=true;generation++;clearTimeout(timer);metrics.replaceChildren();warningSlot.replaceChildren();resultsBody.replaceChildren();if(resultsDialog.open)resultsDialog.close();save.disabled=true;clearResultButton.disabled=true;progress.textContent='';status.textContent=settings.message;status.dataset.state='pending';
+      latest=null;last=null;baseline=null;baselineRun=null;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;resultNotice.hidden=true;resultNotice.textContent='';showTrace(false);activity.hidden=true;generation++;clearTimeout(timer);metrics.replaceChildren();warningSlot.replaceChildren();resultsBody.replaceChildren();if(resultsDialog.open)resultsDialog.close();save.disabled=true;clearResultButton.disabled=true;progress.textContent='';status.textContent=settings.message;status.dataset.state='pending';
       var undo=button('Undo',function(){
         if(activeHost||latest)return;
         simulation.whatIf.evaluations=savedEntries(simulation).filter(function(entry){return !sameCard(entry);}).concat(removed);
         if(previousConfig)simulation.whatIf.cardConfigurations[cardId]=previousConfig;else delete simulation.whatIf.cardConfigurations[cardId];
-        latest=previousLatest;last=previousLast;baseline=previousBaseline;baselineRun=previousBaselineRun;status.textContent=previousStatus;status.dataset.state=previousState;save.disabled=previousSaveDisabled;clearResultButton.disabled=false;resultNotice.textContent=previousNotice;resultNotice.hidden=previousNoticeHidden;traceHistorical=previousHistorical;progressStage.textContent=traceHistorical?traceText('Saved analysis'):'';
+        latest=previousLatest;last=previousLast;baseline=previousBaseline;baselineRun=previousBaselineRun;status.textContent=previousStatus;status.dataset.state=previousState;save.disabled=previousSaveDisabled;clearResultButton.disabled=false;resultNotice.textContent=previousNotice;resultNotice.hidden=previousNoticeHidden;traceHistorical=previousHistorical;
         var value=latest?.baseline&&latest?.candidate?latest:latest?.lastResult;if(value)renderMetrics(value);
-        if(latest?.progressTrace?.steps?.length){progressTrace=latest.progressTrace.steps;tracePercent=latest.progressTrace.percent;traceOutcome=latest.progressTrace.outcome;traceSummary=Object.assign({},latest.progressTrace.summary);activity.hidden=false;progressLabel.hidden=false;progressPercent.textContent=tracePercent.toFixed(1)+'%';activity.firstChild.style.width=tracePercent+'%';activity.setAttribute('aria-valuenow',String(tracePercent));}if(latest)renderWarnings(latest.warnings||[],!previousSaveDisabled,latest.evaluatedChanges,latest);clearNotice.replaceChildren();changed(simulation);
+        if(latest?.progressTrace?.steps?.length){progressTrace=latest.progressTrace.steps;tracePercent=latest.progressTrace.percent;traceOutcome=latest.progressTrace.outcome;traceSummary=Object.assign({},latest.progressTrace.summary);activity.hidden=false;paintOverallProgress();}if(latest)renderWarnings(latest.warnings||[],!previousSaveDisabled,latest.evaluatedChanges,latest);clearNotice.replaceChildren();changed(simulation);
       });undo.className='ghost';clearNotice.replaceChildren(el('span','Result deleted.'),undo);changed(simulation);
     });clearResultButton.classList.add('scenario-clear-result');actions.append(clearResultButton);
     function showResults(){
@@ -598,7 +617,7 @@ window.STScenarioExplorer=(function(){
     }
     function improves(base,next){return Number.isFinite(next.throughput)&&Number.isFinite(next.oee)&&next.throughput>base.throughput+Math.max(.001,Math.abs(base.throughput)*.001)&&next.oee>=base.oee-1e-9;}
     async function preview(all){
-      if(activeHost||!requireCompletedSource())return;searchSettingsChanged();activity.hidden=false;progressLabel.hidden=false;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;resultNotice.hidden=true;resultNotice.textContent='';activity.firstChild.style.width='0%';progressPercent.textContent='0%';host.setAttribute('aria-busy','true');activeHost=host;activeRecordKey=recordKey;searchCanFinish=!!all;finishRequested=false;window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
+      if(activeHost||!requireCompletedSource())return;searchSettingsChanged();activity.hidden=false;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;resultNotice.hidden=true;resultNotice.textContent='';paintOverallProgress();host.setAttribute('aria-busy','true');activeHost=host;activeRecordKey=recordKey;searchCanFinish=!!all;finishRequested=false;window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
       var locked=Array.from(document.querySelectorAll('.analysis-recommendation input, .analysis-recommendation select, .analysis-recommendation button, .scenario-explorer input, .scenario-explorer select, .scenario-explorer textarea, .scenario-explorer button')).filter(e=>e!==run&&!e.dataset.scenarioTraceControl).map(e=>({element:e,disabled:e.disabled}));locked.forEach(x=>x.element.disabled=true);
       setIcon(run,all?'Finish search and validate best found':'Cancel evaluation','stop');run.setAttribute('aria-pressed','true');dialog.close();
       var started=Date.now(),stage='Preparing',completed=0,maximum=0,batchFraction=0,activeFractions=new Map(),nextBatch=0,ended=false,failed=false,abortPending=false,rankingProgress=null;
@@ -614,7 +633,7 @@ window.STScenarioExplorer=(function(){
         }
       }
       function captureTrace(terminal){var now=Date.now(),name=stage.startsWith('DOE ·')?'Design of experiments (DOE)':stage.startsWith('Refining ·')?'Refining candidates':stage;
-        refreshTraceStats(now);
+        traceSummary.elapsedMs=Math.max(0,now-started);refreshTraceStats(now);
         if(terminal){finishTraceStep(terminal,now);traceOutcome=terminal;return;}
         if(!traceStep||traceStep.name!==name){finishTraceStep('Completed',now);traceStarted=now;traceBase=completed;traceDetail='';traceStep={name:name,state:'Running',percent:null,elapsedMs:0,detail:'',work:{},candidateStart:Number.isFinite(done)?done:0,batchStarted:0,batchCompleted:0,roundsStarted:0,roundsCompleted:0,activeBatches:0,reusedBatches:0,calculatedCandidates:0,candidateMs:0};progressTrace.push(traceStep);}
         traceStep.elapsedMs=now-traceStarted;var total=null,amount=Math.max(0,completed-traceBase)+batchFraction,primary=traceStep.work.primary;
@@ -629,7 +648,7 @@ window.STScenarioExplorer=(function(){
       function setStage(value){captureTrace();stage=value;captureTrace();paintTrace(true);}
       captureTrace();
       function progressText(label){return window.STLanguage?.translate(label)||label;}
-      function updateProgress(){var percent=ended?100:Math.min(99.9,Math.floor(1000*(completed+batchFraction)/Math.max(1,maximum))/10),percentText=percent.toFixed(1)+'%';tracePercent=percent;progressStage.textContent='';progressPercent.textContent=percentText;activity.firstChild.style.width=percent+'%';activity.setAttribute('aria-valuenow',String(percent));activity.setAttribute('aria-valuetext',progressText(stage)+' · '+percentText);var seconds=Math.floor((Date.now()-started)/1000);progress.textContent=stage+' · '+completed+' / up to '+maximum+' simulation batches (including baseline and confirmation) · '+previewRun.rounds+' round(s) each · Elapsed '+Math.floor(seconds/60)+'m '+seconds%60+'s.'+(stage==='Finished'||stage==='Stopped'?'':(searchCanFinish?(finishRequested?' Finishing the current batch; Stop now cancels.':' Use Stop to finish searching and validate the best found.'):' Use Stop to cancel validation.')+' Create becomes available after confirmation.'+(all?' Last meaningful gain: '+Math.floor((Date.now()-lastGainAt)/1000)+'s ago.':''));
+      function updateProgress(){var now=Date.now(),percent=ended?100:Math.min(99.9,Math.floor(1000*(completed+batchFraction)/Math.max(1,maximum))/10);tracePercent=percent;traceSummary.elapsedMs=Math.max(0,now-started);var seconds=Math.floor(traceSummary.elapsedMs/1000);progress.textContent=stage+' · '+completed+' / up to '+maximum+' simulation batches (including baseline and confirmation) · '+previewRun.rounds+' round(s) each · Elapsed '+Math.floor(seconds/60)+'m '+seconds%60+'s.'+(stage==='Finished'||stage==='Stopped'?'':(searchCanFinish?(finishRequested?' Finishing the current batch; Stop now cancels.':' Use Stop to finish searching and validate the best found.'):' Use Stop to cancel validation.')+' Create becomes available after confirmation.'+(all?' Last meaningful gain: '+Math.floor((Date.now()-lastGainAt)/1000)+'s ago.':''));
         if(!['Finished','Stopped','Failed'].includes(stage))captureTrace();paintTrace(false);
         if((stage==='Comparing finalists'||stage==='Screening finalists')&&rankingProgress&&!cancelled?.()){var currentFraction=activeFractions.size?Math.min(1,batchFraction/activeFractions.size):1;status.textContent=(rankingProgress.index?progressText('Candidate')+' '+rankingProgress.index+' / '+rankingProgress.total:progressText('Baseline'))+' · '+Number((previewRun.durationSeconds/60).toFixed(2))+' min × '+previewRun.rounds+' '+progressText('Rounds')+' · '+progressText('Current batch')+': '+(100*currentFraction).toFixed(1)+'%';}
       }
@@ -840,7 +859,7 @@ window.STScenarioExplorer=(function(){
         last={changes:bestChanges,reviewRequired:!!warnings.length,validationRequired:!validated};
 
       }catch(error){failed=true;if(!cancelled()){record('ERROR',Object.assign({},evidence,{error:error.message}));status.textContent='Cannot evaluate: '+error.message;status.dataset.state='rejected';STErrors.capture(status,error);}}
-      finally{host.removeAttribute('aria-busy');window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:false}}));searchCanFinish=false;clearInterval(clock);setIcon(run,'Find best scenario','refresh');run.setAttribute('aria-pressed','false');ended=!cancelled()&&!failed;captureTrace();captureTrace(cancelled()?'Cancelled':failed?'Failed':'Completed');stage=cancelled()?'Stopped':failed?'Failed':'Finished';updateProgress();progressLabel.hidden=false;paintTrace(true);locked.forEach(x=>{if(x.element!==save)x.element.disabled=x.disabled;});activeHost=null;activeRecordKey=null;refreshDOE();refreshFactors();if(latest)record(latest.status,latest);searchSettingsChanged();}
+      finally{host.removeAttribute('aria-busy');window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:false}}));searchCanFinish=false;clearInterval(clock);setIcon(run,'Find best scenario','refresh');run.setAttribute('aria-pressed','false');ended=!cancelled()&&!failed;captureTrace();captureTrace(cancelled()?'Cancelled':failed?'Failed':'Completed');stage=cancelled()?'Stopped':failed?'Failed':'Finished';updateProgress();paintTrace(true);locked.forEach(x=>{if(x.element!==save)x.element.disabled=x.disabled;});activeHost=null;activeRecordKey=null;refreshDOE();refreshFactors();if(latest)record(latest.status,latest);searchSettingsChanged();}
     }
     if(restored){
       latest=restored;previewRun=restoredCurrent?restored.run||config(source):config(source);contextText();
@@ -875,9 +894,9 @@ window.STScenarioExplorer=(function(){
       if(restoredDefaultsUpdated)preserveSavedOutcome(traceText('Search targets updated. Run a new search to evaluate them. Previous analysis retained.'));
       if(restoredCurrent&&restored.status==='PREPARED_DEMO'){status.dataset.state='saved';setIcon(save,'This demo scenario already exists','copy');save.disabled=true;}
       if(ready&&!requiresValidation&&restored.analysisOnly)setIcon(save,'Create exploratory simulation','copy');
-      if(ready&&!requiresValidation)status.textContent='';progressLabel.hidden=true;
+      if(ready&&!requiresValidation)status.textContent='';
       // Input changes invalidate reuse, not the user's saved analysis history.
-      if(Array.isArray(restored.progressTrace?.steps)&&restored.progressTrace.steps.length){progressTrace=restored.progressTrace.steps.map(p=>Object.assign({},p,interrupted&&p.state==='Running'?{state:'Interrupted'}:{}));traceHistorical=traceHistorical||!restoredCurrent||!reviewPolicyCompatible;tracePercent=Math.max(0,Math.min(100,Number(restored.progressTrace.percent)||0));traceOutcome=interrupted?'Interrupted':restored.progressTrace.outcome||'';traceSummary=Object.assign({},restored.progressTrace.summary);activity.hidden=false;progressLabel.hidden=false;progressStage.textContent=traceHistorical?traceText('Saved analysis'):'';progressPercent.textContent=tracePercent.toFixed(1)+'%';activity.firstChild.style.width=tracePercent+'%';activity.setAttribute('aria-valuenow',String(tracePercent));}
+      if(Array.isArray(restored.progressTrace?.steps)&&restored.progressTrace.steps.length){progressTrace=restored.progressTrace.steps.map(p=>Object.assign({},p,interrupted&&p.state==='Running'?{state:'Interrupted'}:{}));traceHistorical=traceHistorical||!restoredCurrent||!reviewPolicyCompatible;tracePercent=Math.max(0,Math.min(100,Number(restored.progressTrace.percent)||0));traceOutcome=interrupted?'Interrupted':restored.progressTrace.outcome||'';traceSummary=Object.assign({},restored.progressTrace.summary);activity.hidden=false;paintOverallProgress();}
       if(ready)last={changes:restored.evaluatedChanges,reviewRequired:!!warnings.length,validationRequired:requiresValidation};
 
     }else{

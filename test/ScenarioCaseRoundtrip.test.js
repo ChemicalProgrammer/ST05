@@ -98,8 +98,14 @@ test('opening, saving and reopening a completed negative CAPEX search preserves 
       assert.equal(h.w.STScenarios.readiness(sim).ready,true);
       assert.deepEqual(copy(sim.whatIf.evaluations),original.whatIf.evaluations);
       const card=h.d.querySelector('.analysis-capex[data-tier="ZERO"]').closest('article');
+      const header=card.querySelector(':scope > .scenario-card-header'),badge=header.querySelector('.analysis-capex');
       assert(card.textContent.includes(original.whatIf.evaluations[0].message));
+      assert.equal(card.querySelector('.scenario-activity .scenario-progress-text').textContent,'100.0% · 2m 00s','The saved total takes priority over the sum of recorded step times.');
       card.querySelector('.scenario-activity').click();
+      assert.equal(card.querySelector(':scope > .scenario-card-header'),header);
+      assert.equal(header.querySelector('.analysis-capex'),badge);
+      assert.equal(card.querySelectorAll('.analysis-capex').length,1);
+      assert.equal(card.querySelector('.scenario-trace-overall .scenario-progress-text').textContent,'100.0% · 2m 00s');
       const steps=[...card.querySelectorAll('.scenario-trace-step')];assert.equal(steps.length,8);
       assert.deepEqual(steps.map(step=>step.querySelector('.scenario-trace-step-name').textContent),original.whatIf.evaluations[0].progressTrace.steps.map(step=>step.name));
       assert(steps.every(step=>step.querySelector('[role=progressbar]').getAttribute('aria-valuenow')==='100'));

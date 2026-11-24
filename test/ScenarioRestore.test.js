@@ -30,7 +30,7 @@ function savedCase(){
 }
 
 function browser(record){
-  const dom=new JSDOM('<!doctype html><html data-ui-mode="basic"><body><article class="analysis-recommendation"></article></body></html>',{runScripts:'outside-only'}),w=dom.window;
+  const dom=new JSDOM('<!doctype html><html data-ui-mode="basic"><body></body></html>',{runScripts:'outside-only'}),w=dom.window;
   w.__ST_TEXT__=key=>key;
   w.STPreferences={read:()=>null,write:()=>true};w.STIcons={svg:()=>'<svg></svg>'};
   w.STErrors={register(){},capture(){}};w.STReports={bindWhatIf(){}};
@@ -45,10 +45,10 @@ function browser(record){
   let simulationCalls=0,creationCalls=0;
   w.SimulatorEngine.simulateBatch=async()=>{simulationCalls++;throw new Error('Restoring history must not simulate.');};
   w.STScenarioExplorer.connectCase(()=>record,()=>{});
-  const sim=record.simulations[0],host=w.document.querySelector('article');
-  w.STScenarioExplorer.attach(host,{kind:'CUSTOM',tier:'ZERO',searchScope:'ZERO',explore:true,catalog:true,searchDerivedDOE:true,
-    changes:[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}]},()=>{creationCalls++;},sim);
-  return {w,sim,host,simulationCalls:()=>simulationCalls,creationCalls:()=>creationCalls,close:()=>w.close()};
+  const sim=record.simulations[0],host=w.STWhatIf.card({kind:'CUSTOM',tier:'ZERO',searchScope:'ZERO',explore:true,catalog:true,searchDerivedDOE:true,
+    changes:[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}]},()=>{creationCalls++;},sim.equipment,sim);
+  w.document.body.append(host);
+  return {w,sim,host,header:host.querySelector(':scope > .scenario-card-header'),simulationCalls:()=>simulationCalls,creationCalls:()=>creationCalls,close:()=>w.close()};
 }
 
 function openTrace(h){
@@ -57,6 +57,10 @@ function openTrace(h){
   activity.click();
   const panel=h.host.querySelector('.scenario-trace-panel');
   assert.equal(panel.hidden,false);
+  assert.equal(h.host.querySelector(':scope > .scenario-card-header'),h.header,'Historical progress retains the original CAPEX header.');
+  assert.equal(h.header.querySelector('.analysis-capex').dataset.tier,'ZERO');
+  assert.equal(h.host.querySelectorAll('.analysis-capex').length,1);
+  assert.equal(panel.querySelector('.scenario-trace-header'),null);
   return panel;
 }
 
@@ -97,7 +101,7 @@ test('a real input edit retains negative result history while blocking stale sim
     assert.equal(h.host.querySelector('.scenario-search').disabled,true);
     assert.equal(h.host.querySelector('.scenario-create').disabled,true);
     assert.equal(h.w.STScenarioExplorer.evaluations(sim).length,0,'Historical results cannot become current recommendations.');
-    const panel=openTrace(h);assert.match(panel.textContent,/Saved analysis progress/);assert.equal(panel.querySelectorAll('.scenario-trace-row').length,2);
+    const panel=openTrace(h);assert.match(panel.textContent,/Saved analysis\. Complete the current numerical simulation/);assert.equal(panel.querySelectorAll('.scenario-trace-row').length,2);
     assert.match(panel.textContent,/Baseline retained/);
     h.host.querySelector('.scenario-search').onclick();
     assert.equal(h.simulationCalls(),0);
@@ -129,7 +133,7 @@ test('a newly completed baseline enables search but keeps the old scenario resul
     assert.equal(h.host.querySelector('.scenario-search').disabled,false);
     assert.equal(h.host.querySelector('.scenario-create').disabled,true);
     assert.equal(h.w.STScenarioExplorer.evaluations(sim).length,0);
-    assert.match(openTrace(h).textContent,/Saved analysis progress/);
+    assert.match(openTrace(h).textContent,/Saved result from previous inputs or search settings/);
     assert.equal(h.simulationCalls(),0);
   }finally{h.close();}
 });
@@ -164,7 +168,7 @@ test('an old winning scenario remains inspectable but cannot be created after a 
     assert.match(h.host.querySelector('.scenario-result-notice').textContent,/Saved result from previous inputs/);
     assert(h.host.querySelector('.scenario-basic-metric'),'Saved metrics remain visible for review.');
     assert.equal(h.host.querySelector('.scenario-preview-status').textContent,'Previous analysis completed.');
-    assert.match(openTrace(h).textContent,/Saved analysis progress/);
+    assert.match(openTrace(h).textContent,/Saved result from previous inputs or search settings/);
     h.host.querySelector('.scenario-create').onclick();
     assert.equal(h.creationCalls(),0,'A disabled stale result cannot be applied even if its handler is called directly.');
     assert.equal(h.simulationCalls(),0);

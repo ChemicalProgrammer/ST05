@@ -359,20 +359,38 @@
     }
     function numericalRestartRequiresCalculation(){
       var status=state.run.result?.replicationStatus?.state;
-      return Boolean(state.run.result&&(status==='CANCELLED'||state.run.result.provisional&&!roundSession?.pending));
+      return Boolean(state.run.result&&(state.run.playbackAction==='reset'||status==='CANCELLED'||state.run.result.provisional&&!roundSession?.pending));
     }
     function runControlsLocked(){return Boolean(state.run.active||state.run.playing||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty);}
     var last2DLockState=null;
     function syncBatchProgress(){
-      var pending=Boolean(roundSession&&(roundSession.pending||roundSession.firstUpdating||roundSession.dirty));
+      var session=roundSession;
+      var pending=Boolean(session&&roundSessionActive(session)&&(session.pending||session.firstUpdating||session.dirty));
       var result=state.run.representative||state.run.result,status=result?.replicationStatus;
-      var rounds=status?.rounds??result?.batch?.rounds??1;
-      var completed=!pending&&status?.state==='COMPLETE'&&rounds>1;
-      toggle('batch-dialog',pending||completed);
+      var es=document.documentElement.lang==='es';
+      var reset=!pending&&state.run.playbackAction==='reset';
+      var rounds=pending?(session.run.rounds||1):reset?(Number(document.getElementById('run-rounds').value)||1):(status?.rounds??result?.batch?.rounds??1);
+      var completed=!pending&&!reset&&status?.state==='COMPLETE'&&rounds>1&&result?.batch?.rows?.length===rounds;
+      var visible=pending||completed||(reset&&rounds>1);
+      toggle('batch-dialog',visible);
       document.getElementById('batch-cancel').hidden=!pending;
-      if(completed){
-        document.getElementById('batch-progress').value=1;
-        document.getElementById('batch-status').textContent=rounds+' / '+rounds+' · 100%';
+      if(!visible)return;
+      var progress=document.getElementById('batch-progress'),label=document.getElementById('batch-status');
+      if(pending){
+        // The active generation owns its progress. Never read the old archive
+        // or leave the previous 100% value in the DOM while a new batch starts.
+        var p=session.batchProgress||{value:0,completed:0,total:rounds};
+        var value=Math.max(0,Math.min(.999,Number(p.value)||0));
+        progress.value=value;
+        var slots=Math.min(p.total,SimulatorEngine.concurrency?.(session.run.engineId)||1);
+        var message=p.completed+' / '+p.total+' '+(es?'rondas completas':'rounds complete')+' · '+(value*100).toFixed(1)+'% · '+(slots>1?(es?'Hasta ':'Up to ')+slots+(es?' en paralelo':' in parallel'):(es?'Cálculo secuencial':'Sequential calculation'));
+        if(p.stage)message+=' · '+(p.stage==='representative'?(es?'Preparando ronda representativa ':'Preparing representative round ')+p.round:(es?'Preparando resultados':'Preparing results'));
+        if(p.detail&&Number.isFinite(session.run.effectiveRuntimeTargetSeconds))message+=' · Effective Runtime '+(Number.isFinite(p.detail.accumulatedSeconds)?formatMinutes(p.detail.accumulatedSeconds):'—')+' / '+formatMinutes(session.run.effectiveRuntimeTargetSeconds)+' · '+(es?'Calendario ':'Calendar ')+formatMinutes(p.detail.elapsedSeconds)+' · '+(es?'Producción ':'Output ')+formatNumber(p.detail.outputCount);
+        label.textContent=message;
+      }else if(reset){
+        progress.value=0;label.textContent='0 / '+rounds+' · 0% · '+(es?'Listo para un nuevo cálculo':'Ready for a new calculation');
+      }else{
+        progress.value=1;label.textContent=rounds+' / '+rounds+' · 100% · '+(es?'Cálculo completado':'Calculation complete');
       }
     }
     function syncRunControls(){
@@ -738,11 +756,11 @@
       execution=execution||prepareCalendarRun(session.run);
       var generation=++session.generation,version=session.version;
       var calculationStartedAt=performance.now();
-      session.pending=true;session.firstProgress=null;syncRunControls();toggle('batch-dialog',true);document.getElementById('batch-progress').value=0;
-      document.getElementById('batch-status').textContent='0 / '+(execution.rounds||1)+' · 0%';
+      session.batchProgress={value:0,completed:0,total:execution.rounds||1};
+      session.pending=true;session.firstProgress=null;syncRunControls();
       window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
       var input={case:cloneJson(session.caseModel),run:cloneJson(execution)};
-      SimulatorEngine.simulateBatch(input,{onRepresentative:function(round){if(roundSessionActive(session))document.getElementById('batch-status').textContent='Preparing representative round '+round+'…';},firstResult:firstResult,cancelled:function(){return !roundSessionActive(session)||generation!==session.generation;},onFirstProgress:firstResult||session.run.calculationMode!=='LIVE'?undefined:function(partial){
+      SimulatorEngine.simulateBatch(input,{onRepresentative:function(round){if(roundSessionActive(session)&&generation===session.generation){session.batchProgress={...session.batchProgress,stage:'representative',round:round};syncBatchProgress();}},firstResult:firstResult,cancelled:function(){return !roundSessionActive(session)||generation!==session.generation;},onFirstProgress:firstResult||session.run.calculationMode!=='LIVE'?undefined:function(partial){
         if(!roundSessionActive(session)||generation!==session.generation)return;
         if(session.first&&!session.streaming)return;
         var previous=session.streaming?state.run.result:null;
@@ -792,14 +810,10 @@
         else persistRoundResult(session,result,'PENDING');
       },progress:function(value,completed,total,detail){
         if(!roundSessionActive(session)||generation!==session.generation)return;
-        toggle('batch-dialog',true);
-        document.getElementById('batch-progress').value=Math.max(0,Math.min(1,value));
-        var slots=Math.min(total,SimulatorEngine.concurrency?.(session.run.engineId)||1);
-        var message=completed+' / '+total+' rondas completas · '+(slots>1?'Hasta '+slots+' rondas en paralelo':'Cálculo secuencial')+' · '+Math.round(value*100)+'%';
         if(detail?.round===1)session.firstProgress=detail;
-        detail=session.firstProgress;
-        if(detail)message+=' · Effective Runtime '+(Number.isFinite(detail.accumulatedSeconds)?formatMinutes(detail.accumulatedSeconds):'—')+' / '+formatMinutes(session.run.effectiveRuntimeTargetSeconds)+' · Calendario '+formatMinutes(detail.elapsedSeconds)+' · Producción '+formatNumber(detail.outputCount);
-        document.getElementById('batch-status').textContent=message;
+        var previous=session.batchProgress||{value:0,completed:0,total:total};
+        session.batchProgress={value:Math.max(previous.value,Math.max(0,Math.min(1,Number(value)||0))),completed:Math.max(previous.completed,completed),total:total,detail:session.firstProgress,stage:completed===total?'finalizing':null};
+        syncBatchProgress();
       }}).then(function(response){
         if(!roundSessionActive(session)||generation!==session.generation)return;
         session.pending=false;

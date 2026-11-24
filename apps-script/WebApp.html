@@ -255,7 +255,10 @@
     <input id="run-calendar-enabled" type="checkbox"><span>Include plant calendar</span>
   </label>
 </div>
-<p id="run-effective-progress" class="chart-note" role="status" aria-live="polite" hidden></p></div></section>
+<p id="run-effective-progress" class="chart-note" role="status" aria-live="polite" hidden></p></div>
+<!-- The setup body folds; this status footer does not. -->
+<section id="batch-dialog" class="round-background hidden" aria-labelledby="batch-title"><strong id="batch-title"><?= __ST_TEXT__('batch.title') ?></strong><progress id="batch-progress" max="1" value="0" aria-labelledby="batch-title"></progress><span id="batch-status" role="status" aria-live="polite"></span><button id="batch-cancel" type="button" class="ghost icon-button" data-icon="stop" aria-label="<?= __ST_TEXT__('view.cancel') ?>" title="<?= __ST_TEXT__('view.cancel') ?>"></button></section><p id="rounds-warning" class="round-warning hidden" role="alert"></p>
+</section>
 
 <!-- Los parámetros necesarios para el motor siguen presentes sin subsección visual. -->
         <div id="run-internal-parameters" hidden aria-hidden="true">
@@ -278,8 +281,6 @@
           <div id="simulation-event-content" class="fold-content"><div id="event-time-tools" class="event-time-tools"></div><div class="event-selection-toolbar button-row"><label class="checkbox-label st-checkbox-card st-checkbox-card--compact"><input id="select-all-control-events" type="checkbox">Select all events</label><button id="delete-selected-control-events" type="button" class="ghost icon-button" data-icon="trash" aria-label="Delete selected events" title="Delete selected events" disabled></button><button id="delete-all-control-events" type="button" class="ghost icon-button" data-icon="trashAll" aria-label="Delete all events" title="Delete all events" disabled></button><span id="control-event-selection-status" class="chart-note" role="status" aria-live="polite"></span></div><p class="chart-note event-selection-hint">Click a row to select it. Ctrl/Cmd adds or removes rows; Shift selects a range. Checkboxes also allow multiple selection.</p><div id="control-events" class="control-events"></div><div id="planned-line-events" class="table-scroll"></div></div></section>
         </div>
 
-        <!-- Progress remains outside every collapsible subsection. -->
-          <section id="batch-dialog" class="round-background hidden" aria-labelledby="batch-title"><strong id="batch-title"><?= __ST_TEXT__('batch.title') ?></strong><progress id="batch-progress" max="1" value="0" aria-labelledby="batch-title"></progress><span id="batch-status" role="status" aria-live="polite"></span><button id="batch-cancel" type="button" class="ghost icon-button" data-icon="stop" aria-label="<?= __ST_TEXT__('view.cancel') ?>" title="<?= __ST_TEXT__('view.cancel') ?>"></button></section><p id="rounds-warning" class="round-warning hidden" role="alert"></p>
         <section id="simulation-playback" class="fold-card">
           <div class="fold-heading">
             <div class="subsection-heading-copy"><h3 class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-playback-content">Simulation playback</button></h3>
@@ -290,7 +291,7 @@
             <button id="play-simulation" class="secondary icon-button" type="button" data-icon="play" aria-label="<?= __ST_TEXT__('view.play') ?>" title="<?= __ST_TEXT__('view.play') ?>"></button>
             <button id="pause-simulation" class="secondary icon-button" type="button" data-icon="pause" aria-label="<?= __ST_TEXT__('client.pause') ?>" title="<?= __ST_TEXT__('client.pause') ?>"></button>
             <button id="stop-simulation" class="secondary icon-button" type="button" data-icon="stop" aria-label="Stop" title="Stop and retain the current results"></button>
-            <button id="reset-playback" class="secondary icon-button" type="button" data-icon="refresh" aria-label="<?= __ST_TEXT__('client.reset') ?>" title="Reset to the initial state"></button>
+            <button id="reset-playback" class="secondary icon-button" type="button" data-icon="refresh" aria-label="<?= __ST_TEXT__('client.reset') ?>" title="Reset and prepare a new calculation"></button>
             <details class="export-menu">
               <summary class="secondary icon-button" data-icon="upload" aria-label="Export charts" title="Export charts for the selected round"></summary>
               <div>

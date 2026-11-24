@@ -288,9 +288,8 @@
     function resetPlayback() {
       markNumericalPlaybackAction('reset');
       terminateNumericalExecution();
-      // A partial first round has no valid replay archive. Reset clears it;
-      // a completed archive (including a completed first round of a cancelled
-      // batch) is retained, but only COMPLETE results can support CAPEX.
+      // Reset prepares a fresh calculation on the next Play. Keep completed
+      // evidence available until that new calculation actually starts.
       if(state.run.result?.provisional)invalidateActiveResult();
       state.run.roundIndex=0;
       if(state.run.representative)state.run.result=state.run.representative;
@@ -304,6 +303,7 @@
       syncPlaybackRounds();syncRunControls();
       renderPlaybackFrame();
       setPlaybackStatus('Ready');
+      syncBatchProgress();
       if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
       renderSimulationAnalysis();
     }

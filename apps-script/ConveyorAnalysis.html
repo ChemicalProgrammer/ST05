@@ -351,7 +351,7 @@ window.STConveyorAnalysis=(function(){
       const element=row(common,ref,label);
       const output=make(element,'td');
       output.className='numeric';
-      make(element,'td',unit);
+      make(element,'td',unit).className='metric-unit';
       output.textContent=valueText(value)+(Number.isFinite(value)&&source?.partial?' (partial)':'');
     });
     if(!worksheet.profiles.length)make(body,'p','No applicable formats.');
@@ -373,7 +373,7 @@ window.STConveyorAnalysis=(function(){
           cell.className='numeric';
           cell.textContent=valueText(read(profile));
         });
-        make(element,'td',unit);
+        make(element,'td',unit).className='metric-unit';
       }
     }
     make(body,'p','Time to First Package After Restart is configured on the conveyor card. Positions are measured from the conveyor entry.').className='chart-note';

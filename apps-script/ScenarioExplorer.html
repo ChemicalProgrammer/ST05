@@ -3,6 +3,7 @@
 window.ST_SCENARIO_SEARCH_LIMITS={parallelCandidates:0,wallClockBudget:false,reusePreviousWinner:false};
 window.STScenarioExplorer=(function(){
   function unitLabel(unit){return window.STBasicMode?.unitLabel(unit)||unit||'units';}
+  function quantity(value,unit){var strong=el('strong',value,'metric-value');if(unit)strong.append(el('span',unit,'metric-unit'));return strong;}
   // Evidence belongs to the simulation and is saved through the case autosave.
   var activeHost=null,activeRecordKey=null,caseProvider,caseChanged,configurationSerial=0;
   var reliabilityDiscoveryCache=new Map(),flowScreenCache=new Map();
@@ -64,7 +65,7 @@ window.STScenarioExplorer=(function(){
     return Object.assign({},value,{cacheSource:'CALCULATED',warnings:evaluationWarnings(candidate,value)});
   }
   function attach(host,project,create,simulation){
-    var source=JSON.parse(JSON.stringify({id:simulation.id,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,unitOfFlow:simulation.unitOfFlow||simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow})),rows=[],generation=0,timer,baseline,baselineRun,last=null,searchCanFinish=false,finishRequested=false;
+    var source=JSON.parse(JSON.stringify({id:simulation.id,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,unitOfFlow:simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||simulation.unitOfFlow})),rows=[],generation=0,timer,baseline,baselineRun,last=null,searchCanFinish=false,finishRequested=false;
     var searchSettings=currentSearchSettings(),searchSettingsSignature=STScenarioSearch.settingsSignature(searchSettings),pendingSearchSettingsChange=false;
     function searchRun(phase,rounds){return STScenarioSearch.run(config(source),depth,phase,rounds,searchSettings);}
     function searchProfile(){return STScenarioSearch.profile(depth,searchSettings);}
@@ -361,7 +362,7 @@ window.STScenarioExplorer=(function(){
       if(entry.baseline&&entry.candidate){var simple=el('div','','scenario-basic-metrics');
         [['OEE','oee','%'],['Throughput','throughput',' '+unitLabel(source.unitOfFlow)+'/min']].forEach(function(spec){
           var metric=el('div','','scenario-basic-metric'),base=displayed.baseline[spec[1]],value=unconfirmed?NaN:displayed.candidate[spec[1]],delta=value-base;
-          metric.append(el('span',spec[0]),el('strong',Number.isFinite(value)?value.toFixed(spec[1]==='oee'?1:2)+spec[2]:'—'));
+          metric.append(el('span',spec[0]),quantity(Number.isFinite(value)?value.toFixed(spec[1]==='oee'?1:2):'—',Number.isFinite(value)?spec[2]:''));
           var change=el('span',Number.isFinite(delta)?(spec[1]==='oee'?'Δ OEE: ':'')+(delta>0?'+':'')+delta.toFixed(2)+(spec[1]==='oee'?' pp':' '+unitLabel(source.unitOfFlow)+'/min')+' vs. base':'—','scenario-basic-change');change.dataset.direction=delta>0?'up':delta<0?'down':'same';metric.append(change);simple.append(metric);
         });metrics.append(simple);metrics.append(el('p',(unconfirmed?'No confirmed improvement. ':provisional?'Provisional estimate · ':'Confirmed · ')+'Base: '+displayed.baseline.oee.toFixed(2)+'% OEE'+(Number.isFinite(entry.independentCheck?.durationSeconds)?' · '+(entry.independentCheck.durationSeconds/60)+' min × '+entry.independentCheck.rounds+' rounds · matching seeds':''),'scenario-baseline-note'));var badge=host.querySelector('.analysis-capex');if(badge&&primaryTier==='HIGH'&&project.searchScope!=='ALL')badge.textContent='High CAPEX';
       }
@@ -655,7 +656,7 @@ window.STScenarioExplorer=(function(){
         var current=el('article','','analysis-recommendation scenario-current'),values=simulation.results?.summary?metric(simulation.results):{},metrics=el('div','','scenario-basic-metrics');
         current.dataset.motionKey=JSON.stringify([simulation.id,'CURRENT']);
         current.append(el('h4','Current scenario','scenario-current-title'));
-        [['OEE','oee','%'],['Throughput','throughput',' '+unitLabel(simulation.unitOfFlow||simulation.results?.unitOfFlow)+'/min']].forEach(function(spec){var item=el('div','','scenario-basic-metric'),value=values[spec[1]];item.append(el('span',spec[0]),el('strong',Number.isFinite(value)?value.toFixed(spec[1]==='oee'?1:2)+spec[2]:'—'));metrics.append(item);});
+        [['OEE','oee','%'],['Throughput','throughput',' '+unitLabel(simulation.unitOfFlow||simulation.results?.unitOfFlow)+'/min']].forEach(function(spec){var item=el('div','','scenario-basic-metric'),value=values[spec[1]];item.append(el('span',spec[0]),quantity(Number.isFinite(value)?value.toFixed(spec[1]==='oee'?1:2):'—',Number.isFinite(value)?spec[2]:''));metrics.append(item);});
         current.append(metrics);combined.append(current);
       }
       (basic?['ZERO','MEDIUM','HIGH']:['ZERO','MEDIUM','HIGH','ALL']).forEach(function(tier){

@@ -4412,7 +4412,14 @@ function scenarioSourceReadiness(simulation) {
   if(provenance.version!==SIMULATION_PROVENANCE_VERSION)return fail('PROVENANCE_VERSION_MISMATCH','HISTORICAL',{provenance:{recordedVersion:provenance.version??null,currentVersion:SIMULATION_PROVENANCE_VERSION}});
   const run={...simulation.dynamicConfig};
   if(run.durationMode==='SHIFTS')run.durationSeconds=(run.shiftHours||8)*(run.shiftCount||1)*3600;
-  const expected=JSON.parse(canonicalSimulationInputSignature({case:{equipment:simulation.equipment,unitOfFlow:simulation.unitOfFlow||result.unitOfFlow||'units'},run}));
+  // With an active packing format the engine reports bottle equivalents even
+  // when the case's original generic input label is "units". Do not mistake
+  // that output label for the input unit recorded in the signature.
+  const formatId=run.initialFormatId??run.initialProductId;
+  const formatted=Array.isArray(run.productCatalog)&&run.productCatalog.some(p=>p.id===formatId);
+  const inputUnit=formatted?provenance.unitOfFlow:simulation.unitOfFlow||result.unitOfFlow||'units';
+  const expected=JSON.parse(canonicalSimulationInputSignature({case:{equipment:simulation.equipment,unitOfFlow:inputUnit},run}));
+  if(formatted&&result.unitOfFlow!=='bottles')return fail('FLOW_UNIT_CHANGED','STALE');
   function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,canonical(value[k])]));return value;}
   const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
   if(provenance.run?.engineId!==expected.run.engineId)return fail('ENGINE_MISMATCH','STALE');
@@ -4441,7 +4448,7 @@ function scenarioSourceReadiness(simulation) {
       if(stop.status==='REACHED'&&(!Number.isFinite(stop.accumulatedSeconds)||stop.accumulatedSeconds+1e-6<target))return fail('INCOMPLETE_RUNTIME_TARGET','INCOMPLETE');
     }
   }
-  return {ready:true,reason:null,sourceStatus:'CURRENT',rounds,completedRounds:rows.length,unitOfFlow:expected.unitOfFlow,comparisonBasis:target===undefined?'FIXED_CALENDAR_HORIZON':'COMPLETED_RUNTIME_TARGET_OR_LIMIT'};
+  return {ready:true,reason:null,sourceStatus:'CURRENT',rounds,completedRounds:rows.length,unitOfFlow:formatted?'bottles':expected.unitOfFlow,comparisonBasis:target===undefined?'FIXED_CALENDAR_HORIZON':'COMPLETED_RUNTIME_TARGET_OR_LIMIT'};
 }
 
 

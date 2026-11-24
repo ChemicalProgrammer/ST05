@@ -13,7 +13,11 @@ window.STAppearance = (function() {
     root.dataset.secondaryAccent = secondary();
     var palette = STThemeResources.palettes[secondary()];
     var color = palette[root.dataset.theme === 'dark' ? 'dark' : 'light'];
-    Object.entries({'--secondary':color.accent,'--secondary-soft':color.soft,'--secondary-text':color.text || color.accent}).forEach(function(pair) {
+    // Keep an already dark accent; use the palette's readable shade for a
+    // light accent. Dark theme retains its contrast-aware text variant.
+    function luminance(hex){var rgb=hex.replace('#','').match(/.{2}/g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];}
+    var unitColor=root.dataset.theme==='dark'?color.text||color.accent:(1.05/(luminance(color.accent)+.05)>=4.5?color.accent:color.text||color.accent);
+    Object.entries({'--secondary':color.accent,'--secondary-soft':color.soft,'--secondary-text':color.text || color.accent,'--unit-color':unitColor}).forEach(function(pair) {
       root.style.setProperty(pair[0], pair[1]);
     });
     document.querySelectorAll('[data-secondary-accent]').forEach(function(button) {

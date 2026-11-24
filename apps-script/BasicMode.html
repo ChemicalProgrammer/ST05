@@ -154,16 +154,24 @@ window.STBasicMode=(function(){
   function number(value,digits){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:digits??2}):'—';}
   function node(tag,text,cls){var n=document.createElement(tag);n.textContent=text||'';if(cls)n.className=cls;return n;}
   // Tarjeta KPI destacada para eficiencia; las métricas ordinarias siguen con basic-metric.
-  function metric(host,label,value){var row=node('div','','basic-metric');if(host===efficiencies)row.classList.add('metric-card','metric-card--featured');row.append(node('span',label),node('strong',value));host.appendChild(row);}
+  function metric(host,label,value,unit){var row=node('div','','basic-metric'),strong=node('strong',value);if(host===efficiencies)row.classList.add('metric-card','metric-card--featured');if(unit){strong.classList.add('metric-value');strong.append(node('span',unit,'metric-unit'));}row.append(node('span',label),strong);host.appendChild(row);}
+  // The theoretical KPI is the historical product of modeled machine
+  // availabilities, independent of the simulation and of mounted cards.
+  // An absent failure model means no own modeled failures, not a plant claim.
+  function theoreticalAvailability(e){
+    var r=e.noiseProfile?.reliability;
+    if(!r)return 1;
+    var bf=Number(r.mtbfMinutes),tr=Number(r.mttrMinutes);
+    return Number.isFinite(bf)&&bf>0&&Number.isFinite(tr)&&tr>0?bf/(bf+tr):NaN;
+  }
   function refreshData(){
     if(!state.activeCase||!basicMounted&&!splitMounted)return;
     var equipment=actions.preview?.()||state.activeCase.equipment||[],simulation=(state.activeCase.simulations||[]).find(function(s){return s.id===state.activeSimulationId;});
-    var audits=STScenarios.audit({equipment:equipment}),availability=1;
+    var audits=STScenarios.audit({equipment:equipment}),machines=equipment.filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR'),availability=machines.length?machines.reduce((a,e)=>a*theoreticalAvailability(e),1):NaN;
     Array.from(list.querySelectorAll('.equipment-card')).forEach(function(card,index){
       var e=equipment[index];if(!e)return;var machine=e.type!=='CONVEYOR';
       if(splitMounted)card.querySelector('.equipment-header strong').textContent=e.name;
-      var reliability=e.noiseProfile.reliability||{},a=reliability.mtbfMinutes/(reliability.mtbfMinutes+reliability.mttrMinutes);
-      if(machine)availability*=Number.isFinite(a)?a:NaN;
+      var a=theoreticalAvailability(e);
       if(!splitMounted)return;
       var data=card.querySelector('.basic-card-data');if(!data){data=node('section','','basic-card-data');card.appendChild(data);}
       data.replaceChildren();
@@ -176,7 +184,7 @@ window.STBasicMode=(function(){
       }
     });
     var simulatedEfficiency=state.run.result?.provisional?null:state.run.result?.summary?.lineOeePercent;
-    efficiencies.replaceChildren();metric(efficiencies,'Theoretical equipment efficiency',number(availability*100,1)+'%');metric(efficiencies,'Simulated efficiency',number(simulatedEfficiency,1)+(Number.isFinite(simulatedEfficiency)?'%':''));
+    efficiencies.replaceChildren();metric(efficiencies,'Theoretical equipment efficiency',number(availability*100,1),Number.isFinite(availability)?'%':'');metric(efficiencies,'Simulated efficiency',number(simulatedEfficiency,1),Number.isFinite(simulatedEfficiency)?'%':'');
     if(!splitMounted)return;
     var chosen=list.querySelector('.equipment-selected'),id=chosen?.dataset.equipmentId,audit=audits.find(function(x){return x.equipmentId===id;});
     if(chosen)title.textContent=chosen.querySelector('.equipment-header strong').textContent;

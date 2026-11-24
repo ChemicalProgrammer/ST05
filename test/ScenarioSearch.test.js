@@ -30,19 +30,20 @@ test('F upper-tail probabilities match tabulated values',()=>{
  assert.equal(scenarioFSurvival(0,1,10),1);
 });
 
-function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=99){
+function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=99,factorCount=2){
  const dom=new JSDOM('<article class="analysis-recommendation"></article>',{runScripts:'outside-only'}),w=dom.window,calls=[];
+ const paths=factorCount===3?['speed','sensor','buffer']:['speed','sensor'];
  w.HTMLDialogElement.prototype.close=function(){};w.HTMLDialogElement.prototype.showModal=function(){};
  w.STPreferences={read(){return '';},write(){return true;}};w.STIcons={svg(){return '<svg></svg>';}};w.STErrors={register(){},capture(){}};w.STScenarioText={HIGH:'High'};
  w.STScenarioSearch={screenFlow:screenFlowFactors,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
  w.STWhatIf={changeInfo(c){return {equipment:'Unit',parameter:c.path,before:c.before,after:c.after};}};
- w.STScenarios={study:buildScenarioStudy,fields:{speed:[1,100,'u/s'],sensor:[1,100,'m']},signature(){return 'same';},plan(){return {candidates:[]};},apply(source,changes){const copy=JSON.parse(JSON.stringify(source));for(const c of changes)copy.equipment[0][c.path]=c.after;return copy;}};
- w.SimulatorEngine={validateSimulationInput(){return {ok:true};},inputSignature(input){return JSON.stringify(input);},async simulateBatch(input){calls.push(JSON.parse(JSON.stringify(input)));const gain=(input.case.equipment[0].speed-10)+(input.case.equipment[0].sensor-10);const rows=Array.from({length:input.run.rounds},(_,j)=>{const noise=uncertain&&input.run.seed>1000000&&gain>0?[0,-20,20,0,0,0][j]:0;return {seed:input.run.seed+j,summary:{lineOeePercent:50+gain/10,outputCount:(100+gain+noise)*input.run.durationSeconds/60}};});return {ok:true,result:{durationSeconds:input.run.durationSeconds,summary:rows[0].summary,batch:{rows,statistics:{lineOeePercent:{mean:50+gain/10},throughputPerMinute:{mean:rows.reduce((sum,row)=>sum+row.summary.outputCount/input.run.durationSeconds*60,0)/rows.length}}}}};}};
- const sim={id:'sim',equipment:[{id:'e',speed:10,sensor:10}],dynamicConfig:{durationSeconds:durationSeconds,rounds:40,seed:1},whatIf:{searchDepth:depth}},record={metadata:{includeDOE:doe},simulations:[sim]};
+ w.STScenarios={study:buildScenarioStudy,fields:{speed:[1,100,'u/s'],sensor:[1,100,'m'],...(factorCount===3?{buffer:[1,100,'m']}:{})},signature(){return 'same';},plan(){return {candidates:[]};},apply(source,changes){const copy=JSON.parse(JSON.stringify(source));for(const c of changes)copy.equipment[0][c.path]=c.after;return copy;}};
+ w.SimulatorEngine={validateSimulationInput(){return {ok:true};},inputSignature(input){return JSON.stringify(input);},async simulateBatch(input){calls.push(JSON.parse(JSON.stringify(input)));const gain=paths.reduce((sum,path)=>sum+input.case.equipment[0][path]-10,0);const rows=Array.from({length:input.run.rounds},(_,j)=>{const noise=uncertain&&input.run.seed>1000000&&gain>0?[0,-20,20,0,0,0][j]:0;return {seed:input.run.seed+j,summary:{lineOeePercent:50+gain/10,outputCount:(100+gain+noise)*input.run.durationSeconds/60}};});return {ok:true,result:{durationSeconds:input.run.durationSeconds,summary:rows[0].summary,batch:{rows,statistics:{lineOeePercent:{mean:50+gain/10},throughputPerMinute:{mean:rows.reduce((sum,row)=>sum+row.summary.outputCount/input.run.durationSeconds*60,0)/rows.length}}}}};}};
+ const sim={id:'sim',equipment:[{id:'e',...Object.fromEntries(paths.map(path=>[path,10]))}],dynamicConfig:{durationSeconds:durationSeconds,rounds:40,seed:1},whatIf:{searchDepth:depth}},record={metadata:{includeDOE:doe},simulations:[sim]};
  w.eval(fs.readFileSync('apps-script/ScenarioExplorer.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1]);w.STScenarioExplorer.connectCase(()=>record,()=>{});w.ST_SCENARIO_SEARCH_LIMITS.maxCandidates=1;
- const host=w.document.querySelector('article');w.STScenarioExplorer.attach(host,{kind:'CUSTOM',tier:tier,explore:true,changes:['speed','sensor'].map(path=>({equipmentId:'e',path,before:10,after:20,unit:'u/s'}))},()=>{},sim);
+ const host=w.document.querySelector('article');w.STScenarioExplorer.attach(host,{kind:'CUSTOM',tier:tier,explore:true,changes:paths.map(path=>({equipmentId:'e',path,before:10,after:20,unit:'u/s'}))},()=>{},sim);
  if(doe){for(const checkbox of host.querySelectorAll('.scenario-doe-select')){checkbox.checked=true;checkbox.onchange();}}
- return {dom,w,sim,host,calls,project:{kind:'CUSTOM',tier:tier,explore:true,changes:['speed','sensor'].map(path=>({equipmentId:'e',path,before:10,after:20,unit:'u/s'}))}};
+ return {dom,w,sim,host,calls,project:{kind:'CUSTOM',tier:tier,explore:true,changes:paths.map(path=>({equipmentId:'e',path,before:10,after:20,unit:'u/s'}))}};
 }
 async function search(h){h.host.querySelector('.scenario-search').click();for(let i=0;i<200;i++){if(h.sim.whatIf.evaluations?.[0]&&!['RUNNING','VALIDATING'].includes(h.sim.whatIf.evaluations[0].status))return h.sim.whatIf.evaluations[0];await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Search did not finish');}
 test('reserved DOE completes after exploration exhausts its budget; confirmation uses common horizons',async()=>{
@@ -84,6 +85,53 @@ test('one search/stop action replaces calculate and results explain selected and
 });
 test('the search action becomes stop and can cancel without launching another search',async()=>{
  const h=harness(false);try{const original=h.w.SimulatorEngine.simulateBatch;let release;h.w.SimulatorEngine.simulateBatch=async input=>{await new Promise(resolve=>release=resolve);return original(input);};const button=h.host.querySelector('.scenario-search');button.click();assert.match(button.title,/Finish search/);button.click();assert.match(button.title,/Cancel/);button.click();release();for(let i=0;i<20&&h.host.hasAttribute('aria-busy');i++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(h.calls.length,1);assert.equal(h.sim.whatIf.evaluations[0].status,'CANCELLED');assert.equal(h.host.querySelector('.scenario-create').disabled,true);assert.equal(button.title,'Find best scenario');}finally{h.dom.window.close();}
+});
+
+async function awaitRankingCondition(predicate){for(let i=0;i<600;i++){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,5));}assert.fail('Ranking did not reach the expected state');}
+test('long-horizon ranking after DOE 8/8 shows advancing batch progress and only counts remaining work',async()=>{
+ const h=harness(true,'MEDIUM',false,'ZERO',86400,3),held=[];
+ try{
+  delete h.w.ST_SCENARIO_SEARCH_LIMITS.maxCandidates;
+  const original=h.w.SimulatorEngine.simulateBatch;
+  h.w.SimulatorEngine.simulateBatch=async(input,options)=>{if(input.run.seed>=100003&&input.run.seed<1000003&&held.length<2)await new Promise(resolve=>held.push({input,options,resolve}));return original(input,options);};
+  h.host.querySelector('.scenario-search').click();await awaitRankingCondition(()=>held.length===1);
+  assert.equal(held[0].input.run.durationSeconds,86400);assert.equal(held[0].input.run.rounds,3);
+  assert.equal(h.host.querySelector('.scenario-progress-label > span:first-child').textContent,'Comparing finalists');
+  const counts=h.host.querySelector('.scenario-search-progress').textContent.match(/(\d+) \/ up to (\d+)/).slice(1).map(Number),percentages=[];
+  for(const fraction of [0,.25,.5,.75]){
+   held[0].options.progress(fraction);
+   const status=h.host.querySelector('.scenario-preview-status').textContent,percent=h.host.querySelector('.scenario-progress-label > span:last-child').textContent;
+   assert.match(status,/Baseline · 1440 min × 3 Rounds/);assert(status.includes('Current batch: '+(fraction*100).toFixed(1)+'%'));assert.doesNotMatch(status,/DOE/);
+   assert.match(percent,/^\d+\.\d%$/);percentages.push(parseFloat(percent));
+  }
+  assert(percentages.every((value,index)=>index===0||value>percentages[index-1]),'A working ranking batch must visibly advance');
+  held[0].resolve();await awaitRankingCondition(()=>held.length===2);
+  held[1].options.progress(.25);
+  const candidateStatus=h.host.querySelector('.scenario-preview-status').textContent,finalists=Number(candidateStatus.match(/Candidate 1 \/ (\d+)/)[1]);
+  assert.match(candidateStatus,/1440 min × 3 Rounds · Current batch: 25\.0%/);
+  assert.equal(counts[1],counts[0]+1+finalists+2,'Unused exploration allowance must leave the ranking denominator');
+  held[1].resolve();await awaitRankingCondition(()=>!h.host.hasAttribute('aria-busy'));
+  const result=h.sim.whatIf.evaluations[0];assert.equal(result.status,'IMPROVEMENT_REPRODUCED');assert.equal(result.doe.observations.length,8);assert.equal(result.independentCheck.durationSeconds,86400);
+ }finally{held.forEach(batch=>batch.resolve());h.dom.window.close();}
+});
+test('cancel during long finalist ranking clears busy state and allows a complete repeat search',async()=>{
+ const h=harness(true,'MEDIUM',false,'ZERO',86400,3);let rankingStarted=false;
+ try{
+  delete h.w.ST_SCENARIO_SEARCH_LIMITS.maxCandidates;
+  const labels={'Baseline':'Caso base','Candidate':'Candidato','Rounds':'Rondas','Current batch':'Lote actual','Comparing finalists':'Comparando candidatos finalistas'};
+  h.w.STLanguage={translate:label=>labels[label]||label};
+  const original=h.w.SimulatorEngine.simulateBatch;
+  h.w.SimulatorEngine.simulateBatch=async(input,options)=>{
+   if(!rankingStarted&&input.run.seed>=100003&&input.run.seed<1000003){rankingStarted=true;options.progress(.4);await new Promise((resolve,reject)=>{const poll=h.w.setInterval(()=>{if(options.cancelled()){h.w.clearInterval(poll);reject(Error('BATCH_CANCELLED'));}},1);});}
+   return original(input,options);
+  };
+  const button=h.host.querySelector('.scenario-search');button.click();await awaitRankingCondition(()=>rankingStarted);
+  assert.match(h.host.querySelector('.scenario-preview-status').textContent,/Caso base · 1440 min × 3 Rondas · Lote actual: 40\.0%/);
+  assert.equal(h.host.querySelector('.scenario-progress-label > span:first-child').textContent,'Comparando candidatos finalistas');
+  button.click();await awaitRankingCondition(()=>!h.host.hasAttribute('aria-busy'));
+  assert.equal(h.sim.whatIf.evaluations[0].status,'CANCELLED');assert.equal(button.title,'Find best scenario');assert.equal(button.disabled,false);assert.equal(h.host.querySelector('.scenario-create').disabled,true);
+  assert.equal((await search(h)).status,'IMPROVEMENT_REPRODUCED');assert.equal(h.host.hasAttribute('aria-busy'),false);
+ }finally{h.dom.window.close();}
 });
 
 async function suggest(h){const b=h.host.querySelector('.scenario-doe-suggest');b.click();for(let i=0;i<250;i++){if(b.textContent==='Suggest factor combination'&&h.calls.length)return;await new Promise(r=>setTimeout(r,5));}throw Error('Screening did not finish');}

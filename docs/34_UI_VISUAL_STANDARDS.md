@@ -540,6 +540,10 @@ un navegador real.
 - **Registro y gráficas:** el checkbox «Mostrar conteo por turnos» pertenece a la misma cuadrícula que el intervalo, los FPS y la ventana de gráfica; ocupa la segunda columna de la segunda fila. Se conserva el mismo control e identificador `run-track-shifts`.
 - **Importación de equipos:** se conserva una fila para el destino y tipo de máquina. No muestres la nota repetida «Equipo nuevo — agregado al final de la línea» cuando se elige agregar, ni al cambiar temporalmente ese destino; los diagnósticos y advertencias accionables sí permanecen.
 
+## Encabezado principal de SimuLine
+
+El header global `.topbar` reutiliza `--subsection-header-gradient`: un degradado vertical sutil (12 % de `--secondary` mezclado con `--surface` arriba, `--surface` abajo). Se aplica de borde a borde en Basic y Advance, con los estilos Classic y Elegant, sin cambiar la altura, padding, navegación, botones, comportamiento sticky/pin ni borde inferior. Evita usar `background` como shorthand en estilos que sobrescriban la imagen del gradiente; emplea `background-color` y `background-image`.
+
 ## Tarjetas numéricas de equipos: fila compacta de acciones
 
 El encabezado de identidad numérica tiene dos zonas: nombre/estado arriba, y una fila flexible abajo que contiene **OEE a la izquierda** y los controles manuales (Play, Pausa, Stop, Emergencia, Reset) **a la derecha**. Esta fila reutiliza `.numeric-equipment-header-footer` y hace `flex-wrap` automáticamente cuando el panel no es suficientemente ancho; evita una tercera fila reservada exclusivamente para botones. Se conserva la ubicación de los controles dentro del recuadro, el estado seleccionado y el comportamiento de Basic/Advance, expandido/colapsado y eventos deshabilitados.

@@ -246,6 +246,27 @@ test('gradient touches every subsection card edge while inner title/tool insets 
     'Sheet import subsections use their smaller 12px inset, not 16px');
 });
 
+test('main topbar shares the full-bleed subsection gradient in Basic/Advance and both visual styles',()=>{
+  const topbar=document.querySelector('header.topbar');
+  assert(topbar,'Production header must be the shared topbar');
+  const old={ui:root.getAttribute('data-ui-mode'),style:root.getAttribute('data-visual-style'),theme:root.getAttribute('data-theme')};
+  try{
+    for(const mode of ['basic','advance'])
+      for(const visual of ['classic','elegant'])
+        for(const theme of ['light','dark'])
+          for(const width of [390,1440]){
+            root.dataset.uiMode=mode;root.dataset.visualStyle=visual;root.dataset.theme=theme;
+            assert.equal(value(topbar,'background-color',width),'var(--surface)',mode+'/'+visual+'/'+theme+'/'+width);
+            assert.equal(value(topbar,'background-image',width),'var(--subsection-header-gradient)',mode+'/'+visual+'/'+theme+'/'+width);
+            assert.equal(value(topbar,'border-bottom',width),'var(--border-width) solid var(--line-strong)',mode+'/'+visual+'/'+theme+'/'+width);
+          }
+  }finally{
+    for(const [attribute,previous] of [
+      ['data-ui-mode',old.ui],['data-visual-style',old.style],['data-theme',old.theme]
+    ]){if(previous===null)root.removeAttribute(attribute);else root.setAttribute(attribute,previous);}
+  }
+});
+
 test('canonical grids center wrapped tools beside the entire title and description column',()=>{
   for(const header of document.querySelectorAll('.st-subsection-header')){
     const copy=header.querySelector(':scope > .subsection-heading-copy');

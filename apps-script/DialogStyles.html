@@ -36,9 +36,18 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 /* Settings uses the full dialog width for the source color collection. */
 #settings-dialog .dialog-heading { padding:var(--space-3) var(--space-4); }
 #settings-dialog .dialog-body { padding:var(--space-4); }
+/* Shared Settings section spacing for every tab (including Simulation).
+   One rule owns section padding and dividers; avoid stacked margins. */
 #settings-dialog .settings-section {
-  display:grid; gap:var(--space-3); min-width:0;
-  padding-bottom:var(--section-gap); margin:0 0 var(--section-gap);
+  display:grid;gap:var(--space-3);min-width:0;
+  padding:var(--space-4) 0;margin:0;
+  border-bottom:var(--border-width) solid var(--line);
+}
+#settings-dialog :is(#settings-page-case,#settings-page-appearance,#settings-run-options,#settings-page-gemini,#settings-page-storage) > .settings-section:first-of-type {
+  padding-top:0;
+}
+#settings-dialog :is(#settings-page-case,#settings-page-appearance,#settings-run-options,#settings-page-gemini,#settings-page-storage) > .settings-section:last-of-type {
+  padding-bottom:0;border-bottom:0;
 }
 #settings-dialog .settings-section > :is(h3,p,label,form,.settings-row,.settings-section-heading,.gemini-connection-grid,.gemini-prompt-editor,.settings-color-columns,.settings-simulation-grid) { margin:0; }
 #settings-dialog .settings-section > :is(form,.settings-option-group),
@@ -51,7 +60,6 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 #settings-dialog .settings-section .scenario-scope { gap:var(--space-2); }
 #settings-dialog .settings-section .settings-section-heading h3,
 #settings-dialog .gemini-connection-grid :is(label,p) { margin:0; }
-#settings-dialog .gemini-settings { padding:0 0 var(--section-gap); }
 #settings-dialog .gemini-prompt-card { display:grid; gap:var(--space-2); align-content:start; }
 #settings-dialog .gemini-prompt-card :is(textarea,.gemini-prompt-footer) { margin:0; }
 
@@ -65,10 +73,22 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 #settings-dialog .accent-choice { width:var(--size-28); height:var(--size-28); justify-self:center; border:var(--border-width) solid var(--line-strong); }
 #settings-dialog .accent-choice[aria-pressed=true] { outline:var(--focus-width) solid var(--ink); outline-offset:2px; }
 #settings-dialog #case-editor-form .field-grid { margin:0; }
-#settings-dialog #case-editor-form .settings-case-general-grid { grid-template-columns:repeat(2,minmax(0,1fr));max-width:none;align-items:end; }
+#settings-dialog #case-editor-form .settings-case-general-grid {grid-template-columns:repeat(2,minmax(0,1fr));max-width:none;align-items:end;}
+#settings-dialog #settings-case-section .settings-case-options {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:var(--space-3);align-items:start;min-width:0;
+}
+#settings-dialog #settings-case-section .settings-case-options > label {
+  display:grid;gap:var(--space-2);min-width:0;margin:0;
+}
+#settings-dialog #settings-case-section .settings-case-options select {width:100%;min-width:0;}
+#settings-page-simulation .settings-recording-toggle {align-self:end;min-width:0;margin:0;}
 .settings-case-export { display:grid;gap:var(--space-2); }
 .settings-case-export button { justify-self:start; }
-@media(max-width:600px) { #settings-dialog #case-editor-form .settings-case-general-grid { grid-template-columns:1fr; } }
+@media(max-width:600px) {
+  #settings-dialog #case-editor-form .settings-case-general-grid,
+  #settings-dialog #settings-case-section .settings-case-options {grid-template-columns:minmax(0,1fr);}
+}
 
 #settings-dialog .gemini-settings > label { margin:0; }
 #settings-dialog .dialog-actions { padding:var(--space-3) var(--space-4); }

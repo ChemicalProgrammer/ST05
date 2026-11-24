@@ -141,14 +141,32 @@ test('machine destination and type selects share a responsive row',()=>{
   assert(controls[1].classList.contains('sheet-machine-type'));
   assert.equal(row.querySelectorAll('.sheet-equipment-target-reason').length,0);
   const reason=card.querySelector(':scope > .sheet-equipment-target-reason');
-  assert(reason);
-  assert.match(reason.textContent,/appended|equipment|Equipment/i);
-  assert.equal(controls[0].getAttribute('aria-describedby'),reason.id);
+  assert.equal(reason,null,'A new equipment destination does not need a repeated placement note');
+  assert.equal(controls[0].getAttribute('aria-describedby'),null);
   assert.equal(controls[0].value,'new');
   assert.equal(controls[1].value,'CUSTOM');
   const styles=fs.readFileSync('apps-script/SheetImportStyles.html','utf8');
   assert.match(styles,/\.sheet-equipment-mapping-row\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles,/@media\(max-width:650px\)[\s\S]*\.sheet-equipment-mapping-row\s*\{\s*grid-template-columns:minmax\(0,1fr\)/);
+ }finally{h.dom.window.close();}
+});
+
+test('new equipment hints stay hidden after changing the destination, but errors remain explained',()=>{
+ const h=setup();try{
+  const first=h.d.querySelector('.sheet-equipment-choice');
+  assert.equal(first.querySelector(':scope > .sheet-equipment-target-reason'),null);
+  const select=first.querySelector('.sheet-target');
+  select.value='skip';select.onchange();
+  const skipped=h.d.querySelector('.sheet-equipment-choice');
+  assert.equal(skipped.querySelector(':scope > .sheet-equipment-target-reason'),null,
+    'The previous new-equipment reason must not reappear when the target changes');
+  h.preview.errors=[{cell:'D10',message:'Invalid MTBF for this row'}];
+  h.d.getElementById('sheet-import-form').dispatchEvent(new h.w.Event('submit',{cancelable:true}));
+  const invalid=h.d.querySelector('.sheet-equipment-choice');
+  const note=invalid.querySelector(':scope > .sheet-equipment-target-reason');
+  assert(note,'Actionable row diagnostics must remain visible');
+  assert.match(note.textContent,/Invalid MTBF/);
+  assert.equal(invalid.querySelector('.sheet-target').getAttribute('aria-describedby'),note.id);
  }finally{h.dom.window.close();}
 });
 

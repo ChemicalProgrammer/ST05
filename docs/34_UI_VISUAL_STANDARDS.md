@@ -532,3 +532,10 @@ importación comprueba desplegables, requisitos y aplicación. Se analizaron los
 51 bloques de script generados, 25 estilos y 19 archivos de servidor. Estas
 comprobaciones de DOM, eventos y estilos no equivalen a una revisión visual en
 un navegador real.
+
+## Distribución del diálogo Configuración
+
+- **Márgenes de secciones:** una sola regla en `DialogStyles.html` administra el `padding` vertical, los divisores y el espacio entre controles de `#settings-dialog .settings-section`. Evita añadir márgenes por pestaña o subsecciones de Simulación en `UiStandards.html` para no duplicar las separaciones.
+- **General (Caso):** dos columnas uniformes. Primera fila: nombre del caso y exportación JSON. Segunda fila: configuración de productos/formatos y vista de equipos/transportadores. En anchuras menores de 600 px ambas filas se apilan.
+- **Registro y gráficas:** el checkbox «Mostrar conteo por turnos» pertenece a la misma cuadrícula que el intervalo, los FPS y la ventana de gráfica; ocupa la segunda columna de la segunda fila. Se conserva el mismo control e identificador `run-track-shifts`.
+- **Importación de equipos:** se conserva una fila para el destino y tipo de máquina. No muestres la nota repetida «Equipo nuevo — agregado al final de la línea» cuando se elige agregar, ni al cambiar temporalmente ese destino; los diagnósticos y advertencias accionables sí permanecen.

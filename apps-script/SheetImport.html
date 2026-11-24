@@ -257,9 +257,9 @@ window.STSheetImport=function(state,actions){
         record.target=select.value;merge.defaults(data,record,snapshot.equipment);render();
         var next=host.querySelector('[data-source-index="'+record.index+'"]');next.open=true;next.querySelector('select').focus();
       };
-      var reason=node('p',record.reason,'sheet-equipment-target-reason');
-      reason.id='sheet-import-target-reason-'+record.index;
-      select.setAttribute('aria-describedby',reason.id);
+      var newEquipmentHint=__ST_TEXT__('sheetimportmerge.new_equipment_appended_to_the_line');
+      var reason=record.target==='new'||record.reason===newEquipmentHint?null:node('p',record.reason,'sheet-equipment-target-reason');
+      if(reason){reason.id='sheet-import-target-reason-'+record.index;select.setAttribute('aria-describedby',reason.id);}
       label.append(select);mappingRow.append(label);
       if(unit.type!=='CONVEYOR'){
         var typeLabel=node('label',__ST_TEXT__('sheetimport.machine_type')),typeSelect=document.createElement('select');
@@ -270,7 +270,7 @@ window.STSheetImport=function(state,actions){
         typeLabel.classList.add('sheet-equipment-mapping-field');
         typeLabel.append(typeSelect);mappingRow.append(typeLabel);
       }
-      section.append(mappingRow,reason);
+      section.append(mappingRow);if(reason)section.append(reason);
       var table=header();merge.fieldsFor(data).forEach(function(f){
         var before=current?f.read(current):null,after=merge.incomingValue(data,record,f),
           errors=merge.errorsFor(data,f.col,record.row);

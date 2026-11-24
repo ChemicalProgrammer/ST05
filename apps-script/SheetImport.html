@@ -1,10 +1,29 @@
 <script>
 window.STSheetImport=function(state,actions){
   var preview=null,plan=null,snapshot=null,sequence=0,context=null,lastFocus,packingDraft=null,inheritedTab=null,observationDraft=null;
-  var merge=STSheetImportMerge,importVersion='sheet-import-20261123-8';
+  var merge=STSheetImportMerge,importVersion='sheet-import-20261123-8',sectionOpen={};
+  function subsection(spec){
+    var id=spec.id,config=Object.assign({},spec,{native:true,
+      open:Object.prototype.hasOwnProperty.call(sectionOpen,id)?sectionOpen[id]:spec.open});
+    var control=STSubsection.create(config);
+    control.section.classList.add('sheet-import-section');
+    control.section.addEventListener('toggle',function(){if(control.section.isConnected)sectionOpen[id]=control.section.open;});
+    return control;
+  }
+  function mountSpreadsheetSection(){
+    if(el('sheet-import-spreadsheet-section'))return;
+    var body=el('sheet-import-dialog').querySelector('.dialog-body');
+    var intro=body.querySelector(':scope > .subsection-description'),form=el('sheet-import-form'),
+      error=el('sheet-import-error'),meta=node('div','');
+    meta.id='sheet-import-case-meta';
+    var control=subsection({id:'sheet-import-spreadsheet-section',title:'Spreadsheet',
+      description:'Select the Google Sheets source and preview before applying changes.',open:true,
+      content:[intro,form,error,meta]});
+    body.insertBefore(control.section,el('sheet-import-preview'));
+  }
   function el(id){return document.getElementById(id);}
   function validContext(){return context&&state.activeCase?.id===context.caseId&&state.activeSimulationId===context.simulationId&&state.requestEpoch===context.epoch;}
-  function clear(){preview=null;plan=null;packingDraft=null;observationDraft=null;el('sheet-import-readiness')?.setAttribute('hidden','');el('sheet-import-preview').textContent='';el('sheet-import-ack').checked=false;el('sheet-import-apply').disabled=true;el('sheet-import-summary').textContent='';}
+  function clear(){preview=null;plan=null;packingDraft=null;observationDraft=null;sectionOpen={};el('sheet-import-case-meta')?.replaceChildren();el('sheet-import-preview').replaceChildren();el('sheet-import-ack').checked=false;el('sheet-import-apply').disabled=true;el('sheet-import-apply').removeAttribute('aria-describedby');}
   function busy(value){el('sheet-import-read').disabled=value;el('sheet-import-read').setAttribute('aria-busy',String(value));el('sheet-import-url').disabled=value;el('sheet-import-tab').disabled=value;}
   function close(){sequence++;clear();snapshot=null;busy(false);el('sheet-import-dialog').close();if(lastFocus&&lastFocus.isConnected)lastFocus.focus();}
   function node(tag,text,className){var n=document.createElement(tag);n.textContent=text;if(className)n.className=className;return n;}
@@ -82,7 +101,6 @@ window.STSheetImport=function(state,actions){
       host.append(section);return;
     }
     var section=document.createElement('section');section.className='settings-section sheet-packing-proposal';section.id='sheet-packing-proposal';
-    var heading=node('div','');heading.className='editor-subheading compact-heading';heading.append(node('h3','Product and packing format'));section.append(heading);
     var label=node('label',''),enabled=document.createElement('input');enabled.type='checkbox';enabled.id='sheet-packing-enabled';enabled.checked=packingDraft.enabled;label.className='remember st-checkbox-card';label.append(enabled,document.createTextNode('Create product and format from the selected line'));section.append(label);
     var fields=document.createElement('fieldset');fields.className='field-grid sheet-packing-fields';fields.id='sheet-packing-fields';fields.disabled=!packingDraft.enabled;var legend=node('legend','Packing proposal');legend.className='sr-only';fields.append(legend);
     function changed(){el('sheet-import-ack').checked=false;refresh();}
@@ -115,34 +133,46 @@ window.STSheetImport=function(state,actions){
     review.append(node('p','Machine rates are expressed in output units. For example, 300 bottles/min ÷ 12 bottles/case = 25 cases/min. Physical belt speeds in m/min are not divided.'));host.append(review);
   }
   function applyReadiness(result){
+    var details=el('sheet-import-details-section'),body=details?.querySelector(':scope > .fold-content');
+    if(!body)return;
     var area=el('sheet-import-readiness');
     if(!area){
       area=node('div','');area.id='sheet-import-readiness';area.className='sheet-import-readiness';
       var text=node('span','');text.id='sheet-import-readiness-text';text.setAttribute('role','status');
-      var jump=node('button','Review pending field');jump.id='sheet-import-review-pending';jump.type='button';jump.className='ghost';area.append(text,jump);el('sheet-import-summary').after(area);
-      el('sheet-import-apply').setAttribute('aria-describedby',text.id);
+      var jump=node('button','Review pending field');jump.id='sheet-import-review-pending';jump.type='button';jump.className='ghost';
+      area.append(text,jump);body.prepend(area);
     }
-    area.hidden=false;
-    var pending=result.packingIssues||[],first=pending[0],focusId=first?'sheet-packing-'+first.field:'sheet-import-error';
-    var message=result.errors.length?(first?'Complete "'+(el(focusId)?.getAttribute('aria-label')||first.field)+'" in Product and packing format.':result.errors[0]):!result.hasChanges?'No changes selected. Select the fields you want to import.':!el('sheet-import-ack').checked?'Confirm the review to enable Apply.':'Ready to apply the selected changes.';
+    var pending=result.packingIssues||[],first=pending[0],focusId=first?'sheet-packing-'+first.field:'sheet-import-error',
+      blocking=Boolean(result.errors.length)||!result.hasChanges;
+    var message=result.errors.length?(first?'Complete "'+(el(focusId)?.getAttribute('aria-label')||first.field)+'" in Product and packing format.':result.errors[0]):!result.hasChanges?'No changes selected. Select the fields you want to import.':'';
     if(result.errors.length>1)message+=' '+(result.errors.length-1)+' additional requirement(s) remain.';
-    el('sheet-import-readiness-text').textContent=message;area.dataset.status=result.errors.length?'error':!result.hasChanges?'idle':'ready';
-    var jump=el('sheet-import-review-pending');jump.hidden=!result.errors.length;jump.onclick=function(){var target=el(focusId);if(!target)return;if(!target.matches('input,select,button'))target.tabIndex=-1;target.scrollIntoView?.({block:'center',behavior:'smooth'});target.focus({preventScroll:true});};
-    el('sheet-import-apply').title=message;
-    var fields=el('sheet-packing-fields');if(fields)fields.querySelectorAll('input,select').forEach(function(control){
+    el('sheet-import-readiness-text').textContent=message;area.hidden=!blocking;area.dataset.status=result.errors.length?'error':'idle';
+    if(blocking)details.open=true;
+    var jump=el('sheet-import-review-pending');jump.hidden=!result.errors.length;
+    jump.onclick=function(){
+      var target=el(focusId);if(!target)return;
+      target.closest('.sheet-import-section')?.setAttribute('open','');
+      if(!target.matches('input,select,button'))target.tabIndex=-1;
+      target.scrollIntoView?.({block:'center',behavior:'smooth'});target.focus({preventScroll:true});
+    };
+    if(blocking)el('sheet-import-apply').setAttribute('aria-describedby','sheet-import-readiness-text');
+    else el('sheet-import-apply').removeAttribute('aria-describedby');
+    el('sheet-import-apply').title=message||(!el('sheet-import-ack').checked?'Review the import and check the confirmation to apply.':'Apply the selected changes.');
+    var fields=el('sheet-packing-fields');
+    if(fields)fields.querySelectorAll('input,select').forEach(function(control){
       var key=control.id.replace('sheet-packing-',''),issue=pending.find(item=>item.field===key),errorId=control.id+'-error';
       control.setCustomValidity(issue?.message||'');
       if(issue)control.setAttribute('aria-invalid','true');else control.removeAttribute('aria-invalid');
-      var local=el(errorId);if(!local){local=node('span','');local.id=errorId;local.className='sheet-packing-field-error';control.after(local);}local.textContent=issue?.message||'';local.hidden=!issue;
+      var local=el(errorId);if(!local){local=node('span','');local.id=errorId;local.className='sheet-packing-field-error';control.after(local);}
+      local.textContent=issue?.message||'';local.hidden=!issue;
       if(issue)control.setAttribute('aria-describedby',errorId);else control.removeAttribute('aria-describedby');
     });
   }
   function refresh(){
     if(!preview||!plan)return;var result=buildResult();updatePackingReview(result);
-    el('sheet-import-summary').textContent=result.added+__ST_TEXT__('sheetimport.to_add')+result.updated+__ST_TEXT__('sheetimport.to_update')+result.metadataChanges+__ST_TEXT__('sheetimport.metadata_changes')+(result.realData?' · 1 Real Data observation':'')+(result.formatCatalog?' · Product and format catalog updated':'')+(result.equipmentChanged?__ST_TEXT__('sheetimport.existing_results_will_be_cleared_run_again'):'');
     el('sheet-import-error').textContent=result.errors.join('\n');
     var validation=window.SimulatorEngine.validateSimulationInput({case:{equipment:result.equipment},run:{durationSeconds:1,tickSeconds:1,seed:1,...(result.initialFormatId?{initialFormatId:result.initialFormatId,initialProductId:result.initialFormatId,productCatalog:SimulatorEngine.resolvePackingFormats(result.formatCatalog)}:{})}});updateRowIndicators(result,validation);
-    var review=el('sheet-import-model-review');if(review){review.textContent='';review.classList.toggle('hidden',validation.ok);if(!validation.ok){review.open=true;review.appendChild(node('summary',__ST_TEXT__('sheetimport.physical_model_review_drafts_can_be_saved')+' · '+validation.error.details.length));var list=document.createElement('ul');validation.error.details.forEach(function(detail){list.appendChild(node('li',merge.physicalIssue(detail,result.equipment,result.sourceImport)));});review.appendChild(list);}}
+    var review=el('sheet-import-model-review');if(review){review.textContent='';review.classList.toggle('hidden',validation.ok);if(!validation.ok){el('sheet-import-details-section')?.setAttribute('open','');review.open=true;review.appendChild(node('summary',__ST_TEXT__('sheetimport.physical_model_review_drafts_can_be_saved')+' · '+validation.error.details.length));var list=document.createElement('ul');validation.error.details.forEach(function(detail){list.appendChild(node('li',merge.physicalIssue(detail,result.equipment,result.sourceImport)));});review.appendChild(list);}}
     var corrections=el('sheet-import-corrections');if(corrections){corrections.textContent='';STSheetCorrections.render(corrections,preview,plan,result,function(row){el('sheet-import-ack').checked=false;render();el('sheet-import-corrections').querySelector('[data-correction-row="'+row+'"] button')?.focus();});}
     el('sheet-import-apply').disabled=!result.hasChanges||result.errors.length>0||!el('sheet-import-ack').checked;applyReadiness(result);
   }
@@ -152,42 +182,118 @@ window.STSheetImport=function(state,actions){
     var cell=document.createElement('td'),input=document.createElement('input');input.type='checkbox';input.checked=selected;input.disabled=disabled;input.setAttribute('aria-label',__ST_TEXT__('sheetimport.import')+label);input.dataset.field=field?.id||'';input.onchange=function(){el('sheet-import-ack').checked=false;callback(input.checked);refresh();};cell.appendChild(input);row.appendChild(cell);
     [label,merge.display(before,field),merge.display(after,field),disabled?__ST_TEXT__('sheetimport.unavailable'):!changed?__ST_TEXT__('sheetimport.unchanged'):after==null?__ST_TEXT__('sheetimport.clear_to_na_optional'):__ST_TEXT__('sheetimport.changed')].forEach(function(text){row.appendChild(node('td',text));});if(issues&&issues.length){var detail=node('p',issues.map(function(e){return (e.severity==='info'?'Info · ':'')+e.cell+': '+e.message;}).join(' '));detail.className='sheet-field-issues';row.lastChild.appendChild(detail);}body.appendChild(row);
   }
+  function renderCaseMetadata(data){
+    var host=el('sheet-import-case-meta');if(!host)return;host.replaceChildren();
+    var selected=merge.metadataFieldsFor(data).filter(function(item){
+      var f=item.field,i=item.index,key=f[0],before=merge.metadataValue(snapshot.sourceImport?.metadata,key),
+        after=merge.metadataValue(data.metadata,key);
+      return before!=null||after!=null||merge.metadataErrors(data,i).length;
+    });
+    if(!selected.length)return;
+    var details=detail(__ST_TEXT__('sheetimport.case_format_information_select_metadata_to_update'));
+    details.classList.add('sheet-import-case-information');
+    details.open=selected.some(function(item){return merge.metadataErrors(data,item.index).length;});
+    var mt=header();
+    selected.forEach(function(item){
+      var f=item.field,i=item.index,before=merge.metadataValue(snapshot.sourceImport?.metadata,f[0]),
+        after=merge.metadataValue(data.metadata,f[0]);
+      choice(mt.body,merge.metadataCell(data.source,i)+' · '+f[1],before,after,plan.metadata[f[0]],
+        Boolean(merge.metadataErrors(data,i).length),!merge.equal(before,after),
+        function(v){plan.metadata[f[0]]=v;},null,merge.metadataErrors(data,i));
+    });
+    var scroll=node('div','');scroll.className='table-scroll';scroll.append(mt.table);
+    details.append(scroll);host.append(details);
+  }
   function render(){
-    var data=preview,host=el('sheet-import-preview');host.textContent='';el('sheet-import-ack').checked=false;
-    host.appendChild(node('h3',data.equipment.length+__ST_TEXT__('sheetimport.source_equipment')+data.source.sheetName));
-    host.appendChild(node('p',__ST_TEXT__('sheetimport.choose_what_to_apply_to_this_simulation_existing_equipment_keeps_its_id_and'),'subsection-description'));
-    var toolbar=document.createElement('div');toolbar.className='button-row';
-    [[__ST_TEXT__('sheetimport.select_differences'),function(){plan.records.forEach(function(r){merge.defaults(data,r,snapshot.equipment);});if(packingDraft.catalog)packingDraft.enabled=true;merge.metadataFields.forEach(function(f,i){plan.metadata[f[0]]=!merge.metadataErrors(data,i).length&&merge.metadataValue(data.metadata,f[0])!=null&&!merge.equal(merge.metadataValue(snapshot.sourceImport?.metadata,f[0]),merge.metadataValue(data.metadata,f[0]));});render();}],[__ST_TEXT__('sheetimport.deselect_all_fields'),function(){plan.records.forEach(function(r){Object.keys(r.selected).forEach(function(k){r.selected[k]=false;});});Object.keys(plan.metadata).forEach(function(k){plan.metadata[k]=false;});packingDraft.enabled=false;if(observationDraft)observationDraft.enabled=false;render();}]].forEach(function(item){var b=node('button',item[0]);b.type='button';b.className='secondary';b.onclick=item[1];toolbar.appendChild(b);});host.appendChild(toolbar);
-    var meta=document.createElement('details');meta.open=merge.metadataFields.some(function(f,i){return merge.metadataErrors(data,i).length;});meta.appendChild(node('summary',__ST_TEXT__('sheetimport.case_format_information_select_metadata_to_update')));
-    var mt=header();merge.metadataFields.forEach(function(f,i){var before=merge.metadataValue(snapshot.sourceImport?.metadata,f[0]),after=merge.metadataValue(data.metadata,f[0]);choice(mt.body,merge.metadataCell(data.source,i)+' · '+f[1],before,after,plan.metadata[f[0]],Boolean(merge.metadataErrors(data,i).length),!merge.equal(before,after),function(v){plan.metadata[f[0]]=v;},null,merge.metadataErrors(data,i));});meta.appendChild(mt.table);host.appendChild(meta);packingPanel(host,merge.build(data,plan,snapshot.equipment,snapshot.sourceImport));observationPanel(host);
+    var data=preview,host=el('sheet-import-preview');
+    host.querySelectorAll(':scope > .sheet-import-section').forEach(function(item){sectionOpen[item.id]=item.open;});
+    host.replaceChildren();el('sheet-import-ack').checked=false;
+    renderCaseMetadata(data);
+    var toolbar=node('div','');toolbar.className='button-row';
+    [[__ST_TEXT__('sheetimport.select_differences'),function(){
+      plan.records.forEach(function(r){merge.defaults(data,r,snapshot.equipment);});
+      if(packingDraft.catalog)packingDraft.enabled=true;
+      merge.metadataFieldsFor(data).forEach(function(item){
+        var f=item.field,i=item.index,from=merge.metadataValue(snapshot.sourceImport?.metadata,f[0]),
+          after=merge.metadataValue(data.metadata,f[0]);
+        plan.metadata[f[0]]=!merge.metadataErrors(data,i).length&&after!=null&&!merge.equal(from,after);
+      });render();
+    }],[__ST_TEXT__('sheetimport.deselect_all_fields'),function(){
+      plan.records.forEach(function(r){Object.keys(r.selected).forEach(function(k){r.selected[k]=false;});});
+      Object.keys(plan.metadata).forEach(function(k){plan.metadata[k]=false;});
+      packingDraft.enabled=false;if(observationDraft)observationDraft.enabled=false;render();
+    }]].forEach(function(item){var b=node('button',item[0]);b.type='button';b.className='secondary';b.onclick=item[1];toolbar.append(b);});
+    var equipmentSection=subsection({
+      id:'sheet-import-equipment-section',title:'Equipment',
+      description:'Review source equipment and choose which fields to import.',
+      tools:toolbar,open:true
+    });host.append(equipmentSection.section);
+    var equipmentBody=equipmentSection.body;
     plan.records.forEach(function(record){
-      var unit=data.equipment[record.index],current=snapshot.equipment.find(function(e){return e.id===record.target;}),section=document.createElement('details');section.className='sheet-equipment-choice';section.dataset.sourceIndex=record.index;
-      var summary=node('summary',''),summaryText=node('span',__ST_TEXT__('sheetimport.row')+record.row+' · '+unit.name+' · '+(record.target==='skip'?'Skipped':record.target==='new'?__ST_TEXT__('sheetimport.add_equipment'):__ST_TEXT__('sheetimport.update')+current.name)),indicator=node('span',''),issues=node('ul','');summaryText.className='sheet-equipment-summary-text';indicator.className='sheet-import-row-status';indicator.setAttribute('role','img');issues.className='sheet-equipment-issues';issues.id='sheet-import-row-issues-'+record.index;indicator.setAttribute('aria-describedby',issues.id);summary.append(summaryText,indicator);section.append(summary,issues);
-      var label=node('label',__ST_TEXT__('sheetimport.import_into')),select=document.createElement('select');select.className='sheet-target';select.setAttribute('aria-label',__ST_TEXT__('sheetimport.import_target_for_row')+record.row);
-      [['skip',__ST_TEXT__('sheetimport.skip_this_equipment')],['new',__ST_TEXT__('sheetimport.add_as_new_equipment')]].concat(snapshot.equipment.map(function(e){return [e.id,__ST_TEXT__('sheetimport.update_2')+e.name+' ('+e.id+')'];})).forEach(function(option){select.add(new Option(option[1],option[0]));});select.value=record.target;
-      select.onchange=function(){record.target=select.value;merge.defaults(data,record,snapshot.equipment);render();var next=host.querySelector('[data-source-index="'+record.index+'"]');next.open=true;next.querySelector('select').focus();};label.appendChild(select);section.appendChild(label);section.appendChild(node('p',record.reason));
+      var unit=data.equipment[record.index],current=snapshot.equipment.find(function(e){return e.id===record.target;}),
+        section=document.createElement('details');section.className='sheet-equipment-choice';section.dataset.sourceIndex=record.index;
+      var summary=node('summary',''),summaryText=node('span',__ST_TEXT__('sheetimport.row')+record.row+' · '+unit.name+' · '+(record.target==='skip'?'Skipped':record.target==='new'?__ST_TEXT__('sheetimport.add_equipment'):__ST_TEXT__('sheetimport.update')+current.name)),
+        indicator=node('span',''),issues=node('ul','');
+      summaryText.className='sheet-equipment-summary-text';indicator.className='sheet-import-row-status';
+      indicator.setAttribute('role','img');issues.className='sheet-equipment-issues';issues.id='sheet-import-row-issues-'+record.index;
+      indicator.setAttribute('aria-describedby',issues.id);summary.append(summaryText,indicator);section.append(summary,issues);
+      var label=node('label',__ST_TEXT__('sheetimport.import_into')),select=document.createElement('select');select.className='sheet-target';
+      select.setAttribute('aria-label',__ST_TEXT__('sheetimport.import_target_for_row')+record.row);
+      [['skip',__ST_TEXT__('sheetimport.skip_this_equipment')],['new',__ST_TEXT__('sheetimport.add_as_new_equipment')]].concat(snapshot.equipment.map(function(e){return [e.id,__ST_TEXT__('sheetimport.update_2')+e.name+' ('+e.id+')'];})).forEach(function(option){select.add(new Option(option[1],option[0]));});
+      select.value=record.target;
+      select.onchange=function(){
+        record.target=select.value;merge.defaults(data,record,snapshot.equipment);render();
+        var next=host.querySelector('[data-source-index="'+record.index+'"]');next.open=true;next.querySelector('select').focus();
+      };
+      label.append(select);section.append(label,node('p',record.reason));
       if(unit.type!=='CONVEYOR'){
         var typeLabel=node('label',__ST_TEXT__('sheetimport.machine_type')),typeSelect=document.createElement('select');
         typeSelect.className='sheet-machine-type';typeSelect.setAttribute('aria-label',__ST_TEXT__('sheetimport.machine_type')+' '+unit.name);
         ['CUSTOM','BLOWER','BLOWMOLDER','PUCKER','FILLER','CAPPER','FEEDER','DEPUCKER','SLEEVER','CASE_PACKER','PALLETIZER'].forEach(function(type){typeSelect.add(new Option(type.replace(/_/g,' '),type));});
         typeSelect.value=unit.type;typeSelect.disabled=record.target==='skip';
         typeSelect.onchange=function(){unit.type=typeSelect.value;record.selected.type=true;render();host.querySelector('[data-source-index="'+record.index+'"]').open=true;};
-        typeLabel.appendChild(typeSelect);section.appendChild(typeLabel);
+        typeLabel.append(typeSelect);section.append(typeLabel);
       }
-      var table=header();merge.fieldsFor(data).forEach(function(f){var before=current?f.read(current):null,after=merge.incomingValue(data,record,f),errors=merge.errorsFor(data,f.col,record.row);choice(table.body,f.col+record.row+' · '+(record.rateDivisor&&['maxSpeed','nominalSpeed'].includes(f.id)?f.label.replace(/bpm/ig,'cases/min')+' · source ÷ '+record.rateDivisor:f.label),before,after,record.target!=='skip'&&record.selected[f.id],record.target==='skip'||errors.length>0,!merge.equal(before,after),function(v){record.selected[f.id]=v;},f,errors.concat(merge.errorsFor({errors:data.warnings||[]},f.col,record.row)));});
-      var scroll=document.createElement('div');scroll.className='table-scroll';scroll.appendChild(table.table);section.appendChild(scroll);host.appendChild(section);
+      var table=header();merge.fieldsFor(data).forEach(function(f){
+        var before=current?f.read(current):null,after=merge.incomingValue(data,record,f),
+          errors=merge.errorsFor(data,f.col,record.row);
+        choice(table.body,f.col+record.row+' · '+(record.rateDivisor&&['maxSpeed','nominalSpeed'].includes(f.id)?f.label.replace(/bpm/ig,'cases/min')+' · source ÷ '+record.rateDivisor:f.label),
+          before,after,record.target!=='skip'&&record.selected[f.id],record.target==='skip'||errors.length>0,
+          !merge.equal(before,after),function(v){record.selected[f.id]=v;},f,
+          errors.concat(merge.errorsFor({errors:data.warnings||[]},f.col,record.row)));
+      });
+      var scroll=node('div','');scroll.className='table-scroll';scroll.append(table.table);section.append(scroll);
+      equipmentBody.append(section);
     });
-    [[__ST_TEXT__('sheetimport.source_errors_affected_fields_are_unavailable'),data.errors||[],true],[__ST_TEXT__('sheetimport.source_warnings'),(data.warnings||[]).filter(issue=>issue.severity!=='info'),false]].forEach(function(group){if(!group[1].length)return;var d=document.createElement('details');d.open=group[2];d.appendChild(node('summary',group[0]+' ('+group[1].length+')'));var list=document.createElement('ul');group[1].forEach(function(item){list.appendChild(node('li',item.cell+': '+item.message));});d.appendChild(list);host.appendChild(d);});
-    var information=detail('Import details'),notes=data.notes||[],sourceInfo=(data.warnings||[]).filter(issue=>issue.severity==='info');
-    if(sourceInfo.length){information.append(node('h4','Source information'));var sourceList=node('ul','');sourceInfo.forEach(function(item){sourceList.append(node('li',item.cell+': '+item.message));});information.append(sourceList);}
-    if(notes.length){information.append(node('h4',__ST_TEXT__('sheetimport.mapping_and_model_assumptions')));var list=node('ul','');notes.forEach(function(text){list.appendChild(node('li',text));});information.appendChild(list);}
-    if(sourceInfo.length||notes.length)host.appendChild(information);
-    var corrections=document.createElement('div');corrections.id='sheet-import-corrections';host.appendChild(corrections);
-    var review=document.createElement('details');review.id='sheet-import-model-review';host.appendChild(review);
+    var formatSection=subsection({id:'sheet-import-format-section',title:'Format',
+      description:'Review products, formats and optional packing conversion.',open:true});
+    host.append(formatSection.section);
+    packingPanel(formatSection.body,merge.build(data,plan,snapshot.equipment,snapshot.sourceImport));
+    var detailsSection=subsection({id:'sheet-import-details-section',title:'Import details',
+      description:data.realData?'Review warnings, diagnostics and Real Data.':'Review source notes and validation warnings.',
+      open:Boolean(data.errors?.length||data.realData&&observationDraft?.enabled)});
+    host.append(detailsSection.section);
+    var detailsBody=detailsSection.body;
+    observationPanel(detailsBody);
+    [[__ST_TEXT__('sheetimport.source_errors_affected_fields_are_unavailable'),data.errors||[],true],
+      [__ST_TEXT__('sheetimport.source_warnings'),(data.warnings||[]).filter(issue=>issue.severity!=='info'),false]]
+      .forEach(function(group){
+        if(!group[1].length)return;
+        var d=detail(group[0]+' ('+group[1].length+')');d.open=group[2];var list=node('ul','');
+        group[1].forEach(function(item){list.append(node('li',item.cell+': '+item.message));});
+        d.append(list);detailsBody.append(d);
+      });
+    var information=detail('Source information'),notes=data.notes||[],sourceInfo=(data.warnings||[]).filter(issue=>issue.severity==='info');
+    if(sourceInfo.length){var sourceList=node('ul','');sourceInfo.forEach(function(item){sourceList.append(node('li',item.cell+': '+item.message));});information.append(sourceList);}
+    if(notes.length){information.append(node('h4',__ST_TEXT__('sheetimport.mapping_and_model_assumptions')));var list=node('ul','');notes.forEach(function(text){list.append(node('li',text));});information.append(list);}
+    if(sourceInfo.length||notes.length)detailsBody.append(information);
+    var corrections=node('div','');corrections.id='sheet-import-corrections';detailsBody.append(corrections);
+    var review=document.createElement('details');review.id='sheet-import-model-review';detailsBody.append(review);
     refresh();
   }
   function init(){
-    el('open-sheet-import').onclick=function(){this.closest('details')?.removeAttribute('open');if(!state.activeCase||state.saving)return;snapshot=actions.capture();if(!snapshot)return;context={caseId:state.activeCase.id,simulationId:state.activeSimulationId,epoch:state.requestEpoch};lastFocus=document.activeElement;clear();el('sheet-import-error').textContent='';var source=snapshot.sourceImport?.source;el('sheet-import-url').value=source?.spreadsheetId||'';el('sheet-import-tab').value=source?.sheetName||'';inheritedTab=source?.sheetName||null;el('sheet-import-dialog').showModal();el('sheet-import-url').focus();};
+    mountSpreadsheetSection();
+    el('open-sheet-import').onclick=function(){this.closest('details')?.removeAttribute('open');if(!state.activeCase||state.saving)return;snapshot=actions.capture();if(!snapshot)return;context={caseId:state.activeCase.id,simulationId:state.activeSimulationId,epoch:state.requestEpoch};lastFocus=document.activeElement;clear();el('sheet-import-spreadsheet-section').open=true;el('sheet-import-error').textContent='';var source=snapshot.sourceImport?.source;el('sheet-import-url').value=source?.spreadsheetId||'';el('sheet-import-tab').value=source?.sheetName||'';inheritedTab=source?.sheetName||null;el('sheet-import-dialog').showModal();el('sheet-import-url').focus();};
     el('sheet-import-close').onclick=close;el('sheet-import-cancel').onclick=close;
     el('sheet-import-dialog').addEventListener('cancel',function(e){e.preventDefault();close();});
     el('sheet-import-url').addEventListener('input',function(){
@@ -200,8 +306,9 @@ window.STSheetImport=function(state,actions){
     el('sheet-import-form').onsubmit=function(e){
       e.preventDefault();if(!validContext())return close();clear();snapshot=actions.capture();if(!snapshot)return;busy(true);el('sheet-import-error').textContent='';var ticket=++sequence,finishActivity=STDialog.beginActivity(el('sheet-import-dialog'));
       function finish(response){finishActivity?.();if(ticket!==sequence||!validContext())return;busy(false);if(response?.ok&&(response.importVersion!==importVersion||response.data?.contractVersion&&response.data.contractVersion!==importVersion)){
+        el('sheet-import-spreadsheet-section').open=true;
         el('sheet-import-error').textContent='Import versions differ. Update the Apps Script web deployment and reopen the app. Client: '+importVersion+'; server: '+(response.importVersion||'unavailable')+'. No changes were applied.';return;
-      }if(!response||!response.ok){var error=response?.error||{message:__ST_TEXT__('sheetimport.no_response_received_from_apps_script')};var details=(error.details||[]).map(function(d){return typeof d==='string'?d:JSON.stringify(d);});el('sheet-import-error').textContent=[error.message,...details,!response?.importVersion?'Client '+importVersion+': server version unavailable. Update Main.gs, SheetImportService.gs and the import interface files together.':''].filter(Boolean).join('\n');STErrors.capture('sheet-import-error',error);return;}preview=response.data;plan=merge.create(preview,snapshot.equipment,snapshot.sourceImport);packingDraft=createPackingDraft(preview);observationDraft=STSheetRealData.create(preview,plan,snapshot.equipment);render();}
+      }if(!response||!response.ok){el('sheet-import-spreadsheet-section').open=true;var error=response?.error||{message:__ST_TEXT__('sheetimport.no_response_received_from_apps_script')};var details=(error.details||[]).map(function(d){return typeof d==='string'?d:JSON.stringify(d);});el('sheet-import-error').textContent=[error.message,...details,!response?.importVersion?'Client '+importVersion+': server version unavailable. Update Main.gs, SheetImportService.gs and the import interface files together.':''].filter(Boolean).join('\n');STErrors.capture('sheet-import-error',error);return;}preview=response.data;plan=merge.create(preview,snapshot.equipment,snapshot.sourceImport);packingDraft=createPackingDraft(preview);observationDraft=STSheetRealData.create(preview,plan,snapshot.equipment);render();}
       google.script.run.withFailureHandler(function(error){finish({ok:false,error:{message:__ST_TEXT__('sheetimport.apps_script_request_failed')+String(error?.message||error||__ST_TEXT__('sheetimport.unknown_transport_error')).slice(0,500)}});}).withSuccessHandler(finish).previewSheetImport({caseId:context.caseId,spreadsheet:el('sheet-import-url').value,sheetName:el('sheet-import-tab').value,
         uiMode:document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC',
         sheetTemplateVersion:'sheet-template-20261124-1',clientImportVersion:importVersion});

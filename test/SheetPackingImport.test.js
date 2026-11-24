@@ -24,6 +24,13 @@ test('packing proposal resolves selected line units, dimensions and native speed
  const simulation=simulateLine({case:{id:'packing-test',equipment:plain(result.equipment)},run});assert(simulation.ok,JSON.stringify(simulation.error));assert(simulation.result.summary.outputCount>0);assert.equal(simulation.result.products.rows[0].outputUnit,'CASES');
  const profiled=applyProductProfile(plain(result.equipment),resolved[0]);assert.equal(profiled[3].processData.upstream.packageLengthMm,310);assert.equal(profiled[3].processData.accumulation.conveyorSpeedMmPerSecond,result.equipment[3].processData.accumulation.conveyorSpeedMmPerSecond);
 });
+test('packing proposal diagnostics do not refer to obsolete Equipment E1:E3 cells',()=>{
+ const h=prepare();h.draft.bottlesPerCase=undefined;h.draft.formatName='';h.draft.volumeMl=0;
+ const errors=h.apply().errors.join(' · ');
+ assert.match(errors,/Products & Formats/);
+ assert.match(errors,/bottles per case/);
+ assert(!/\bE[123]\b/.test(errors),errors);
+});
 test('missing pack count, ambiguous or excluded packer and invalid gaps require review; disabling preserves ordinary import',()=>{
  const data=preview();delete data.metadata.bottlesPerCase;let h=prepare(data);assert(h.apply().errors.some(e=>e.includes('bottles per case')));h.draft.bottlesPerCase=12;assert.equal(h.apply().errors.length,0);
  h.draft.enabled=false;assert.strictEqual(h.apply(),h.base);

@@ -5,10 +5,10 @@ import {JSDOM} from 'jsdom';
 import {normalizeFormatCatalog,productVolumeUnits} from '../src/simulation/FormatCatalog.js';
 
 function setup({importVersion='sheet-import-20261123-8',informational=false,rememberedTab=null,uiMode='basic'}={}){
- const dom=new JSDOM(`<button id="open-sheet-import"></button><dialog id="sheet-import-dialog"><form id="sheet-import-form"><input id="sheet-import-url"><input id="sheet-import-tab"><button id="sheet-import-read"></button></form><div id="sheet-import-preview"></div><p id="sheet-import-error"></p><p id="sheet-import-summary"></p><input type="checkbox" id="sheet-import-ack"><button id="sheet-import-apply"></button><button id="sheet-import-close"></button><button id="sheet-import-cancel"></button></dialog>`,{runScripts:'outside-only'}),w=dom.window;
+ const dom=new JSDOM(`<button id="open-sheet-import"></button><dialog id="sheet-import-dialog"><div class="dialog-body"><p class="subsection-description">Spreadsheet source</p><form id="sheet-import-form"><input id="sheet-import-url"><input id="sheet-import-tab"><button id="sheet-import-read"></button></form><p id="sheet-import-error"></p><div id="sheet-import-preview"></div></div><footer class="dialog-actions"><input type="checkbox" id="sheet-import-ack"><button id="sheet-import-apply"></button><button id="sheet-import-close"></button><button id="sheet-import-cancel"></button></footer></dialog>`,{runScripts:'outside-only'}),w=dom.window;
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  w.eval(fs.readFileSync('apps-script/TextResources.gs','utf8'));w.__ST_TEXT__=key=>w.ST_TEXT_RESOURCES[key]||key;
- for(const file of ['Icons.html','SheetImportMerge.html','SheetImport.html'])w.eval(fs.readFileSync('apps-script/'+file,'utf8').replace(/<\/?script>/g,''));
+ for(const file of ['Icons.html','Subsection.html','SheetImportMerge.html','SheetImport.html'])w.eval(fs.readFileSync('apps-script/'+file,'utf8').replace(/<\/?script>/g,''));
  const units=Array.from({length:4},(_,i)=>({id:'sheet-row-'+(10+i),name:'Machine '+i,type:'CUSTOM',nominalRatePerSecond:2,initialMode:'AUTO',characteristics:{sourceSheetRow:10+i},noiseProfile:{},processData:{role:'MACHINE',equipment:{maximumSpeedBpm:120}}}));
  const preview={equipment:units,source:{sheetName:'Test',spreadsheetId:'test',sheetId:0},sourceRows:units.map((u,i)=>({row:10+i,values:{}})),metadata:{},notes:[],errors:[{cell:'D12:E12',message:'Invalid reliability values.'}],warnings:[{cell:'F11',message:'Confirm the speed unit.'}]};
  if(informational){preview.errors=[];preview.warnings=[{cell:'D10:E10',severity:'info',code:'NO_RELIABILITY_DATA',message:'Random failures disabled.'},{cell:'F10',severity:'info',code:'INHERITED_CONVEYOR_RATE',message:'Using upstream machine rate.'}];}
@@ -21,6 +21,42 @@ function setup({importVersion='sheet-import-20261123-8',informational=false,reme
  w.STSheetImport(state,{capture:()=>snapshot,apply:()=>true}).init();w.document.getElementById('open-sheet-import').click();w.document.getElementById('sheet-import-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
  return {dom,w,d:w.document,preview,setModelReview(value){modelReview=value;}};
 }
+
+test('import dialog groups spreadsheet, equipment, formats and details with the shared subsection',()=>{
+ const h=setup();
+ try{
+  const names=['sheet-import-spreadsheet-section','sheet-import-equipment-section',
+    'sheet-import-format-section','sheet-import-details-section'];
+  assert.deepEqual(names.map(id=>h.d.getElementById(id)?.querySelector(':scope > summary .subsection-native-title')?.textContent),
+    ['Spreadsheet','Equipment','Format','Import details']);
+  for(const id of names)assert(h.d.getElementById(id)?.classList.contains('st-subsection'),id);
+  assert(h.d.getElementById('sheet-import-spreadsheet-section').contains(h.d.getElementById('sheet-import-form')));
+  assert(h.d.getElementById('sheet-import-equipment-section').contains(h.d.querySelector('.sheet-equipment-choice')));
+  assert(h.d.getElementById('sheet-import-details-section').contains(h.d.getElementById('sheet-import-model-review')));
+  assert.equal(h.d.getElementById('sheet-import-summary'),null,'No long status note in the footer');
+  const icons=[...h.d.querySelectorAll('.sheet-import-row-status')];
+  assert.equal(icons.length,4);
+  assert(icons[0].querySelector('svg.icon'));
+  const css=fs.readFileSync('apps-script/SheetImportStyles.html','utf8');
+  assert.match(css,/width:30px; height:30px/);
+  assert.match(css,/stroke-width:2\.9/);
+ }finally{h.dom.window.close();}
+});
+
+test('dedicated Products & Formats catalog hides obsolete E1:E3 case fields',()=>{
+ const h=setup();
+ try{
+  h.preview.source.metadataCells=['B1','B2','E1','E2','E3','B3','B4'];
+  h.preview.materialCatalog={catalog:{version:3,products:[],formats:[]},errors:[]};
+  h.preview.metadata={site:'Plant A',packagingLine:'Line H',formatName:'Obsolete',
+    containerSize:'500 mL',bottlesPerCase:12,dateOfAnalysis:'2026-11-24',by:'Technician'};
+  h.d.getElementById('sheet-import-form').dispatchEvent(new h.w.Event('submit',{cancelable:true}));
+  const labels=[...h.d.querySelectorAll('#sheet-import-case-meta td')].map(x=>x.textContent);
+  for(const text of ['B1 · Site','B2 · Packaging line','B3 · Date of analysis','B4 · By'])assert(labels.some(s=>s.includes(text)),text);
+  for(const legacy of ['E1 ·','E2 ·','E3 ·'])assert(!labels.some(s=>s.includes(legacy)),legacy);
+  assert.equal(h.d.querySelectorAll('#sheet-import-case-meta tbody tr').length,4);
+ }finally{h.dom.window.close();}
+});
 
 test('Sheet import request includes mode and both contract versions',()=>{
  for(const mode of ['basic','advance']){
@@ -73,7 +109,7 @@ test('normal conveyor notes use an information icon instead of a warning',()=>{
 });
 test('a mixed deployment stops before previewing or applying equipment',()=>{
  const h=setup({importVersion:'sheet-import-20260917-2'});try{
-  assert.match(h.d.getElementById('sheet-import-error').textContent,/client and server versions do not match/);assert(h.d.getElementById('sheet-import-apply').disabled);assert.equal(h.d.querySelectorAll('.sheet-equipment-choice').length,0);
+  assert.match(h.d.getElementById('sheet-import-error').textContent,/Import versions differ/);assert(h.d.getElementById('sheet-import-apply').disabled);assert.equal(h.d.querySelectorAll('.sheet-equipment-choice').length,0);
  }finally{h.dom.window.close();}
 });
 
@@ -88,7 +124,7 @@ test('a remembered worksheet cannot override a newly pasted URL gid, but an expl
 test('Apply explains when review is checked but no import changes are selected',()=>{
  const h=setup();try{
   [...h.d.querySelectorAll('#sheet-import-preview button')].find(button=>button.textContent==='Deselect all fields').click();h.d.getElementById('sheet-import-ack').click();assert(h.d.getElementById('sheet-import-ack').checked);assert(h.d.getElementById('sheet-import-apply').disabled);assert.match(h.d.getElementById('sheet-import-readiness-text').textContent,/No changes selected/);assert(h.d.getElementById('sheet-import-review-pending').hidden);
-  h.d.getElementById('sheet-import-cancel').click();assert(h.d.getElementById('sheet-import-readiness').hidden);
+  h.d.getElementById('sheet-import-cancel').click();assert.equal(h.d.getElementById('sheet-import-readiness'),null);
  }finally{h.dom.window.close();}
 });
 

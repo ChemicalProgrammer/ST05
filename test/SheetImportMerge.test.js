@@ -7,6 +7,22 @@ const copy=x=>JSON.parse(JSON.stringify(x));
 function equipment(id,name,mtbf=100){return {id,name,type:'FILLER',nominalRatePerSecond:2,initialMode:'AUTO',characteristics:{custom:'keep'},processData:{role:'MACHINE',equipment:{mtbfMinutes:mtbf,mttrMinutes:5,maximumSpeedBpm:120}},noiseProfile:{reliability:{mtbfMinutes:mtbf,mttrMinutes:5},microStop:{probabilityPerMinute:.01,minDurationSeconds:1,maxDurationSeconds:2}}};}
 function preview(units){return {equipment:units,source:{spreadsheetId:'sheet-id',sheetId:0,sheetName:'Line'},metadata:{site:'Plant'},sourceRows:[],errors:[],warnings:[],notes:[]};}
 function deselect(plan){plan.records.forEach(r=>Object.keys(r.selected).forEach(k=>r.selected[k]=false));Object.keys(plan.metadata).forEach(k=>plan.metadata[k]=false);}
+test('catalog workbook imports only B metadata and never E1:E3 placeholders',()=>{
+ const data=preview([]);data.source.metadataCells=['B1','B2','E1','E2','E3','B3','B4'];
+ data.metadata={site:'Plant',packagingLine:'Line 1',formatName:'obsolete',containerSize:'500 mL',
+   bottlesPerCase:12,dateOfAnalysis:'2026-11-24',by:'Technician'};
+ data.materialCatalog={catalog:{version:3,products:[],formats:[]},errors:[]};
+ assert.deepEqual(merge.metadataFieldsFor(data).map(item=>item.field[0]),
+   ['site','packagingLine','dateOfAnalysis','by']);
+ const plan=merge.create(data,[],{});
+ assert(!('formatName' in plan.metadata));assert(!('containerSize' in plan.metadata));assert(!('bottlesPerCase' in plan.metadata));
+ const result=merge.build(data,plan,[],{});
+ assert.equal(result.metadataChanges,4);
+ assert(!('formatName' in result.sourceImport.metadata));
+ delete data.materialCatalog;
+ assert.equal(merge.metadataFieldsFor(data).length,7,'Legacy standalone Equipment tabs still support E metadata');
+});
+
 test('selective MTBF update preserves IDs, order, other fields and custom noise',()=>{
  const current=[equipment('a','Filler'),equipment('b','Packer')],data=preview([equipment('sheet-row-10','Filler',200)]),plan=merge.create(data,current,{});deselect(plan);plan.records[0].selected.mtbf=true;
  const before=copy(current),out=merge.build(data,plan,current,{});assert.equal(out.errors.length,0);assert.equal(out.updated,1);assert.equal(out.added,0);assert.equal(out.equipment[0].id,'a');assert.equal(out.equipment[0].noiseProfile.reliability.mtbfMinutes,200);assert.equal(out.equipment[0].noiseProfile.reliability.mttrMinutes,5);assert.deepEqual(copy(out.equipment[0].noiseProfile.microStop),current[0].noiseProfile.microStop);assert.deepEqual(copy(out.equipment[1]),current[1]);assert.deepEqual(current,before);

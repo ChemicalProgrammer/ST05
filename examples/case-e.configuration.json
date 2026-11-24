@@ -1,0 +1,1731 @@
+{
+  "schema": "st-line-configuration-v1",
+  "importMode": "DRAFT",
+  "documentation": {
+    "name": "Caso E — Línea H — 1.1 L",
+    "purpose": "Import original source inputs as an editable draft. Resolve physical-line validation issues before numerical simulation.",
+    "applicationRequirement": "Requires explicit DRAFT configuration import support. Older deployments reject unresolved physical inputs.",
+    "source": {
+      "repository": "ChemicalProgrammer/ST04",
+      "path": "docs/CASE_E_DATA.md",
+      "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+      "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+      "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+      "caseId": "E",
+      "sourceDocumentAnalysisDate": "2026-10-13",
+      "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+    },
+    "workingRunPreset": {
+      "purpose": "Editable working preset only; not a historical production period or completed result.",
+      "durationSeconds": 86400,
+      "rounds": 1,
+      "seed": 20261013,
+      "seedBasis": "Reproducible software seed chosen from the analysis-date digits; not an observed plant value.",
+      "sourcePeriodSeconds": 2592000,
+      "directlyComparableToSourcePeriod": false,
+      "note": "One day and one round are a working preset. The documentary source covers 43,200 minutes (30 days), and its schedule and product mix have not been reconstructed."
+    },
+    "missingValuesPreserved": true,
+    "physicalValidationBypassedForExecution": false,
+    "originalCaseAndSimulationNamesPreserved": true,
+    "recommendedDestination": "A new empty case, to avoid retaining a product/format catalog from another line."
+  },
+  "simulation": {
+    "equipment": [
+      {
+        "id": "case-e-pace",
+        "type": "CUSTOM",
+        "name": "Pace",
+        "nominalRatePerSecond": 2.1666666666666665,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "bottles per minute",
+          "sourceSheetRow": 10,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {
+          "reliability": {
+            "mtbfMinutes": 24.6,
+            "mttrMinutes": 0.7
+          }
+        },
+        "processData": {
+          "role": "MACHINE",
+          "machineType": "CUSTOM",
+          "equipment": {
+            "mtbfMinutes": 24.6,
+            "mttrMinutes": 0.7,
+            "maximumSpeedBpm": 130
+          },
+          "geometry": {
+            "lactMm": null,
+            "lpPrimeMm": null,
+            "actualDischargeMm": null,
+            "actualCodingMm": null
+          },
+          "upstream": {
+            "packageLengthMm": null,
+            "dischargePitchMm": null,
+            "startupTimeSeconds": null,
+            "bottlesDischargedAtStop": null
+          },
+          "downstream": {
+            "infeedPitchMm": null,
+            "rampUpTimeSeconds": null
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": null,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "blockedTimeDelaySeconds": null,
+            "clearTimeDelaySeconds": null,
+            "insuranceFactorUnits": null,
+            "overspeedVsInfeedScrewPercent": null
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Pace",
+            "originalOrder": 1,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTBF (min)",
+                "value": 24.6,
+                "unit": "min",
+                "sourceValue": "24.6",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTTR (min)",
+                "value": 0.7,
+                "unit": "min",
+                "sourceValue": "0.7",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Machine max speed (bpm)",
+                "value": 130,
+                "unit": "bpm (as labelled)",
+                "sourceValue": "130",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [
+              {
+                "concept": "Machine type",
+                "status": "UNCONFIRMED",
+                "note": "Pace is represented as CUSTOM; its physical machine type was not established by the source."
+              }
+            ],
+            "reliabilityScope": "GENERAL_UNSPLIT",
+            "interpretation": "Reported maximum bpm initializes nominal rate, as in worksheet import. General MTBF/MTTR are retained without inventing minor/major stop classes or adding microstop noise.",
+            "caseDocument": {
+              "name": "Caso E",
+              "packagingLine": "H",
+              "containerSize": {
+                "value": 1.1,
+                "unit": "L"
+              },
+              "bottlesPerCase": 12,
+              "analysisDate": "2026-10-13",
+              "reportYear": 2026,
+              "sourcePeriodMinutes": 43200,
+              "variables": [
+                {
+                  "concept": "Report year",
+                  "value": 2026,
+                  "unit": "year",
+                  "sourceValue": "2026"
+                },
+                {
+                  "concept": "Packaging line",
+                  "value": "H",
+                  "unit": "—",
+                  "sourceValue": "H"
+                },
+                {
+                  "concept": "Container size",
+                  "value": 1.1,
+                  "unit": "L",
+                  "sourceValue": "1.1"
+                },
+                {
+                  "concept": "Bottles per case",
+                  "value": 12,
+                  "unit": "bottles/case",
+                  "sourceValue": "12"
+                },
+                {
+                  "concept": "Date of analysis",
+                  "value": "2026-10-13",
+                  "unit": "date",
+                  "sourceValue": "2026-10-13"
+                },
+                {
+                  "concept": "Total Time",
+                  "value": 43200,
+                  "unit": "min",
+                  "sourceValue": "43200"
+                },
+                {
+                  "concept": "Business External Time",
+                  "value": 2880,
+                  "unit": "min",
+                  "sourceValue": "2880"
+                },
+                {
+                  "concept": "Plant Available Time",
+                  "value": 40320,
+                  "unit": "min",
+                  "sourceValue": "40320"
+                },
+                {
+                  "concept": "Plant Decision Time",
+                  "value": 5324,
+                  "unit": "min",
+                  "sourceValue": "5324"
+                },
+                {
+                  "concept": "Production Available Time",
+                  "value": 34996,
+                  "unit": "min",
+                  "sourceValue": "34996"
+                },
+                {
+                  "concept": "Downtime",
+                  "value": 10013,
+                  "unit": "min",
+                  "sourceValue": "10013"
+                },
+                {
+                  "concept": "Run Time",
+                  "value": 24982,
+                  "unit": "min",
+                  "sourceValue": "24982"
+                },
+                {
+                  "concept": "AU / Effective Runtime",
+                  "value": 23388,
+                  "unit": "min",
+                  "sourceValue": "23388"
+                },
+                {
+                  "concept": "UPDT",
+                  "value": 11608,
+                  "unit": "min",
+                  "sourceValue": "11608"
+                },
+                {
+                  "concept": "Rate Loss Minutes",
+                  "value": 1594,
+                  "unit": "min",
+                  "sourceValue": "1594"
+                },
+                {
+                  "concept": "AU",
+                  "value": 58.01,
+                  "unit": "%",
+                  "sourceValue": "58.01"
+                },
+                {
+                  "concept": "UPDT",
+                  "value": 33.17,
+                  "unit": "%",
+                  "sourceValue": "33.17"
+                },
+                {
+                  "concept": "Changeover",
+                  "value": 2548,
+                  "unit": "min",
+                  "sourceValue": "2548"
+                },
+                {
+                  "concept": "CO Reporting Error",
+                  "value": 580,
+                  "unit": "min",
+                  "sourceValue": "580"
+                },
+                {
+                  "concept": "C&S",
+                  "value": 552,
+                  "unit": "min",
+                  "sourceValue": "552"
+                },
+                {
+                  "concept": "Autonomous Maintenance",
+                  "value": 0,
+                  "unit": "min",
+                  "sourceValue": "0"
+                },
+                {
+                  "concept": "Planned Maintenance",
+                  "value": 1584,
+                  "unit": "min",
+                  "sourceValue": "1584"
+                },
+                {
+                  "concept": "Lunch & Break",
+                  "value": 60,
+                  "unit": "min",
+                  "sourceValue": "60"
+                },
+                {
+                  "concept": "Meeting & Training",
+                  "value": 0,
+                  "unit": "min",
+                  "sourceValue": "0"
+                },
+                {
+                  "concept": "Plant Experimentation",
+                  "value": 0,
+                  "unit": "min",
+                  "sourceValue": "0"
+                },
+                {
+                  "concept": "SKU Count",
+                  "value": 10,
+                  "unit": "SKUs",
+                  "sourceValue": "10"
+                },
+                {
+                  "concept": "Size Type Count",
+                  "value": 3,
+                  "unit": "types",
+                  "sourceValue": "3"
+                },
+                {
+                  "concept": "Avg Line Speed",
+                  "value": 147,
+                  "unit": "not specified",
+                  "sourceValue": "147"
+                },
+                {
+                  "concept": "Throughput/Shift",
+                  "value": 41,
+                  "unit": "not specified",
+                  "sourceValue": "41"
+                },
+                {
+                  "concept": "Weight / Unit",
+                  "value": 3338,
+                  "unit": "not specified",
+                  "sourceValue": "3338"
+                }
+              ],
+              "observations": [
+                "Plant Decision Time reportado: 5,324 min. La suma de Changeover, CO Reporting Error, C&S, mantenimiento y pausas coincide con 5,324 min. No se alteró ninguna categoría.",
+                "Los paros físicos suman 4,744 min, excluyendo CO Reporting Error. Con el tratamiento actual del calendario, el horizonte tras excluir tiempo externo y error de reporte sería 39,740 min, y quedarían 34,996 min después de los paros programados, coincidiendo con el reporte. Confirmar el tratamiento contable del error de reporte antes de validar resultados.",
+                "34,996 − 10,013 = 24,983 min, frente a Run Time reportado de 24,982 min. Downtime + Rate Loss = 11,607 min, frente a UPDT de 11,608 min.",
+                "Los porcentajes publicados son AU 58.01% y UPDT 33.17%. AU/Effective Runtime ÷ Plant Available Time y UPDT ÷ Production Available Time reproducen sus porcentajes redondeados. Son relaciones de comprobación, no definiciones confirmadas.",
+                "Conveyor FIL-EMP: 2,000 mm de longitud total y 1,999 mm de zona Prime dejan 1 mm de diferencia. Conservar ambos valores y confirmar posición del sensor/capacidad útil.",
+                "Los pasos de entrada de 120 y 125 mm son menores que el paquete de 130 mm. Confirmar orientación, dimensiones y significado de pitch.",
+                "Avg Line Speed 147 requiere unidad y base de tiempo. Si fuera comparable en botellas/min para este formato, supera Sleever 100 y Filler/Capper 145; confirmar periodo y mezcla de formatos.",
+                "Throughput/Shift 41 y Weight/Unit 3,338 se conservan sin asignarles cajas, miles de unidades ni masa. Faltan unidades y duración del turno.",
+                "No se suministran frecuencias de eventos ni mes exacto. La fecha de análisis no define el comienzo del periodo. No agregar Downtime, UPDT ni Rate Loss como eventos porque son métricas de referencia.",
+                "Confirmar el tipo de Pace en la vista previa y las unidades de Case Packer/Palletizer. El patrón de 12 botellas/caja no garantiza por sí mismo una conversión física dentro del modelo."
+              ],
+              "documentNotes": [
+                "Las imágenes no incluyen velocidad física de banda ni acumulación declarada. Los siete campos Speed & Sensors de Conveyor ETI - FIL no son visibles y quedan vacíos en el Excel.",
+                "El Excel conserva Equipment en formato A:W (plant-sheet-v1), fila inicial 10. Variables contiene conceptos, valores, unidades, conciliaciones y pendientes. El parser acepta los nueve elementos como borrador con advertencias; eso no valida todavía los datos para ejecutar o comparar el proceso. No se realizó una simulación."
+              ],
+              "originalImages": [
+                "image-1792088616308.jpg",
+                "image-1792088626510.jpg",
+                "image-1792088637495.jpg",
+                "image-1792088651593.jpg"
+              ],
+              "sourceDocumentText": "# Caso E\n\nLínea H. Envase de 1.1 L. Patrón de empaque: 12 botellas/caja. Fecha de análisis: 2026-10-13. Año del reporte: 2026.\n\nNo indicado significa que el dato no se ve en las imágenes. N/A significa que no aplica; no equivale a cero. Se conserva el orden y los nombres de los equipos.\n\n## Equipos\n\n| Equipo | Concepto | Valor | Unidad |\n|---|---|---:|---|\n| Pace | Critical machine | N | Y/N |\n| Pace | MTBF (min) | 24.6 | min |\n| Pace | MTTR (min) | 0.7 | min |\n| Pace | Machine max speed (bpm) | 130 | bpm (as labelled) |\n| Conveyor PU-FIL | Critical machine | N | Y/N |\n| Conveyor PU-FIL | Total length (mm) | 10000 | mm |\n| Conveyor PU-FIL | Prime zone (mm) | 2750 | mm |\n| Conveyor PU-FIL | Discharge actual (mm) | 0 | mm |\n| Conveyor PU-FIL | Coding actual (mm) | 0 | mm |\n| Conveyor PU-FIL | Package length (mm) | 130 | mm |\n| Conveyor PU-FIL | Discharge pitch (mm) | 170 | mm |\n| Conveyor PU-FIL | Upstream startup time (s) | 1 | s |\n| Conveyor PU-FIL | Bottles discharged at stop | 0 | EA |\n| Conveyor PU-FIL | Downstream infeed pitch (mm) | 170 | mm |\n| Conveyor PU-FIL | Downstream ramp-up including Prime delay (s) | 0 | s |\n| Conveyor PU-FIL | Speed factor vs discharge (%) | 0 | % |\n| Conveyor PU-FIL | Coding speed factor vs previous (%) | 0 | % |\n| Conveyor PU-FIL | Conveyor speed factor vs previous (%) | 1 | % |\n| Conveyor PU-FIL | Back-up blocked delay (s) | 0.5 | s |\n| Conveyor PU-FIL | Back-up clear delay (s) | 0.5 | s |\n| Conveyor PU-FIL | Insurance factor (packages) | 1 | packages |\n| Conveyor PU-FIL | Overspeed vs infeed screw (%) | 5 | % |\n| Sleever | Critical machine | N | Y/N |\n| Sleever | MTBF (min) | 9.4 | min |\n| Sleever | MTTR (min) | 0.8 | min |\n| Sleever | Machine max speed (bpm) | 100 | bpm (as labelled) |\n| Conveyor ETI - FIL | Critical machine | N | Y/N |\n| Conveyor ETI - FIL | Total length (mm) | 22450 | mm |\n| Conveyor ETI - FIL | Prime zone (mm) | 5960 | mm |\n| Conveyor ETI - FIL | Discharge actual (mm) | 0 | mm |\n| Conveyor ETI - FIL | Coding actual (mm) | 0 | mm |\n| Conveyor ETI - FIL | Package length (mm) | 130 | mm |\n| Conveyor ETI - FIL | Discharge pitch (mm) | 130 | mm |\n| Conveyor ETI - FIL | Upstream startup time (s) | 2.06 | s |\n| Conveyor ETI - FIL | Bottles discharged at stop | 0 | EA |\n| Conveyor ETI - FIL | Downstream infeed pitch (mm) | 120 | mm |\n| Conveyor ETI - FIL | Downstream ramp-up including Prime delay (s) | 6.77 | s |\n| Conveyor ETI - FIL | Speed factor vs discharge (%) | No indicado | % |\n| Conveyor ETI - FIL | Coding speed factor vs previous (%) | No indicado | % |\n| Conveyor ETI - FIL | Conveyor speed factor vs previous (%) | No indicado | % |\n| Conveyor ETI - FIL | Back-up blocked delay (s) | No indicado | s |\n| Conveyor ETI - FIL | Back-up clear delay (s) | No indicado | s |\n| Conveyor ETI - FIL | Insurance factor (packages) | No indicado | packages |\n| Conveyor ETI - FIL | Overspeed vs infeed screw (%) | No indicado | % |\n| Filler/Capper | Critical machine | Y | Y/N |\n| Filler/Capper | MTBF (min) | 17 | min |\n| Filler/Capper | MTTR (min) | 0.8 | min |\n| Filler/Capper | Machine max speed (bpm) | 145 | bpm (as labelled) |\n| Conveyor FIL-EMP | Critical machine | N | Y/N |\n| Conveyor FIL-EMP | Total length (mm) | 2000 | mm |\n| Conveyor FIL-EMP | Prime zone (mm) | 1999 | mm |\n| Conveyor FIL-EMP | Discharge actual (mm) | 0 | mm |\n| Conveyor FIL-EMP | Coding actual (mm) | 0 | mm |\n| Conveyor FIL-EMP | Package length (mm) | 130 | mm |\n| Conveyor FIL-EMP | Discharge pitch (mm) | 150 | mm |\n| Conveyor FIL-EMP | Upstream startup time (s) | 1.71 | s |\n| Conveyor FIL-EMP | Bottles discharged at stop | 6 | EA |\n| Conveyor FIL-EMP | Downstream infeed pitch (mm) | 125 | mm |\n| Conveyor FIL-EMP | Downstream ramp-up including Prime delay (s) | 7.1 | s |\n| Conveyor FIL-EMP | Speed factor vs discharge (%) | 0 | % |\n| Conveyor FIL-EMP | Coding speed factor vs previous (%) | 0 | % |\n| Conveyor FIL-EMP | Conveyor speed factor vs previous (%) | 1 | % |\n| Conveyor FIL-EMP | Back-up blocked delay (s) | 0.5 | s |\n| Conveyor FIL-EMP | Back-up clear delay (s) | 0.5 | s |\n| Conveyor FIL-EMP | Insurance factor (packages) | 1 | packages |\n| Conveyor FIL-EMP | Overspeed vs infeed screw (%) | 5 | % |\n| Case Packer | Critical machine | N | Y/N |\n| Case Packer | MTBF (min) | 26.8 | min |\n| Case Packer | MTTR (min) | 0.7 | min |\n| Case Packer | Machine max speed (bpm) | 130 | bpm (as labelled) |\n| Conveyor EMP-PAL | Critical machine | N | Y/N |\n| Conveyor EMP-PAL | Total length (mm) | 8430 | mm |\n| Conveyor EMP-PAL | Prime zone (mm) | 7700 | mm |\n| Conveyor EMP-PAL | Discharge actual (mm) | 0 | mm |\n| Conveyor EMP-PAL | Coding actual (mm) | 0 | mm |\n| Conveyor EMP-PAL | Package length (mm) | 309 | mm |\n| Conveyor EMP-PAL | Discharge pitch (mm) | 309 | mm |\n| Conveyor EMP-PAL | Upstream startup time (s) | 3.4 | s |\n| Conveyor EMP-PAL | Bottles discharged at stop | 1 | EA |\n| Conveyor EMP-PAL | Downstream infeed pitch (mm) | 309 | mm |\n| Conveyor EMP-PAL | Downstream ramp-up including Prime delay (s) | 0 | s |\n| Conveyor EMP-PAL | Speed factor vs discharge (%) | 0 | % |\n| Conveyor EMP-PAL | Coding speed factor vs previous (%) | 0 | % |\n| Conveyor EMP-PAL | Conveyor speed factor vs previous (%) | 0 | % |\n| Conveyor EMP-PAL | Back-up blocked delay (s) | 0.5 | s |\n| Conveyor EMP-PAL | Back-up clear delay (s) | 0.5 | s |\n| Conveyor EMP-PAL | Insurance factor (packages) | 1 | packages |\n| Conveyor EMP-PAL | Overspeed vs infeed screw (%) | 5 | % |\n| Palletizer | Critical machine | N | Y/N |\n| Palletizer | MTBF (min) | 17.7 | min |\n| Palletizer | MTTR (min) | 1.3 | min |\n| Palletizer | Machine max speed (bpm) | 150 | bpm (as labelled) |\n\nLas imágenes no incluyen velocidad física de banda ni acumulación declarada. Los siete campos Speed & Sensors de Conveyor ETI - FIL no son visibles y quedan vacíos en el Excel.\n\n## Variables\n\n| Concepto | Valor | Unidad |\n|---|---:|---|\n| Report year | 2026 | year |\n| Packaging line | H | — |\n| Container size | 1.1 | L |\n| Bottles per case | 12 | bottles/case |\n| Date of analysis | 2026-10-13 | date |\n| Total Time | 43200 | min |\n| Business External Time | 2880 | min |\n| Plant Available Time | 40320 | min |\n| Plant Decision Time | 5324 | min |\n| Production Available Time | 34996 | min |\n| Downtime | 10013 | min |\n| Run Time | 24982 | min |\n| AU / Effective Runtime | 23388 | min |\n| UPDT | 11608 | min |\n| Rate Loss Minutes | 1594 | min |\n| AU | 58.01 | % |\n| UPDT | 33.17 | % |\n| Changeover | 2548 | min |\n| CO Reporting Error | 580 | min |\n| C&S | 552 | min |\n| Autonomous Maintenance | 0 | min |\n| Planned Maintenance | 1584 | min |\n| Lunch & Break | 60 | min |\n| Meeting & Training | 0 | min |\n| Plant Experimentation | 0 | min |\n| SKU Count | 10 | SKUs |\n| Size Type Count | 3 | types |\n| Avg Line Speed | 147 | not specified |\n| Throughput/Shift | 41 | not specified |\n| Weight / Unit | 3338 | not specified |\n\n## Observaciones para preparar la simulación\n\n- Plant Decision Time reportado: 5,324 min. La suma de Changeover, CO Reporting Error, C&S, mantenimiento y pausas coincide con 5,324 min. No se alteró ninguna categoría.\n- Los paros físicos suman 4,744 min, excluyendo CO Reporting Error. Con el tratamiento actual del calendario, el horizonte tras excluir tiempo externo y error de reporte sería 39,740 min, y quedarían 34,996 min después de los paros programados, coincidiendo con el reporte. Confirmar el tratamiento contable del error de reporte antes de validar resultados.\n- 34,996 − 10,013 = 24,983 min, frente a Run Time reportado de 24,982 min. Downtime + Rate Loss = 11,607 min, frente a UPDT de 11,608 min.\n- Los porcentajes publicados son AU 58.01% y UPDT 33.17%. AU/Effective Runtime ÷ Plant Available Time y UPDT ÷ Production Available Time reproducen sus porcentajes redondeados. Son relaciones de comprobación, no definiciones confirmadas.\n- Conveyor FIL-EMP: 2,000 mm de longitud total y 1,999 mm de zona Prime dejan 1 mm de diferencia. Conservar ambos valores y confirmar posición del sensor/capacidad útil.\n- Los pasos de entrada de 120 y 125 mm son menores que el paquete de 130 mm. Confirmar orientación, dimensiones y significado de pitch.\n- Avg Line Speed 147 requiere unidad y base de tiempo. Si fuera comparable en botellas/min para este formato, supera Sleever 100 y Filler/Capper 145; confirmar periodo y mezcla de formatos.\n- Throughput/Shift 41 y Weight/Unit 3,338 se conservan sin asignarles cajas, miles de unidades ni masa. Faltan unidades y duración del turno.\n- No se suministran frecuencias de eventos ni mes exacto. La fecha de análisis no define el comienzo del periodo. No agregar Downtime, UPDT ni Rate Loss como eventos porque son métricas de referencia.\n- Confirmar el tipo de Pace en la vista previa y las unidades de Case Packer/Palletizer. El patrón de 12 botellas/caja no garantiza por sí mismo una conversión física dentro del modelo.\n\n## Archivo de trabajo\n\nEl Excel conserva Equipment en formato A:W (plant-sheet-v1), fila inicial 10. Variables contiene conceptos, valores, unidades, conciliaciones y pendientes. El parser acepta los nueve elementos como borrador con advertencias; eso no valida todavía los datos para ejecutar o comparar el proceso. No se realizó una simulación.\n\n## Fuentes\n\n1. image-1792088616308.jpg\n2. image-1792088626510.jpg\n3. image-1792088637495.jpg\n4. image-1792088651593.jpg\n",
+              "unresolvedStopClasses": "The source provides general machine MTBF/MTTR only; no minor/major split is inferred.",
+              "packingStatus": "Twelve bottles per case is reported, but no product profile, native rate conversion or bottle-to-case transformation is activated.",
+              "calendarStatus": "Reported monthly calendar/loss totals remain observations; no event frequency, event times or physical downtime schedule is invented."
+            },
+            "workingRunPreset": {
+              "purpose": "Editable working preset only; not a historical production period or completed result.",
+              "durationSeconds": 86400,
+              "rounds": 1,
+              "seed": 20261013,
+              "seedBasis": "Reproducible software seed chosen from the analysis-date digits; not an observed plant value.",
+              "sourcePeriodSeconds": 2592000,
+              "directlyComparableToSourcePeriod": false,
+              "note": "One day and one round are a working preset. The documentary source covers 43,200 minutes (30 days), and its schedule and product mix have not been reconstructed."
+            }
+          }
+        }
+      },
+      {
+        "id": "case-e-conveyor-pu-fil",
+        "type": "CONVEYOR",
+        "name": "Conveyor PU-FIL",
+        "nominalRatePerSecond": 2.1666666666666665,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "bottles per minute",
+          "sourceSheetRow": 11,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {},
+        "processData": {
+          "role": "CONVEYOR",
+          "machineType": "CONVEYOR",
+          "equipment": {
+            "mtbfMinutes": null,
+            "mttrMinutes": null,
+            "maximumSpeedBpm": null
+          },
+          "geometry": {
+            "lactMm": 10000,
+            "lpPrimeMm": 2750,
+            "actualDischargeMm": 0,
+            "actualCodingMm": 0
+          },
+          "upstream": {
+            "packageLengthMm": 130,
+            "dischargePitchMm": 170,
+            "startupTimeSeconds": 1,
+            "bottlesDischargedAtStop": 0
+          },
+          "downstream": {
+            "infeedPitchMm": 170,
+            "rampUpTimeSeconds": 0
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": 0,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": 0,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": 1,
+            "blockedTimeDelaySeconds": 0.5,
+            "clearTimeDelaySeconds": 0.5,
+            "insuranceFactorUnits": 1,
+            "overspeedVsInfeedScrewPercent": 5
+          },
+          "accumulation": {
+            "blockedTimeDelaySeconds": 0.5,
+            "clearTimeDelaySeconds": 0.5,
+            "insuranceFactorUnits": 1,
+            "bottlesDischargedAtStop": 0,
+            "downstreamRampUpSeconds": 0,
+            "speedMode": "AUTO",
+            "useNominalDesignSpeed": true
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Conveyor PU-FIL",
+            "originalOrder": 2,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Total length (mm)",
+                "value": 10000,
+                "unit": "mm",
+                "sourceValue": "10000",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Prime zone (mm)",
+                "value": 2750,
+                "unit": "mm",
+                "sourceValue": "2750",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Coding actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Package length (mm)",
+                "value": 130,
+                "unit": "mm",
+                "sourceValue": "130",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge pitch (mm)",
+                "value": 170,
+                "unit": "mm",
+                "sourceValue": "170",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Upstream startup time (s)",
+                "value": 1,
+                "unit": "s",
+                "sourceValue": "1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Bottles discharged at stop",
+                "value": 0,
+                "unit": "EA",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream infeed pitch (mm)",
+                "value": 170,
+                "unit": "mm",
+                "sourceValue": "170",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream ramp-up including Prime delay (s)",
+                "value": 0,
+                "unit": "s",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Speed factor vs discharge (%)",
+                "value": 0,
+                "unit": "%",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Coding speed factor vs previous (%)",
+                "value": 0,
+                "unit": "%",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Conveyor speed factor vs previous (%)",
+                "value": 1,
+                "unit": "%",
+                "sourceValue": "1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Back-up blocked delay (s)",
+                "value": 0.5,
+                "unit": "s",
+                "sourceValue": "0.5",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Back-up clear delay (s)",
+                "value": 0.5,
+                "unit": "s",
+                "sourceValue": "0.5",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Insurance factor (packages)",
+                "value": 1,
+                "unit": "packages",
+                "sourceValue": "1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Overspeed vs infeed screw (%)",
+                "value": 5,
+                "unit": "%",
+                "sourceValue": "5",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [
+              {
+                "concept": "Measured physical belt speed",
+                "status": "NOT_REPORTED",
+                "note": "AUTO derives a design speed when the recorded inputs suffice; it is not a measured speed."
+              },
+              {
+                "concept": "Installed Back-up sensor position",
+                "status": "NOT_REPORTED",
+                "note": "No installed position is supplied. The engine recommendation must not be represented as a field measurement."
+              }
+            ],
+            "reliabilityScope": "NO_OWN_FAILURES_MODEL_ASSUMPTION",
+            "interpretation": "Nominal rate is inherited from the upstream machine by the worksheet parser. Physical belt speed, spacing and sensors remain subject to the normal engineering calculation and validation."
+          }
+        }
+      },
+      {
+        "id": "case-e-sleever",
+        "type": "SLEEVER",
+        "name": "Sleever",
+        "nominalRatePerSecond": 1.6666666666666667,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "bottles per minute",
+          "sourceSheetRow": 12,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {
+          "reliability": {
+            "mtbfMinutes": 9.4,
+            "mttrMinutes": 0.8
+          }
+        },
+        "processData": {
+          "role": "MACHINE",
+          "machineType": "SLEEVER",
+          "equipment": {
+            "mtbfMinutes": 9.4,
+            "mttrMinutes": 0.8,
+            "maximumSpeedBpm": 100
+          },
+          "geometry": {
+            "lactMm": null,
+            "lpPrimeMm": null,
+            "actualDischargeMm": null,
+            "actualCodingMm": null
+          },
+          "upstream": {
+            "packageLengthMm": null,
+            "dischargePitchMm": null,
+            "startupTimeSeconds": null,
+            "bottlesDischargedAtStop": null
+          },
+          "downstream": {
+            "infeedPitchMm": null,
+            "rampUpTimeSeconds": null
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": null,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "blockedTimeDelaySeconds": null,
+            "clearTimeDelaySeconds": null,
+            "insuranceFactorUnits": null,
+            "overspeedVsInfeedScrewPercent": null
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Sleever",
+            "originalOrder": 3,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTBF (min)",
+                "value": 9.4,
+                "unit": "min",
+                "sourceValue": "9.4",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTTR (min)",
+                "value": 0.8,
+                "unit": "min",
+                "sourceValue": "0.8",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Machine max speed (bpm)",
+                "value": 100,
+                "unit": "bpm (as labelled)",
+                "sourceValue": "100",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [],
+            "reliabilityScope": "GENERAL_UNSPLIT",
+            "interpretation": "Reported maximum bpm initializes nominal rate, as in worksheet import. General MTBF/MTTR are retained without inventing minor/major stop classes or adding microstop noise."
+          }
+        }
+      },
+      {
+        "id": "case-e-conveyor-eti-fil",
+        "type": "CONVEYOR",
+        "name": "Conveyor ETI - FIL",
+        "nominalRatePerSecond": 1.6666666666666667,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "bottles per minute",
+          "sourceSheetRow": 13,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {},
+        "processData": {
+          "role": "CONVEYOR",
+          "machineType": "CONVEYOR",
+          "equipment": {
+            "mtbfMinutes": null,
+            "mttrMinutes": null,
+            "maximumSpeedBpm": null
+          },
+          "geometry": {
+            "lactMm": 22450,
+            "lpPrimeMm": 5960,
+            "actualDischargeMm": 0,
+            "actualCodingMm": 0
+          },
+          "upstream": {
+            "packageLengthMm": 130,
+            "dischargePitchMm": 130,
+            "startupTimeSeconds": 2.06,
+            "bottlesDischargedAtStop": 0
+          },
+          "downstream": {
+            "infeedPitchMm": 120,
+            "rampUpTimeSeconds": 6.77
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": null,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "blockedTimeDelaySeconds": null,
+            "clearTimeDelaySeconds": null,
+            "insuranceFactorUnits": null,
+            "overspeedVsInfeedScrewPercent": null
+          },
+          "accumulation": {
+            "blockedTimeDelaySeconds": null,
+            "clearTimeDelaySeconds": null,
+            "insuranceFactorUnits": null,
+            "bottlesDischargedAtStop": 0,
+            "downstreamRampUpSeconds": 6.77,
+            "speedMode": "AUTO",
+            "useNominalDesignSpeed": true
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Conveyor ETI - FIL",
+            "originalOrder": 4,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Total length (mm)",
+                "value": 22450,
+                "unit": "mm",
+                "sourceValue": "22450",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Prime zone (mm)",
+                "value": 5960,
+                "unit": "mm",
+                "sourceValue": "5960",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Coding actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Package length (mm)",
+                "value": 130,
+                "unit": "mm",
+                "sourceValue": "130",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge pitch (mm)",
+                "value": 130,
+                "unit": "mm",
+                "sourceValue": "130",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Upstream startup time (s)",
+                "value": 2.06,
+                "unit": "s",
+                "sourceValue": "2.06",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Bottles discharged at stop",
+                "value": 0,
+                "unit": "EA",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream infeed pitch (mm)",
+                "value": 120,
+                "unit": "mm",
+                "sourceValue": "120",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream ramp-up including Prime delay (s)",
+                "value": 6.77,
+                "unit": "s",
+                "sourceValue": "6.77",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Speed factor vs discharge (%)",
+                "value": null,
+                "unit": "%",
+                "sourceValue": "No indicado",
+                "status": "NOT_VISIBLE"
+              },
+              {
+                "concept": "Coding speed factor vs previous (%)",
+                "value": null,
+                "unit": "%",
+                "sourceValue": "No indicado",
+                "status": "NOT_VISIBLE"
+              },
+              {
+                "concept": "Conveyor speed factor vs previous (%)",
+                "value": null,
+                "unit": "%",
+                "sourceValue": "No indicado",
+                "status": "NOT_VISIBLE"
+              },
+              {
+                "concept": "Back-up blocked delay (s)",
+                "value": null,
+                "unit": "s",
+                "sourceValue": "No indicado",
+                "status": "NOT_VISIBLE"
+              },
+              {
+                "concept": "Back-up clear delay (s)",
+                "value": null,
+                "unit": "s",
+                "sourceValue": "No indicado",
+                "status": "NOT_VISIBLE"
+              },
+              {
+                "concept": "Insurance factor (packages)",
+                "value": null,
+                "unit": "packages",
+                "sourceValue": "No indicado",
+                "status": "NOT_VISIBLE"
+              },
+              {
+                "concept": "Overspeed vs infeed screw (%)",
+                "value": null,
+                "unit": "%",
+                "sourceValue": "No indicado",
+                "status": "NOT_VISIBLE"
+              }
+            ],
+            "unresolved": [
+              {
+                "concept": "Speed factor vs discharge (%)",
+                "status": "NOT_VISIBLE",
+                "sourceValue": "No indicado"
+              },
+              {
+                "concept": "Coding speed factor vs previous (%)",
+                "status": "NOT_VISIBLE",
+                "sourceValue": "No indicado"
+              },
+              {
+                "concept": "Conveyor speed factor vs previous (%)",
+                "status": "NOT_VISIBLE",
+                "sourceValue": "No indicado"
+              },
+              {
+                "concept": "Back-up blocked delay (s)",
+                "status": "NOT_VISIBLE",
+                "sourceValue": "No indicado"
+              },
+              {
+                "concept": "Back-up clear delay (s)",
+                "status": "NOT_VISIBLE",
+                "sourceValue": "No indicado"
+              },
+              {
+                "concept": "Insurance factor (packages)",
+                "status": "NOT_VISIBLE",
+                "sourceValue": "No indicado"
+              },
+              {
+                "concept": "Overspeed vs infeed screw (%)",
+                "status": "NOT_VISIBLE",
+                "sourceValue": "No indicado"
+              },
+              {
+                "concept": "Measured physical belt speed",
+                "status": "NOT_REPORTED",
+                "note": "AUTO derives a design speed when the recorded inputs suffice; it is not a measured speed."
+              },
+              {
+                "concept": "Installed Back-up sensor position",
+                "status": "NOT_REPORTED",
+                "note": "No installed position is supplied. The engine recommendation must not be represented as a field measurement."
+              }
+            ],
+            "reliabilityScope": "NO_OWN_FAILURES_MODEL_ASSUMPTION",
+            "interpretation": "Nominal rate is inherited from the upstream machine by the worksheet parser. Physical belt speed, spacing and sensors remain subject to the normal engineering calculation and validation."
+          }
+        }
+      },
+      {
+        "id": "case-e-filler-capper",
+        "type": "FILLER",
+        "name": "Filler/Capper",
+        "nominalRatePerSecond": 2.4166666666666665,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": true,
+          "isPacemaker": true,
+          "rateBasis": "bottles per minute",
+          "sourceSheetRow": 14,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {
+          "reliability": {
+            "mtbfMinutes": 17,
+            "mttrMinutes": 0.8
+          }
+        },
+        "processData": {
+          "role": "CRITICAL_MACHINE",
+          "machineType": "FILLER",
+          "equipment": {
+            "mtbfMinutes": 17,
+            "mttrMinutes": 0.8,
+            "maximumSpeedBpm": 145
+          },
+          "geometry": {
+            "lactMm": null,
+            "lpPrimeMm": null,
+            "actualDischargeMm": null,
+            "actualCodingMm": null
+          },
+          "upstream": {
+            "packageLengthMm": null,
+            "dischargePitchMm": null,
+            "startupTimeSeconds": null,
+            "bottlesDischargedAtStop": null
+          },
+          "downstream": {
+            "infeedPitchMm": null,
+            "rampUpTimeSeconds": null
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": null,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "blockedTimeDelaySeconds": null,
+            "clearTimeDelaySeconds": null,
+            "insuranceFactorUnits": null,
+            "overspeedVsInfeedScrewPercent": null
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Filler/Capper",
+            "originalOrder": 5,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "Y",
+                "unit": "Y/N",
+                "sourceValue": "Y",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTBF (min)",
+                "value": 17,
+                "unit": "min",
+                "sourceValue": "17",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTTR (min)",
+                "value": 0.8,
+                "unit": "min",
+                "sourceValue": "0.8",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Machine max speed (bpm)",
+                "value": 145,
+                "unit": "bpm (as labelled)",
+                "sourceValue": "145",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [],
+            "reliabilityScope": "GENERAL_UNSPLIT",
+            "interpretation": "Reported maximum bpm initializes nominal rate, as in worksheet import. General MTBF/MTTR are retained without inventing minor/major stop classes or adding microstop noise."
+          }
+        }
+      },
+      {
+        "id": "case-e-conveyor-fil-emp",
+        "type": "CONVEYOR",
+        "name": "Conveyor FIL-EMP",
+        "nominalRatePerSecond": 2.4166666666666665,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "bottles per minute",
+          "sourceSheetRow": 15,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {},
+        "processData": {
+          "role": "CONVEYOR",
+          "machineType": "CONVEYOR",
+          "equipment": {
+            "mtbfMinutes": null,
+            "mttrMinutes": null,
+            "maximumSpeedBpm": null
+          },
+          "geometry": {
+            "lactMm": 2000,
+            "lpPrimeMm": 1999,
+            "actualDischargeMm": 0,
+            "actualCodingMm": 0
+          },
+          "upstream": {
+            "packageLengthMm": 130,
+            "dischargePitchMm": 150,
+            "startupTimeSeconds": 1.71,
+            "bottlesDischargedAtStop": 6
+          },
+          "downstream": {
+            "infeedPitchMm": 125,
+            "rampUpTimeSeconds": 7.1
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": 0,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": 0,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": 1,
+            "blockedTimeDelaySeconds": 0.5,
+            "clearTimeDelaySeconds": 0.5,
+            "insuranceFactorUnits": 1,
+            "overspeedVsInfeedScrewPercent": 5
+          },
+          "accumulation": {
+            "blockedTimeDelaySeconds": 0.5,
+            "clearTimeDelaySeconds": 0.5,
+            "insuranceFactorUnits": 1,
+            "bottlesDischargedAtStop": 6,
+            "downstreamRampUpSeconds": 7.1,
+            "speedMode": "AUTO",
+            "useNominalDesignSpeed": true
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Conveyor FIL-EMP",
+            "originalOrder": 6,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Total length (mm)",
+                "value": 2000,
+                "unit": "mm",
+                "sourceValue": "2000",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Prime zone (mm)",
+                "value": 1999,
+                "unit": "mm",
+                "sourceValue": "1999",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Coding actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Package length (mm)",
+                "value": 130,
+                "unit": "mm",
+                "sourceValue": "130",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge pitch (mm)",
+                "value": 150,
+                "unit": "mm",
+                "sourceValue": "150",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Upstream startup time (s)",
+                "value": 1.71,
+                "unit": "s",
+                "sourceValue": "1.71",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Bottles discharged at stop",
+                "value": 6,
+                "unit": "EA",
+                "sourceValue": "6",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream infeed pitch (mm)",
+                "value": 125,
+                "unit": "mm",
+                "sourceValue": "125",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream ramp-up including Prime delay (s)",
+                "value": 7.1,
+                "unit": "s",
+                "sourceValue": "7.1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Speed factor vs discharge (%)",
+                "value": 0,
+                "unit": "%",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Coding speed factor vs previous (%)",
+                "value": 0,
+                "unit": "%",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Conveyor speed factor vs previous (%)",
+                "value": 1,
+                "unit": "%",
+                "sourceValue": "1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Back-up blocked delay (s)",
+                "value": 0.5,
+                "unit": "s",
+                "sourceValue": "0.5",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Back-up clear delay (s)",
+                "value": 0.5,
+                "unit": "s",
+                "sourceValue": "0.5",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Insurance factor (packages)",
+                "value": 1,
+                "unit": "packages",
+                "sourceValue": "1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Overspeed vs infeed screw (%)",
+                "value": 5,
+                "unit": "%",
+                "sourceValue": "5",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [
+              {
+                "concept": "Measured physical belt speed",
+                "status": "NOT_REPORTED",
+                "note": "AUTO derives a design speed when the recorded inputs suffice; it is not a measured speed."
+              },
+              {
+                "concept": "Installed Back-up sensor position",
+                "status": "NOT_REPORTED",
+                "note": "No installed position is supplied. The engine recommendation must not be represented as a field measurement."
+              }
+            ],
+            "reliabilityScope": "NO_OWN_FAILURES_MODEL_ASSUMPTION",
+            "interpretation": "Nominal rate is inherited from the upstream machine by the worksheet parser. Physical belt speed, spacing and sensors remain subject to the normal engineering calculation and validation."
+          }
+        }
+      },
+      {
+        "id": "case-e-case-packer",
+        "type": "CASE_PACKER",
+        "name": "Case Packer",
+        "nominalRatePerSecond": 2.1666666666666665,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "source bpm — native unit unconfirmed",
+          "sourceSheetRow": 16,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {
+          "reliability": {
+            "mtbfMinutes": 26.8,
+            "mttrMinutes": 0.7
+          }
+        },
+        "processData": {
+          "role": "MACHINE",
+          "machineType": "CASE_PACKER",
+          "equipment": {
+            "mtbfMinutes": 26.8,
+            "mttrMinutes": 0.7,
+            "maximumSpeedBpm": 130
+          },
+          "geometry": {
+            "lactMm": null,
+            "lpPrimeMm": null,
+            "actualDischargeMm": null,
+            "actualCodingMm": null
+          },
+          "upstream": {
+            "packageLengthMm": null,
+            "dischargePitchMm": null,
+            "startupTimeSeconds": null,
+            "bottlesDischargedAtStop": null
+          },
+          "downstream": {
+            "infeedPitchMm": null,
+            "rampUpTimeSeconds": null
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": null,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "blockedTimeDelaySeconds": null,
+            "clearTimeDelaySeconds": null,
+            "insuranceFactorUnits": null,
+            "overspeedVsInfeedScrewPercent": null
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Case Packer",
+            "originalOrder": 7,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTBF (min)",
+                "value": 26.8,
+                "unit": "min",
+                "sourceValue": "26.8",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTTR (min)",
+                "value": 0.7,
+                "unit": "min",
+                "sourceValue": "0.7",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Machine max speed (bpm)",
+                "value": 130,
+                "unit": "bpm (as labelled)",
+                "sourceValue": "130",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [
+              {
+                "concept": "Native material and rate units",
+                "status": "UNCONFIRMED",
+                "note": "Do not infer bottle/case conversion from the package size or machine name. The source labels machine rates bpm; the physical output basis requires review."
+              }
+            ],
+            "reliabilityScope": "GENERAL_UNSPLIT",
+            "interpretation": "Reported maximum bpm initializes nominal rate, as in worksheet import. General MTBF/MTTR are retained without inventing minor/major stop classes or adding microstop noise."
+          }
+        }
+      },
+      {
+        "id": "case-e-conveyor-emp-pal",
+        "type": "CONVEYOR",
+        "name": "Conveyor EMP-PAL",
+        "nominalRatePerSecond": 2.1666666666666665,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "source bpm — native unit unconfirmed",
+          "sourceSheetRow": 17,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {},
+        "processData": {
+          "role": "CONVEYOR",
+          "machineType": "CONVEYOR",
+          "equipment": {
+            "mtbfMinutes": null,
+            "mttrMinutes": null,
+            "maximumSpeedBpm": null
+          },
+          "geometry": {
+            "lactMm": 8430,
+            "lpPrimeMm": 7700,
+            "actualDischargeMm": 0,
+            "actualCodingMm": 0
+          },
+          "upstream": {
+            "packageLengthMm": 309,
+            "dischargePitchMm": 309,
+            "startupTimeSeconds": 3.4,
+            "bottlesDischargedAtStop": 1
+          },
+          "downstream": {
+            "infeedPitchMm": 309,
+            "rampUpTimeSeconds": 0
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": 0,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": 0,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": 0,
+            "blockedTimeDelaySeconds": 0.5,
+            "clearTimeDelaySeconds": 0.5,
+            "insuranceFactorUnits": 1,
+            "overspeedVsInfeedScrewPercent": 5
+          },
+          "accumulation": {
+            "blockedTimeDelaySeconds": 0.5,
+            "clearTimeDelaySeconds": 0.5,
+            "insuranceFactorUnits": 1,
+            "bottlesDischargedAtStop": 1,
+            "downstreamRampUpSeconds": 0,
+            "speedMode": "AUTO",
+            "useNominalDesignSpeed": true
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Conveyor EMP-PAL",
+            "originalOrder": 8,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Total length (mm)",
+                "value": 8430,
+                "unit": "mm",
+                "sourceValue": "8430",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Prime zone (mm)",
+                "value": 7700,
+                "unit": "mm",
+                "sourceValue": "7700",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Coding actual (mm)",
+                "value": 0,
+                "unit": "mm",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Package length (mm)",
+                "value": 309,
+                "unit": "mm",
+                "sourceValue": "309",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Discharge pitch (mm)",
+                "value": 309,
+                "unit": "mm",
+                "sourceValue": "309",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Upstream startup time (s)",
+                "value": 3.4,
+                "unit": "s",
+                "sourceValue": "3.4",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Bottles discharged at stop",
+                "value": 1,
+                "unit": "EA",
+                "sourceValue": "1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream infeed pitch (mm)",
+                "value": 309,
+                "unit": "mm",
+                "sourceValue": "309",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Downstream ramp-up including Prime delay (s)",
+                "value": 0,
+                "unit": "s",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Speed factor vs discharge (%)",
+                "value": 0,
+                "unit": "%",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Coding speed factor vs previous (%)",
+                "value": 0,
+                "unit": "%",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Conveyor speed factor vs previous (%)",
+                "value": 0,
+                "unit": "%",
+                "sourceValue": "0",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Back-up blocked delay (s)",
+                "value": 0.5,
+                "unit": "s",
+                "sourceValue": "0.5",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Back-up clear delay (s)",
+                "value": 0.5,
+                "unit": "s",
+                "sourceValue": "0.5",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Insurance factor (packages)",
+                "value": 1,
+                "unit": "packages",
+                "sourceValue": "1",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Overspeed vs infeed screw (%)",
+                "value": 5,
+                "unit": "%",
+                "sourceValue": "5",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [
+              {
+                "concept": "Native material and rate units",
+                "status": "UNCONFIRMED",
+                "note": "Do not infer bottle/case conversion from the package size or machine name. The source labels machine rates bpm; the physical output basis requires review."
+              },
+              {
+                "concept": "Measured physical belt speed",
+                "status": "NOT_REPORTED",
+                "note": "AUTO derives a design speed when the recorded inputs suffice; it is not a measured speed."
+              },
+              {
+                "concept": "Installed Back-up sensor position",
+                "status": "NOT_REPORTED",
+                "note": "No installed position is supplied. The engine recommendation must not be represented as a field measurement."
+              }
+            ],
+            "reliabilityScope": "NO_OWN_FAILURES_MODEL_ASSUMPTION",
+            "interpretation": "Nominal rate is inherited from the upstream machine by the worksheet parser. Physical belt speed, spacing and sensors remain subject to the normal engineering calculation and validation."
+          }
+        }
+      },
+      {
+        "id": "case-e-palletizer",
+        "type": "PALLETIZER",
+        "name": "Palletizer",
+        "nominalRatePerSecond": 2.5,
+        "initialMode": "AUTO",
+        "characteristics": {
+          "criticalMachine": false,
+          "isPacemaker": false,
+          "rateBasis": "source bpm — native unit unconfirmed",
+          "sourceSheetRow": 18,
+          "sourceSheetLayout": "plant-sheet-v1"
+        },
+        "noiseProfile": {
+          "reliability": {
+            "mtbfMinutes": 17.7,
+            "mttrMinutes": 1.3
+          }
+        },
+        "processData": {
+          "role": "MACHINE",
+          "machineType": "PALLETIZER",
+          "equipment": {
+            "mtbfMinutes": 17.7,
+            "mttrMinutes": 1.3,
+            "maximumSpeedBpm": 150
+          },
+          "geometry": {
+            "lactMm": null,
+            "lpPrimeMm": null,
+            "actualDischargeMm": null,
+            "actualCodingMm": null
+          },
+          "upstream": {
+            "packageLengthMm": null,
+            "dischargePitchMm": null,
+            "startupTimeSeconds": null,
+            "bottlesDischargedAtStop": null
+          },
+          "downstream": {
+            "infeedPitchMm": null,
+            "rampUpTimeSeconds": null
+          },
+          "speedAndSensors": {
+            "conveyorSpeedFactorVsDischargeVelocityPercent": null,
+            "codingConveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "conveyorSpeedFactorVsPreviousConveyorPercent": null,
+            "blockedTimeDelaySeconds": null,
+            "clearTimeDelaySeconds": null,
+            "insuranceFactorUnits": null,
+            "overspeedVsInfeedScrewPercent": null
+          },
+          "sourceEvidence": {
+            "source": {
+              "repository": "ChemicalProgrammer/ST04",
+              "path": "docs/CASE_E_DATA.md",
+              "url": "https://github.com/ChemicalProgrammer/ST04/blob/bddaa2b31e5b824bc2ced6625213e1cc4ada5402/docs/CASE_E_DATA.md",
+              "commit": "bddaa2b31e5b824bc2ced6625213e1cc4ada5402",
+              "blobSha": "092e1b17700fdc1fec7d35a0589d20db0d67b333",
+              "caseId": "E",
+              "sourceDocumentAnalysisDate": "2026-10-13",
+              "transcriptionSha256": "bf79762d4fed26843ade3b88e76695fd30b4793c279ee89db416eeebb371f1a7"
+            },
+            "originalName": "Palletizer",
+            "originalOrder": 9,
+            "measurements": [
+              {
+                "concept": "Critical machine",
+                "value": "N",
+                "unit": "Y/N",
+                "sourceValue": "N",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTBF (min)",
+                "value": 17.7,
+                "unit": "min",
+                "sourceValue": "17.7",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "MTTR (min)",
+                "value": 1.3,
+                "unit": "min",
+                "sourceValue": "1.3",
+                "status": "TRANSCRIBED"
+              },
+              {
+                "concept": "Machine max speed (bpm)",
+                "value": 150,
+                "unit": "bpm (as labelled)",
+                "sourceValue": "150",
+                "status": "TRANSCRIBED"
+              }
+            ],
+            "unresolved": [
+              {
+                "concept": "Native material and rate units",
+                "status": "UNCONFIRMED",
+                "note": "Do not infer bottle/case conversion from the package size or machine name. The source labels machine rates bpm; the physical output basis requires review."
+              }
+            ],
+            "reliabilityScope": "GENERAL_UNSPLIT",
+            "interpretation": "Reported maximum bpm initializes nominal rate, as in worksheet import. General MTBF/MTTR are retained without inventing minor/major stop classes or adding microstop noise."
+          }
+        }
+      }
+    ],
+    "dynamicConfig": {
+      "engineId": "ST_CURRENT",
+      "durationMode": "FIXED",
+      "durationSeconds": 86400,
+      "durationOptions": {
+        "method": "FIXED",
+        "amount": 1,
+        "unit": "DAYS",
+        "timeZone": "America/Mexico_City",
+        "start": "",
+        "end": "",
+        "shiftHours": 8,
+        "shiftCount": 3
+      },
+      "tickSeconds": 0.25,
+      "sampleEverySeconds": 5,
+      "sampleDisplayUnit": "SECONDS",
+      "seed": 20261013,
+      "rounds": 1,
+      "discretePackages": false,
+      "machineResidenceEnabled": true,
+      "reliabilityEnabled": true,
+      "reliabilityCategories": {
+        "general": true,
+        "minor": true,
+        "major": true
+      },
+      "eventsEnabled": false,
+      "includePlantCalendar": false,
+      "commands": [],
+      "plannedStops": [],
+      "plantCalendar": {
+        "enabled": false
+      },
+      "productCatalog": [],
+      "initialFormatId": null,
+      "initialProductId": null,
+      "trackShifts": false,
+      "shiftHours": 8,
+      "shiftCount": 3,
+      "historyFormat": "COMPACT",
+      "calculationPreference": "AUTO",
+      "calculationMode": "FAST",
+      "chartWindow": "AUTO"
+    }
+  }
+}

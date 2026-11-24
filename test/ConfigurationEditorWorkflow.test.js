@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import {JSDOM,VirtualConsole} from 'jsdom';
 import {renderAppsScript} from '../scripts/render-apps-script.mjs';
 import {validateSimulationInput} from '../src/simulation/SimulationValidation.js';
+import {simulateLine} from '../src/simulation/LineSimulationEngine.js';
 import {normalizeFormatCatalog,mergeFormatCatalogs,resolvePackingFormats} from '../src/simulation/FormatCatalog.js';
 
 const source=fs.readFileSync(new URL('../apps-script/ConfigurationEditor.html',import.meta.url),'utf8')
@@ -24,6 +25,15 @@ function configuration(){
   return {schema:'st-line-configuration-v1',case:{id:'case-1',unitOfFlow:fixture.case.unitOfFlow,metadata:{}},
     simulation:{id:'simulation-1',engineConfig:{},equipment:copy(fixture.case.equipment),
       dynamicConfig:{...copy(fixture.run),durationMode:'FIXED',rounds:1}}};
+}
+function draftConfiguration(){
+  const incoming=configuration();incoming.importMode='DRAFT';
+  incoming.simulation.equipment.forEach(e=>{e.processData??={};});
+  const conveyor=incoming.simulation.equipment[1];conveyor.name='Conveyor ETI - FIL';
+  conveyor.processData.speedAndSensors.conveyorSpeedFactorVsDischargeVelocityPercent=null;
+  conveyor.processData.accumulation.conveyorSpeedFactorPercent=null;
+  conveyor.processData.sourceEvidence={caseId:'E',speedFactor:null,note:'Not visible in the source; preserve as unknown.'};
+  return incoming;
 }
 function selectedFile(text,options={}){
   return {name:options.name||'line.json',size:options.size??Buffer.byteLength(text),text:options.read||(()=>Promise.resolve(text))};
@@ -195,5 +205,169 @@ test('changing the active simulation after the editor opens prevents application
     h.get('configuration-apply').click();
     assert.equal(h.calls.applied.length,0);assert.equal(h.dialog.open,true);
     assert.match(h.get('configuration-error').textContent,/active simulation changed/i);
+  }finally{h.close();}
+});
+
+test('an explicit draft shows physical review before applying, preserves unknown inputs and cannot run',async()=>{
+  const h=harness();
+  try{
+    const incoming=draftConfiguration(),original=copy(incoming),before=copy(h.current);
+    h.get('import-setup-json').click();h.select(selectedFile(JSON.stringify(incoming)));await h.settle();
+    assert.equal(h.dialog.open,true);assert.equal(h.calls.applied.length,0);
+    assert.match(h.get('configuration-error').textContent,/Draft configuration.*physical review required before simulation/);
+    assert.match(h.get('configuration-error').textContent,/Conveyor ETI - FIL/);
+    assert.match(h.get('configuration-error').textContent,/conveyorSpeedMmPerSecond/);
+    h.get('configuration-apply').click();
+    assert.equal(h.calls.applied.length,1);assert.equal(h.dialog.open,false);
+    const applied=h.calls.applied[0];
+    assert.deepEqual(applied.equipment,original.simulation.equipment);
+    assert.equal(applied.physicalReview.status,'REQUIRES_REVIEW');
+    assert.ok(applied.physicalReview.issues.every(issue=>issue.equipmentId==='c0'&&issue.equipmentName==='Conveyor ETI - FIL'));
+    assert.equal(applied.equipment[1].processData.sourceEvidence.speedFactor,null);
+    const attempted=simulateLine({case:{equipment:applied.equipment},run:applied.dynamicConfig});
+    assert.equal(attempted.ok,false);assert.equal(attempted.error.code,'INVALID_SIMULATION_INPUT');
+    assert.deepEqual(h.current,before);assert.deepEqual(incoming,original);
+    assert.deepEqual(h.calls.validationErrors,[]);assert.deepEqual(h.errors,[]);
+  }finally{h.close();}
+});
+
+test('draft imports are complete run snapshots and do not inherit runtime targets, products or calendars',()=>{
+  const h=harness();
+  try{
+    Object.assign(h.current.simulation.dynamicConfig,{
+      effectiveRuntimeTargetSeconds:100000,productCatalog:[{id:'old-format'}],initialProductId:'old-format',initialFormatId:'old-format',
+      commands:[{equipmentId:'removed-equipment',atVirtualSecond:1,action:'STOP'}],
+      plannedStops:[{category:'changeoverMinutes',targetFormatId:'old-format'}],
+      plantCalendar:{enabled:true,mode:'SCHEDULED'},eventsEnabled:true
+    });
+    const incoming=draftConfiguration();delete incoming.simulation.dynamicConfig.commands;
+    const before=copy(h.current),applied=h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current);
+    assert.deepEqual(copy(applied.dynamicConfig),incoming.simulation.dynamicConfig);
+    for(const key of ['effectiveRuntimeTargetSeconds','productCatalog','initialProductId','initialFormatId','commands','plannedStops','plantCalendar','eventsEnabled'])
+      assert.equal(Object.hasOwn(applied.dynamicConfig,key),false,key);
+    assert.deepEqual(h.current,before);
+    delete incoming.simulation.dynamicConfig;
+    assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/complete dynamicConfig/);
+    incoming.simulation.dynamicConfig={};
+    assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/tickSeconds/);
+  }finally{h.close();}
+});
+
+test('ordinary and explicitly validated imports retain strict physics; draft mode requires the canonical schema',()=>{
+  const h=harness();
+  try{
+    for(const mode of [undefined,'VALIDATED']){
+      const incoming=draftConfiguration();if(mode)incoming.importMode=mode;else delete incoming.importMode;
+      assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/conveyorSpeedMmPerSecond/);
+    }
+    for(const mode of ['draft','SKIP_VALIDATION',null,0]){
+      const incoming=draftConfiguration();incoming.importMode=mode;
+      assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/importMode/);
+    }
+    const bare={...draftConfiguration().simulation,importMode:'DRAFT'};
+    assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(bare),h.current),/importMode/);
+    const documented=draftConfiguration();documented.schema='st-documented-case-transcription-v1';
+    assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(documented),h.current),/Unsupported configuration schema/);
+  }finally{h.close();}
+});
+
+test('drafts preserve inconsistent measured geometry for review instead of adjusting sensors or lengths',()=>{
+  const h=harness();
+  try{
+    const incoming=configuration();incoming.importMode='DRAFT';
+    incoming.simulation.equipment.forEach(e=>{e.processData??={};});
+    incoming.simulation.equipment[0].nominalRatePerSecond=145/60;
+    const conveyor=incoming.simulation.equipment[1];conveyor.name='Conveyor FIL-EMP';
+    conveyor.processData.geometry={lactMm:2000,lpPrimeMm:1999};
+    conveyor.processData.upstream={packageLengthMm:130,dischargePitchMm:150};
+    conveyor.processData.downstream={infeedPitchMm:125};
+    conveyor.processData.speedAndSensors={conveyorSpeedFactorVsDischargeVelocityPercent:0,conveyorSpeedFactorVsPreviousConveyorPercent:1};
+    conveyor.processData.accumulation={blockedTimeDelaySeconds:0.5,bottlesDischargedAtStop:6,insuranceFactorUnits:1};
+    const original=copy(incoming.simulation.equipment),applied=h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current);
+    assert.deepEqual(copy(applied.equipment),original);
+    assert.equal(applied.physicalReview.issues.length,1);
+    assert.equal(applied.physicalReview.issues[0].reason,'must be upstream of the Prime sensor');
+    assert.equal(simulateLine({case:{equipment:applied.equipment},run:applied.dynamicConfig}).ok,false);
+    delete incoming.simulation.equipment[1].processData.accumulation;
+    const incomplete=h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current);
+    assert.equal(incomplete.physicalReview.issues[0].path,'case.equipment[1].processData.accumulation');
+    assert.equal(Object.hasOwn(incomplete.equipment[1].processData,'accumulation'),false);
+  }finally{h.close();}
+});
+
+test('draft mode never defers structural, reliability, run, product or shared-case errors',()=>{
+  const h=harness();
+  try{
+    const mutations=[
+      ['duplicate IDs',d=>{d.simulation.equipment[1].id='m0';},/must be unique/],
+      ['missing ID',d=>{delete d.simulation.equipment[0].id;},/\.id/],
+      ['empty name',d=>{d.simulation.equipment[0].name='';},/name is required/],
+      ['unsupported type',d=>{d.simulation.equipment[0].type='UNKNOWN';},/type is unsupported/],
+      ['negative rate',d=>{d.simulation.equipment[0].nominalRatePerSecond=-1;},/nominalRatePerSecond/],
+      ['invalid reliability',d=>{d.simulation.equipment[0].noiseProfile.reliability={mtbfMinutes:0,mttrMinutes:1};},/mtbfMinutes/],
+      ['invalid split stops',d=>{d.simulation.equipment[0].processData.equipment={stopInputs:{minor:{mtbfMinutes:1,mttrMinutes:1}}};},/stopInputs.major/],
+      ['wrong topology',d=>{d.simulation.equipment.push(copy(d.simulation.equipment[0]));d.simulation.equipment.at(-1).id='extra';},/must be followed by a CONVEYOR/],
+      ['accumulation on machine',d=>{d.simulation.equipment[0].processData.accumulation={};},/belongs only on a CONVEYOR/],
+      ['invalid run duration',d=>{d.simulation.dynamicConfig.durationSeconds=-1;},/durationSeconds/],
+      ['invalid seed',d=>{d.simulation.dynamicConfig.seed=1.5;},/seed/],
+      ['invalid rounds',d=>{d.simulation.dynamicConfig.rounds=0;},/rounds/],
+      ['invalid run mode',d=>{d.simulation.dynamicConfig.durationMode='UNKNOWN';},/durationMode/],
+      ['invalid product selection',d=>{d.simulation.dynamicConfig.initialProductId='missing';},/productCatalog/],
+      ['invalid events',d=>{d.simulation.dynamicConfig.commands=[{equipmentId:'missing',atVirtualSecond:1,action:'STOP'}];},/commands/],
+      ['shared unit mismatch',d=>{d.case.unitOfFlow='cases';},/unitOfFlow must match/],
+      ['shared engine mismatch',d=>{d.simulation.engineConfig={different:true};},/engineConfig is shared/]
+    ];
+    for(const [label,mutate,pattern] of mutations){const incoming=draftConfiguration();mutate(incoming);assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),pattern,label);}
+  }finally{h.close();}
+});
+
+test('draft mode rejects malformed physical input objects and declared invalid numbers while preserving nulls',()=>{
+  const h=harness();
+  try{
+    for(const group of ['geometry','upstream','downstream','speedAndSensors','equipment','accumulation'])for(const value of [[],false,'bad']){
+      const incoming=draftConfiguration();incoming.simulation.equipment[1].processData[group]=value;
+      assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/must be an object/,group+' '+JSON.stringify(value));
+    }
+    for(const [group,key] of [['geometry','lactMm'],['upstream','packageLengthMm'],['downstream','infeedPitchMm'],['speedAndSensors','blockedTimeDelaySeconds'],['accumulation','conveyorSpeedMmPerSecond'],['accumulation','movingGapMm']])for(const value of [-1,'100',false]){
+      const incoming=draftConfiguration();incoming.simulation.equipment[1].processData[group]??={};incoming.simulation.equipment[1].processData[group][key]=value;
+      assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/non-negative number or null/,group+'.'+key);
+    }
+    for(const values of [{speedMode:'UNKNOWN'},{targetPopulationPercent:101},{targetOverspeedPercent:1001},{targetPopulationPercent:50,targetOverspeedPercent:5},{manualLbaMm:0}]){
+      const incoming=draftConfiguration();Object.assign(incoming.simulation.equipment[1].processData.accumulation,values);
+      assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/speedMode|targetPopulationPercent|targetOverspeedPercent|choose either|manualLbaMm/);
+    }
+  }finally{h.close();}
+});
+
+test('editing a draft refreshes its review notice and blocking errors remain in the same modal',async()=>{
+  const h=harness();
+  try{
+    const incoming=draftConfiguration();
+    h.get('open-json-import').click();h.select(selectedFile(JSON.stringify(incoming)));await h.settle();
+    assert.match(h.get('configuration-error').textContent,/physical review required/);
+    incoming.simulation.dynamicConfig.rounds=0;
+    h.get('configuration-draft').value=JSON.stringify(incoming);h.get('configuration-draft').dispatchEvent(new h.w.Event('input'));
+    assert.match(h.get('configuration-error').textContent,/rounds/);
+    h.get('configuration-apply').click();assert.equal(h.calls.applied.length,0);assert.equal(h.dialog.open,true);
+    incoming.simulation.dynamicConfig.rounds=1;
+    incoming.simulation.equipment[1].processData.speedAndSensors.conveyorSpeedFactorVsDischargeVelocityPercent=900;
+    incoming.simulation.equipment[1].processData.accumulation.conveyorSpeedFactorPercent=900;
+    h.get('configuration-draft').value=JSON.stringify(incoming);h.get('configuration-draft').dispatchEvent(new h.w.Event('input'));
+    assert.equal(h.get('configuration-error').textContent,'');
+    h.get('configuration-apply').click();assert.equal(h.calls.applied.length,1);assert.equal(h.calls.applied[0].physicalReview,undefined);
+  }finally{h.close();}
+});
+
+test('the physical review heading follows the current language without changing technical issue details',async()=>{
+  const h=harness();let language='en';
+  try{
+    h.w.STLanguage={translate:text=>language==='es'&&text==='Draft configuration — physical review required before simulation.'?'Borrador de configuración — requiere revisión física antes de simular.':text};
+    h.get('open-json-import').click();h.select(selectedFile(JSON.stringify(draftConfiguration())));await h.settle();
+    const technical=h.get('configuration-error').textContent.split('\n').slice(1);
+    assert.match(h.get('configuration-error').textContent,/^Draft configuration/);
+    language='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+    assert.match(h.get('configuration-error').textContent,/^Borrador de configuración/);
+    assert.deepEqual(h.get('configuration-error').textContent.split('\n').slice(1),technical);
+    assert.equal(h.dialog.open,true);assert.equal(h.calls.applied.length,0);
   }finally{h.close();}
 });

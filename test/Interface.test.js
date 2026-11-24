@@ -695,6 +695,52 @@ test('UI: reliability fields persist engine values and disabled settings',async(
  }finally{h.dom.window.close();}
 });
 
+test('UI: Case E draft JSON imports, saves source evidence and keeps the numerical engine blocked',async()=>{
+ const h=await setup({remember:true,empty:true});try{
+  // The larger line draws measured chart labels; JSDOM has no native canvas.
+  h.w.HTMLCanvasElement.prototype.getContext=()=>new Proxy({measureText:text=>({width:String(text).length*7})},{get:(target,key)=>target[key]||(()=>{})});
+  const source=JSON.parse(fs.readFileSync(new URL('../examples/case-e.configuration.json',import.meta.url),'utf8'));
+  const record=h.storedCases()[0];delete record.metadata.formatCatalog;delete record.metadata.products;
+  const sibling={id:'unrelated',name:'Unrelated simulation',equipment:[],dynamicConfig:{durationSeconds:60,tickSeconds:.25,seed:7},results:null,createdAt:record.updatedAt,updatedAt:record.updatedAt};
+  record.simulations.push(sibling);record.expectedRevision=record.revision;h.api.saveCase(record);
+  await h.click('.open-case');await h.click('.sidebar [data-view="editor"]');
+  await h.click('#open-json-import');
+  const file=h.d.getElementById('configuration-file'),text=JSON.stringify(source);
+  Object.defineProperty(file,'files',{configurable:true,value:[{name:'Caso_E_importable.json',size:Buffer.byteLength(text),text:async()=>text}]});
+  file.dispatchEvent(new h.w.Event('change',{bubbles:true}));
+  await waitFor(()=>h.d.getElementById('configuration-dialog').open);
+  const review=h.d.getElementById('configuration-error');
+  assert.match(review.textContent,/physical review required before simulation/);
+  for(const name of ['Conveyor ETI - FIL','Conveyor FIL-EMP','Conveyor EMP-PAL'])assert(review.textContent.includes(name));
+  h.w.STLanguage.setLanguage('es');assert.match(review.textContent,/revisa los parámetros físicos antes de simular/);
+  h.w.STLanguage.setLanguage('en');assert.match(review.textContent,/physical review required before simulation/);
+  await h.click('#configuration-apply');assert(!h.d.getElementById('configuration-dialog').open,JSON.stringify({review:review.textContent,status:h.d.getElementById('status').textContent,errors:h.errors}));
+  await h.click('#save-case');
+  await waitFor(()=>h.storedCases()[0].simulations[0].equipment.length===9);
+  let saved=h.storedCases()[0],simulation=saved.simulations[0];
+  assert.equal(saved.id,record.id);assert.equal(saved.name,record.name);assert.equal(simulation.id,'simulation-a');
+  assert.deepEqual(saved.simulations[1],sibling);
+  assert.equal(simulation.equipment[0].type,'CUSTOM');assert.equal(simulation.equipment[0].name,'Pace');
+  assert.equal(simulation.equipment[5].processData.geometry.lpPrimeMm,1999);
+  assert.equal(simulation.equipment[7].processData.geometry.lpPrimeMm,7700);
+  const evidence=simulation.equipment[3].processData.sourceEvidence;
+  assert.equal(evidence.measurements.filter(m=>m.value===null).length,7);
+  assert.equal(simulation.dynamicConfig.durationSeconds,86400);assert.equal(simulation.dynamicConfig.rounds,1);
+  assert.equal(simulation.dynamicConfig.eventsEnabled,false);assert.equal(simulation.results,null);
+  const validated=h.w.SimulatorEngine.validateSimulationInput({case:{equipment:simulation.equipment},run:simulation.dynamicConfig});
+  assert.equal(validated.ok,false);assert.equal(validated.error.details.length,6);
+  const attempted=h.w.SimulatorEngine.simulateLine({case:{equipment:simulation.equipment},run:simulation.dynamicConfig});
+  assert.equal(attempted.ok,false);assert.equal(attempted.error.code,'INVALID_SIMULATION_INPUT');assert.equal(attempted.result,undefined);
+  await h.click('#home-cases');await h.click('.open-case');await h.click('.sidebar [data-view="editor"]');
+  await h.click('#edit-setup-json');await waitFor(()=>h.d.getElementById('configuration-dialog').open);
+  const reopened=JSON.parse(h.d.getElementById('configuration-draft').value).simulation;
+  assert.deepEqual(reopened.equipment[3].processData.sourceEvidence,evidence);
+  assert.equal(reopened.equipment[5].processData.geometry.lpPrimeMm,1999);
+  assert.equal(reopened.equipment[7].processData.geometry.lpPrimeMm,7700);
+  assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});
+
 test('UI: JSON drafts are isolated, imports validate physics and preserve simulation identity',async()=>{
  const h=await setup({remember:true});try{
   await h.click('.open-case');await h.click('.sidebar [data-view="editor"]');
@@ -725,7 +771,7 @@ test('UI: JSON validation rejects unsupported settings, invalid reliability and 
   reject(c=>c.schema='other',/schema/);reject(c=>c.simulation.dynamicConfig.tickSeconds=1,/tickSeconds/);
   reject(c=>c.simulation.equipment[0].noiseProfile.reliability.mttrMinutes=-1,/mttrMinutes/);
   reject(c=>c.simulation.equipment[1].processData.upstream.packageLengthMm=0,/productLengthMm/i);
-  reject(c=>c.simulation.dynamicConfig.commands=[{equipmentId:'missing',action:'PAUSE',atVirtualSecond:1}],/equipmentId/);
+  reject(c=>{c.simulation.dynamicConfig.eventsEnabled=true;c.simulation.dynamicConfig.commands=[{equipmentId:'missing',action:'PAUSE',atVirtualSecond:1}];},/equipmentId/);
   assert.throws(()=>validate('{"__proto__":{}}',config),/Unsafe/);
   const original=JSON.stringify(config);validate(original,config);assert.equal(JSON.stringify(config),original);
  }finally{h.dom.window.close();}

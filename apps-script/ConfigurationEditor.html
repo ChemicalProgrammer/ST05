@@ -79,17 +79,55 @@ var STReliabilityControls = (function(){
 })();
 var STConfigurationEditor=(function(){
   function object(value){return value&&typeof value==='object'&&!Array.isArray(value);}
+  function validateDraftPhysicalFields(e,index){
+    var path='equipment['+index+'].processData',data=e.processData;
+    var fields={
+      geometry:['lactMm','lpPrimeMm','actualDischargeMm','actualCodingMm'],
+      upstream:['packageLengthMm','dischargePitchMm','startupTimeSeconds','bottlesDischargedAtStop','dischargeVelocityMPerMinute'],
+      downstream:['infeedPitchMm','rampUpTimeSeconds'],
+      speedAndSensors:['conveyorSpeedFactorVsDischargeVelocityPercent','codingConveyorSpeedFactorVsPreviousConveyorPercent','conveyorSpeedFactorVsPreviousConveyorPercent','blockedTimeDelaySeconds','clearTimeDelaySeconds','insuranceFactorUnits','overspeedVsInfeedScrewPercent'],
+      equipment:['maximumSpeedBpm','recoveryTimeSeconds','residenceTimeSeconds','internalCapacityBottles','mtbfMinutes','mttrMinutes'],
+      accumulation:['usableLengthMm','productLengthMm','productPitchMm','gapMm','movingGapMm','accumulatedGapMm','accumulatedPitchMm','conveyorSpeedMmPerSecond','conveyorSpeedFactorPercent','primeSensorPositionMm','backupSensorPositionMm','backupRestartPositionMm','dischargeRunoutLengthMm','rejectRunoutLengthMm','blockedTimeDelaySeconds','clearTimeDelaySeconds','insuranceFactorUnits','upstreamStopResponseSeconds','bottlesDischargedAtStop','downstreamRampUpSeconds','restartToFirstPackageSeconds','declaredAccumulationSeconds','manualLbaMm','targetPopulationPercent','targetOverspeedPercent']
+    };
+    Object.keys(fields).forEach(function(group){
+      if(data[group]==null)return;
+      if(!object(data[group]))throw Error(path+'.'+group+' must be an object.');
+      fields[group].forEach(function(key){var value=data[group][key];if(value!=null&&(typeof value!=='number'||!Number.isFinite(value)||value<0))throw Error(path+'.'+group+'.'+key+' must be a non-negative number or null.');});
+    });
+  }
+  function canReviewPhysicalIssue(issue,equipment){
+    var match=/^case\.equipment\[(\d+)\]\.processData\.accumulation(?:\.(.*))?$/.exec(issue.path||'');
+    if(!match)return false;
+    var item=equipment[Number(match[1])],data=item?.processData?.accumulation,field=match[2];
+    if(item?.type!=='CONVEYOR'&&item?.processData?.role!=='CONVEYOR')return false;
+    // A draft may lack geometry or have a physical relationship to review.
+    // Invalid control modes and explicit target constraints remain blocking.
+    if(['speedMode','targetPopulationPercent','targetOverspeedPercent','movingGapMm','accumulatedGapMm'].includes(field))return false;
+    if(!field&&data?.targetPopulationPercent!==undefined&&data?.targetOverspeedPercent!==undefined)return false;
+    if(field==='manualLbaMm'&&!(data?.manualLbaMm>0))return false;
+    return true;
+  }
+  function physicalReviewMessage(review){
+    if(!review?.issues?.length)return '';
+    var header='Draft configuration — physical review required before simulation.';
+    return (window.STLanguage?.translate(header)||header)+'\n'+review.issues.map(function(issue){return issue.equipmentName+' · '+issue.path+': '+issue.reason;}).join('\n');
+  }
   function validate(text,current){
     var parsed=JSON.parse(text,function(key,value){if(['__proto__','constructor','prototype'].includes(key))throw Error('Unsafe JSON key: '+key);return value;});
     if(!object(parsed))throw Error('Configuration must be a JSON object.');
     if(parsed.schema&&parsed.schema!=='st-line-configuration-v1')throw Error('Unsupported configuration schema: '+parsed.schema);
+    if(parsed.importMode!==undefined&&(!['DRAFT','VALIDATED'].includes(parsed.importMode)||parsed.schema!=='st-line-configuration-v1'))throw Error('importMode requires st-line-configuration-v1 and must be DRAFT or VALIDATED.');
+    var draftImport=parsed.importMode==='DRAFT';
     if(parsed.simulations)throw Error('Import an active simulation configuration export, not an entire case.');
     if(parsed.case?.unitOfFlow&&parsed.case.unitOfFlow!==current.case.unitOfFlow)throw Error('unitOfFlow must match the active case: '+current.case.unitOfFlow);
     var source=parsed.schema?parsed.simulation:parsed;
     if(!object(source)||!Array.isArray(source.equipment))throw Error('equipment must be an array.');
     if(source.engineConfig&&JSON.stringify(source.engineConfig)!==JSON.stringify(current.simulation.engineConfig))throw Error('engineConfig is shared by the case and must match the active case.');
     if(source.dynamicConfig!==undefined&&!object(source.dynamicConfig))throw Error('dynamicConfig must be an object.');
-    var run=Object.assign({},current.simulation.dynamicConfig,source.dynamicConfig||{}),formatCatalog;
+    if(draftImport&&!object(source.dynamicConfig))throw Error('A draft import requires its complete dynamicConfig.');
+    // Drafts are complete input snapshots. They must not inherit another case's
+    // runtime target, products, commands or calendar while awaiting review.
+    var run=Object.assign({},draftImport?{}:current.simulation.dynamicConfig,source.dynamicConfig||{}),formatCatalog;
     if(Object.prototype.hasOwnProperty.call(source.dynamicConfig||{},'initialFormatId'))run.initialProductId=run.initialFormatId;
     else if(Object.prototype.hasOwnProperty.call(source.dynamicConfig||{},'initialProductId'))run.initialFormatId=run.initialProductId;
     if(parsed.case?.metadata?.formatCatalog||parsed.case?.metadata?.products){
@@ -107,18 +145,32 @@ var STConfigurationEditor=(function(){
       if(typeof e.id==='string')e.id=e.id.trim();e.name=e.name.trim();
       if(!['BLOWER','BLOWMOLDER','CONVEYOR','PACEMAKER','PUCKER','FILLER','CAPPER','FEEDER','DEPUCKER','SLEEVER','CASE_PACKER','PALLETIZER','CUSTOM'].includes(e.type))throw Error('equipment['+index+'].type is unsupported.');
       ['characteristics','noiseProfile','processData'].forEach(function(key){if(e[key]===undefined)e[key]={};if(!object(e[key]))throw Error('equipment['+index+'].'+key+' must be an object.');});
+      if(draftImport)validateDraftPhysicalFields(e,index);
       ['maximumSpeedBpm','recoveryTimeSeconds'].forEach(function(key){var value=e.processData.equipment?.[key];if(value!=null&&(typeof value!=='number'||!Number.isFinite(value)||value<=0))throw Error('equipment['+index+'].processData.equipment.'+key+' must be a positive number.');});
       if(e.type==='CONVEYOR'&&(e.processData.role==='PACEMAKER'||e.characteristics.isPacemaker===true))throw Error('A conveyor cannot be the critical machine.');
       if(e.noiseProfile.reliability){e.processData.equipment=Object.assign({},e.processData.equipment,e.noiseProfile.reliability);}
     });
     if(source.equipment.filter(function(e){return e.type==='PACEMAKER'||e.processData.role==='PACEMAKER'||e.characteristics.isPacemaker===true;}).length>1)throw Error('Select only one machine as the critical machine.');
     var result=SimulatorEngine.validateSimulationInput({case:{equipment:source.equipment},run:run});
-    if(!result.ok)throw Error(result.error.details.map(function(d){return d.path+': '+d.reason;}).join('\n'));
-    return {equipment:source.equipment,dynamicConfig:run,formatCatalog:formatCatalog};
+    var issues=!result.ok?result.error.details:[],blocking=draftImport?issues.filter(function(issue){return !canReviewPhysicalIssue(issue,source.equipment);}):issues;
+    if(blocking.length)throw Error(blocking.map(function(d){return d.path+': '+d.reason;}).join('\n'));
+    var configuration={equipment:source.equipment,dynamicConfig:run,formatCatalog:formatCatalog};
+    if(draftImport&&issues.length)configuration.physicalReview={status:'REQUIRES_REVIEW',issues:issues.map(function(issue){
+      var index=Number(/^case\.equipment\[(\d+)\]/.exec(issue.path)[1]),equipment=source.equipment[index];
+      return {path:issue.path,reason:issue.reason,equipmentId:equipment.id,equipmentName:equipment.name};
+    })};
+    return configuration;
   }
   function init(state,callbacks){
     var dialog=document.getElementById('configuration-dialog'),draft=document.getElementById('configuration-draft'),error=document.getElementById('configuration-error'),file=document.getElementById('configuration-file'),apply=document.getElementById('configuration-apply');
     var context=null,serial=0,importRequest=null,filename=document.getElementById('configuration-filename');
+    function reviewDraft(){
+      if(!context)return;
+      error.textContent='';
+      var parsed;try{parsed=JSON.parse(draft.value);}catch(e){return;}
+      if(parsed?.importMode!=='DRAFT')return;
+      try{error.textContent=physicalReviewMessage(validate(draft.value,context.current).physicalReview);}catch(e){error.textContent=e.message;}
+    }
     function request(){return {token:++serial,caseId:state.activeCase?.id,simulationId:state.activeSimulationId};}
     function currentRequest(entry){return entry&&entry.token===serial&&state.activeCase?.id===entry.caseId&&state.activeSimulationId===entry.simulationId;}
     function close(){serial++;context=null;importRequest=null;draft.value='';file.value='';filename.textContent='';filename.hidden=true;dialog.close();}
@@ -129,7 +181,7 @@ var STConfigurationEditor=(function(){
         var text=selected?await selected.text():JSON.stringify(current,null,2);if(!currentRequest(entry))return;
         context={caseId:entry.caseId,simulationId:entry.simulationId,current:current};
         draft.value=text;file.value='';filename.textContent=selected?.name||'';filename.hidden=!filename.textContent;
-        error.textContent='';apply.disabled=false;dialog.showModal();draft.focus();
+        error.textContent='';reviewDraft();apply.disabled=false;dialog.showModal();draft.focus();
       }catch(e){if(currentRequest(entry))STDialog.open({message:e.message});}
     }
     function importFile(event){
@@ -146,6 +198,8 @@ var STConfigurationEditor=(function(){
     document.getElementById('configuration-cancel').onclick=close;dialog.addEventListener('cancel',function(event){event.preventDefault();close();});
     file.onchange=function(){var selected=file.files[0],entry=importRequest;importRequest=null;if(selected&&currentRequest(entry))open(entry,selected);};
     file.addEventListener('cancel',function(){importRequest=null;});
+    draft.addEventListener('input',reviewDraft);
+    window.addEventListener('st-language-change',reviewDraft);
     apply.onclick=function(){try{
       if(!context||state.activeCase?.id!==context.caseId||state.activeSimulationId!==context.simulationId)throw Error('The active simulation changed. Reopen the editor.');
       var configuration=validate(draft.value,context.current);callbacks.apply(configuration);close();

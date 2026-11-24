@@ -151,7 +151,7 @@ test('Dynamic controls in Equipment, Results, What-If, Formats and Sheet import 
     'apps-script/Results.html':['Effective Run Time','Equipment operation','Equipment time breakdown'],
     'apps-script/Products.html':['Format name','Product name','Bottles per case','Import configuration'],
     'apps-script/ScenarioExplorer.html':['Scenario configuration','Find best scenario','Search depth','Add intervention target'],
-    'apps-script/SheetImport.html':['Review catalog records','Packing proposal','Bottle volume'],
+    'apps-script/SheetImport.html':['Import details','Packing proposal','Bottle volume'],
     'apps-script/Settings.html':['Reset text']
   };
   for(const [path,terms] of Object.entries(screens)){

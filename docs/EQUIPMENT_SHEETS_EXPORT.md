@@ -41,3 +41,9 @@ The Sheet import dialog uses the shared `STSubsection` component for four sectio
 When the source contains a dedicated Products & Formats tab (v1, v2 or v3), Equipment!E1:E3 are legacy placeholders: they are **not offered for selection or applied as case metadata**. A legacy standalone Equipment sheet without a catalog can still read its format metadata. Empty unchanged metadata is omitted from the dialog.
 
 The verbose footer summary and routine confirmation hint are removed; the footer retains the review checkbox and Cancel/Apply buttons. Actionable blockers appear inside Import details and open it automatically. Equipment audit badges use a stronger icon, semantic tinted background and accessible tooltips.
+
+## Import review layout refinements
+
+- The Spreadsheet subsection contains only one instruction in its header, and equipment audit row titles align vertically with the disclosure chevron and status badge.
+- The Format subsection uses a compact Import/Create checkbox **in its own toolbar**. When Products & Formats records are present, the record list appears directly in the subsection content without a nested Review catalog records disclosure. The same toolbar toggle enables or disables the packing proposal fields for older worksheets.
+- Informational source notes display directly in **Import details**; the nested Source information disclosure was removed. Warnings, validation errors, and Real Data controls remain available in that subsection.

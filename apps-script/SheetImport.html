@@ -79,28 +79,37 @@ window.STSheetImport=function(state,actions){
     data.errors.forEach(function(e){var error=node('p',e.cell+': '+e.message,'sheet-packing-field-error');error.setAttribute('role','alert');section.append(error);});
     toggle.onchange=function(){observationDraft.enabled=toggle.checked;el('sheet-import-ack').checked=false;refresh();};host.append(section);
   }
+  function formatToolbar(){
+    var tools=node('div','','button-row'),label=node('label','','st-checkbox-card st-checkbox-card--compact sheet-import-format-toggle'),
+      checkbox=document.createElement('input');
+    checkbox.type='checkbox';checkbox.id='sheet-packing-enabled';checkbox.checked=packingDraft.enabled;
+    checkbox.setAttribute('aria-label',packingDraft.catalog?'Import Products & Formats':'Create product and format from the selected line');
+    label.append(checkbox,node('span',packingDraft.catalog?'Import':'Create'));
+    checkbox.onchange=function(){
+      packingDraft.enabled=checkbox.checked;
+      var fields=el('sheet-packing-fields');if(fields)fields.disabled=!checkbox.checked;
+      el('sheet-import-ack').checked=false;refresh();
+    };
+    tools.append(label);return tools;
+  }
   function packingPanel(host,result){
     if(packingDraft.catalog){
-      var source=preview.materialCatalog,section=node('section',''),label=node('label',''),checkbox=document.createElement('input');
-      section.className='settings-section';label.className='remember st-checkbox-card';checkbox.type='checkbox';checkbox.checked=packingDraft.enabled;
-      var catalog=source.catalog;
-      label.append(checkbox,document.createTextNode('Import Products & Formats ('+catalog.products.length+' products, '+catalog.formats.length+' formats)'));
-      section.append(label);
+      var source=preview.materialCatalog,catalog=source.catalog;
       if(catalog.products.length||catalog.formats.length){
-        var details=node('details',''),list=node('ul','');details.append(node('summary','Review catalog records'),list);
+        var list=node('ul','','sheet-import-catalog-list');
         catalog.products.forEach(function(product){list.append(node('li','Product · '+product.name));});
         catalog.formats.forEach(function(format){
-          var product=catalog.products.find(item=>item.id===format.productId);
+          var product=catalog.products.find(function(item){return item.id===format.productId;});
           list.append(node('li','Format · '+format.name+(product?' · '+product.name:'')+(format.id===source.initialFormatId?' · Initial format':'')));
         });
-        section.append(details);
+        host.append(list);
       }
-      source.errors.forEach(function(message){var error=node('p',message,'sheet-packing-field-error');error.setAttribute('role','alert');section.append(error);});
-      checkbox.onchange=function(){packingDraft.enabled=checkbox.checked;el('sheet-import-ack').checked=false;refresh();};
-      host.append(section);return;
+      source.errors.forEach(function(message){
+        var error=node('p',message,'sheet-packing-field-error');error.setAttribute('role','alert');host.append(error);
+      });
+      return;
     }
-    var section=document.createElement('section');section.className='settings-section sheet-packing-proposal';section.id='sheet-packing-proposal';
-    var label=node('label',''),enabled=document.createElement('input');enabled.type='checkbox';enabled.id='sheet-packing-enabled';enabled.checked=packingDraft.enabled;label.className='remember st-checkbox-card';label.append(enabled,document.createTextNode('Create product and format from the selected line'));section.append(label);
+    var section=document.createElement('div');section.className='sheet-packing-proposal';section.id='sheet-packing-proposal';
     var fields=document.createElement('fieldset');fields.className='field-grid sheet-packing-fields';fields.id='sheet-packing-fields';fields.disabled=!packingDraft.enabled;var legend=node('legend','Packing proposal');legend.className='sr-only';fields.append(legend);
     function changed(){el('sheet-import-ack').checked=false;refresh();}
     function input(key,text,numeric,options){var label=node('label',text),control=document.createElement('input');control.id='sheet-packing-'+key;control.setAttribute('aria-label',text);control.type=numeric?'number':'text';control.value=packingDraft[key]??'';if(numeric){control.min=options?.min||'0.000001';control.step=options?.step||'any';if(options?.max)control.max=options.max;}else control.maxLength=120;control.oninput=function(){packingDraft[key]=numeric?(control.value===''?undefined:Number(control.value)):control.value;changed();};label.append(control);fields.append(label);return control;}
@@ -121,7 +130,6 @@ window.STSheetImport=function(state,actions){
     information.append(node('p','Optional lengths: blanks retain each conveyor’s defaults. Width and height are not inferred. Machine speeds inherit the installed defaults. Conveyor lengths, sensors, manual belt speeds and MTBF/MTTR remain installation settings. Existing product/format overrides are retained on reload; review them if the measurements change.'));
     section.append(information);
     var review=node('div','');review.id='sheet-packing-review';section.append(review);host.append(section);
-    enabled.onchange=function(){packingDraft.enabled=enabled.checked;fields.disabled=!enabled.checked;changed();};
   }
   function updatePackingReview(result){
     var host=el('sheet-packing-review');if(!host)return;var expanded=host.querySelector('.sheet-import-detail')?.open||false;host.replaceChildren();host.hidden=!packingDraft.enabled;if(host.hidden)return;
@@ -265,7 +273,7 @@ window.STSheetImport=function(state,actions){
       equipmentBody.append(section);
     });
     var formatSection=subsection({id:'sheet-import-format-section',title:'Format',
-      description:'Review products, formats and optional packing conversion.',open:true});
+      description:'Review products, formats and optional packing conversion.',tools:formatToolbar(),open:true});
     host.append(formatSection.section);
     packingPanel(formatSection.body,merge.build(data,plan,snapshot.equipment,snapshot.sourceImport));
     var detailsSection=subsection({id:'sheet-import-details-section',title:'Import details',
@@ -282,10 +290,13 @@ window.STSheetImport=function(state,actions){
         group[1].forEach(function(item){list.append(node('li',item.cell+': '+item.message));});
         d.append(list);detailsBody.append(d);
       });
-    var information=detail('Source information'),notes=data.notes||[],sourceInfo=(data.warnings||[]).filter(issue=>issue.severity==='info');
-    if(sourceInfo.length){var sourceList=node('ul','');sourceInfo.forEach(function(item){sourceList.append(node('li',item.cell+': '+item.message));});information.append(sourceList);}
-    if(notes.length){information.append(node('h4',__ST_TEXT__('sheetimport.mapping_and_model_assumptions')));var list=node('ul','');notes.forEach(function(text){list.append(node('li',text));});information.append(list);}
-    if(sourceInfo.length||notes.length)detailsBody.append(information);
+    var notes=data.notes||[],sourceInfo=(data.warnings||[]).filter(issue=>issue.severity==='info');
+    if(sourceInfo.length||notes.length){
+      var list=node('ul','','sheet-import-source-notes');
+      sourceInfo.forEach(function(item){list.append(node('li',item.cell+': '+item.message));});
+      notes.forEach(function(text){list.append(node('li',text));});
+      detailsBody.append(list);
+    }
     var corrections=node('div','');corrections.id='sheet-import-corrections';detailsBody.append(corrections);
     var review=document.createElement('details');review.id='sheet-import-model-review';detailsBody.append(review);
     refresh();

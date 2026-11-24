@@ -66,6 +66,44 @@ test('dedicated Products & Formats catalog hides obsolete E1:E3 case fields',()=
  }finally{h.dom.window.close();}
 });
 
+test('Format puts the catalog import checkbox in its toolbar and records directly in its content',()=>{
+ const h=setup();try{
+  h.preview.materialCatalog={catalog:{version:3,
+    products:[{id:'water',name:'Multipurpose cleaner'}],
+    formats:[{id:'box',name:'500 mL · 12 bottles per case',productId:'water',bottlesPerCase:12}]},
+    errors:[]};
+  h.d.getElementById('sheet-import-form').dispatchEvent(new h.w.Event('submit',{cancelable:true}));
+  const format=h.d.getElementById('sheet-import-format-section');
+  const toolbar=format.querySelector(':scope > summary > .fold-tools');
+  const input=toolbar.querySelector('#sheet-packing-enabled');
+  assert(input,'The existing catalog toggle must be a toolbar control');
+  assert(input.checked);
+  assert.equal(format.querySelectorAll('#sheet-packing-enabled').length,1);
+  const list=format.querySelector(':scope > .fold-content > .sheet-import-catalog-list');
+  assert(list,'Records must be direct children of the Format content');
+  assert.equal(list.children.length,2);
+  assert.match(list.textContent,/Multipurpose cleaner/);
+  assert.match(list.textContent,/500 mL · 12 bottles per case/);
+  assert.equal(format.querySelectorAll('details > summary').length,0,'Do not nest another catalog disclosure');
+  input.click();
+  assert.equal(input.checked,false);
+  assert(h.d.getElementById('sheet-import-apply').disabled || input.checked===false);
+ }finally{h.dom.window.close();}
+});
+
+test('The Format toolbar toggle also controls the editable packing proposal',()=>{
+ const h=setup();try{
+  const format=h.d.getElementById('sheet-import-format-section');
+  const toggle=format.querySelector(':scope > summary > .fold-tools #sheet-packing-enabled');
+  const fields=h.d.getElementById('sheet-packing-fields');
+  assert(toggle && fields);
+  assert.equal(fields.disabled,!toggle.checked);
+  toggle.click();
+  assert.equal(fields.disabled,!toggle.checked);
+  assert.equal(format.querySelectorAll('#sheet-packing-enabled').length,1);
+ }finally{h.dom.window.close();}
+});
+
 test('Sheet import request includes mode and both contract versions',()=>{
  for(const mode of ['basic','advance']){
    const h=setup({uiMode:mode});
@@ -112,7 +150,13 @@ test('physical review and card issue list show the same expected Sheet cell',()=
 test('normal conveyor notes use an information icon instead of a warning',()=>{
  const h=setup({informational:true});try{
   const row=h.d.querySelector('[data-source-index="0"]');assert.equal(row.dataset.importStatus,'info');assert.match(row.querySelector('.sheet-import-row-status').getAttribute('aria-label'),/no action required/);assert.match(row.querySelector('.sheet-equipment-issues').textContent,/Info · D10:E10/);assert(!row.querySelector('.sheet-equipment-issues').textContent.includes('Warning ·'));
-  assert.match(h.d.getElementById('sheet-import-preview').textContent,/Source information/);
+  const details=h.d.getElementById('sheet-import-details-section');
+  const notes=details.querySelector(':scope > .fold-content > .sheet-import-source-notes');
+  assert(notes,'Informational notes must appear directly in Import details');
+  assert.match(notes.textContent,/Random failures disabled/);
+  assert.match(notes.textContent,/Using upstream machine rate/);
+  assert(![...details.querySelectorAll('details > summary')].some(summary=>summary.textContent==='Source information'),
+    'No nested Source information disclosure should remain');
  }finally{h.dom.window.close();}
 });
 test('a mixed deployment stops before previewing or applying equipment',()=>{

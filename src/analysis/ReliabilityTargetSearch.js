@@ -55,6 +55,7 @@ export async function searchReliabilityTargets(simulation,{measure,run,cancelled
     observations.push({equipmentId:equipment.id,name:equipment.name,candidate,...gainEvidence(candidate),stopDataCoverage,
       targetScope:stopDataCoverage.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED',
       interpretation:'Conditional removal of all MTBF/MTTR stop classes with the separate MICRO_STOP process unchanged; not an additive share of line OEE, a class-specific intervention or a demonstrated physical failure cause.'});
+    progress({label:'Machines screened '+observations.length+' / '+selected.length,calculations,counter:'Machines screened',completed:observations.length,total:selected.length});
   }
   const threshold=Math.max(.001,Math.abs(baseline.throughput)*.001),ranking=observations.slice().sort((a,b)=>b.deltaThroughput-a.deltaThroughput||(a.equipmentId<b.equipmentId?-1:1));
   let relevant=scope==='AUTO'?ranking.filter(o=>o.deltaThroughput>threshold&&o.candidate.oee>=baseline.oee-1e-9).slice(0,maximumTargets):ranking;

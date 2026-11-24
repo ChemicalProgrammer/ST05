@@ -3,14 +3,22 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source=fs.readFileSync('apps-script/ClientCases.html','utf8');
+const simulationSource=fs.readFileSync('apps-script/ClientSimulation.html','utf8');
+const equipmentSource=fs.readFileSync('apps-script/ClientEquipment.html','utf8');
 const clone=value=>JSON.parse(JSON.stringify(value));
+function loadCapture(context){
+ context.state.run=context.state.run||{};context.roundSession=null;
+ vm.runInContext(simulationSource.slice(simulationSource.indexOf('    function preserveCommittedSimulationInputs('),simulationSource.indexOf('    function syncPersistentSimulation(')),context);
+ vm.runInContext(equipmentSource.slice(equipmentSource.indexOf('    function caseEditorSnapshot('),equipmentSource.indexOf('    function basicEquipmentPreview(')),context);
+ vm.runInContext(source.slice(source.indexOf('    function captureForSave()'),source.indexOf('    function fitCaseSave(')),context);
+}
 test('case capture saves the live 2D checkpoint without triggering another edit',()=>{
  const owner={id:'s',equipment:[],dynamicConfig:{}},state={activeCase:{id:'c',revision:4,simulations:[owner]}};
  let captures=0;
  const live={identity:['c','s','format'],version:2,checkpoint:{time:12.345,line:[]},presentation:{palletAnimation:{forkStarted:10,placed:36}},source:'independent'};
  const context=vm.createContext({window:{STSimulation2D:{capture(){captures++;return clone(live);}}},state,STProducts:{validateForSave(){}},whatIfOnlySave:false,
   collectCaseEditor:()=>({name:'Case',equipment:[]}),activePersistentSimulation:()=>owner,readRunConfiguration:()=>({}),captureSimulationView(){},fitCaseSave:value=>value,cloneJson:clone});
- vm.runInContext(source.slice(source.indexOf('    function captureForSave()'),source.indexOf('    function fitCaseSave(')),context);
+ loadCapture(context);
  const saved=context.captureForSave();assert.equal(captures,1);assert.equal(saved.simulations[0].simulation2d.checkpoint.time,12.345);
  assert.deepEqual(saved.simulations[0].simulation2d.presentation,live.presentation);
  context.whatIfOnlySave=true;const evidence=context.captureForSave();assert.equal(evidence.expectedRevision,4);assert.equal(evidence.simulations[0].simulation2d.checkpoint.time,12.345);
@@ -19,8 +27,29 @@ test('case capture does not attach a checkpoint from a different case',()=>{
  const owner={id:'s',equipment:[],dynamicConfig:{}},state={activeCase:{id:'c',simulations:[owner]}};
  const context=vm.createContext({window:{STSimulation2D:{capture:()=>({identity:['other-case','s'],checkpoint:{time:999}})}},state,STProducts:{validateForSave(){}},whatIfOnlySave:false,
   collectCaseEditor:()=>({name:'Case',equipment:[]}),activePersistentSimulation:()=>owner,readRunConfiguration:()=>({}),captureSimulationView(){},fitCaseSave:value=>value,cloneJson:clone});
- vm.runInContext(source.slice(source.indexOf('    function captureForSave()'),source.indexOf('    function fitCaseSave(')),context);
+ loadCapture(context);
  assert.equal(context.captureForSave().simulations[0].simulation2d,undefined);
+});
+test('saving a completed search with no improvement preserves committed inputs and its full progress history',()=>{
+ const equipment=[{id:'inlet',name:'Virtual inlet',type:'FEEDER',nominalRatePerSecond:4,processData:{equipment:{mtbfMinutes:null,mttrMinutes:null}},noiseProfile:{}}];
+ const trace={state:'Completed',percent:100,elapsedMs:1041000,steps:Array.from({length:8},(_,i)=>({name:'Step '+(i+1),state:'Completed',percent:100,elapsedMs:1000,work:{batches:{label:'Batches',done:3,total:3}}}))};
+ const owner={id:'s',equipment,dynamicConfig:{durationSeconds:86400,rounds:3},results:{summary:{outputCount:120},inputSignature:'saved-inputs'},
+  whatIf:{evaluations:[{sourceSimulationId:'s',sourceSignature:'saved-source',status:'NO_DEMONSTRATED_IMPROVEMENT',message:'No demonstrated improvement.',progress:'Finished',progressTrace:trace,trials:32}]}};
+ const state={activeCase:{id:'c',name:'Case',revision:4,equipment:clone(equipment),simulations:[owner]}};
+ const context=vm.createContext({window:{},state,STProducts:{validateForSave(){}},whatIfOnlySave:false,
+  collectCaseEditor:()=>{throw Error('Completed evidence must not read the editor');},activePersistentSimulation:()=>owner,
+  readRunConfiguration:()=>{throw Error('Completed evidence must keep its run');},captureSimulationView(){},fitCaseSave:value=>value,cloneJson:clone});
+ loadCapture(context);
+ const before=clone(owner);
+ for(const evidenceOnly of [false,true]){
+  context.whatIfOnlySave=evidenceOnly;
+  const saved=context.captureForSave(),restored=JSON.parse(JSON.stringify(saved));
+  assert.deepEqual(restored.simulations[0],before);
+  assert.equal(restored.simulations[0].whatIf.evaluations[0].progressTrace.steps.length,8);
+  assert.equal(restored.simulations[0].equipment[0].processData.equipment.mtbfMinutes,null);
+  saved.simulations[0].whatIf.evaluations[0].progressTrace.steps[0].state='Changed copy';
+  assert.deepEqual(owner,before,'capture returns a detached snapshot');
+ }
 });
 test('manual Save flushes the request even when automatic saving is disabled',async()=>{
  const sent=[],state={activeCase:{id:'c'}},context=vm.createContext({window:{},setTimeout,clearTimeout,Date,__ST_TEXT__:key=>key,state,prepareCaseDraft:()=>Promise.resolve(),showError:error=>{throw error;}});

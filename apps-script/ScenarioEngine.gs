@@ -1667,10 +1667,22 @@ function scenarioSignature(simulation){
   let hash=2166136261;for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
   return (hash>>>0).toString(16)+':'+text.length;
 }
+function scenarioActiveProduct(simulation){
+  const run=simulation.dynamicConfig||simulation.run||{},id=run.initialFormatId??run.initialProductId;
+  return Array.isArray(run.productCatalog)?run.productCatalog.find(product=>product.id===id):undefined;
+}
+function scenarioEngineeringEquipment(simulation){
+  const equipment=simulation.equipment||[],product=scenarioActiveProduct(simulation);
+  // The runtime applies the active format before resolving conveyor geometry.
+  // In particular, a Case Packer's bottle input rate differs from its case output.
+  // Apply the same profile on copies; persisted rates and proposal baselines stay native.
+  return product?applyProductProfile(equipment,product):equipment;
+}
 function scenarioAudit(simulation){
-  return (simulation.equipment||[]).flatMap((e,index)=>{
+  const equipment=scenarioEngineeringEquipment(simulation);
+  return equipment.flatMap((e,index)=>{
     if(e.type!=='CONVEYOR')return [];
-    const zone=resolveAccumulationZoneDefinition(simulation.equipment,index).definition;
+    const zone=resolveAccumulationZoneDefinition(equipment,index).definition;
     return [{equipmentId:e.id,equipmentName:e.name,engineering:zone?.engineering||null,upstreamId:zone?.upstreamControlEquipmentId,downstreamId:zone?.downstreamControlEquipmentId}];
   });
 }
@@ -1838,21 +1850,26 @@ function scenarioLossEvidence(simulation,diagnosis,equipment,kind){
 }
 // Opportunity screening does not create undocumented implementation targets.
 function scenarioProposalNeeds(simulation){
-  const line=analyzeLinePerformance(simulation.equipment,null),reference=line.points.find(p=>p.isPacemaker),options=(simulation.whatIf?.externalOptions||[]).filter(o=>{try{if(!o.changes?.length||!o.changes.every(c=>scenarioCategoryAllows(c,o.tier)))return false;applyScenarioChanges(simulation,o.changes);return true;}catch(_){return false;}}).flatMap(o=>o.changes),needs=[];
+  const equipment=scenarioEngineeringEquipment(simulation),product=scenarioActiveProduct(simulation),line=analyzeLinePerformance(equipment,null),reference=line.points.find(p=>p.isPacemaker),options=(simulation.whatIf?.externalOptions||[]).filter(o=>{try{if(!o.changes?.length||!o.changes.every(c=>scenarioCategoryAllows(c,o.tier)))return false;applyScenarioChanges(simulation,o.changes);return true;}catch(_){return false;}}).flatMap(o=>o.changes),needs=[];
+  if(!reference)return needs;
+  const factors=new Map(equipment.map(item=>[item.id,product?productUnitFactor(item,product):1]));
+  const referenceBpm=reference.configuredBpm*factors.get(reference.id);
   for(const point of line.points){
-    const equipment=simulation.equipment.find(e=>e.id===point.id),r=equipment.noiseProfile?.reliability;
+    const unit=equipment.find(e=>e.id===point.id),r=unit.noiseProfile?.reliability;
+    // Compare like units without rewriting installed/native machine limits.
+    const configuredBpm=point.configuredBpm*factors.get(point.id),maximumBpm=point.maximumBpm===null?null:point.maximumBpm*factors.get(point.id);
     const hasCapacity=options.some(c=>c.equipmentId===point.id&&c.replacementMaximumBpm!==undefined);
-    if(!point.isPacemaker&&point.configuredBpm<reference.configuredBpm-1e-6&&(!point.maximumBpm||point.maximumBpm<reference.configuredBpm)&&!hasCapacity)needs.push({kind:'CAPACITY_TARGET_REQUIRED',equipmentId:point.id,name:point.name,configuredBpm:point.configuredBpm,installedMaximumBpm:point.maximumBpm,referenceBpm:reference.configuredBpm,requiredInput:'Documented replacement operating speed, new maximum capacity and source. No target is inferred from the reference.'});
+    if(!point.isPacemaker&&configuredBpm<referenceBpm-1e-6&&(!maximumBpm||maximumBpm<referenceBpm)&&!hasCapacity)needs.push({kind:'CAPACITY_TARGET_REQUIRED',equipmentId:point.id,name:point.name,configuredBpm,installedMaximumBpm:maximumBpm,referenceBpm,requiredInput:'Documented replacement operating speed, new maximum capacity and source. No target is inferred from the reference.'});
     if(simulation.dynamicConfig?.reliabilityEnabled!==false&&r?.mtbfMinutes>0&&r?.mttrMinutes>0){
-      const availability=r.mtbfMinutes/(r.mtbfMinutes+r.mttrMinutes),effective=point.configuredBpm*availability;
+      const availability=r.mtbfMinutes/(r.mtbfMinutes+r.mttrMinutes),effective=configuredBpm*availability;
       const hasReliability=options.some(c=>c.equipmentId===point.id&&c.path.startsWith('noiseProfile.reliability.'));
-      if(effective<reference.configuredBpm-1e-6&&!hasReliability)needs.push({kind:'RELIABILITY_TARGET_REQUIRED',equipmentId:point.id,name:point.name,availabilityPercent:100*availability,availabilityOnlyBpm:effective,referenceBpm:reference.configuredBpm,requiredInput:'Evaluate sensitivity, then supply an achievable MTBF/MTTR target, intervention type and source. Availability-only capacity is screening, not simulated throughput.'});
+      if(effective<referenceBpm-1e-6&&!hasReliability)needs.push({kind:'RELIABILITY_TARGET_REQUIRED',equipmentId:point.id,name:point.name,availabilityPercent:100*availability,availabilityOnlyBpm:effective,referenceBpm,requiredInput:'Evaluate sensitivity, then supply an achievable MTBF/MTTR target, intervention type and source. Availability-only capacity is screening, not simulated throughput.'});
     }
   }
   return needs.sort((a,b)=>(a.availabilityOnlyBpm??a.configuredBpm)-(b.availabilityOnlyBpm??b.configuredBpm));
 }
 function planScenarios(simulation){
-  const audit=scenarioAudit(simulation),diagnosis=diagnoseScenarioLosses(simulation);
+  const audit=scenarioAudit(simulation),engineeringEquipment=scenarioEngineeringEquipment(simulation),diagnosis=diagnoseScenarioLosses(simulation);
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
   const result=diagnosis.status==='OBSERVED'?simulation.results:null;
   const candidates=[],checks=[];
@@ -1880,11 +1897,19 @@ function planScenarios(simulation){
     }
     // Search existing sensor locations on every supported conveyor, even when
     // worksheet targets pass. These are hypotheses, not promised gains.
-    const zone=resolveAccumulationZoneDefinition(simulation.equipment,simulation.equipment.indexOf(e)).definition;
+    const zone=resolveAccumulationZoneDefinition(engineeringEquipment,simulation.equipment.indexOf(e)).definition;
     if(zone?.usableLengthMm>0){
-      let backup=Math.min(c.recommendedBackupSensorPositionMm,zone.primeSensorPositionMm,zone.backupRestartPositionMm??Infinity);
+      const bound=Math.min(zone.usableLengthMm,zone.primeSensorPositionMm,zone.backupRestartPositionMm??Infinity),current=e.processData?.accumulation?.backupSensorPositionMm;
+      const engineeringTargetAvailable=Number.isFinite(c.recommendedBackupSensorPositionMm);
+      let backup=engineeringTargetAvailable?Math.min(c.recommendedBackupSensorPositionMm,bound):NaN;
+      // A missing worksheet speed factor must not remove an installed sensor
+      // from the search. Reuse its bounded range as an explicit hypothesis;
+      // do not fill in the missing engineering data or claim a calculated target.
+      if(!engineeringTargetAvailable&&Number.isFinite(current)&&current>=0&&current<=bound&&
+        Number.isFinite(zone.primeSensorPositionMm)&&zone.primeSensorPositionMm<=zone.usableLengthMm&&
+        (zone.backupRestartPositionMm===undefined||Number.isFinite(zone.backupRestartPositionMm)&&zone.backupRestartPositionMm<=zone.usableLengthMm))backup=current*.5;
       if(backup===e.processData?.accumulation?.backupSensorPositionMm)backup=Math.min(zone.primeSensorPositionMm,zone.backupRestartPositionMm??Infinity)*.5;
-      if(Number.isFinite(backup)&&backup>=0)add('SENSOR_POSITION','ZERO',e,[scenarioChange(e,'processData.accumulation.backupSensorPositionMm',Number(backup.toFixed(2)))],{installedLengthMm:zone.usableLengthMm},75,'STATIC');
+      if(Number.isFinite(backup)&&backup>=0)add('SENSOR_POSITION','ZERO',e,[scenarioChange(e,'processData.accumulation.backupSensorPositionMm',Math.min(bound,Number(backup.toFixed(2))))],{installedLengthMm:zone.usableLengthMm,engineeringTargetAvailable,targetBasis:engineeringTargetAvailable?'ENGINEERING_TARGET':'EXISTING_SENSOR_RANGE'},75,'STATIC');
     }
     if(zone?.usableLengthMm>0&&e.processData?.geometry?.lpPrimeMm>0){
       add('SENSOR_WINDOW','ZERO',e,[scenarioChange(e,'processData.geometry.lpPrimeMm',e.processData.geometry.lpPrimeMm*.5)],{installedLengthMm:zone.usableLengthMm},72,'STATIC');

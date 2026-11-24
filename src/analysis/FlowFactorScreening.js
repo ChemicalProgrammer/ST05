@@ -40,14 +40,15 @@ export async function screenFlowFactors(simulation,{targets=[],fixedChanges=[],r
     return {candidate,paired,extended,deltaThroughput:candidate.throughput-base.throughput,deltaOee:candidate.oee-base.oee,spillNotWorse:admissible,reason};
   }
   // Consume results in input order; completion timing must not choose factors.
-  async function inOrder(items,task){
-    const results=new Array(items.length);let next=0,failure;
+  async function inOrder(items,task,counter){
+    const results=new Array(items.length);let next=0,finished=0,failure;
+    const report=()=>progress({label:counter+' '+finished+' / '+items.length,calculations,counter,completed:finished,total:items.length});report();
     await Promise.all(Array.from({length:Math.min(items.length,Math.max(1,Math.min(4,Math.floor(concurrency)||1)))},async()=>{
-      while(next<items.length&&!failure){const index=next++;try{results[index]=await task(items[index]);}catch(error){failure=error;}}
+      while(next<items.length&&!failure){const index=next++;try{results[index]=await task(items[index]);finished++;report();}catch(error){failure=error;}}
     }));
     if(failure)throw failure;return results;
   }
-  const singleResults=await inOrder(shortlist,async target=>{try{return await test([target.change],key(target.change));}catch(error){if(!String(error.message).startsWith('SCENARIO_'))throw error;return {reason:'INFEASIBLE',error:error.message};}});
+  const singleResults=await inOrder(shortlist,async target=>{try{return await test([target.change],key(target.change));}catch(error){if(!String(error.message).startsWith('SCENARIO_'))throw error;return {reason:'INFEASIBLE',error:error.message};}},'Factors screened');
   for(const [index,target] of shortlist.entries()){try{const result=singleResults[index];const note={...target.change,...result};observations.push(note);if(result.paired?.stable&&result.spillNotWorse)groupsOfGain.push({items:[target],score:result.paired.selectionScore});}catch(error){if(!String(error.message).startsWith('SCENARIO_'))throw error;observations.push({...target.change,reason:'INFEASIBLE',error:error.message});}}
   const pool=[];for(let i=0;i<shortlist.length;i++)for(let j=i+1;j<shortlist.length;j++){const a=shortlist[i],b=shortlist[j],distance=Math.abs(simulation.equipment.findIndex(e=>e.id===a.change.equipmentId)-simulation.equipment.findIndex(e=>e.id===b.change.equipmentId));pool.push({items:[a,b],priority:(a.priority||0)+(b.priority||0)+(distance===0?30:distance<=2?15:0),key:[key(a.change),key(b.change)].sort().join('|')});}
   pool.sort((a,b)=>b.priority-a.priority||a.key.localeCompare(b.key));
@@ -59,7 +60,7 @@ export async function screenFlowFactors(simulation,{targets=[],fixedChanges=[],r
     if(!pair)break;pairSelection.push(pair);pair.items.forEach(t=>covered.add(key(t.change)));
   }
   for(const pair of pool)if(pairSelection.length<maximumPairs&&!pairSelection.includes(pair))pairSelection.push(pair);
-  const pairResults=await inOrder(pairSelection,async pair=>{try{return await test(pair.items.map(t=>t.change),pair.key);}catch(error){if(!String(error.message).startsWith('SCENARIO_'))throw error;return {reason:'INFEASIBLE',error:error.message};}});
+  const pairResults=await inOrder(pairSelection,async pair=>{try{return await test(pair.items.map(t=>t.change),pair.key);}catch(error){if(!String(error.message).startsWith('SCENARIO_'))throw error;return {reason:'INFEASIBLE',error:error.message};}},'Pairs screened');
   for(const [index,pair] of pairSelection.entries()){try{const result=pairResults[index];pairs.push({keys:pair.items.map(t=>key(t.change)),...result});if(result.paired?.stable&&result.spillNotWorse)groupsOfGain.push({items:pair.items,score:result.paired.selectionScore});}catch(error){if(!String(error.message).startsWith('SCENARIO_'))throw error;pairs.push({keys:pair.items.map(t=>key(t.change)),reason:'INFEASIBLE',error:error.message});}}
   const chosen=new Map();for(const group of groupsOfGain.sort((a,b)=>b.score-a.score)){const union=new Map(chosen);group.items.forEach(t=>union.set(key(t.change),t));if(union.size<=maxFactors)group.items.forEach(t=>chosen.set(key(t.change),t));}
   for(const observation of observations)if(chosen.has(key(observation)))observation.selectionReason=observation.paired?.stable?'Selected through isolated gain':'Suggested through a stable pair';

@@ -22,6 +22,8 @@ test('real engine search preserves the card and source while retaining an indepe
     w.STIcons={svg(){return '<svg></svg>';}};
     w.STErrors={register(){},capture(_host,error){errors.push(error.message);}};
     w.STScenarioText={ZERO:'Zero CAPEX'};
+    w.eval(fs.readFileSync('apps-script/ClientUtils.html','utf8'));
+    w.eval(script('Subsection.html'));
     w.STWhatIf={changeInfo(change,equipment){return {
       equipment:equipment.find(unit=>unit.id===change.equipmentId)?.name||change.equipmentId,
       parameter:change.path,before:change.before,after:change.after

@@ -53,7 +53,10 @@ function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=
  const dom=new JSDOM('<article class="analysis-recommendation"></article>',{runScripts:'outside-only'}),w=dom.window,calls=[];
  const paths=factorCount===3?['speed','sensor','buffer']:['speed','sensor'];
  w.HTMLDialogElement.prototype.close=function(){};w.HTMLDialogElement.prototype.showModal=function(){};
+ w.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
  w.STPreferences={read(){return '';},write(){return true;}};w.STIcons={svg(){return '<svg></svg>';}};w.STErrors={register(){},capture(){}};w.STScenarioText={HIGH:'High'};
+ w.eval(fs.readFileSync('apps-script/ClientUtils.html','utf8'));
+ w.eval(fs.readFileSync('apps-script/Subsection.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1]);
  w.STScenarioSearch={settings:scenarioSearchSettings,settingsSignature:scenarioSearchSettingsSignature,screenFlow:screenFlowFactors,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
  w.STWhatIf={changeInfo(c){return {equipment:'Unit',parameter:c.path,before:c.before,after:c.after};}};
  w.STScenarios={study:buildScenarioStudy,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,fields:{speed:[1,100,'u/s'],sensor:[1,100,'m'],...(factorCount===3?{buffer:[1,100,'m']}:{})},signature(){return 'same';},plan(){return {candidates:[]};},apply(source,changes){const copy=JSON.parse(JSON.stringify(source));for(const c of changes)copy.equipment[0][c.path]=c.after;return copy;}};

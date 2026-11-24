@@ -12,37 +12,32 @@
 #conveyor-analysis-body > .st-subsection { min-width:0; max-width:100%; margin:0; padding:var(--subsection-padding); }
 #conveyor-analysis-body .st-subsection > .fold-content { display:grid; gap:var(--space-3); min-width:0; }
 #conveyor-analysis-body .table-scroll { min-width:0;max-width:100%;width:100%;overflow-x:auto;overflow-y:visible; }
-/* Columnas autoajustables: Parameter takes the leftover room, while
-   every value/format/unit column occupies only its intrinsic content width.
-   The table scrolls horizontally only when all columns genuinely cannot fit. */
+/* A consistent column model prevents long parameters or diagnostic text
+   from expanding the table. The wrapper scrolls only for genuinely wide
+   multi-format tables; normal tables fit their subsection. */
 #conveyor-analysis-body table {
-  width:100%;min-width:0;table-layout:auto;
+  width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;
 }
+#conveyor-analysis-body table[data-value-columns] { min-width:var(--worksheet-min-width,0px); }
 #conveyor-analysis-body :is(td,th) {
-  min-width:0;padding:var(--space-2) var(--space-3);
-  overflow-wrap:anywhere;white-space:normal;
+  box-sizing:border-box;min-width:0;padding:var(--space-2) var(--space-3);
+  overflow-wrap:anywhere;white-space:normal;vertical-align:middle;
 }
 #conveyor-analysis-body tbody th[scope=row]:not([colspan]) {
-  width:auto;white-space:normal;overflow-wrap:break-word;
+  text-align:start;white-space:normal;overflow-wrap:anywhere;word-break:normal;
 }
-#conveyor-analysis-body :is(thead th,tbody td):not(:first-child) {
-  width:1%;padding-inline:var(--space-2);
-}
-#conveyor-analysis-body tbody td {white-space:nowrap;font-variant-numeric:tabular-nums;}
-#conveyor-analysis-body thead th:not(:first-child) {
-  min-width:4rem;max-width:12rem;white-space:normal;text-align:center;
-}
-#conveyor-analysis-body .conveyor-analysis-format-note {
-  margin:0 0 var(--space-2);
-  font-size:var(--font-secondary);
-  overflow-wrap:anywhere;
-}
-#conveyor-analysis-body :is(td,th)[colspan] {
-  width:auto;text-align:left;white-space:normal;
-}
+#conveyor-analysis-body :is(thead th,tbody td):not(:first-child) {padding-inline:var(--space-2);}
+#conveyor-analysis-body thead th {text-align:center;}
+#conveyor-analysis-body thead th:first-child {text-align:start;}
+#conveyor-analysis-body tbody td.numeric {text-align:end;font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere;}
+#conveyor-analysis-body td.metric-unit {text-align:center;white-space:normal;overflow-wrap:anywhere;}
+#conveyor-analysis-body :is(td,th)[colspan] {text-align:start;white-space:normal;}
+#conveyor-analysis-body .conveyor-value-pending {cursor:help;text-decoration:underline dotted;text-underline-offset:.18em;color:var(--muted);}
+#conveyor-analysis-body .conveyor-value-partial {cursor:help;text-decoration:underline dotted;text-underline-offset:.18em;}
+#conveyor-analysis-body :is(.conveyor-value-pending,.conveyor-value-partial):focus-visible {outline:2px solid var(--accent);outline-offset:-2px;}
+#conveyor-analysis-body .conveyor-analysis-format-note {margin:0;font-size:var(--font-secondary);overflow-wrap:anywhere;}
 @media(max-width:600px){
-  #conveyor-analysis-body :is(td,th) {padding:var(--space-2);}
-  #conveyor-analysis-body thead th:not(:first-child) {min-width:3rem;}
+  #conveyor-analysis-body :is(td,th) {padding:var(--space-2) var(--space-1);}
 }
 #conveyor-analysis-body { display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:var(--subsection-gap,var(--space-4)); }
 #conveyor-analysis-body .chart-note { margin:0; }
@@ -153,8 +148,9 @@ window.STConveyorAnalysis=(function(){
         const dischargeMmPerSecond=dischargeVelocity>0?dischargeVelocity/.06:NaN;
         const rate=divide(dischargeMmPerSecond*60,dischargePitch);
         const highRate=divide(speed*60,infeedPitch);
-        const highSpeedBpm=highRate*bottlesPerFlowUnit(models[index],format);
-        const dischargeBpm=rate*bottlesPerFlowUnit(models[index],format);
+        const packFactor=bottlesPerFlowUnit(models[index],format);
+        const highSpeedBpm=highRate*packFactor;
+        const dischargeBpm=rate*packFactor;
         const dischargeFactor=input.conveyorSpeedFactorPercent??data.speedAndSensors?.conveyorSpeedFactorVsDischargeVelocityPercent;
         const codingFactor=input.codingSpeedFactorPercent??data.speedAndSensors?.codingConveyorSpeedFactorVsPreviousConveyorPercent;
         const dischargeSpeed=dischargeMmPerSecond*(1+dischargeFactor/100);
@@ -176,7 +172,11 @@ window.STConveyorAnalysis=(function(){
         const inCoding=coding===0?0:divide(coding*codingPopulation,length);
         const total=duringDelay+residual+inDischarge+inCoding+insurance;
         const overflow=length>0&&population>=0?divide(total*length,1-population):NaN;
-        return {name:format?.name||format?.id||'Current format',formatId:format?.id,length,rate,highSpeedBpm,dischargePitch,infeedPitch,
+        return {name:format?.name||format?.id||'Current format',formatId:format?.id,length,rate,highRate,packFactor,highSpeedBpm,dischargePitch,infeedPitch,
+          upstreamName:upstream?.name||upstream?.id,downstreamName:downstream?.name||downstream?.id,
+          configuredDischargeVelocity,engineeringInput:input,upstreamRate:upstream?.nominalRatePerSecond,downstreamInputRate:downstream?.processData?.productInputRatePerSecond??downstream?.nominalRatePerSecond,speedMode:models[index].processData?.accumulation?.speedMode,
+          targetPopulation:models[index].processData?.accumulation?.targetPopulationPercent,
+          targetOverspeed:models[index].processData?.accumulation?.targetOverspeedPercent,
           speed,dischargeBpm,dischargeVelocity,dischargeSpeed,codingSpeed,dischargePopulation,codingPopulation,flow,consumption,population,blocked,clear,startup,firstPackage,residual,insurance,
           dischargeTime,codingTime,duringDelay,inDischarge,inCoding,total,overflow,
           ramp:input.downstreamRampUpSeconds??belt.downstreamRampUpSeconds,
@@ -301,6 +301,183 @@ window.STConveyorAnalysis=(function(){
     ]]
   ];
 
+  // Diagnostic graph mirrors the existing worksheet calculations. It never
+  // supplies defaults, changes a result, or changes the engineering verdict.
+  // IDs are the worksheet row references; display names let the user locate
+  // the corresponding row even though the original cell column is hidden.
+  const commonTraceKeys=['D8','E8','F8','K8','L8','E11','I11','I13','RUNOUT',
+    'BACKUP_CALCULATED','BACKUP_ACTUAL','RECOVERY_POINT','PRIME_CALCULATED','PRIME_ACTUAL','MIN_LENGTH'];
+  function createPendingTrace(worksheet,context={},language='en'){
+    const es=language==='es',tr=(en,spanish)=>es?spanish:en,formatNumber=n=>new Intl.NumberFormat(es?'es-MX':'en-US',{maximumFractionDigits:3}).format(n);
+    const translate=value=>window.STLanguage?.current?.()===language?window.STLanguage.translate(value):value;
+    const g=worksheet.geometry,profiles=worksheet.profiles,nodes=new Map(),common=(key)=>'common:'+key,local=(i,key)=>i+':'+key;
+    const finite=Number.isFinite,positive=v=>finite(v)&&v>0,nonnegative=v=>finite(v)&&v>=0;
+    const dep=(key,test=finite,condition)=>({key,test,condition});
+    const needPositive=key=>dep(key,positive,tr('must be greater than zero','debe ser mayor que cero'));
+    const needNonnegative=key=>dep(key,nonnegative,tr('must be zero or greater','debe ser cero o mayor'));
+    const below100=key=>dep(key,v=>finite(v)&&v>=0&&v<100,tr('must be below 100% and nonnegative','debe ser menor que 100% y no negativa'));
+    const add=(key,label,value,dependencies=[],help='',partial=false)=>nodes.set(key,{key,label,value,dependencies,help,partial});
+    for(const [index,entry] of worksheet.common.entries()){
+      const [,label,,value,,source]=entry,key=commonTraceKeys[index];
+      add(common(key),translate(label)+(entry[0]?' ('+entry[0]+')':''),value,[],'',Boolean(source?.partial));
+    }
+    const change=(key,dependencies,help)=>{const node=nodes.get(key);if(node){node.dependencies=dependencies||[];node.help=help||'';}};
+    change(common('D8'),[],tr('Enter the installed Discharge length in Conveyors → Geometry. Enter 0 only if the section does not exist.','Captura Discharge actual en Conveyors → Geometry. Usa 0 solo si no existe el tramo.'));
+    change(common('E8'),[],tr('Enter the installed Coding length in Conveyors → Geometry. Enter 0 only if the section does not exist.','Captura Coding actual en Conveyors → Geometry. Usa 0 solo si no existe el tramo.'));
+    change(common('I13'),[],tr('Enter the installed total conveyor length (Lact) in Conveyors → Geometry.','Captura la longitud total instalada (Lact) en Conveyors → Geometry.'));
+    change(common('L8'),[],tr('Enter Prime zone reserve (Lp), or provide the installed Prime position and Lact.','Captura la reserva Prime (Lp), o proporciona la posición instalada de Prime y Lact.'));
+    change(common('RUNOUT'),[dep(common('D8')),dep(common('E8'))]);
+    change(common('PRIME_CALCULATED'),[dep(common('I13')),dep(common('L8'))]);
+    change(common('F8'),profiles.map((p,i)=>dep(local(i,'L58'))),tr('There are no applicable formats with a calculable overflow. Review Formats.','No hay formatos aplicables con overflow calculable. Revisa Formats.'));
+    change(common('E11'),[dep(common('D8')),dep(common('E8')),dep(common('F8'))]);
+    change(common('I11'),[dep(common('PRIME_CALCULATED')),dep(common('E11'))]);
+    change(common('K8'),[dep(common('F8')),...profiles.map((p,i)=>dep(local(i,'L70')))],tr('No applicable format has a calculable recovery distance.','Ningún formato aplicable tiene una distancia de recuperación calculable.'));
+    change(common('BACKUP_CALCULATED'),[dep(common('E11'))]);
+    const zone=context.zone||{},acc=context.data?.accumulation||{},engineInput=zone.engineering?.input||{};
+    const backupMissing=[];
+    if(!finite(zone.backupSensorPositionMm)){
+      if(finite(acc.manualLbaMm)){
+        if(!finite(zone.primeSensorPositionMm))backupMissing.push(tr('Engine-resolved Prime position','Posición Prime resuelta por el motor'));
+      }else{
+        if(!positive(zone.productPitchMm)&&!(positive(zone.productLengthMm)&&nonnegative(zone.gapMm)))backupMissing.push(tr('Engine-resolved moving product pitch or package length plus gap','Pitch de transporte resuelto por el motor o longitud del envase más separación'));
+        if(!positive(zone.conveyorSpeedMmPerSecond))backupMissing.push(tr('Engine-resolved conveyor speed','Velocidad del conveyor resuelta por el motor'));
+        if(!positive(engineInput.upstreamNominalSpeedBpm)&&!positive(profiles[0]?.upstreamRate))backupMissing.push(tr('Upstream machine nominal rate','Velocidad nominal de la máquina anterior'));
+      }
+    }
+    const backupHelp=tr('The operating Back-up position is not resolved by the engine. Check the installed Back-up override or manual LBA, if used.','El motor no resolvió la posición operativa de Back-up. Revisa Back-up instalado o LBA manual, si se utilizan.');
+    change(common('BACKUP_ACTUAL'),[],backupHelp+(backupMissing.length?' '+tr('Unresolved engine inputs: ','Inputs pendientes del motor: ')+backupMissing.join('; ')+'.':' '+tr('Review the engine-resolved overflow geometry; the worksheet recommendation is a separate calculation.','Revisa la geometría de overflow resuelta por el motor; la recomendación de la hoja es un cálculo independiente.')));
+    change(common('PRIME_ACTUAL'),[dep(common('PRIME_CALCULATED'))],tr('Check the installed Prime position or the engine-resolved geometry.','Revisa la posición Prime instalada o la geometría resuelta por el motor.'));
+    change(common('RECOVERY_POINT'),[dep(common('PRIME_CALCULATED')),dep(common('K8')),dep(common('I11'))],
+      finite(g.recovery.value)&&g.recovery.value<0?tr('No recovery point exists: Lrec is negative. This is a design failure, not a missing input.','No existe punto de recuperación: Lrec es negativo. Es una condición de diseño, no un dato faltante.'):
+      finite(g.lba)&&finite(g.recovery.value)&&g.lba<g.recovery.value?tr('The calculated recovery point is outside the useful accumulation zone.','El punto de recuperación calculado queda fuera de la zona de acumulación útil.'):tr('Check whether the calculated recovery point is physically within the accumulation zone.','Verifica si el punto de recuperación calculado está dentro de la zona de acumulación.'));
+    change(common('MIN_LENGTH'),[dep(common('I13')),dep(common('K8'))]);
+    profiles.forEach((p,i)=>{
+      const key=ref=>local(i,ref),pdep=ref=>dep(key(ref)),pos=ref=>needPositive(key(ref)),nonneg=ref=>needNonnegative(key(ref)),cd=ref=>dep(common(ref));
+      const machine=(name,fallback)=>name||fallback;
+      const upstream=machine(p.upstreamName,tr('upstream machine','máquina anterior')),downstream=machine(p.downstreamName,tr('downstream machine','máquina siguiente'));
+      for(const [title,entries] of rows)for(const entry of entries){
+        if(!Array.isArray(entry))continue;
+        const [ref,label,,formula,read]=entry,k='L'+ref;
+        const suffix=[35,38,41].includes(ref)?' · '+({35:'Discharge',38:'Coding',41:'Overflow'}[ref]):'';
+        add(key(k),p.name+' · '+translate(label)+suffix+' ('+k+')',read(p));
+      }
+      const set=(ref,dependencies,help)=>change(key(ref),dependencies,help);
+      const internal=(ref,label,value,deps,help)=>add(key(ref),p.name+' · '+label,value,deps,help);
+      internal('PACK',tr('Bottles per case (Formats)','Botellas por caja (Formats)'),p.packFactor,[],tr('Set a positive bottles-per-case quantity for this format. Required for bottle-equivalent BPM on case conveyors.','Define una cantidad positiva de botellas por caja para este formato. Se requiere para convertir el flujo de cajas a BPM equivalentes.'));
+      internal('NATIVE_OUT',tr('Native discharge rate (packages/min)','Flujo nativo de descarga (envases/min)'),p.rate,[pos('L23'),pos('L19')]);
+      internal('NATIVE_IN',tr('Native infeed rate (packages/min)','Flujo nativo de entrada (envases/min)'),p.highRate,[pos('L40'),pos('L28')]);
+      set('L16',[],tr('Enter Package Length for the transported bottle/case in Formats, or the conveyor package length.','Captura Package Length de la botella/caja transportada en Formats o en el conveyor.'));
+      set('L19',[],tr('Check Upstream Machine Discharge Pitch on this conveyor or '+upstream+'. A positive distance between package centers is required.','Revisa Upstream Machine Discharge Pitch en este conveyor o '+upstream+'. Se requiere una distancia positiva entre centros.'));
+      set('L20',[],tr('Enter Start-up Time on the conveyor or '+upstream+'. Zero is valid if there is no delay.','Captura Start-up Time en el conveyor o '+upstream+'. Cero es válido si no existe retardo.'));
+      set('L21',[],tr('Enter Bottles/Packages Discharged at Stop for '+upstream+' or the conveyor. Zero is valid when confirmed.','Captura Bottles/Packages Discharged at Stop de '+upstream+' o del conveyor. Cero es válido si se confirma.'));
+      set('L22',[pos('NATIVE_OUT'),pos('PACK')]);
+      set('L23',[pos('L40')],tr('Enter Upstream Discharge Velocity (m/min) on the conveyor (AF), or resolve the conveyor speed used as its existing fallback.','Captura Upstream Discharge Velocity (m/min) del conveyor (AF), o resuelve la velocidad del conveyor que se utiliza como alternativa.'));
+      set('L24',[pos('NATIVE_OUT'),pos('L16')]);
+      set('L27',[pos('NATIVE_IN'),pos('PACK')]);
+      set('L28',[],tr('Enter Downstream Machine Infeed Pitch on this conveyor or '+downstream+'.','Captura Downstream Machine Infeed Pitch en este conveyor o '+downstream+'.'));
+      set('L29',[],tr('Enter Ramp up Time on the conveyor or '+downstream+'. Zero is valid for no ramp.','Captura Ramp up Time del conveyor o '+downstream+'. Cero es válido sin rampa.'));
+      set('L30',[pos('NATIVE_IN'),pos('L16')]);
+      set('L33',[],tr('Enter Conveyor Speed Factor vs Discharge Velocity in Speed & Sensors.','Captura Conveyor Speed Factor vs Discharge Velocity en Speed & Sensors.'));
+      set('L34',[pos('L23'),pdep('L33')]);
+      set('L35',[pdep('L24'),pos('L34')]);
+      set('L36',[],tr('Enter Coding Conveyor Speed Factor vs Previous Conveyor in Speed & Sensors.','Captura Coding Conveyor Speed Factor vs Previous Conveyor en Speed & Sensors.'));
+      set('L37',[pos('L34'),pdep('L36')]);
+      set('L38',[pdep('L24'),pos('L37')]);
+      set('L39',[],tr('Enter the accumulation conveyor speed factor in Speed & Sensors if used by the design.','Captura el factor de velocidad de acumulación en Speed & Sensors si el diseño lo utiliza.'));
+      const speedHelp=p.speedMode==='MANUAL'?tr('Enter a positive actual Conveyor Speed in Speed & Sensors (m/min in the editor).','Captura una velocidad real positiva del conveyor en Speed & Sensors (m/min en el editor).'):
+        p.targetPopulation!=null?tr('Check target Population (greater than 0 and at most 100%), package length and nominal speed of '+upstream+'.','Revisa Population objetivo (mayor que 0 y hasta 100%), longitud del envase y velocidad nominal de '+upstream+'.'):
+        p.targetOverspeed!=null?tr('Check target Overspeed, infeed pitch and speed of '+downstream+'.','Revisa Overspeed objetivo, pitch de entrada y velocidad de '+downstream+'.'):
+        tr('Check Conveyor Speed or AUTO calculation inputs: '+upstream+' nominal speed, discharge pitch and speed factors.','Revisa Conveyor Speed o los inputs de cálculo AUTO: velocidad nominal de '+upstream+', pitch de descarga y factores de velocidad.');
+      // L23 may use L40 as its fallback; never point L40 back to L23.
+      const missingSpeedInputs=[];
+      if(!positive(p.speed)&&p.speedMode!=='MANUAL'){
+        const inputs=p.engineeringInput||{};
+        const missing=(value,label,test=positive)=>{if(!test(value))missingSpeedInputs.push(label);};
+        if(p.targetPopulation!=null){
+          missing(p.targetPopulation,tr('Target Population (0–100%, greater than zero)','Population objetivo (mayor que cero y hasta 100%)'),v=>positive(v)&&v<=100);
+          missing(p.length,tr('Package Length (L16)','Package Length (L16)'));
+          missing(inputs.upstreamNominalSpeedBpm??p.upstreamRate,tr('Nominal speed of ','Velocidad nominal de ')+upstream);
+        }else if(p.targetOverspeed!=null){
+          missing(p.targetOverspeed,tr('Target Overspeed','Overspeed objetivo'),nonnegative);
+          missing(p.infeedPitch,tr('Infeed Pitch (L28)','Infeed Pitch (L28)'));
+          missing(inputs.downstreamHighSpeedBpm??p.downstreamInputRate,tr('Input speed of ','Velocidad de entrada de ')+downstream);
+        }else{
+          missing(inputs.upstreamNominalSpeedBpm??p.upstreamRate,tr('Nominal speed of ','Velocidad nominal de ')+upstream);
+          missing(p.dischargePitch,tr('Discharge Pitch (L19)','Discharge Pitch (L19)'));
+          missing(p.dischargeFactor,tr('Discharge speed factor (L33)','Factor de velocidad Discharge (L33)'),finite);
+          if(!finite(p.codingFactor)&&inputs.codingSpeedFactorPercent===undefined)missingSpeedInputs.push(tr('Coding speed factor (L36), if applicable','Factor de velocidad Coding (L36), si aplica'));
+          if(!finite(p.accumulationFactor)&&inputs.accumulationSpeedFactorPercent===undefined)missingSpeedInputs.push(tr('Accumulation speed factor (L39), if applicable','Factor de velocidad Accumulation (L39), si aplica'));
+        }
+      }
+      set('L40',[],speedHelp+(missingSpeedInputs.length?' '+tr('Unresolved inputs: ','Inputs pendientes: ')+missingSpeedInputs.join('; ')+'.':''));
+      set('L41',[pdep('L24'),pos('L40')]);
+      set('L45',[pos('L16'),pos('L40')]);
+      set('L46',[],tr('Enter Back Up Sensor Blocked Time Delay in Speed & Sensors.','Captura Back Up Sensor Blocked Time Delay en Speed & Sensors.'));
+      set('L48',[],tr('Enter Back Up Sensor Clear Time Delay in Speed & Sensors.','Captura Back Up Sensor Clear Time Delay en Speed & Sensors.'));
+      set('L51',[nonneg('L46'),pos('NATIVE_OUT')]);
+      set('L52',[nonneg('L21')]);
+      set('L53',[cd('D8'),...(g.discharge===0?[]:[pdep('L35'),pos('L16')])]);
+      set('L54',[cd('E8'),...(g.coding===0?[]:[pdep('L38'),pos('L16')])]);
+      set('L55',[],tr('Enter Insurance Factor in Speed & Sensors if not resolved.','Captura Insurance Factor en Speed & Sensors si no se ha resuelto.'));
+      set('L56',['L51','L52','L53','L54','L55'].map(pdep));
+      set('L57',[pdep('L56'),pos('L16')]);
+      set('L58',[pdep('L57'),below100(key('L41'))]);
+      set('L61',[nonneg('L48')]);
+      set('L62',[],tr('Enter Time to First Package After Restart (s) on the conveyor, in Upstream. It is a separate input from Start-up Time.','Captura Time to First Package After Restart (s) en el conveyor, sección Upstream. Es un input distinto de Start-up Time.'));
+      set('L63',[cd('D8'),...(g.discharge===0?[]:[pos('L34')])]);
+      set('L64',[cd('E8'),...(g.coding===0?[]:[pos('L37')])]);
+      set('L65',[cd('F8'),pos('L40')]);
+      set('L66',['L61','L62','L63','L64','L65'].map(pdep));
+      set('L67',[pdep('L30'),pdep('L66')]);
+      internal('CATCH_SPEED',tr('Recovery speed margin (Conveyor Speed − Machine Package Consumption Rate)','Margen de velocidad de recuperación (Conveyor Speed − Machine Package Consumption Rate)'),(p.speed-p.consumption)*.06,[pos('L40'),pdep('L30')],tr('Conveyor Speed must exceed Machine Package Consumption Rate; a first package cannot catch the queue otherwise.','Conveyor Speed debe superar Machine Package Consumption Rate; de lo contrario el primer envase no puede alcanzar la cola.'));
+      set('L68',[pdep('L67'),pos('CATCH_SPEED')]);
+      set('L69',[pdep('L30'),pdep('L68')]);
+      set('L70',[cd('I11'),pdep('L69'),pdep('L67')]);
+      set('L73',[needNonnegative(common('I11')),pos('L30')]);
+      set('L74',[pdep('L73')]);
+      set('L75',[needNonnegative(common('I11')),pos('L24'),below100(key('L41'))]);
+      set('L76',[pdep('L75')]);
+      set('L79',[],tr('Enter conveyor overspeed vs infeed screw in Speed & Sensors.','Captura Overspeed of conveyor vs infeed screw en Speed & Sensors.'));
+      set('L80',[pos('L28'),pdep('L79')]);
+    });
+    function blocked(node){
+      return node.dependencies.filter(d=>{const n=nodes.get(d.key);return !n||!d.test(n.value)||n.partial;});
+    }
+    function describe(ref,profileIndex=null){
+      const node=nodes.get(profileIndex===null?common(ref):local(profileIndex,ref));
+      if(!node||finite(node.value)&&!node.partial)return '';
+      const immediate=blocked(node),roots=new Set(),visited=new Set();
+      function follow(n){
+        if(!n||visited.has(n.key))return;visited.add(n.key);
+        const unmet=blocked(n);
+        if(!unmet.length){
+          roots.add(n.label+': '+(n.help||tr('Check this unresolved input or calculation.','Revisa este input o cálculo no resuelto.')));
+          return;
+        }
+        for(const d of unmet){
+          const child=nodes.get(d.key);
+          if(!child)continue;
+          if(finite(child.value)&&!d.test(child.value)){
+            roots.add(child.label+' = '+formatNumber(child.value)+': '+(child.help||d.condition||tr('invalid for this formula','inválido para esta fórmula')));continue;
+          }
+          follow(child);
+        }
+        // L23 is an optional explicit input as well as a speed fallback.
+        if(n.key.endsWith(':L23')&&n.help)roots.add(n.label+': '+n.help);
+      }
+      follow(node);
+      const direct=immediate.map(d=>{
+        const n=nodes.get(d.key);if(!n)return d.key;
+        return n.label+(finite(n.value)?n.partial?' — '+tr('partial','parcial'):' = '+formatNumber(n.value)+(d.condition?' ('+d.condition+')':''):' — '+tr('Pending','Pendiente'));
+      });
+      const parts=[(node.partial&&finite(node.value)?tr('Partial result','Resultado parcial'):tr('Pending','Pendiente'))+' · '+node.label];
+      if(direct.length)parts.push(tr('Missing dependencies:','Dependencias pendientes:')+'\n'+direct.map(x=>'• '+x).join('\n'));
+      if(roots.size)parts.push(tr('Check:','Revisar:')+'\n'+[...roots].map(x=>'• '+x).join('\n'));
+      return parts.join('\n\n');
+    }
+    return {describe,commonKeys:commonTraceKeys.slice()};
+  }
+
   function open(name,context){
     if(!context)return;
     const dialog=document.getElementById('conveyor-analysis-dialog');
@@ -308,6 +485,7 @@ window.STConveyorAnalysis=(function(){
     const number=new Intl.NumberFormat(undefined,{maximumFractionDigits:2});
     const valueText=value=>Number.isFinite(value)?number.format(value):'Pending';
     const worksheet=calculate(context);
+    const trace=createPendingTrace(worksheet,context,document.documentElement.lang==='es'?'es':'en');
     body.replaceChildren();
     document.getElementById('conveyor-analysis-title').textContent='Conveyor Analysis Tool · '+name;
     function make(parent,tag,text){
@@ -340,6 +518,16 @@ window.STConveyorAnalysis=(function(){
       wrapper.className='table-scroll';
       const element=make(wrapper,'table');
       element.setAttribute('aria-labelledby',heading.id);
+      // Explicit, content-adaptive columns: equal compact format columns;
+      // the parameter column takes the remaining width and wraps normally.
+      const count=headers.length-2;
+      element.dataset.valueColumns=String(count);
+      const colgroup=make(element,'colgroup');
+      make(colgroup,'col').className='worksheet-parameter-col';
+      const unitWidth=count>4?8:12,valueWidth=Math.min(22,(100-unitWidth-35)/count);
+      for(let i=0;i<count;i++){const col=make(colgroup,'col');col.className='worksheet-value-col';col.style.width='min(7.5rem, '+valueWidth+'%)';}
+      const unitCol=make(colgroup,'col');unitCol.className='worksheet-unit-col';unitCol.style.width='min(4.5rem, '+unitWidth+'%)';
+      if(count>3)element.style.setProperty('--worksheet-min-width',(14+count*5+3.5)+'rem');
       const row=make(make(element,'thead'),'tr');
       headers.forEach((header,index)=>{
         const cell=make(row,'th',header);
@@ -353,16 +541,24 @@ window.STConveyorAnalysis=(function(){
       if(ref)element.dataset.cell=ref;
       if(ref==='K8'||ref==='L70')element.title=recoveryHelp;
       if(ref==='D8'||ref==='E8')element.title=lengthHelp[ref==='D8'?'discharge':'coding'];
-      make(element,'th',label).scope='row';
+      const heading=make(element,'th',label);heading.scope='row';
+      if(ref)heading.title=ref+' · '+label;
       return element;
     }
+    function renderValue(cell,value,tip,partial=false){
+      cell.textContent=valueText(value)+(Number.isFinite(value)&&partial?' (partial)':'');
+      if(!tip)return;
+      cell.title=tip;cell.tabIndex=0;
+      cell.setAttribute('aria-label',cell.textContent+' · '+tip);
+      cell.classList.add(Number.isFinite(value)?'conveyor-value-partial':'conveyor-value-pending');
+    }
     const common=table('Common Geometry',['Parameter','Value','Unit'],worksheet.geometry);
-    worksheet.common.forEach(([ref,label,unit,value,,source])=>{
+    worksheet.common.forEach(([ref,label,unit,value,,source],index)=>{
       const element=row(common,ref,label);
       const output=make(element,'td');
       output.className='numeric';
       make(element,'td',unit).className='metric-unit';
-      output.textContent=valueText(value)+(Number.isFinite(value)&&source?.partial?' (partial)':'');
+      renderValue(output,value,trace.describe(trace.commonKeys[index]),Boolean(source?.partial));
     });
     if(!worksheet.profiles.length)make(body,'p','No applicable formats.');
     for(const [title,entries] of worksheet.profiles.length?rows:[]){
@@ -378,10 +574,10 @@ window.STConveyorAnalysis=(function(){
         const [ref,label,unit,,read]=entry;
         const element=row(formats,'L'+ref,label);
         if(ref>=33&&ref<=41)element.dataset.zone=ref<=35?'discharge':ref<=38?'coding':'overflow';
-        worksheet.profiles.forEach(profile=>{
+        worksheet.profiles.forEach((profile,index)=>{
           const cell=make(element,'td');
           cell.className='numeric';
-          cell.textContent=valueText(read(profile));
+          renderValue(cell,read(profile),trace.describe('L'+ref,index));
         });
         make(element,'td',unit).className='metric-unit';
       }
@@ -409,6 +605,6 @@ window.STConveyorAnalysis=(function(){
     button.addEventListener('click',event=>{event.stopPropagation();openAnalysis();});
     paintEvaluationButton(button,null);return button;
   }
-  return {open,close,calculate,resolveProfiles,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton};
+  return {open,close,calculate,resolveProfiles,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton,createPendingTrace};
 })();
 </script>

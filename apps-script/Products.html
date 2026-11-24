@@ -88,7 +88,6 @@ window.STProducts=(function(){
     dialog.addEventListener('input',commit);dialog.addEventListener('change',commit);
     var error=document.createElement('p');error.className='notice product-error hidden';error.setAttribute('role','alert');
     function showError(message){error.textContent=message;error.classList.remove('hidden');}
-    var collapsedSections=new Set();
     // Crea un bloque plegable y devuelve su cuerpo y su barra de herramientas.
     function section(text){
       var sectionKey=text;
@@ -100,12 +99,9 @@ window.STProducts=(function(){
         Conveyors:'Override conveyor speeds, transported units, and bottle or case spacing.'
       };
       var group=STSubsection.create({title:text,description:guidance[text]||'Review the settings for '+text.toLowerCase()+'.',
-        native:false,open:!collapsedSections.has(sectionKey),contentId:id('formats-subsection'),
+        native:false,open:true,persistKey:'products:'+sectionKey,contentId:id('formats-subsection'),
         className:'settings-section product-subsection'});
       group.tools.classList.add('product-selector-row');
-      group.title.querySelector('.fold-toggle').addEventListener('click',function(){
-        if(group.body.hidden)collapsedSections.delete(sectionKey);else collapsedSections.add(sectionKey);
-      });
       body.append(group.section);
       return {content:group.body,tools:group.tools};
     }

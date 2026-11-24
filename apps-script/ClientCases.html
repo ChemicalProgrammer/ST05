@@ -81,6 +81,7 @@
       cancelRoundSession();stopPlaybackTimer();
       sheetImport.close();
       state.activeCase = null;
+      STSubsection.restoreAll();
       autosave.reset();
       state.run.result = null;
       state.isDirty = false;
@@ -242,6 +243,7 @@ function createDemoCase() {
         if (deletedActiveCase) {
           stopPlaybackTimer();
           state.activeCase = null;
+          STSubsection.restoreAll();
           autosave.reset();
           STSettings.close();
           state.isDirty = false;
@@ -271,6 +273,7 @@ async function openCase(caseId, initialView) {
         if(rememberedView==='comparison'&&(response.data.simulations||[]).length<2)rememberedView='editor';
         state.restoringCaseView=true;
         state.activeCase = response.data;
+        STSubsection.restoreAll();
         // Settings may open before the full editor mount finishes.
         document.getElementById('case-name').value=state.activeCase.name||'';
         state.basicView=initialView?'equipment':['equipment','conveyors','products','results','vgraph','simulation','realdata','whatif','comparison'].includes(preference?.basicView)?preference.basicView:null;
@@ -290,6 +293,7 @@ async function openCase(caseId, initialView) {
         if(state.activeCase.equipment?.length&&!document.querySelector('#equipment-list .equipment-card'))renderEquipment();
         state.restoringCaseView=false;
         navigateView(rememberedView);
+        STSubsection.restoreAll();
         setStatus(response.data.storageMigrationPending?__ST_TEXT__('client.case_loaded_migration_pending'):__ST_TEXT__('client.case_loaded'));
       });
     }
@@ -406,7 +410,7 @@ async function openCase(caseId, initialView) {
       return draft;
     }
     function saveActiveCase(afterSave) {
-      return prepareCaseDraft().then(function(){autosave.change(true);return autosave.flush();}).then(function(){if(typeof afterSave==='function')afterSave(state.activeCase);}).catch(function(error){showError(error);});
+      return prepareCaseDraft().then(function(){if(whatIfOnlySave)queueCaseSave(true);else autosave.change(true);return autosave.flush();}).then(function(){if(typeof afterSave==='function')afterSave(state.activeCase);}).catch(function(error){showError(error);});
     }
 
     function captureSheetImport() {

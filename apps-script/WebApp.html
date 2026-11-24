@@ -373,15 +373,15 @@
             </div>
             <div id="results-loss-breakdown" class="fold-content" hidden></div>
           </section>
-          <details class="results-group fold-card fold-native">
+          <details id="results-rate-loss-group" class="results-group fold-card fold-native">
             <summary><span class="subsection-heading-copy"><span class="subsection-native-title">Rate loss</span><span class="subsection-description">See how the line loses potential output while operating below its design rate.</span></span></summary>
             <div id="results-rate-loss" class="results-group-content"></div>
           </details>
-          <details class="results-group fold-card fold-native">
+          <details id="results-ramp-accounting-group" class="results-group fold-card fold-native">
             <summary><span class="subsection-heading-copy"><span class="subsection-native-title">Start ramps and stop transitions</span><span class="subsection-description">Inspect start-up and shut-down effects and their accumulated losses.</span></span></summary>
             <div id="results-ramp-accounting" class="results-group-content"></div>
           </details>
-          <details class="results-group fold-card fold-native">
+          <details id="results-equipment-group" class="results-group fold-card fold-native">
             <summary><span class="subsection-heading-copy"><span class="subsection-native-title">Equipment performance</span><span class="subsection-description">Compare machines and conveyors, including runtime and downtime metrics.</span></span></summary>
             <div class="results-group-content">
               <div id="results-insight" class="result-insight"></div>
@@ -399,7 +399,7 @@
           <div id="vgraph-plot" class="vgraph-plot"></div><p id="vgraph-caveat" class="chart-note"></p>
           </div>
           </section>
-          <details class="fold-card fold-native" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title"><?= __ST_TEXT__('performance.throughput_by_machine') ?></span><span class="subsection-description">Review nominal, achievable, and recommended throughput for each machine.</span></span></summary><div class="fold-content">
+          <details id="vgraph-throughput-group" class="fold-card fold-native" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title"><?= __ST_TEXT__('performance.throughput_by_machine') ?></span><span class="subsection-description">Review nominal, achievable, and recommended throughput for each machine.</span></span></summary><div class="fold-content">
           <div class="table-scroll"><table><thead><tr><th><?= __ST_TEXT__('performance.machine') ?></th><th class="numeric"><?= __ST_TEXT__('performance.normal_bpm') ?></th><th class="numeric"><?= __ST_TEXT__('performance.maximum_bpm') ?></th><th class="numeric"><?= __ST_TEXT__('performance.recommended_bpm') ?></th><th class="numeric"><?= __ST_TEXT__('performance.headroom') ?></th><th class="numeric"><?= __ST_TEXT__('performance.availability') ?></th><th class="numeric"><?= __ST_TEXT__('performance.efficiency') ?></th><th class="numeric"><?= __ST_TEXT__('performance.effective_bpm') ?></th></tr></thead><tbody id="performance-rows"></tbody></table></div>
           <p id="throughput-method" class="chart-note"></p></div></details>
         </section>
@@ -562,7 +562,7 @@
         </div>
         <p id="settings-error" data-error-notice="message" data-error-title="Settings error" role="alert"></p>
       </div>
-      <div class="dialog-actions"><span id="settings-unsaved" role="status"></span><button id="settings-retry" type="button" class="hidden"><?= __ST_TEXT__('autosave.retry') ?></button><button id="settings-cancel" type="button"><?= __ST_TEXT__('dialog.done') ?></button></div>
+      <div class="dialog-actions"><button id="settings-retry" type="button" class="hidden"><?= __ST_TEXT__('autosave.retry') ?></button><button id="settings-cancel" type="button"><?= __ST_TEXT__('dialog.done') ?></button></div>
     </dialog>
     <dialog id="series-color-dialog" aria-labelledby="series-color-title"><header class="dialog-heading"><h2 id="series-color-title">Series color</h2><button id="series-color-close" type="button" class="ghost icon-button" data-icon="x" aria-label="Close color picker"></button></header><form id="series-color-form"><div class="dialog-body"><div id="series-color-map" tabindex="0" role="slider" aria-label="Color map. Left/right: saturation. Up/down: brightness." aria-valuemin="0" aria-valuemax="100"><span id="series-color-marker" aria-hidden="true"></span></div><label>Hue<input id="series-color-hue" type="range" min="0" max="359" step="1"></label><div class="color-hex-row"><div id="series-color-preview" aria-hidden="true"></div><label>HEX<input id="series-color-hex" pattern="#[0-9a-fA-F]{6}" maxlength="7" required></label><button id="series-color-copy" type="button" class="ghost icon-button" data-icon="copy" aria-label="Copy HEX" title="Copy HEX"></button></div><p id="series-color-copy-status" class="chart-note" role="status"></p><div class="color-rgb-grid"><label>R<input id="series-color-r" type="number" min="0" max="255" step="1" required></label><label>G<input id="series-color-g" type="number" min="0" max="255" step="1" required></label><label>B<input id="series-color-b" type="number" min="0" max="255" step="1" required></label></div></div><footer class="dialog-actions"><button id="series-color-default" class="ghost hidden" type="button">Reset default</button><button id="series-color-cancel" class="ghost" type="button">Cancel</button><button type="submit">Apply</button></footer></form></dialog>
     <dialog id="sheet-import-dialog" aria-labelledby="sheet-import-title">

@@ -5,7 +5,67 @@
 window.STSubsection=(function(){
   'use strict';
   const controls=new WeakMap();
-  let sequence=0;
+  let sequence=0,caseProvider=null,caseChanged=null;
+  const animations=new WeakMap();
+  function keyFor(control){
+    const section=control.section;
+    if(section.closest('#cases-panel,.design-reference-subsection,.design-reference-native-preview'))return null;
+    const button=control.header.querySelector('[data-subsection-toggle]');
+    const id=section.dataset.subsectionKey||section.id||button?.id||control.title.id||control.body?.id;
+    return id&&!/^st-subsection-\d+-content$/.test(id)?'section:'+id:null;
+  }
+  function savedStates(){
+    const value=caseProvider?.()?.metadata?.subsectionStates;
+    return value&&typeof value==='object'&&!Array.isArray(value)?value:{};
+  }
+  function savedExpanded(section,fallback){
+    const control=controls.get(section),key=control&&keyFor(control);
+    const stored=key?savedStates()[key]:undefined;
+    return typeof stored==='boolean'?stored:fallback;
+  }
+  function remember(control,expanded){
+    const record=caseProvider?.(),key=keyFor(control);
+    if(!record||!key||savedStates()[key]===expanded)return;
+    record.metadata={...record.metadata,subsectionStates:{...savedStates(),[key]:expanded}};
+    caseChanged?.();
+  }
+  function setExpanded(button,expanded,animate=true,body){
+    const content=body||document.getElementById(button?.getAttribute('aria-controls'));
+    if(!content)return;
+    const previous=animations.get(content);
+    if(button.getAttribute('aria-expanded')===String(expanded)&&animate)return;
+    const from=content.hidden?0:content.getBoundingClientRect().height;
+    previous?.cancel();animations.delete(content);
+    button.setAttribute('aria-expanded',String(expanded));
+    if(!expanded&&content.contains(document.activeElement))button.focus();
+    content.inert=!expanded;
+    if(!animate||window.STMotion?.reduced?.()||!content.animate){content.hidden=!expanded;return;}
+    content.hidden=false;
+    const to=expanded?content.getBoundingClientRect().height:0;
+    if(from===to){content.hidden=!expanded;return;}
+    const animation=content.animate([{height:from+'px',overflow:'clip'},{height:to+'px',overflow:'clip'}],{duration:180,easing:'ease-in-out',fill:'both'});
+    animations.set(content,animation);
+    animation.finished.then(()=>{
+      if(animations.get(content)!==animation)return;
+      content.hidden=!expanded;animations.delete(content);animation.cancel();
+    },()=>{});
+  }
+  function restoreControl(control){
+    if(!keyFor(control))return;
+    const record=caseProvider?.(),legacyId={'simulation2d-settings':'settings','simulation2d-events-panel':'events-panel','simulation2d-results':'results'}[control.section.id];
+    const legacy=legacyId&&record?.simulations?.find(s=>s.id===(record.activeSimulationId||record.simulations[0]?.id))?.simulation2d?.layout?.folds?.[legacyId];
+    const expanded=savedExpanded(control.section,typeof legacy==='boolean'?legacy:control.defaultOpen);
+    if(control.native){control.lastOpen=expanded;control.section.open=expanded;}
+    else{const button=control.header.querySelector('[data-subsection-toggle]');if(button)setExpanded(button,expanded,false,control.body);}
+  }
+  function restoreAll(root=document){
+    root.querySelectorAll('.st-subsection').forEach(section=>{const control=controls.get(section);if(control)restoreControl(control);});
+  }
+  function userToggle(button,expanded){
+    setExpanded(button,expanded);
+    const section=button.closest('.st-subsection'),control=section&&controls.get(section);
+    if(control)remember(control,expanded);
+  }
   function element(tag,className){
     const node=document.createElement(tag);
     if(className)node.className=className;
@@ -89,8 +149,16 @@ window.STSubsection=(function(){
     tools.classList.add('fold-tools');
     if(tools.parentElement!==header)header.append(tools);
     const body=section.querySelector(':scope > .fold-content')||null;
-    const control={section,body,header,title,description,tools};
+    const toggle=header.querySelector('[data-subsection-toggle]'),defaultOpen=native?section.open:toggle?.getAttribute('aria-expanded')!=='false';
+    const control={section,body,header,title,description,tools,native,defaultOpen,lastOpen:defaultOpen};
     controls.set(section,control);
+    if(native)section.addEventListener('toggle',()=>{
+      const expanded=section.open;
+      if(control.lastOpen===expanded)return;
+      control.lastOpen=expanded;
+      if(section.isConnected)remember(control,expanded);
+    });
+    restoreControl(control);
     if(focused?.isConnected&&document.activeElement!==focused)focused.focus({preventScroll:true});
     return control;
   }
@@ -106,6 +174,7 @@ window.STSubsection=(function(){
     const section=element(native?'details':'section',spec.className||'');
     setVariant(section,spec.variant);
     if(spec.id)section.id=spec.id;
+    if(spec.persistKey)section.dataset.subsectionKey=spec.persistKey;
     const header=element(native?'summary':'div',native?'':'fold-heading');
     const copy=element(native?'span':'div','subsection-heading-copy');
     const title=element(native?'span':'h3',native?'subsection-native-title':'subsection-heading-title');
@@ -138,6 +207,6 @@ window.STSubsection=(function(){
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>init(),{once:true});
   else init();
-  return Object.freeze({create,enhance,init});
+  return Object.freeze({create,enhance,init,setExpanded,userToggle,restoreAll,savedExpanded,connectCase(provider,changed){caseProvider=provider;caseChanged=changed;}});
 })();
 </script>

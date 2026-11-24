@@ -92,32 +92,7 @@
       return true;
     }
 
-    const subsectionAnimations=new WeakMap();
-    function setSubsectionExpanded(button,expanded){
-      const content=document.getElementById(button.getAttribute('aria-controls'));
-      if(!content||button.getAttribute('aria-expanded')===String(expanded))return;
-      const previous=subsectionAnimations.get(content);
-      const from=content.hidden?0:content.getBoundingClientRect().height;
-      previous?.cancel();
-      subsectionAnimations.delete(content);
-      button.setAttribute('aria-expanded',String(expanded));
-      if(!expanded&&content.contains(document.activeElement))button.focus();
-      content.inert=!expanded;
-      content.hidden=false;
-      const to=expanded?content.getBoundingClientRect().height:0;
-      if(STMotion.reduced()||!content.animate||from===to){content.hidden=!expanded;return;}
-      const animation=content.animate([
-        {height:from+'px',overflow:'clip'},
-        {height:to+'px',overflow:'clip'}
-      ],{duration:180,easing:'ease-in-out',fill:'both'});
-      subsectionAnimations.set(content,animation);
-      animation.finished.then(function(){
-        if(subsectionAnimations.get(content)!==animation)return;
-        content.hidden=!expanded;
-        subsectionAnimations.delete(content);
-        animation.cancel();
-      },function(){});
-    }
+    function setSubsectionExpanded(button,expanded){STSubsection.setExpanded(button,expanded);}
     window.addEventListener('st-startup-failure',function(){
       // Ignore a response arriving after a failed or timed-out startup.
       state.requestEpoch+=1;state.pendingRequests=0;state.bootstrap=null;
@@ -146,8 +121,7 @@
       const button=event.target.closest?.('[data-subsection-toggle]');
       if(!button)return;
       const expanded=button.getAttribute('aria-expanded')!=='true';
-      setSubsectionExpanded(button,expanded);
-
+      STSubsection.userToggle(button,expanded);
     });
     // Redibuja las gráficas cuando el bloque vuelve a tener dimensiones visibles.
     document.getElementById('results-history-group').addEventListener('toggle',function(){
@@ -195,6 +169,7 @@
       },runControlsLocked);
       window.addEventListener('st-simpy-status',function(event){if(roundSession?.pending)document.getElementById('batch-status').textContent=event.detail.message;});
       STPreferences.connectCase(function(){return state.activeCase;},function(){autosave.change();});
+      STSubsection.connectCase(function(){return state.activeCase;},function(){if(!autosave.pending())whatIfOnlySave=true;queueCaseSave();});
       window.addEventListener('st-rate-loss-reporting-change',function(){shell.sync();});
       window.addEventListener('st-equipment-layout-change',function(){STBasicMode.sync(state);shell.sync();});
       STSettings.connectCase(function(){return state.activeCase;},function(){autosave.change();});

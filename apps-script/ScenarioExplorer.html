@@ -22,7 +22,7 @@
 .scenario-trace-step-summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:var(--radius-sm)}
 .scenario-trace-step-title{display:flex;align-items:center;gap:var(--space-1);min-width:0}
 .scenario-trace-step-title::before{content:'';flex:none;width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform var(--duration-normal,180ms) ease;margin-inline-end:2px;color:var(--muted)}
-.scenario-trace-step[open]>.scenario-trace-step-summary .scenario-trace-step-title::before{transform:rotate(45deg)}
+.scenario-trace-step[data-trace-expanded=true]>.scenario-trace-step-summary .scenario-trace-step-title::before{transform:rotate(45deg)}
 .scenario-trace-step-index{flex:none;color:var(--muted);font-variant-numeric:tabular-nums}
 .scenario-trace-step-name{min-width:0;overflow-wrap:anywhere;color:var(--ink)}
 /* One capsule serves the card and every individual step.
@@ -33,15 +33,13 @@
 .scenario-progress-capsule :is(.scenario-progress-text,.scenario-progress-text-fill){position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;padding:0 var(--space-1);color:#000;background:transparent;font-size:var(--font-micro,.5625rem);font-weight:var(--weight-semibold,600);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1;pointer-events:none;text-shadow:none;box-shadow:none}
 .scenario-progress-capsule .scenario-progress-text-fill{color:#fff}
 .scenario-progress-capsule[hidden]{display:none!important}
-.scenario-trace-step-details{padding:var(--space-1) var(--space-2) var(--space-2);border-top:1px solid var(--line);font-size:var(--font-caption);line-height:var(--leading-body,1.4)}
-.scenario-trace-step[open]>.scenario-trace-step-details{animation:scenario-trace-expand var(--duration-normal,180ms) ease-out}
-@keyframes scenario-trace-expand{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.scenario-trace-step-details{box-sizing:border-box;overflow:hidden;padding:var(--space-1) var(--space-2) var(--space-2);border-top:1px solid var(--line);font-size:var(--font-caption);line-height:var(--leading-body,1.4)}
 .scenario-trace-step-note{color:var(--muted);margin:0 0 var(--space-1);overflow-wrap:anywhere}
 .scenario-trace-step-list{display:grid;gap:1px;list-style:none;margin:0;padding:0}
 .scenario-trace-step-list>li{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-2);min-width:0;margin:0;padding:0;color:var(--muted)}
 .scenario-trace-step-list>li>span{min-width:0;overflow-wrap:anywhere}
 .scenario-trace-step-list>li>strong{flex:none;color:var(--ink);font-size:inherit;font-variant-numeric:tabular-nums;font-weight:var(--weight-semibold,600)}
-@media(prefers-reduced-motion:reduce){.scenario-progress-capsule > .scenario-progress-fill,.scenario-trace-step-title::before{transition:none}.scenario-trace-step[open]>.scenario-trace-step-details{animation:none}}
+@media(prefers-reduced-motion:reduce){.scenario-progress-capsule > .scenario-progress-fill,.scenario-trace-step-title::before{transition:none}}
 .scenario-config-dialog[data-scenario-scope]>.dialog-heading{padding:var(--space-3) var(--space-4)}
 .scenario-config-dialog[data-scenario-scope]>.dialog-body{padding:var(--space-4)}
 .scenario-config-dialog[data-scenario-scope] .scenario-config-section{display:grid;gap:var(--subsection-gap);padding:0;border:0;min-width:0;align-content:start}
@@ -285,7 +283,7 @@ window.STScenarioExplorer=(function(){
     Object.assign(configLabels,{'DOE unavailable at Light depth.':'DOE no está disponible en profundidad Ligera.','Choose Medium or High depth to use DOE.':'Selecciona profundidad Media o Alta para usar DOE.','No eligible numeric inputs.':'No hay variables numéricas elegibles.','Enable DOE to choose factors and edit Low / High levels.':'Activa DOE para elegir factores y editar los niveles Bajo / Alto.'});
     function configText(value){return document.documentElement.lang==='es'&&configLabels[value]?configLabels[value]:window.STLanguage?.translate(value)||value;}
     function configGroup(page,title,description,tools,content){
-      var group=STSubsection.create({title:configText(title),description:configText(description),variant:'B',native:false,className:'scenario-config-group',tools:tools||[],content:content});
+      var group=STSubsection.create({title:configText(title),description:configText(description),variant:'B',native:false,persistKey:'scenario-config:'+cardId+':'+title,className:'scenario-config-group',tools:tools||[],content:content});
       page.append(group.section);return group;
     }
     function checkboxHeader(table,cell,check,label){
@@ -497,15 +495,32 @@ window.STScenarioExplorer=(function(){
       var row=el('li','','scenario-trace-row'),details=el('details','','scenario-trace-step'),head=el('summary','','scenario-trace-step-summary'),title=el('div','','scenario-trace-step-title'),number=el('span',String(index+1)+'.','scenario-trace-step-index'),name=el('span','','scenario-trace-step-name'),capsule=createProgressCapsule('scenario-trace-step-bar'),content=el('div','','scenario-trace-step-details'),note=el('p','','scenario-trace-step-note'),list=el('ul','','scenario-trace-step-list');
       capsule.fill.classList.add('scenario-trace-step-fill');capsule.text.classList.add('scenario-trace-step-meta');
       title.append(number,name);head.append(title,capsule.bar);content.append(note,list);details.append(head,content);row.append(details);
-      var view={row,details,head,name,capsule,note,list,manual:false,state:null,detailKey:null,stepName:step.name};
-      head.addEventListener('click',()=>{view.manual=true;});
+      var view={row,details,head,name,capsule,content,note,list,manual:false,state:null,detailKey:null,stepName:step.name,expanded:false,animation:null};
+      head.addEventListener('click',event=>{event.preventDefault();view.manual=true;setTraceStep(view,!view.expanded,true);});
       return view;
+    }
+    function setTraceStep(view,expanded,animate){
+      const {details,content}=view;
+      if(view.expanded===expanded&&!view.animation){view.head.setAttribute('aria-expanded',String(expanded));return;}
+      const measured=details.open?getComputedStyle(content):null,from=details.open?content.getBoundingClientRect().height:0;
+      const fromStyle=measured?{paddingTop:measured.paddingTop,paddingBottom:measured.paddingBottom,borderTopWidth:measured.borderTopWidth,opacity:measured.opacity}:null;
+      const previous=view.animation;view.animation=null;previous?.cancel();
+      view.expanded=expanded;details.dataset.traceExpanded=String(expanded);
+      view.head.setAttribute('aria-expanded',String(expanded));
+      if(!animate||!content.animate||window.matchMedia('(prefers-reduced-motion: reduce)').matches){details.open=expanded;return;}
+      details.open=true;
+      const to=expanded?content.getBoundingClientRect().height:0;
+      if(from===to){details.open=expanded;return;}
+      const style=getComputedStyle(content),full={paddingTop:style.paddingTop,paddingBottom:style.paddingBottom,borderTopWidth:style.borderTopWidth},zero={paddingTop:'0px',paddingBottom:'0px',borderTopWidth:'0px'};
+      const animation=content.animate([{height:from+'px',...(fromStyle||{...zero,opacity:0})},{height:to+'px',opacity:expanded?1:0,...(expanded?full:zero)}],{duration:180,easing:'ease-in-out',fill:'both'});
+      view.animation=animation;
+      animation.finished.then(()=>{if(view.animation!==animation)return;view.animation=null;details.open=expanded;animation.cancel();},()=>{});
     }
     function updateTraceRow(view,step){
       var translatedName=traceText(step.name);
       view.row.dataset.traceState=step.state;
       // Preserve native details nodes and focus across live updates.
-      if(view.state!==step.state&&!view.manual)view.details.open=step.state==='Running';
+      if(view.state!==step.state&&!view.manual)setTraceStep(view,step.state==='Running',view.state!==null);
       view.state=step.state;view.name.textContent=translatedName;
       paintProgressCapsule(view.capsule,step.percent,step.elapsedMs,step.state,translatedName);
       var note=traceText(step.state)+(step.detail?' · '+traceText(step.detail):'');
@@ -532,7 +547,20 @@ window.STScenarioExplorer=(function(){
       while(traceRows.length>progressTrace.length)traceRows.pop().row.remove();
       traceMessage.textContent=[traceOutcome?traceText(traceOutcome):'',status.textContent,resultNotice.hidden?'':resultNotice.textContent,progress.textContent].filter(Boolean).join(' · ');
     }
-    function showTrace(open){if(open&&!progressTrace.length)return;tracePanel.hidden=!open;traceBack.hidden=!open;host.classList.toggle('scenario-trace-open',open);if(open){paintTrace(true);traceBack.focus();}else{activity.focus();}var target=open?tracePanel:activity;if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)target.animate?.([{opacity:.2,transform:'translateX('+ (open?'8':'-8')+'px)'},{opacity:1,transform:'translateX(0)'}],{duration:180,easing:'ease-out'});}
+    function showTrace(open){
+      if(open&&!progressTrace.length)return;
+      const changed=host.classList.contains('scenario-trace-open')!==open;
+      tracePanel.hidden=!open;traceBack.hidden=!open;host.classList.toggle('scenario-trace-open',open);
+      if(open){paintTrace(true);traceBack.focus();}else if(!activity.hidden)activity.focus();
+      if(!changed||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+      // Animate all the returning card content, not only the progress bar.
+      const targets=open?[tracePanel]:[...host.children].filter(node=>node!==cardHeader&&node!==tracePanel&&!node.matches('.scenario-actions,dialog')&&!node.hidden&&getComputedStyle(node).display!=='none');
+      for(const node of targets){
+        const frames=[{opacity:.25,transform:'translateX('+(open?'8':'-8')+'px)'},{opacity:1,transform:'translateX(0)'}];
+        if(window.STMotion?.play)STMotion.play(node,frames,{duration:180,easing:'ease-out'});
+        else node.animate?.(frames,{duration:180,easing:'ease-out'});
+      }
+    }
     var progress=el('p','','scenario-search-progress');progress.setAttribute('role','status');host.append(progress);var activityView=createProgressCapsule('scenario-activity'),activity=activityView.bar;activity.hidden=true;host.append(activity,tracePanel);paintOverallProgress();activity.tabIndex=0;activity.title=traceText('View analysis progress');activity.addEventListener('click',()=>showTrace(true));activity.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();showTrace(true);}});
     var actions=el('div','','button-row scenario-actions'),run=iconButton('Find best scenario','refresh',function(){if(activeHost===host){if(searchCanFinish&&!finishRequested){finishRequested=true;setIcon(run,'Cancel evaluation','stop');status.textContent='Finishing the current batch, then validating the best candidate found…';return;}clearTimeout(timer);generation++;status.textContent='Cancelled — no final estimate. Run a new evaluation to enable creation.';save.disabled=true;last=null;record('CANCELLED',latest||{});}else preview(true);}),save=iconButton('Create selected scenario','copy',function(){if(!requireCompletedSource())return;searchSettingsChanged();if(last?.changes.length)create(Object.assign({},project,{analysisOnly:last.changes.some(c=>c.analysisOnly),evidence:Object.assign({},project.evidence,{categoryInclusions:Object.assign({},inclusions)},last.validationRequired?{independentValidation:'NOT_REPRODUCED_REQUIRES_VALIDATION',screeningOeeGain:latest?.delta?.oeePercentagePoints,screeningThroughputGain:latest?.delta?.throughputPerMinute,confirmationOeeGain:latest?.independentCheck?.delta?.oeePercentagePoints,confirmationThroughputGain:latest?.independentCheck?.delta?.throughputPerMinute}:{},last.reviewRequired?{engineeringReview:latest?.engineeringReviewAcknowledged?'ACKNOWLEDGED_REQUIRES_REVIEW':'REQUIRES_REVIEW',engineeringWarnings:latest?.warnings||[]}:{}),reviewed:!!last.validationRequired||!!last.reviewRequired||!!project.explore||JSON.stringify(last.changes)!==JSON.stringify(project.changes),title:(last.changes.some(c=>c.analysisOnly)?'Exploratory reliability targets':project.title||STScenarioText[project.titleKey]||'Selected improvements')+(last.validationRequired?' · Validation required':''),changes:last.changes,canApply:true}),save);});save.disabled=true;
     run.classList.add('scenario-search');save.classList.add('scenario-create');actions.setAttribute('role','group');actions.setAttribute('aria-label','Scenario actions');actions.append(configure,run,save);host.append(actions);

@@ -413,7 +413,7 @@ window.STResults=(function(){
     var body=document.createElement('tbody'); rows.forEach(function(r){var m=r.metric,tr=document.createElement('tr');[r.model.name,r.model.type,unitLabel(m.unitOfFlow||r.model.unitOfFlow),number(m.oeePercent)+'%',number(m.outputCount),number(m.starvedSeconds/60),number(m.blockedSeconds/60),number(m.failureSeconds/60),number(m.failureCount,0),number((m.partialStarvationLossSeconds||0)/60),number((m.partialBlockingLossSeconds||0)/60),number(m.processingCapacityPercent)].forEach(function(v,i){var td=document.createElement('td');td.textContent=v; if(i>2)td.className='numeric';tr.appendChild(td);});body.appendChild(tr);});table.appendChild(body);document.getElementById('results-table').replaceChildren(table);
   }
   function comparisonSection(title,className){
-    return STSubsection.create({title,open:true,className:'comparison-section '+className});
+    return STSubsection.create({title,open:true,persistKey:'comparison:'+className,className:'comparison-section '+className});
   }
   function compare(target,a,b){
     if(!a.results?.summary||!b.results?.summary)return;

@@ -52,8 +52,8 @@ window.STInputComparison=(function(){
 })();
 
 window.STComparison=function(state,isFiniteNumber){
-    function subsection(title,open){
-      return STSubsection.create({title,open:Boolean(open),className:'comparison-section'});
+    function subsection(title,open,key){
+      return STSubsection.create({title,open:Boolean(open),persistKey:'comparison:'+key,className:'comparison-section'});
     }
     function renderCaseComparison() {
       var a = (state.activeCase.simulations || []).find(function(sim) { return sim.id === document.getElementById('case-compare-a').value; });
@@ -65,29 +65,29 @@ window.STComparison=function(state,isFiniteNumber){
       STResults.compareEquipmentOee(target,a,b);
       var basic=Boolean(window.STBasicMode?.isBasic());
       appendChangedInputs(target,a,b);
-      appendComparisonSection(target,__ST_TEXT__('comparison.simulation_configuration'),STInputComparison.run(a.dynamicConfig),STInputComparison.run(b.dynamicConfig));
+      appendComparisonSection(target,__ST_TEXT__('comparison.simulation_configuration'),STInputComparison.run(a.dynamicConfig),STInputComparison.run(b.dynamicConfig),'configuration');
       if(basic)return;
-      const additional=subsection('Additional result details',false);additional.section.classList.add('comparison-result-details');additional.body.classList.add('comparison-details-content');target.append(additional.section);target=additional.body;
+      const additional=subsection('Additional result details',false,'additional');additional.section.classList.add('comparison-result-details');additional.body.classList.add('comparison-details-content');target.append(additional.section);target=additional.body;
       if(a.results?.batch||b.results?.batch){
         var note=document.createElement('p');note.className='notice';note.textContent=__ST_TEXT__('batch.compare_note');target.appendChild(note);
-        appendComparisonSection(target,__ST_TEXT__('batch.title'),a.results?.batch?.statistics||{},b.results?.batch?.statistics||{});
-        appendComparisonSection(target,__ST_TEXT__('batch.rounds'),{rounds:a.results?.batch?.rounds||1,seeds:a.results?.batch?.rows.map(function(r){return r.seed;})||[a.results?.seed]},{rounds:b.results?.batch?.rounds||1,seeds:b.results?.batch?.rows.map(function(r){return r.seed;})||[b.results?.seed]});
+        appendComparisonSection(target,__ST_TEXT__('batch.title'),a.results?.batch?.statistics||{},b.results?.batch?.statistics||{},'batch-statistics');
+        appendComparisonSection(target,__ST_TEXT__('batch.rounds'),{rounds:a.results?.batch?.rounds||1,seeds:a.results?.batch?.rows.map(function(r){return r.seed;})||[a.results?.seed]},{rounds:b.results?.batch?.rounds||1,seeds:b.results?.batch?.rows.map(function(r){return r.seed;})||[b.results?.seed]},'batch-rounds');
       }
 
-      appendComparisonSection(target, __ST_TEXT__('comparison.simulation_results'), a.results?.summary || {}, b.results?.summary || {});
-      appendComparisonSection(target, __ST_TEXT__('comparison.saved_result_metadata'), comparisonResultMetadata(a.results), comparisonResultMetadata(b.results));
+      appendComparisonSection(target, __ST_TEXT__('comparison.simulation_results'), a.results?.summary || {}, b.results?.summary || {},'summary');
+      appendComparisonSection(target, __ST_TEXT__('comparison.saved_result_metadata'), comparisonResultMetadata(a.results), comparisonResultMetadata(b.results),'saved-metadata');
       var equipmentIds = (a.equipment || []).map(function(item) { return item.id; });
       (b.equipment || []).forEach(function(item) { if (equipmentIds.indexOf(item.id) === -1) equipmentIds.push(item.id); });
       var metricA = a.results?.equipmentMetrics || {};
       var metricB = b.results?.equipmentMetrics || {};
       equipmentIds.forEach(function(equipmentId) {
-        appendComparisonSection(target, __ST_TEXT__('comparison.simulation_metrics') + equipmentId, metricA[equipmentId] || {}, metricB[equipmentId] || {});
+        appendComparisonSection(target, __ST_TEXT__('comparison.simulation_metrics') + equipmentId, metricA[equipmentId] || {}, metricB[equipmentId] || {},'equipment:'+equipmentId);
       });
     }
 
     function appendChangedInputs(target,a,b) {
       var comparison=STInputComparison.changes(a,b),changes=comparison.rows;
-      const block=subsection(__ST_TEXT__('comparison.changed_inputs')+changes.length+__ST_TEXT__('comparison.changes')+comparison.affected+__ST_TEXT__('comparison.equipment_affected'),true),section=block.section;
+      const block=subsection(__ST_TEXT__('comparison.changed_inputs')+changes.length+__ST_TEXT__('comparison.changes')+comparison.affected+__ST_TEXT__('comparison.equipment_affected'),true,'changed-inputs'),section=block.section;
       if(!changes.length){var message=document.createElement('p');message.className='chart-note';message.textContent=__ST_TEXT__('comparison.no_equipment_input_differences_run_settings_are_listed_below');block.body.appendChild(message);}
       else {
         var scroll=document.createElement('div');scroll.className='table-scroll';var table=document.createElement('table');table.innerHTML='<thead><tr><th>Equipment</th><th>Parameter</th><th>Baseline</th><th>Proposed</th></tr></thead><tbody></tbody>';
@@ -111,8 +111,8 @@ window.STComparison=function(state,isFiniteNumber){
       };
     }
 
-    function appendComparisonSection(target, title, left, right) {
-      const block=subsection(title,title===__ST_TEXT__('comparison.scenario_provenance')||title===__ST_TEXT__('comparison.simulation_configuration')),section=block.section;
+    function appendComparisonSection(target, title, left, right, key) {
+      const block=subsection(title,title===__ST_TEXT__('comparison.scenario_provenance')||title===__ST_TEXT__('comparison.simulation_configuration'),key),section=block.section;
       var flatLeft = flattenComparisonValues(left); var flatRight = flattenComparisonValues(right);
       var keys = Array.from(new Set(Object.keys(flatLeft).concat(Object.keys(flatRight)))).sort();
       if (!keys.length) { const empty=document.createElement('p');empty.className='chart-note';empty.textContent=__ST_TEXT__('comparison.no_saved_values');block.body.append(empty);target.appendChild(section);return; }

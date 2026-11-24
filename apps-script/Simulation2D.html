@@ -414,8 +414,8 @@ window.STSimulation2D=(function(){
     machineStyle.value=['blocks','animated'].includes(saved.equipmentView)?saved.equipmentView:window.STPreferences?.read('simulation2dMachineStyle')==='animated'?'animated':'blocks';
     showDimensions.checked=saved.showDimensions??showDimensions.checked;showEvents.checked=saved.showEvents??showEvents.checked;syncEvents(true);
     for(const id of ['settings','events-panel','results']){
-      const button=el(id).querySelector('[data-subsection-toggle]'),expanded=saved.folds?.[id]!==false;
-      button.setAttribute('aria-expanded',String(expanded));document.getElementById(button.getAttribute('aria-controls')).hidden=!expanded;
+      const section=el(id),button=section.querySelector('[data-subsection-toggle]'),expanded=window.STSubsection?.savedExpanded(section,saved.folds?.[id]!==false)??(saved.folds?.[id]!==false);
+      STSubsection.setExpanded(button,expanded,false);
     }
     let restored=false;
     for(const [index,view] of viewports.entries()){

@@ -4,10 +4,10 @@ window.STSheetImport=function(state,actions){
   var merge=STSheetImportMerge,importVersion='sheet-import-20261123-8',sectionOpen={};
   function subsection(spec){
     var id=spec.id,config=Object.assign({},spec,{native:true,
-      open:Object.prototype.hasOwnProperty.call(sectionOpen,id)?sectionOpen[id]:spec.open});
+      open:!state.activeCase&&Object.prototype.hasOwnProperty.call(sectionOpen,id)?sectionOpen[id]:spec.open});
     var control=STSubsection.create(config);
     control.section.classList.add('sheet-import-section');
-    control.section.addEventListener('toggle',function(){if(control.section.isConnected)sectionOpen[id]=control.section.open;});
+    control.section.addEventListener('toggle',function(){if(!state.activeCase&&control.section.isConnected)sectionOpen[id]=control.section.open;});
     return control;
   }
   function mountSpreadsheetSection(){
@@ -213,7 +213,7 @@ window.STSheetImport=function(state,actions){
   }
   function render(){
     var data=preview,host=el('sheet-import-preview');
-    host.querySelectorAll(':scope > .sheet-import-section').forEach(function(item){sectionOpen[item.id]=item.open;});
+    if(!state.activeCase)host.querySelectorAll(':scope > .sheet-import-section').forEach(function(item){sectionOpen[item.id]=item.open;});
     host.replaceChildren();el('sheet-import-ack').checked=false;
     renderCaseMetadata(data);
     var toolbar=node('div','');toolbar.className='button-row';

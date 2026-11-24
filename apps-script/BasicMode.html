@@ -178,7 +178,7 @@ window.STBasicMode=(function(){
       var data=card.querySelector('.basic-card-data');if(!data){data=node('section','','basic-card-data');card.appendChild(data);}
       data.replaceChildren();
       if(machine){
-        var speedLabel=card._fields.querySelector('.equipment-rate').closest('label');if(speedLabel.firstChild?.nodeType===Node.TEXT_NODE)speedLabel.firstChild.nodeValue='Speed ('+(card._fields.querySelector('.equipment-unit').value||'units').toLowerCase()+'/min)';
+        var speedLabel=card._fields.querySelector('.equipment-rate').closest('label');if(speedLabel.firstChild?.nodeType===Node.TEXT_NODE)speedLabel.firstChild.nodeValue='Speed ('+STFlowUnits.labels(card._fields.querySelector('.equipment-unit').value).rate+')';
         var next=equipment[index+1],audit=next?.type==='CONVEYOR'?audits.find(function(x){return x.equipmentId===next.id;}):null;
         var capacity=audit?.engineering?.runtimeGeometry?.capacityUnits,downstream=equipment.find(function(x){return x.id===audit?.downstreamId;});
         var buffer=next?.type==='CONVEYOR'?capacity/(downstream?.nominalRatePerSecond*60):0;

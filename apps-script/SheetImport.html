@@ -137,7 +137,7 @@ window.STSheetImport=function(state,actions){
     if(!result.packingRows?.length)return;
     var review=detail('Review flow and machine speeds');review.open=expanded;
     var scroll=node('div','');scroll.className='table-scroll';var table=node('table',''),caption=node('caption','Proposed flow and nominal machine speeds');table.append(caption);var head=node('thead',''),headers=node('tr','');['Equipment','Input','Output','Native output/min'].forEach((text,index)=>{var th=node('th',text);th.scope='col';if(index===3)th.className='numeric';headers.append(th);});head.append(headers);table.append(head);var body=node('tbody','');result.packingRows.forEach(e=>{var row=node('tr','');[e.name,e.input.toLowerCase(),e.output.toLowerCase(),e.ratePerMinute==null?'—':Number(e.ratePerMinute.toPrecision(10)).toLocaleString()].forEach((text,index)=>{var td=node('td',text);if(index===3)td.className='numeric';row.append(td);});body.append(row);});table.append(body);scroll.append(table);review.append(scroll);
-    review.append(node('p','Machine rates are expressed in output units. For example, 300 bottles/min ÷ 12 bottles/case = 25 cases/min. Physical belt speeds in m/min are not divided.'));host.append(review);
+    review.append(node('p','Machine rates are expressed in output units. For example, 300 bpm ÷ 12 bottles/case = 25 cpm. Physical belt speeds in m/min are not divided.'));host.append(review);
   }
   function applyReadiness(result){
     var details=el('sheet-import-details-section'),body=details?.querySelector(':scope > .fold-content');

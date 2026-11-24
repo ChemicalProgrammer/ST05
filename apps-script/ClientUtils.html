@@ -21,8 +21,8 @@
 
     function flowUnitLabels(unit) {
       var raw=String(unit??'').trim(),normalized=raw.toLowerCase();
-      if(['bottle','bottles','botella','botellas'].includes(normalized))return {count:'bottles',rate:'bpm'};
-      if(['case','cases','caja','cajas'].includes(normalized))return {count:'cases',rate:'cpm'};
+      if(['bottle','bottles','botella','botellas','bpm','bottle/min','bottles/min','botella/min','botellas/min','bottles per minute','botellas por minuto'].includes(normalized))return {count:'bottles',rate:'bpm'};
+      if(['case','cases','caja','cajas','cpm','case/min','cases/min','caja/min','cajas/min'].includes(normalized))return {count:'cases',rate:'cpm'};
       if(!normalized||['unit','units','unidad','unidades'].includes(normalized))return {count:'units',rate:'units/min'};
       return {count:raw,rate:raw+'/min'};
     }

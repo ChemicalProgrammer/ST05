@@ -86,7 +86,7 @@
       equipmentField(card, '.equipment-type').value = STEquipmentRoles.machineType(equipment);
       equipmentField(card, '.equipment-name').value = equipment.name || '';
       unitInput.dataset.legacyLabel=equipment.unitOfFlow||'';
-      function updateRateUnit(){var rate=equipmentField(card,'.equipment-rate');rate.closest('label').firstChild.nodeValue='Nominal rate ('+(unitInput.value?unitInput.value.toLowerCase():'units')+'/min)';if(unitInput.value&&!inputUnit.value)inputUnit.value=equipment.type==='CONVEYOR'?unitInput.value:(state.activeCase.equipment[index-1]?.processData?.flowUnits?.output||'BOTTLES');}
+      function updateRateUnit(){var rate=equipmentField(card,'.equipment-rate');rate.closest('label').firstChild.nodeValue='Nominal rate ('+STFlowUnits.labels(unitInput.value).rate+')';if(unitInput.value&&!inputUnit.value)inputUnit.value=equipment.type==='CONVEYOR'?unitInput.value:(state.activeCase.equipment[index-1]?.processData?.flowUnits?.output||'BOTTLES');}
       unitInput.addEventListener('change',updateRateUnit);updateRateUnit();
       var rateInput=equipmentField(card,'.equipment-rate');
       var displayedRate=selectedProfile.ratePerMinute===undefined?equipment.nominalRatePerSecond:selectedProfile.ratePerMinute/60;

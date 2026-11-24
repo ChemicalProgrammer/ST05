@@ -360,10 +360,10 @@ window.STScenarioExplorer=(function(){
       metrics.replaceChildren();
       var displayed=entry.independentCheck||entry,unconfirmed=entry.independentCheck?.passed===false,provisional=!entry.independentCheck;
       if(entry.baseline&&entry.candidate){var simple=el('div','','scenario-basic-metrics');
-        [['OEE','oee','%'],['Throughput','throughput',' '+unitLabel(source.unitOfFlow)+'/min']].forEach(function(spec){
+        [['OEE','oee','%'],['Throughput','throughput',' '+STFlowUnits.labels(source.unitOfFlow).rate]].forEach(function(spec){
           var metric=el('div','','scenario-basic-metric'),base=displayed.baseline[spec[1]],value=unconfirmed?NaN:displayed.candidate[spec[1]],delta=value-base;
           metric.append(el('span',spec[0]),quantity(Number.isFinite(value)?value.toFixed(spec[1]==='oee'?1:2):'—',Number.isFinite(value)?spec[2]:''));
-          var change=el('span',Number.isFinite(delta)?(spec[1]==='oee'?'Δ OEE: ':'')+(delta>0?'+':'')+delta.toFixed(2)+(spec[1]==='oee'?' pp':' '+unitLabel(source.unitOfFlow)+'/min')+' vs. base':'—','scenario-basic-change');change.dataset.direction=delta>0?'up':delta<0?'down':'same';metric.append(change);simple.append(metric);
+          var change=el('span',Number.isFinite(delta)?(spec[1]==='oee'?'Δ OEE: ':'')+(delta>0?'+':'')+delta.toFixed(2)+(spec[1]==='oee'?' pp':' '+STFlowUnits.labels(source.unitOfFlow).rate)+' vs. base':'—','scenario-basic-change');change.dataset.direction=delta>0?'up':delta<0?'down':'same';metric.append(change);simple.append(metric);
         });metrics.append(simple);metrics.append(el('p',(unconfirmed?'No confirmed improvement. ':provisional?'Provisional estimate · ':'Confirmed · ')+'Base: '+displayed.baseline.oee.toFixed(2)+'% OEE'+(Number.isFinite(entry.independentCheck?.durationSeconds)?' · '+(entry.independentCheck.durationSeconds/60)+' min × '+entry.independentCheck.rounds+' rounds · matching seeds':''),'scenario-baseline-note'));var badge=host.querySelector('.analysis-capex');if(badge&&primaryTier==='HIGH'&&project.searchScope!=='ALL')badge.textContent='High CAPEX';
       }
 
@@ -656,7 +656,7 @@ window.STScenarioExplorer=(function(){
         var current=el('article','','analysis-recommendation scenario-current'),values=simulation.results?.summary?metric(simulation.results):{},metrics=el('div','','scenario-basic-metrics');
         current.dataset.motionKey=JSON.stringify([simulation.id,'CURRENT']);
         current.append(el('h4','Current scenario','scenario-current-title'));
-        [['OEE','oee','%'],['Throughput','throughput',' '+unitLabel(simulation.unitOfFlow||simulation.results?.unitOfFlow)+'/min']].forEach(function(spec){var item=el('div','','scenario-basic-metric'),value=values[spec[1]];item.append(el('span',spec[0]),quantity(Number.isFinite(value)?value.toFixed(spec[1]==='oee'?1:2):'—',Number.isFinite(value)?spec[2]:''));metrics.append(item);});
+        [['OEE','oee','%'],['Throughput','throughput',' '+STFlowUnits.labels(simulation.results?.unitOfFlow||simulation.unitOfFlow).rate]].forEach(function(spec){var item=el('div','','scenario-basic-metric'),value=values[spec[1]];item.append(el('span',spec[0]),quantity(Number.isFinite(value)?value.toFixed(spec[1]==='oee'?1:2):'—',Number.isFinite(value)?spec[2]:''));metrics.append(item);});
         current.append(metrics);combined.append(current);
       }
       (basic?['ZERO','MEDIUM','HIGH']:['ZERO','MEDIUM','HIGH','ALL']).forEach(function(tier){

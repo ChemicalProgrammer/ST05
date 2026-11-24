@@ -215,7 +215,7 @@ window.STRealDataModel=(function(){
     {id:'production',label:'Producción y calidad',fields:[
       ['reportedProductionUnits','Producción total (botellas)','number'],['reportedProductionCases','Producción total (cajas)','number'],['bottlesPerCase','Botellas por caja','number'],
       ['shiftProduction.0','Turno 1 (cajas)','number'],['shiftProduction.1','Turno 2 (cajas)','number'],['shiftProduction.2','Turno 3 (cajas)','number'],
-      ['referenceSpeedBpm','Standard Rate (botellas/min)','number'],['aem.goodOutputUnits','Producción conforme (botellas)','number'],
+      ['referenceSpeedBpm','Standard Rate (bpm)','number'],['aem.goodOutputUnits','Producción conforme (botellas)','number'],
       ['aem.scrapSeconds','Scrap (min equivalentes)','number',60],['aem.scrapUnits','Scrap (botellas)','number'],
       ['aem.reworkSeconds','Rework (min equivalentes)','number',60],['aem.reworkUnits','Rework (botellas)','number'],
       ['qualityPercent','Calidad reportada (%)','number'],
@@ -287,7 +287,7 @@ window.STRealDataModel=(function(){
     add('bottles','Producción total','botellas',realBottles,bottles,'Salida final del período. Cajas × botellas por caja cuando se requiere conversión.','Producción');
     add('cases','Producción total','cajas',realCases,['CASE','CASES'].includes(unit)?output:finite(bottles)&&pack>0?bottles/pack:null,'Cajas = botellas / botellas por caja. No se suman conteos de equipos sucesivos.','Producción');
     for(let i=0;i<3;i++)add('shift'+i,'Turno '+(i+1),'cajas',real.shiftProduction[i],sim?.shifts?.length===real.shiftProduction.filter(finite).length?(unit==='CASES'?sim.shifts[i]?.outputCount:finite(sim.shifts[i]?.outputCount)&&pack>0?sim.shifts[i].outputCount/pack:null):null,'Producción de los límites del turno guardado. No se divide el total diario entre turnos.','Producción');
-    add('standard','Standard Rate','botellas/min',real.referenceSpeedBpm,sim&&!sim.multiFormat&&finite(sim.nominalRate)?sim.nominalRate*60:null,'Velocidad estándar del cuello de botella para el producto. En múltiples formatos no se inventa una velocidad global media.','Inputs');
+    add('standard','Standard Rate','bpm',real.referenceSpeedBpm,sim&&!sim.multiFormat&&finite(sim.nominalRate)?sim.nominalRate*60:null,'Velocidad estándar del cuello de botella para el producto. En múltiples formatos no se inventa una velocidad global media.','Inputs');
     add('pack','Botellas por caja','botellas/caja',real.bottlesPerCase,sim?.packFactor??simulation?.sourceImport?.metadata?.bottlesPerCase??null,'Factor de conversión declarado para el formato.','Inputs');
     add('good','Producción conforme','botellas',real.aem.goodOutputUnits??(real.outputBasis==='GOOD'?realBottles:null),bottles,'Producción conforme de planta. La simulación continua supone calidad del 100 %.','Producción');
     add('scrapUnits','Scrap','botellas',real.aem.scrapUnits,sim&&sim.engine!=='DES_SIMPY_EXPERIMENTAL'?0:null,'Scrap capturado en botellas; el simulador continuo no modela rechazos y supone cero.','Producción');

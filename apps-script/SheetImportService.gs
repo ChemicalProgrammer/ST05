@@ -1,3 +1,16 @@
+function sheetTemplateVersion_(){return 'sheet-template-20261124-1';}
+function sheetRequestUiMode_(request){
+  var mode=typeof request?.uiMode==='string'?request.uiMode.trim().toUpperCase():'';
+  if(!mode)throw createSimulatorError_('SHEET_CLIENT_OUTDATED',
+    'The spreadsheet interface is outdated. Update the Apps Script web deployment and reopen the app, then try again. No spreadsheet changes were made.');
+  if(!['BASIC','ADVANCE','ADVANCED'].includes(mode))throw createSimulatorError_('INVALID_SHEET_REQUEST',
+    'Choose Basic or Advance for the spreadsheet operation.');
+  if(request.sheetTemplateVersion&&request.sheetTemplateVersion!==sheetTemplateVersion_())
+    throw createSimulatorError_('SHEET_VERSION_MISMATCH',
+      'The spreadsheet interface and server are different versions. Update the web deployment and reload the app before retrying.');
+  return mode==='ADVANCED'?'ADVANCE':mode;
+}
+
 function sheetImportContractVersion_(){return 'sheet-import-20261123-8';}
 // Conservative name recognition for worksheets whose category is simply Machine.
 function inferSheetMachineType_(name) {
@@ -69,8 +82,8 @@ function sheetContainerUnit_(labels){
 
 function previewSheetImport_(request, user) {
   if (!request || typeof request !== 'object') throw createSimulatorError_('INVALID_SHEET_REQUEST','Enter a spreadsheet URL or spreadsheet ID.');
-  var mode=String(request.uiMode||'ADVANCE').trim().toUpperCase();
-  if(!['BASIC','ADVANCE','ADVANCED'].includes(mode))throw createSimulatorError_('INVALID_SHEET_REQUEST','Choose Basic or Advance for spreadsheet import.');
+  var mode=sheetRequestUiMode_(request);
+  if(request.clientImportVersion&&request.clientImportVersion!==sheetImportContractVersion_())throw createSimulatorError_('SHEET_VERSION_MISMATCH','The import client and server are different versions. Reopen the latest web deployment before retrying.');
   if(request.caseSnapshot)browserCaseSnapshot_(request,user);else getCase_(request.caseId, user);
   var reference = parseSheetReference_(request.spreadsheet);
   var book = openImportSpreadsheet_(reference.id);

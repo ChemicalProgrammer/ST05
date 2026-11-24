@@ -18,6 +18,11 @@ function fixture(){
  return {metadata:['Synthetic site','Line 1','Synthetic format',12,24,'2026-09-16','Test author'],rows:[a,b,c],formats:Array.from({length:3},()=>Array(23).fill('0.00'))};
 }
 const plain=x=>JSON.parse(JSON.stringify(x));
+test('a stale import client cannot omit the interface mode',()=>{
+ const r=runtime();
+ assert.throws(()=>r.previewSheetImport_({caseId:'mine',spreadsheet:'synthetic-sheet-id'},{email:'owner@test'}),error=>error.simulatorError?.code==='SHEET_CLIENT_OUTDATED');
+});
+
 test('fixed Sheet mapping preserves every A–W value and C1:C7 metadata, with no invented reliability',()=>{
  const r=runtime(),f=fixture(),out=r.parseEquipmentSheet_(f.metadata,f.rows,f.formats);
  assert.equal(out.canImport,true,JSON.stringify(out.errors));assert.equal(out.equipment.length,3);
@@ -72,9 +77,9 @@ test('Sheet reader authenticates, checks case ownership, respects URL gid and se
  function tab(id){return {getSheetId:()=>id,getName:()=> 'Tab '+id,getLastRow:()=>12,getMaxColumns:()=>23,getMaxRows:()=>100,getRange:(row,col,num,width)=>{ranges.push([row,col,num,width]);return {getValues:()=>row===1?f.metadata.map((v,i)=>[i===5?new Date('2026-09-16'):v]):f.rows,getNumberFormats:()=>f.formats};}};}
  const tabs=[tab(0),tab(22)];const r=runtime({DriveApp:{getFileById:()=>({getMimeType:()=> 'application/vnd.google-apps.spreadsheet'})},SpreadsheetApp:{openById:id=>{reads.push(id);return {getSheets:()=>tabs,getSheetByName:()=>null,getSpreadsheetTimeZone:()=> 'Etc/UTC'};}}});
  let checked=false;r.requireCurrentUser_=()=>({email:'owner@test'});r.getCase_=(id,user)=>{assert.equal(id,'mine');assert.equal(user.email,'owner@test');checked=true;};
- const response=r.previewSheetImport({caseId:'mine',spreadsheet:'https://docs.google.com/spreadsheets/d/synthetic-sheet-id/edit#gid=22'});
+ const response=r.previewSheetImport({caseId:'mine',spreadsheet:'https://docs.google.com/spreadsheets/d/synthetic-sheet-id/edit#gid=22',uiMode:'ADVANCE'});
  assert(checked);assert.equal(response.ok,true);assert.equal(response.data.source.sheetId,22);assert.equal(response.data.metadata.dateOfAnalysis,'2026-09-16');assert.deepEqual(ranges,[[8,7,2,2],[1,3,7,1],[4,1,1,2],[10,1,3,23]]);
- r.getCase_=()=>{throw Error('Denied');};assert.equal(r.previewSheetImport({caseId:'mine',spreadsheet:'synthetic-sheet-id'}).ok,false);assert.equal(reads.length,1);
+ r.getCase_=()=>{throw Error('Denied');};assert.equal(r.previewSheetImport({caseId:'mine',spreadsheet:'synthetic-sheet-id',uiMode:'ADVANCE'}).ok,false);assert.equal(reads.length,1);
  assert.throws(()=>r.parseSheetReference_('https://evil.test/synthetic-sheet-id'));
 });
 test('Sheet reader distinguishes Excel files and missing Sheets authorization',()=>{
@@ -90,7 +95,7 @@ test('readable Sheets do not depend on Drive metadata access',()=>{
 test('RPC preserves Google errors and identifies the responding importer',()=>{
  const r=runtime({SpreadsheetApp:{openById:()=>{throw Error('Sheets service unavailable');}},DriveApp:{getFileById:()=>{throw Error('Drive access denied');}}});
  r.requireCurrentUser_=()=>({email:'owner@test'});r.getCase_=()=>({});
- const response=r.previewSheetImport({caseId:'mine',spreadsheet:'synthetic-sheet-id'});
+ const response=r.previewSheetImport({caseId:'mine',spreadsheet:'synthetic-sheet-id',uiMode:'ADVANCE'});
  assert.equal(response.ok,false);assert.equal(response.importVersion,'sheet-import-20261123-8');
  assert.match(response.error.message,/sheet-import-20261123-8.*SHEET_OPEN_FAILED.*Sheets service unavailable/);
  assert.match(response.error.details[0],/Drive access denied/);
@@ -160,7 +165,7 @@ test('updated format rejects invalid G/H values and reports shifted source cells
 test('updated Sheet reader detects G/H headers and reads through Y',()=>{
  const f=updatedFixture(),reads=[],sheet={getLastRow:()=>12,getMaxRows:()=>100,getMaxColumns:()=>26,getSheetId:()=>0,getName:()=> 'Equipment',getRange:(row,col,count,width)=>{reads.push([row,col,count,width]);return {getValues:()=>row===8?[['',''],['Conveyor Speed (m/min)','Accumulation (s)']]:row===1?f.metadata.map(v=>[v]):f.rows,getNumberFormats:()=>f.formats};}};
  const r=runtime({SpreadsheetApp:{openById:()=>({getSheets:()=>[sheet]})}});r.getCase_=()=>({});
- const out=r.previewSheetImport_({caseId:'mine',spreadsheet:'synthetic-sheet-id'},{email:'owner@test'});assert.equal(out.source.schemaVersion,'plant-sheet-v2');assert.equal(out.source.equipmentRange,'A10:Y12');assert(reads.some(v=>v[0]===10&&v[3]===25));assert.equal(out.equipment[1].processData.accumulation.declaredAccumulationSeconds,28);
+ const out=r.previewSheetImport_({caseId:'mine',spreadsheet:'synthetic-sheet-id',uiMode:'ADVANCE'},{email:'owner@test'});assert.equal(out.source.schemaVersion,'plant-sheet-v2');assert.equal(out.source.equipmentRange,'A10:Y12');assert(reads.some(v=>v[0]===10&&v[3]===25));assert.equal(out.equipment[1].processData.accumulation.declaredAccumulationSeconds,28);
 });
 test('selective updated import exposes G/H, switches an AUTO conveyor to its explicit belt speed and preserves the accumulation reference',()=>{
  const r=runtime(),f=updatedFixture();r.window={};for(const file of ['TextResources.gs','SheetImportMerge.html'])vm.runInContext(fs.readFileSync('apps-script/'+file,'utf8').replace(/<\/?script>/g,''),r);
@@ -174,14 +179,14 @@ test('selective updated import exposes G/H, switches an AUTO conveyor to its exp
 test('updated plant template reads equipment above a Total Time footer without treating shift summaries as equipment',()=>{
  const f=updatedFixture(),footer=Array(25).fill('');footer[5]='Total Time';footer[7]=43200;const rows=f.rows.concat([Array(25).fill(''),footer]);
  const sheet={getLastRow:()=>14,getMaxRows:()=>100,getMaxColumns:()=>26,getSheetId:()=>0,getName:()=> 'Equipment',getRange:(row)=>({getValues:()=>row===8?[['Conveyor Speed (m/min)','Accumulation (s)']]:row===1?f.metadata.map(v=>[v]):rows,getNumberFormats:()=>f.formats})};
- const r=runtime({SpreadsheetApp:{openById:()=>({getSheets:()=>[sheet]})}});r.getCase_=()=>({});const out=r.previewSheetImport_({caseId:'mine',spreadsheet:'synthetic-sheet-id'},{});assert(out.canImport,JSON.stringify(out.errors));assert.equal(out.equipment.length,3);assert.equal(out.source.equipmentRange,'A10:Y13');
+ const r=runtime({SpreadsheetApp:{openById:()=>({getSheets:()=>[sheet]})}});r.getCase_=()=>({});const out=r.previewSheetImport_({caseId:'mine',spreadsheet:'synthetic-sheet-id',uiMode:'ADVANCE'},{});assert(out.canImport,JSON.stringify(out.errors));assert.equal(out.equipment.length,3);assert.equal(out.source.equipmentRange,'A10:Y13');
 });
 
 test('numeric C4 reads its unit from the row label or displayed cell format without converting quantities',()=>{
  for(const [label,display,expected] of [['Container size (mL)','500','500 mL'],['Container size (oz)','500 mL','500 mL'],['Container size','500',500],['Container size (oz)','500','500 oz']]){
   const f=fixture();f.metadata[3]=500;
   const sheet={getLastRow:()=>12,getMaxRows:()=>100,getMaxColumns:()=>26,getSheetId:()=>0,getName:()=> 'Equipment',getRange:row=>({getValues:()=>row===8?[['Length','Prime']]:row===4?[[label,'']]:row===1?f.metadata.map(v=>[v]):f.rows,getDisplayValues:()=>f.metadata.map((v,i)=>[i===3?display:String(v)]),getNumberFormats:()=>f.formats})};
-  const r=runtime({SpreadsheetApp:{openById:()=>({getSheets:()=>[sheet]})}});r.getCase_=()=>({});const out=r.previewSheetImport_({caseId:'mine',spreadsheet:'synthetic-sheet-id'},{});
+  const r=runtime({SpreadsheetApp:{openById:()=>({getSheets:()=>[sheet]})}});r.getCase_=()=>({});const out=r.previewSheetImport_({caseId:'mine',spreadsheet:'synthetic-sheet-id',uiMode:'ADVANCE'},{});
   assert(out.canImport,JSON.stringify(out.errors));assert.equal(out.metadata.containerSize,expected);
  }
 });
@@ -198,7 +203,7 @@ test('the reported US-LAB row passes the real RPC and selected merge with zero s
  const rows=[machine('CUSTOM','Unscrambler',320),row,machine('FILLER','Labeler',300)],meta=['','G','','700 ml',12,'',''];
  const sheet={getLastRow:()=>12,getMaxRows:()=>100,getMaxColumns:()=>25,getSheetId:()=>17,getName:()=> 'Case C',getRange:(r,col,count,width)=>({getValues:()=>r===8?[['',''],['Conveyor Speed (m/min)','Accumulation (s)']]:r===1?meta.map(v=>[v]):r===4?[['Container size','']]:rows,getNumberFormats:()=>rows.map(row=>row.map(()=>'0.00'))})};
  const rpc=runtime({SpreadsheetApp:{openById:()=>({getSheets:()=>[sheet]})}});rpc.getCase_=()=>({});rpc.requireCurrentUser_=()=>({});
- const response=rpc.previewSheetImport({caseId:'mine',spreadsheet:'case-c-sheet-id'});assert(response.ok,JSON.stringify(response));assert.equal(response.importVersion,response.data.contractVersion);
+ const response=rpc.previewSheetImport({caseId:'mine',spreadsheet:'case-c-sheet-id',uiMode:'ADVANCE'});assert(response.ok,JSON.stringify(response));assert.equal(response.importVersion,response.data.contractVersion);
  rpc.window={};for(const file of ['TextResources.gs','SheetImportMerge.html'])vm.runInContext(fs.readFileSync('apps-script/'+file,'utf8').replace(/<\/?script>/g,''),rpc);
  const merge=rpc.window.STSheetImportMerge,data=JSON.parse(JSON.stringify(response.data)),plan=merge.create(data,[],{}),result=merge.build(data,plan,[],{}),belt=result.equipment[1];
  assert.equal(belt.processData.upstream.packageLengthMm,60);assert.equal(belt.processData.upstream.dischargePitchMm,80);assert.equal(belt.processData.accumulation.conveyorSpeedFactorPercent,0);assert.equal(belt.processData.accumulation.speedMode,'MANUAL');

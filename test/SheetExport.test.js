@@ -33,8 +33,26 @@ function fixture(c) {
   const conveyor=['CONVEYOR','Conveyor','N','NA','NA',450,8000,400,90,100,66,90,4,2,95,3,100,102,103,.5,.25,5,7];
   const end=['CASE_PACKER','Packer','N',300,4,500,...Array(17).fill('NA')];
   const source=c.parseEquipmentSheet_(['Site','Line','Format',5.5,24,'2026-10-08','Operator'],[machine,conveyor,end],[]);
-  return {caseId:'mine',caseName:'My case',simulationName:'Simulation B',equipment:JSON.parse(JSON.stringify(source.equipment)),metadata:JSON.parse(JSON.stringify(source.metadata)),theme:{primary:'#123456',secondary:'#778899'}};
+  return {uiMode:'ADVANCE',caseId:'mine',caseName:'My case',simulationName:'Simulation B',equipment:JSON.parse(JSON.stringify(source.equipment)),metadata:JSON.parse(JSON.stringify(source.metadata)),theme:{primary:'#123456',secondary:'#778899'}};
 }
+
+test('outdated browsers cannot silently create or import a spreadsheet',()=>{
+ const h=runtime(),request=fixture(h.c);delete request.uiMode;
+ const output=h.c.exportEquipmentSheet(request);
+ assert.equal(output.ok,false);assert.equal(output.error.code,'SHEET_CLIENT_OUTDATED');
+ assert(!h.calls.some(call=>call[0]==='create'));
+ assert.throws(()=>h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id'},{email:'owner@test'}),error=>error.simulatorError?.code==='SHEET_CLIENT_OUTDATED');
+});
+test('capability preflight and UI contract are aligned',()=>{
+ const h=runtime(),result=h.c.getSheetTemplateCapabilities();
+ assert.equal(result.ok,true);
+ assert.equal(result.data.modeSpecificTabs,true);
+ assert.equal(result.data.sheetTemplateVersion,'sheet-template-20261124-1');
+ assert.equal(result.data.importVersion,'sheet-import-20261123-8');
+ const client=fs.readFileSync('apps-script/ClientCases.html','utf8');
+ assert(client.includes("callServer('getSheetTemplateCapabilities'"));
+ assert(client.includes('response.data.tabNames'));
+});
 
 test('Basic writes two tabs; Advance writes three',()=>{
  const b=runtime(),request={...fixture(b.c),uiMode:'BASIC'};
@@ -115,6 +133,8 @@ test('authenticated export creates one new themed Sheet in Exports with batched 
  assert(calls.some(call=>call[0]==='requireValueInList'&&call[1].join(',')==='Y,N'&&call[2]));
  assert(calls.some(call=>call[0]==='setDataValidation'&&JSON.stringify(call[1])==='[8,3,100,1]'));
  assert.equal(values[3][5],'','Equipment F4 must not display a note');
+ assert(calls.some(call=>call[0]==='setHorizontalAlignment'&&JSON.stringify(call[1])==='[8,3,100,1]'&&call[2]==='center'));
+ assert(calls.some(call=>call[0]==='setColumnWidth'&&call[1]===3&&call[2]===120));
  assert(!calls.some(call=>call[0]==='merge'&&JSON.stringify(call[1])==='[4,6,1,10]'));
 
   assert(calls.some(call=>call[0]==='setDataValidation'&&JSON.stringify(call[1])==='[8,1,100,1]'));
@@ -206,7 +226,7 @@ test('three-tab export previews equipment and filled observations via the same s
  const equipment=mock(values,'Equipment',1),real=mock(actuals,'Real Data',3),catalog=mock(h.writes[1].values,'Products & Formats',2);
  h.c.getCase_=()=>({});h.c.SpreadsheetApp.openById=()=>({getSheets:()=>[equipment,catalog,real],getSheetByName:()=>equipment,getSpreadsheetTimeZone:()=> 'America/Mexico_City'});
  for(const spreadsheet of ['new-sheet-id','https://docs.google.com/spreadsheets/d/new-sheet-id/edit#gid=2','https://docs.google.com/spreadsheets/d/new-sheet-id/edit#gid=3']){
-  const result=h.c.previewSheetImport_({caseId:'mine',spreadsheet},{email:'owner@test'}),r=result.realData.record,e=r.equipment[0];
+  const result=h.c.previewSheetImport_({caseId:'mine',spreadsheet,uiMode:'ADVANCE'},{email:'owner@test'}),r=result.realData.record,e=r.equipment[0];
   assert.equal(result.realData.errors.length,0,JSON.stringify(result.realData.errors));
   assert.equal(result.equipment.length,4);assert.equal(result.source.sheetName,'Equipment');assert.equal(result.source.metadataColumn,'B');assert.equal(result.metadata.bottlesPerCase,24);
   assert.equal(result.source.equipmentRange,'A8:AH107');assert.equal(result.equipment[1].processData.accumulation.restartToFirstPackageSeconds,2);assert.equal(result.equipment[1].processData.upstream.dischargeVelocityMPerMinute,18.816);assert.equal(result.equipment[0].processData.equipment.internalCapacityBottles,31);assert.equal(result.equipment[0].processData.equipment.residenceTimeSeconds,8.25);assert.equal(result.equipment[0].noiseProfile.reliability.mttrMinutes,5);assert.equal(result.materialCatalog.errors.length,0);
@@ -220,7 +240,7 @@ test('three-tab export previews equipment and filled observations via the same s
  const basic=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id',uiMode:'BASIC'},{email:'owner@test'});
  assert.equal(basic.realData,undefined,'Basic ignores Real Data in a three-tab source');
  assert.equal(basic.materialCatalog.errors.length,0);
- const legacy=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id'},{email:'owner@test'});
+ const legacy=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id',uiMode:'ADVANCE'},{email:'owner@test'});
  assert.equal(legacy.equipment[0].processData.equipment.internalCapacityBottles,31);
  assert.equal(legacy.equipment[0].processData.equipment.residenceTimeSeconds,undefined);
  assert(h.calls.some(call=>call[0]==='hideColumns'&&call[1]===30));

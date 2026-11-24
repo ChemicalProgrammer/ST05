@@ -9,7 +9,7 @@ Equipment → Export → Spreadsheet creates a **new native Google Sheet** in th
 | **Basic** | Equipment; Products & Formats | Equipment and Products & Formats only, even if a Real Data sheet or legacy actuals are present |
 | **Advance** | Equipment; Products & Formats; Real Data | All three tabs, when Real Data is available |
 
-The browser passes its **current** Basic/Advance setting in both operations because the interface mode may have been changed locally. For backward compatibility, older clients that do not send a mode retain the previous three-tab behavior.
+The browser sends its **current** Basic/Advance setting with both operations. Requests from outdated clients **without a mode are rejected before creating a spreadsheet or importing data**. This prevents Basic from silently exporting an Advance workbook. Export also checks server capabilities before writing and verifies the returned tab list.
 
 ## Equipment tab
 
@@ -32,4 +32,4 @@ The tab uses marker **st-material-sheet-v3**. Existing v1/v2 templates still imp
 
 Preview imports first and checks the equipment and catalog values without modifying the case. The user reviews selections and confirms Apply. Basic does not expose or import Real Data from the source, even when a three-tab workbook was created in Advance. Advance also supports supported legacy inline Real Data formats.
 
-The import client/server handshake is **sheet-import-20261123-8**. Changes to SheetExportService.gs, SheetImportService.gs, ClientCases.html and SheetImport.html must be deployed together. After updating main, push the apps-script files with clasp; update the Apps Script deployment if appropriate.
+The import client/server contract remains **sheet-import-20261123-8** and the template handshake is **sheet-template-20261124-1**. Publish the full set of Apps Script files together. A `clasp push` updates source code but **does not automatically update a versioned `/exec` web app**. In Apps Script choose **Deploy → Manage deployments → Edit → Version: New version → Deploy**, then reopen the deployment URL and hard-reload the page. The `/dev` test URL follows the latest saved code.

@@ -423,18 +423,42 @@ async function openCase(caseId, initialView) {
       var request={caseId:editor.id,caseName:editor.name,simulationName:simulation.name,equipment:cloneJson(editor.equipment),
         metadata:cloneJson(metadata),
         theme:{primary:colors.getPropertyValue('--accent').trim(),secondary:colors.getPropertyValue('--secondary').trim()},
-        uiMode:document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC'};
+        uiMode:document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC',
+        sheetTemplateVersion:'sheet-template-20261124-1'};
       button.disabled=true;button.dataset.busy='true';
-      callServer('exportEquipmentSheet',[request],function(response){
-        if(!response?.ok||!response.data?.url){
-          var error=response?.error||{code:'SHEET_EXPORT_NO_RESPONSE',message:__ST_TEXT__('client.the_request_failed')};
-          var details=[error.code,...(Array.isArray(error.details)?error.details:[])].filter(Boolean).join('\n');
-          showError(error);
-          STDialog.open({title:__ST_TEXT__('exports.sheet_failed'),message:error.message,details:details,error:true,clearError:STErrors.clearAction('status')});
+      function finish(){button.disabled=false;delete button.dataset.busy;}
+      function exportError(error,title){
+        error=error||{code:'SHEET_EXPORT_FAILED',message:__ST_TEXT__('client.the_request_failed')};
+        showError(error);
+        STDialog.open({title:title||__ST_TEXT__('exports.sheet_failed'),message:error.message,error:true});
+      }
+      // Never generate a workbook with an older server that cannot honor Basic/Advance.
+      callServer('getSheetTemplateCapabilities',[],function(check){
+        if(!check?.ok||check.data?.sheetTemplateVersion!==request.sheetTemplateVersion||check.data?.modeSpecificTabs!==true){
+          finish();
+          exportError({code:'SHEET_CLIENT_OUTDATED',message:'Spreadsheet export requires the latest Apps Script web deployment. Update it, then reopen the app.'});
           return;
         }
-        STDialog.open({title:__ST_TEXT__('exports.sheet_title'),message:__ST_TEXT__('exports.sheet_message'),link:{url:response.data.url,label:__ST_TEXT__('exports.sheet_open')}});
-      },function(){button.disabled=false;delete button.dataset.busy;});
+        button.disabled=true;button.dataset.busy='true';
+        callServer('exportEquipmentSheet',[request],function(response){
+          if(!response?.ok||!response.data?.url){
+            finish();
+            exportError(response?.error);
+            return;
+          }
+          var tabs=request.uiMode==='BASIC'?['Equipment','Products & Formats']:['Equipment','Products & Formats','Real Data'];
+          if(response.data.uiMode!==request.uiMode||JSON.stringify(response.data.tabNames)!==JSON.stringify(tabs)||
+             response.data.sheetTemplateVersion!==request.sheetTemplateVersion){
+            finish();
+            exportError({code:'SHEET_VERSION_MISMATCH',message:'The spreadsheet was created, but its tabs did not match the selected mode. Do not import it. Update the web deployment and export again.'});
+            return;
+          }
+          STDialog.open({title:__ST_TEXT__('exports.sheet_title'),
+            message:__ST_TEXT__('exports.sheet_message')+tabs.join(', '),
+            link:{url:response.data.url,label:__ST_TEXT__('exports.sheet_open')}});
+        },finish);
+      },finish);
+
     }
 
     function applySheetImport(result) {

@@ -4,7 +4,7 @@ var ST_TEXT_RESOURCES = {
   "brand.motion_keys":"Hold a bottle to accumulate; drag away to remove; click for domino; double-click for robot. − / + speed; ← / → direction. Focus here: Space hold/release, Delete remove, R robot, D domino, Esc reset.",
   "exports.sheet_failed":"Google Sheets export failed",
   "exports.sheet_title":"Google Sheets template exported",
-  "exports.sheet_message":"A new spreadsheet was created in your workspace Exports folder, using the import layout. Equipment includes the current line inputs. Products & Formats lists products once and uses Linked product when multiple products are present. Enter the recorder’s name in Equipment!B4 (By). Enter observations and review MTBF/MTTR in Real Data. Enable Real Data observation on import to include those entries. Column F is installed maximum speed (configured speed when no maximum is defined); importing it initializes running speed from F. Use JSON to retain all simulator settings.",
+  "exports.sheet_message":"Spreadsheet created in Exports. Tabs: ",
   "exports.sheet_open":"Open spreadsheet",
   "exports.sheet_invalid":"Review the Equipment inputs before exporting.",
   "assistant.general_history":"Messages are saved with this simulation. No case data is sent while Case context is unchecked.",
@@ -139,7 +139,7 @@ var ST_TEXT_RESOURCES = {
   "reports.subtitle":"Simulation inputs, evidence and analysis",
   "reports.footer":"Generated from the selected simulation",
 
-  "exports.setup_note": "The preview below contains the full case, including saved simulations and results. Export downloads only the complete inputs for the selected simulation: equipment, geometry, reliability, run settings and case metadata. Results and replay are excluded. This JSON can be shared as input context with an AI; it is not a measured performance report. No abbreviated copy is needed unless your AI has a smaller context limit.",
+  "exports.setup_note": "Includes the selected simulation inputs and settings. Results and replay are not included.",
   "exports.setup_json": "Configuration JSON",
   "exports.setup_title": "Line configuration",
   "exports.setup_invalid": "Correct the invalid configuration fields before exporting.",

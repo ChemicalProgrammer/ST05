@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {normalizeFormatCatalog,productVolumeUnits} from '../src/simulation/FormatCatalog.js';
 
-function setup({importVersion='sheet-import-20261123-8',informational=false,rememberedTab=null}={}){
+function setup({importVersion='sheet-import-20261123-8',informational=false,rememberedTab=null,uiMode='basic'}={}){
  const dom=new JSDOM(`<button id="open-sheet-import"></button><dialog id="sheet-import-dialog"><form id="sheet-import-form"><input id="sheet-import-url"><input id="sheet-import-tab"><button id="sheet-import-read"></button></form><div id="sheet-import-preview"></div><p id="sheet-import-error"></p><p id="sheet-import-summary"></p><input type="checkbox" id="sheet-import-ack"><button id="sheet-import-apply"></button><button id="sheet-import-close"></button><button id="sheet-import-cancel"></button></dialog>`,{runScripts:'outside-only'}),w=dom.window;
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  w.eval(fs.readFileSync('apps-script/TextResources.gs','utf8'));w.__ST_TEXT__=key=>w.ST_TEXT_RESOURCES[key]||key;
@@ -16,10 +16,23 @@ function setup({importVersion='sheet-import-20261123-8',informational=false,reme
  w.SimulatorEngine={normalizeFormatCatalog,productVolumeUnits,validateSimulationInput(input){const index=input.case.equipment.findIndex(e=>e.name==='Machine 3');return modelReview&&index>=0?{ok:false,error:{details:[{path:'case.equipment['+index+'].nominalRatePerSecond',reason:'Check installed speed.'}]}}:{ok:true};}};
  w.STSheetCorrections={render(){}};w.STDialog={beginActivity(){return ()=>{};}};w.STErrors={capture(){}};
  w.google={script:{run:{withFailureHandler(){return this;},withSuccessHandler(fn){this.success=fn;return this;},previewSheetImport(request){this.lastRequest=request;this.success({ok:true,data:preview,importVersion});}}}};
+ w.document.documentElement.dataset.uiMode=uiMode;
  const state={activeCase:{id:'test'},activeSimulationId:'sim',requestEpoch:1},snapshot={equipment:[],sourceImport:rememberedTab?{source:{spreadsheetId:'previous-book',sheetName:rememberedTab}}:{}};
  w.STSheetImport(state,{capture:()=>snapshot,apply:()=>true}).init();w.document.getElementById('open-sheet-import').click();w.document.getElementById('sheet-import-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
  return {dom,w,d:w.document,preview,setModelReview(value){modelReview=value;}};
 }
+
+test('Sheet import request includes mode and both contract versions',()=>{
+ for(const mode of ['basic','advance']){
+   const h=setup({uiMode:mode});
+   try{
+     const args=h.w.google.script.run.lastRequest;
+     assert.equal(args.uiMode,mode==='basic'?'BASIC':'ADVANCE');
+     assert.equal(args.clientImportVersion,'sheet-import-20261123-8');
+     assert.equal(args.sheetTemplateVersion,'sheet-template-20261124-1');
+   }finally{h.dom.window.close();}
+ }
+});
 
 test('import cards show accessible right-edge success, warning and error indicators, including skipped rows',()=>{
  const h=setup();try{

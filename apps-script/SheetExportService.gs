@@ -1,8 +1,7 @@
 // Writes a new native Sheet; never changes the source used for import.
 function exportEquipmentSheet_(request, user) {
   if (!request || typeof request !== 'object') throw createSimulatorError_('INVALID_SHEET_REQUEST','Equipment export inputs are required.');
-  var mode=String(request.uiMode||'ADVANCE').trim().toUpperCase();
-  if(!['BASIC','ADVANCE','ADVANCED'].includes(mode))throw createSimulatorError_('INVALID_SHEET_REQUEST','Choose Basic or Advance for spreadsheet export.');
+  var mode=sheetRequestUiMode_(request);
   if(request.caseSnapshot)browserCaseSnapshot_(request,user);else getOwnedCaseFile_(request.caseId, user, true);
   if (!Array.isArray(request.equipment) || request.equipment.length > 1000) {
     throw createSimulatorError_('INVALID_SHEET_REQUEST','Export at most 1,000 equipment rows.');
@@ -88,7 +87,7 @@ function exportEquipmentSheet_(request, user) {
     var types=SpreadsheetApp.newDataValidation().requireValueInList(supportedEquipmentTypes_(),true).setAllowInvalid(false).build();
     sheet.getRange(8,1,slots,1).setDataValidation(types);
     var critical=SpreadsheetApp.newDataValidation().requireValueInList(['Y','N'],true).setAllowInvalid(false).build();
-    sheet.getRange(8,3,slots,1).setDataValidation(critical);
+    sheet.getRange(8,3,slots,1).setDataValidation(critical).setHorizontalAlignment('center').setVerticalAlignment('middle');
     sheet.getRange(7,1,1,width).setBackground(sheetExportTint_(primary)).setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setVerticalAlignment('middle');
     if(data.rows.length){
       sheet.getRange(8,1,data.rows.length,29).setWrap(true);
@@ -98,12 +97,14 @@ function exportEquipmentSheet_(request, user) {
     }
     stage='FREEZE_HEADERS';sheet.setFrozenRows(7);sheet.setFrozenColumns(2);
     stage='SIZE_COLUMNS';
-    sheet.setColumnWidths(1,width,130);sheet.setColumnWidth(2,220);sheet.setColumnWidth(3,170);
+    sheet.setColumnWidths(1,width,130);sheet.setColumnWidth(2,220);sheet.setColumnWidth(3,120);
     sheet.setRowHeights(1,4,32);sheet.setRowHeight(5,16);sheet.setRowHeight(6,28);sheet.setRowHeight(7,68);
     stage='CREATE_FILTER';sheet.getRange(7,1,slots+1,width).createFilter();
     stage='FLUSH';
     SpreadsheetApp.flush();
-    return {spreadsheetId:book.getId(),url:book.getUrl(),sheetName:sheet.getName(),equipmentCount:data.rows.length};
+    return {spreadsheetId:book.getId(),url:book.getUrl(),sheetName:sheet.getName(),equipmentCount:data.rows.length,
+      uiMode:mode,tabNames:mode==='BASIC'?['Equipment','Products & Formats']:['Equipment','Products & Formats','Real Data'],
+      sheetTemplateVersion:sheetTemplateVersion_()};
   } catch (error) {
     var details=['Exporter: equipment-actuals-catalog-v3','Stage: '+stage,'Service: '+safeSheetErrorDetail_(error)];
     // Only the new export belongs to this operation; clean up an incomplete export.

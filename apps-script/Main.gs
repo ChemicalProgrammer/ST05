@@ -150,6 +150,13 @@ function previewSheetImport(request) {
   return response;
 }
 
+function getSheetTemplateCapabilities() {
+  return executeServerAction_(function(){
+    return {sheetTemplateVersion:sheetTemplateVersion_(),importVersion:sheetImportContractVersion_(),
+      uiModes:['BASIC','ADVANCE'],modeSpecificTabs:true};
+  });
+}
+
 function exportEquipmentSheet(request) {
   return executeServerAction_(function(user) { return exportEquipmentSheet_(request, user); });
 }

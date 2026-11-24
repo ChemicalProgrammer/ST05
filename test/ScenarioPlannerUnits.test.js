@@ -106,3 +106,19 @@ test('sensor fallback requires an existing valid position and respects the physi
     assert(!planScenarios(simulation).candidates.some(item=>item.kind==='SENSOR_POSITION'&&item.equipmentId===belt.id));
   }
 });
+
+test('actual case-passage pulse creates a zero CAPEX debounce target even with incomplete CAT speed inputs',()=>{
+  const sim=fixture(),original=structuredClone(sim),plan=planScenarios(sim);
+  const proposal=plan.candidates.find(p=>p.kind==='SENSOR_DEBOUNCE'&&p.equipmentId==='pac-pal');
+  assert(proposal);assert.equal(proposal.canApply,true,proposal.disabledReason);assert.equal(proposal.tier,'ZERO');
+  assert.equal(proposal.evidence.targetBasis,'ACTUAL_PACKAGE_PASS_TIME');
+  assert(Math.abs(proposal.evidence.pulseSeconds-310/541.5)<1e-10);
+  assert.equal(proposal.evidence.engineeringReviewRequired,true);
+  assert.equal(proposal.changes[0].path,'processData.accumulation.blockedTimeDelaySeconds');
+  assert.equal(proposal.changes[0].before,.5);assert.equal(proposal.changes[0].after,.8);
+  const corrected=applyScenarioChanges(sim,proposal.changes);
+  assert.equal(corrected.equipment.find(e=>e.id==='pac-pal').processData.accumulation.blockedTimeDelaySeconds,.8);
+  assert.deepEqual(sim,original);
+  const remaining=planScenarios(corrected).candidates.find(p=>p.kind==='SENSOR_DEBOUNCE'&&p.equipmentId==='pac-pal'&&p.evidence.targetBasis==='ACTUAL_PACKAGE_PASS_TIME');
+  assert.equal(remaining,undefined,'A timer already longer than the isolated package passage is not diagnosed as this conflict.');
+});

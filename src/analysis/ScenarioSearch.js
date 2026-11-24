@@ -12,18 +12,36 @@ export function scenarioSearchSettings(raw) {
 export function scenarioSearchSettingsSignature(raw) {
   return JSON.stringify(['SCENARIO_SEARCH_SPEED_V1',scenarioSearchSettings(raw)]);
 }
-export function scenarioSearchProfile(level,settings) {
+export function scenarioSearchProfile(level,settings,context) {
   const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
   // Execution budgets are independent of factor depth and statistical acceptance.
   // Balanced deliberately preserves the existing search, including its adaptive budget.
-  switch(scenarioSearchSettings(settings).speedProfile){
-    case 'FAST':return {...profile,explorationSeconds:Math.min(300,profile.explorationSeconds),confirmationSeconds:900,maxCandidates:Math.min(48,profile.maxCandidates),passes:1,fullHorizonFinalists:1,hardCandidateLimit:true};
-    case 'THOROUGH':return {...profile,explorationSeconds:Math.min(1800,profile.explorationSeconds*2),confirmationSeconds:3600,maxCandidates:profile.maxCandidates*2,passes:profile.passes+1,fullHorizonFinalists:Math.min(4,profile.fullHorizonFinalists+1)};
-    default:return profile;
+  let selected;switch(scenarioSearchSettings(settings).speedProfile){
+    case 'FAST':selected={...profile,explorationSeconds:Math.min(300,profile.explorationSeconds),confirmationSeconds:900,maxCandidates:Math.min(48,profile.maxCandidates),passes:1,fullHorizonFinalists:1,hardCandidateLimit:true};break;
+    case 'THOROUGH':selected={...profile,explorationSeconds:Math.min(1800,profile.explorationSeconds*2),confirmationSeconds:3600,maxCandidates:profile.maxCandidates*2,passes:profile.passes+1,fullHorizonFinalists:Math.min(4,profile.fullHorizonFinalists+1)};break;
+    default:selected=profile;
   }
+  const run=context?.run,equipment=context?.equipment;
+  if(!run||run.reliabilityEnabled===false||!Array.isArray(equipment))return selected;
+  const categories=run.reliabilityCategories||{};
+  const mtbf=equipment.filter(e=>e.type!=='CONVEYOR').flatMap(e=>{
+    const split=e.processData?.equipment?.stopInputs;
+    if(split&&['minor','major'].some(k=>split[k]))return ['minor','major'].filter(k=>categories[k]!==false&&split[k]?.mttrMinutes>0).map(k=>split[k]?.mtbfMinutes);
+    return categories.general!==false&&e.noiseProfile?.reliability?.mttrMinutes>0?[e.noiseProfile.reliability.mtbfMinutes]:[];
+  }).filter(v=>Number.isFinite(v)&&v>0).sort((a,b)=>a-b);
+  if(!mtbf.length)return selected;
+  const median=mtbf.length%2?mtbf[(mtbf.length-1)/2]:(mtbf[mtbf.length/2-1]+mtbf[mtbf.length/2])/2;
+  const full=Number(run.durationSeconds);
+  if(!(full>selected.explorationSeconds))return selected;
+  const floor=Math.min(1800,Math.max(900,Math.ceil(2*median*60/300)*300));
+  const exploration=Math.min(full,Math.max(selected.explorationSeconds,floor));
+  const confirmation=Math.min(full,Math.max(selected.confirmationSeconds,Math.min(3600,2*exploration)));
+  return {...selected,explorationSeconds:exploration,confirmationSeconds:confirmation,
+    fullHorizonFinalists:Math.max(2,selected.fullHorizonFinalists),
+    horizonBasis:'RELIABILITY_AWARE_SCREENING',medianMtbfMinutes:median};
 }
-export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings) {
-  const profile=scenarioSearchProfile(level,settings);
+export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings,equipment) {
+  const profile=scenarioSearchProfile(level,settings,{run,equipment});
   // Independent What-If horizons; replay configuration and scheduled commands stay intact.
   const copy={...run,durationMode:'FIXED',durationSeconds:confirmation==='validation'?Math.max(1800,Number(run.durationSeconds)||0):confirmation?profile.confirmationSeconds:profile.explorationSeconds,rounds};
   delete copy.shiftSeconds;delete copy.shiftHours;delete copy.shiftCount;
@@ -36,9 +54,9 @@ export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings
 // The intermediate screen selects where to spend simulation time; it never
 // certifies a gain. Selection and independent confirmation retain the full day.
 export function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
-  const settings=scenarioSearchSettings(options.searchSettings),profile=scenarioSearchProfile(level,settings),fullRun=scenarioSearchRun(run,level,'validation',3,settings);
+  const settings=scenarioSearchSettings(options.searchSettings),profile=scenarioSearchProfile(level,settings,{run,equipment:options.equipment}),fullRun=scenarioSearchRun(run,level,'validation',3,settings,options.equipment);
   const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
-  const screenRun=scenarioSearchRun(run,level,true,3,settings);
+  const screenRun=scenarioSearchRun(run,level,true,3,settings,options.equipment);
   // A short prefix does not represent an entire shift/calendar/product program.
   // Keep every finalist when the run has explicit changes over time.
   const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);

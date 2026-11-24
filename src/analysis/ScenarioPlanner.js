@@ -224,13 +224,13 @@ export function diagnoseScenarioLosses(simulation){
     stopDataCoverage.recordedCategoryDurations=[minorFailureSeconds,majorFailureSeconds,generalFailureSeconds].every(value=>value!==null);
     stopDataCoverage.recordedCategoryCounts=[minorFailureCount,majorFailureCount,generalFailureCount].every(value=>value!==null);
     stopDataCoverage.classSpecificAnalysisAvailable=stopDataCoverage.classSpecificAnalysisAvailable&&stopDataCoverage.recordedCategoryDurations;
-    const causes=[['FAILURE',failureSeconds],['MICROSTOP',microStopSeconds],['STARVATION',starvedSeconds],['BLOCKING',blockedSeconds]].filter(x=>x[1]!==null).sort((a,b)=>b[1]-a[1]);
+    const causes=[['FAILURE',failureSeconds],['MICROSTOP',microStopSeconds],['STARVATION',starvedSeconds],['BLOCKING',blockedSeconds],['WAITING_PRIME',read('waitingForPrimeSeconds')],['BACKUP_STOP',read('backupStopSeconds')]].filter(x=>x[1]!==null).sort((a,b)=>b[1]-a[1]);
     return {equipmentId:e.id,name:e.name,isReference:e.id===referenceId,failureSeconds,microStopSeconds,ownStopSeconds,starvedSeconds,blockedSeconds,
       minorFailureSeconds,majorFailureSeconds,generalFailureSeconds,minorFailureCount,majorFailureCount,generalFailureCount,stopDataCoverage,
       failureCount,microStopCount,countBasis:rounds>1?'MEAN_PER_REPLICATION':'RECORDED_RUN',
       failureCategories:['general','minor','major'].map(kind=>({kind:kind.toUpperCase(),count:read(kind+'FailureCount'),seconds:read(kind+'FailureSeconds')})),
       reliabilityExposureSeconds:read('reliabilityExposureSeconds'),
-      waitingForPrimeSeconds:read('waitingForPrimeSeconds'),dominantLoss:causes[0]?.[1]>0?causes[0][0]:'NONE',
+      waitingForPrimeSeconds:read('waitingForPrimeSeconds'),backupStopSeconds:read('backupStopSeconds'),dominantLoss:causes[0]?.[1]>0?causes[0][0]:'NONE',
       ownStopPercent:ownStopSeconds===null?null:100*ownStopSeconds/durationSeconds,
       starvationPercent:starvedSeconds===null?null:100*starvedSeconds/durationSeconds,
       blockingPercent:blockedSeconds===null?null:100*blockedSeconds/durationSeconds,
@@ -241,10 +241,14 @@ export function diagnoseScenarioLosses(simulation){
   const rankings={ownStopDuration:rank('ownStopSeconds','DURATION_SECONDS'),failureDuration:rank('failureSeconds','DURATION_SECONDS'),microStopDuration:rank('microStopSeconds','DURATION_SECONDS'),
     minorFailureDuration:rank('minorFailureSeconds','DURATION_SECONDS'),majorFailureDuration:rank('majorFailureSeconds','DURATION_SECONDS'),generalFailureDuration:rank('generalFailureSeconds','DURATION_SECONDS'),
     minorFailureFrequency:rank('minorFailureCount','OBSERVED_EVENT_COUNT'),majorFailureFrequency:rank('majorFailureCount','OBSERVED_EVENT_COUNT'),generalFailureFrequency:rank('generalFailureCount','OBSERVED_EVENT_COUNT'),
-    starvationDuration:rank('starvedSeconds','DURATION_SECONDS'),blockingDuration:rank('blockedSeconds','DURATION_SECONDS'),failureFrequency:rank('failureCount','OBSERVED_EVENT_COUNT'),microStopFrequency:rank('microStopCount','OBSERVED_EVENT_COUNT')};
+    starvationDuration:rank('starvedSeconds','DURATION_SECONDS'),blockingDuration:rank('blockedSeconds','DURATION_SECONDS'),waitingForPrimeDuration:rank('waitingForPrimeSeconds','DURATION_SECONDS'),backupStopDuration:rank('backupStopSeconds','DURATION_SECONDS'),failureFrequency:rank('failureCount','OBSERVED_EVENT_COUNT'),microStopFrequency:rank('microStopCount','OBSERVED_EVENT_COUNT')};
   const opportunities=[];
   for(const row of rows){
     const base={equipmentId:row.equipmentId,name:row.name,evidenceLevel:'HYPOTHESIS',causalStatus:'NOT_ESTABLISHED'};
+    if(row.waitingForPrimeSeconds>0||row.backupStopSeconds>0)opportunities.push({...base,kind:'SENSOR_CONTROL_AND_FLOW_RECOVERY',
+      observed:{waitingForPrimeSeconds:row.waitingForPrimeSeconds,backupStopSeconds:row.backupStopSeconds},
+      mechanismsToTest:['NORMAL_PACKAGE_PULSE','BACKUP_DEBOUNCE','PRIME_RESERVE','FLOW_BALANCE'],
+      interpretation:'Waiting for Prime and Back-up can be propagated control losses. Check actual passage time, buffer geometry and matched simulation sensitivity before attributing the loss.'});
     if(row.failureSeconds>0)opportunities.push({...base,kind:'INTERNAL_STOP_REDUCTION',observed:{failureSeconds:row.failureSeconds,failureCount:row.failureCount,
       minorFailureSeconds:row.minorFailureSeconds,majorFailureSeconds:row.majorFailureSeconds,generalFailureSeconds:row.generalFailureSeconds},
       targetScope:row.stopDataCoverage.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED',
@@ -276,7 +280,7 @@ function scenarioLossEvidence(simulation,diagnosis,equipment,kind){
   const ids=equipment.type==='CONVEYOR'?[simulation.equipment[index-1]?.id,simulation.equipment[index+1]?.id]:[equipment.id];
   const local=diagnosis.equipment.filter(r=>ids.includes(r.equipmentId)),reference=diagnosis.equipment.find(r=>r.isReference);
   const reliabilityTarget=kind==='RELIABILITY_INTERVENTION';
-  const seconds=local.reduce((sum,r)=>sum+(reliabilityTarget?(r.failureSeconds||0):(r.minorFailureSeconds||0)+(r.microStopSeconds||0))+(r.starvedSeconds||0)+(r.blockedSeconds||0),0);
+  const seconds=local.reduce((sum,r)=>sum+(reliabilityTarget?(r.failureSeconds||0):(r.minorFailureSeconds||0)+(r.microStopSeconds||0))+(r.starvedSeconds||0)+(r.blockedSeconds||0)+(reliabilityTarget?0:(r.waitingForPrimeSeconds||0)+(r.backupStopSeconds||0)),0);
   const direction=index<referenceIndex?'UPSTREAM':index>referenceIndex?'DOWNSTREAM':'REFERENCE';
   const referenceLoss=direction==='UPSTREAM'?reference?.starvedSeconds:direction==='DOWNSTREAM'?reference?.blockedSeconds:0;
   const bonus=Math.min(30,seconds/diagnosis.durationSeconds*20+(referenceLoss||0)/diagnosis.durationSeconds*20);
@@ -320,6 +324,30 @@ export function planScenarios(simulation){
   }
   audit.forEach(item=>{
     const e=simulation.equipment.find(x=>x.id===item.equipmentId),engineering=item.engineering;
+    const zone=resolveAccumulationZoneDefinition(engineeringEquipment,simulation.equipment.indexOf(e)).definition;
+    // An isolated package must not be mistaken for a continuously blocked
+    // photoeye. Use the actual resolved belt velocity and package length,
+    // independently of the completeness of the worksheet engineering audit.
+    const delayPath='processData.accumulation.blockedTimeDelaySeconds';
+    const blockedDelay=scenarioGet(e,delayPath);
+    const normalPulse=zone?.productLengthMm>0&&zone?.conveyorSpeedMmPerSecond>0
+      ?zone.productLengthMm/zone.conveyorSpeedMmPerSecond:null;
+    const pulseConflict=Number.isFinite(normalPulse)&&Number.isFinite(blockedDelay)&&blockedDelay>=0&&
+      Number.isFinite(zone?.backupSensorPositionMm)&&zone.backupSensorPositionMm>=0&&
+      zone.backupSensorPositionMm<=zone.usableLengthMm&&blockedDelay<=normalPulse+1e-9;
+    if(pulseConflict){
+      // A small explicit screening margin, not a validated PLC setting.
+      const target=Math.ceil((normalPulse+.15)*10)/10;
+      const measuredZone=Object.values(result?.accumulationZoneMetrics||{}).find(z=>z.ownerEquipmentId===e.id);
+      if(target<=SCENARIO_FIELDS[delayPath][1])add('SENSOR_DEBOUNCE','ZERO',e,[scenarioChange(e,delayPath,target)],{
+        targetBasis:'ACTUAL_PACKAGE_PASS_TIME',pulseSeconds:normalPulse,blockedDelaySeconds:blockedDelay,
+        proposedDelaySeconds:target,screeningMarginSeconds:.15,actualBeltSpeedMmPerSecond:zone.conveyorSpeedMmPerSecond,
+        packageLengthMm:zone.productLengthMm,backupTriggerCount:measuredZone?.backupTriggerCount??null,
+        backupPassedUnits:measuredZone?.backupPassedUnits??null,counterBasis:'REPRESENTATIVE_ROUND_IF_AVAILABLE',
+        engineeringReviewRequired:true,interpretation:'Hypothesis: normal package pulses may trigger Back-up. Confirm PLC response, installed sensor location, stopping distance and overflow reserve before changing a plant setting.'
+      },110,'STATIC');
+      checks.push({equipmentId:e.id,rule:'ACTUAL_SENSOR_PULSE',status:'REVIEW',pulseSeconds:normalPulse,blockedDelaySeconds:blockedDelay,targetSeconds:target});
+    }
     if(!engineering){checks.push({equipmentId:e.id,rule:'GEOMETRY',status:'NOT_EVALUATED'});return;}
     const input=engineering.input,c=engineering.calculated;
     checks.push(...engineering.audit.goals.map(g=>({equipmentId:e.id,rule:g.id,status:g.status})));
@@ -328,13 +356,12 @@ export function planScenarios(simulation){
     if(e.processData?.accumulation?.speedMode!=='MANUAL'&&Number.isFinite(speed)&&speed>=0&&Math.abs(speed-input.conveyorSpeedFactorPercent)>=.25){
       add('SPEED_BALANCE','ZERO',e,[scenarioChange(e,'processData.accumulation.conveyorSpeedFactorPercent',Number(speed.toFixed(2)))],{recommendedSpeedMmPerSecond:c.recommendedInfeedConveyorSpeedMmPerSecond},64,'STATIC');
     }
-    if(scenarioGoal(engineering,'SENSOR_DEBOUNCE')==='WARNING'&&Number.isFinite(c.packagePassSensorSeconds)&&Number.isFinite(c.sensorClearGapSeconds)){
+    if(!pulseConflict&&scenarioGoal(engineering,'SENSOR_DEBOUNCE')==='WARNING'&&Number.isFinite(c.packagePassSensorSeconds)&&Number.isFinite(c.sensorClearGapSeconds)){
       const greater=v=>Math.ceil((v+.01)*100)/100;
       add('SENSOR_DEBOUNCE','ZERO',e,[scenarioChange(e,'processData.accumulation.blockedTimeDelaySeconds',Math.max(input.blockedTimeDelaySeconds,greater(c.packagePassSensorSeconds))),scenarioChange(e,'processData.accumulation.clearTimeDelaySeconds',Math.max(input.clearTimeDelaySeconds,greater(c.sensorClearGapSeconds)))],{pulseSeconds:c.packagePassSensorSeconds,gapSeconds:c.sensorClearGapSeconds},82,'STATIC');
     }
     // Search existing sensor locations on every supported conveyor, even when
     // worksheet targets pass. These are hypotheses, not promised gains.
-    const zone=resolveAccumulationZoneDefinition(engineeringEquipment,simulation.equipment.indexOf(e)).definition;
     if(zone?.usableLengthMm>0){
       const bound=Math.min(zone.usableLengthMm,zone.primeSensorPositionMm,zone.backupRestartPositionMm??Infinity),current=e.processData?.accumulation?.backupSensorPositionMm;
       const engineeringTargetAvailable=Number.isFinite(c.recommendedBackupSensorPositionMm);

@@ -80,10 +80,11 @@
             <button id="rename-simulation" aria-label="<?= __ST_TEXT__('simulation.rename') ?>" title="<?= __ST_TEXT__('simulation.rename') ?>" type="button" class="secondary icon-button" data-icon="edit"></button><button id="clone-case" aria-label="<?= __ST_TEXT__('view.clone_simulation') ?>" title="<?= __ST_TEXT__('view.clone_simulation') ?>" data-icon="copy" class="secondary icon-button" type="button"></button><button id="delete-simulation" type="button" class="secondary icon-button" data-icon="trash" aria-label="<?= __ST_TEXT__('simulation.delete') ?>" title="<?= __ST_TEXT__('simulation.delete') ?>"></button>
           </div>
         </section>
+        <button id="save-case" class="secondary icon-button hidden" type="button" data-icon="save" aria-label="Save case" title="Save case"></button>
         <button id="toggle-gemini" class="secondary icon-button hidden" aria-label="<?= __ST_TEXT__('assistant.gemini') ?>" title="<?= __ST_TEXT__('assistant.gemini') ?>" data-icon="gemini" aria-controls="gemini-panel" aria-expanded="false"></button>
         </div>
         <span id="header-errors" class="hidden" role="status" aria-live="polite"><button id="header-error-button" type="button" class="ghost icon-button error-details-trigger" data-icon="error" aria-haspopup="dialog" aria-label="<?= __ST_TEXT__('errors.view_details') ?>" title="<?= __ST_TEXT__('errors.view_details') ?>"></button><span class="sr-only"><?= __ST_TEXT__('errors.title') ?></span></span>
-        <button id="save-case" class="secondary icon-button hidden" type="button" data-icon="save" aria-label="Save case" title="Save case"></button>
+        
         <span id="autosave-indicator" class="sr-only hidden" role="status"><span id="autosave-status" data-error-notice="save" data-error-title="Case saving error" class="sr-only"></span></span><button id="retry-autosave" class="ghost icon-button hidden" data-icon="refresh" aria-label="<?= __ST_TEXT__('autosave.retry') ?>" title="<?= __ST_TEXT__('autosave.retry') ?>"></button>
         <button id="pin-header" class="ghost icon-button" type="button" data-icon="pin" aria-label="Unpin header" title="Unpin header" aria-pressed="true"></button>
       <div id="request-progress" class="request-progress hidden" role="status" aria-label="<?= __ST_TEXT__('view.loading') ?>"><span></span></div>

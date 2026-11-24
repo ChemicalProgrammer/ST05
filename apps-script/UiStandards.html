@@ -1320,11 +1320,15 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
 
 
 /* Título y descripción forman una columna compacta. La barra se centra
-   verticalmente respecto al bloque completo, también si no hay descripción. */
+   verticalmente respecto al bloque completo, también si no hay descripción.
+   Keep the gradient on the shared header (not on its content or toolbar). */
 .st-subsection > .st-subsection-header {
   display:grid;grid-template-columns:minmax(0,1fr) max-content;
   column-gap:var(--space-3);row-gap:var(--subsection-description-gap);
   align-items:center;
+  background-color:var(--surface);
+  background-image:var(--subsection-header-gradient);
+  border-radius:var(--radius-sm) var(--radius-sm) 0 0;
 }
 .st-subsection > .st-subsection-header > .subsection-heading-copy {
   display:flex;flex-direction:column;align-items:stretch;align-self:center;

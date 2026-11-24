@@ -34,6 +34,9 @@
   --subsection-description-gap: var(--space-1);
   --subsection-marker-size: calc(var(--font-card) * .45);
   --subsection-text-inset: calc(var(--subsection-marker-size) + var(--space-1) + var(--space-2));
+  /* One subtle secondary-tinted header, shared by native and classic Subsections. */
+  --subsection-header-shade: color-mix(in srgb, var(--secondary) 12%, var(--surface));
+  --subsection-header-gradient: linear-gradient(180deg, var(--subsection-header-shade) 0%, var(--surface) 100%);
   --z-header: 10; --z-sidebar: 20; --z-overlay: 30; --z-toast: 40;
   --duration-fast: 120ms; --duration-normal: 180ms; --ease: cubic-bezier(.2,.8,.2,1);
   --shadow: none; --shadow-dialog: 0 16px 48px #10182826;

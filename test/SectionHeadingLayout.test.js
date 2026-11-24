@@ -195,6 +195,35 @@ test('shared descriptions stay readable and toolbars stay on one row',()=>{
 });
 
 
+test('canonical Subsection headers use the same subtle secondary gradient in every mode and theme',()=>{
+  assert.equal(value(root,'--subsection-header-shade'), 'color-mix(in srgb, var(--secondary) 12%, var(--surface))');
+  assert.equal(value(root,'--subsection-header-gradient'),
+    'linear-gradient(180deg, var(--subsection-header-shade) 0%, var(--surface) 100%)');
+  const headers=[...document.querySelectorAll('.st-subsection > .st-subsection-header')];
+  assert(headers.length>=20,'Expected multiple reusable Subsection headers');
+  const modes=['basic','advance'],styles=['classic','elegant'],themes=['light','dark'];
+  const previous={ui:root.dataset.uiMode,style:root.dataset.visualStyle,theme:root.dataset.theme};
+  try{
+    for(const mode of modes)for(const style of styles)for(const theme of themes){
+      root.dataset.uiMode=mode;root.dataset.visualStyle=style;root.dataset.theme=theme;
+      for(const header of headers){
+        assert.equal(value(header,'background-image'),'var(--subsection-header-gradient)');
+        assert.equal(value(header,'background-color'),'var(--surface)');
+        assert.equal(value(header,'border-radius'),'var(--radius-sm) var(--radius-sm) 0 0');
+        // The existing border/toolbar/grid mechanics remain unchanged.
+        assert.equal(value(header,'display'),'grid');
+      }
+    }
+  }finally{
+    for(const [attribute,previousValue] of [
+      ['data-ui-mode',previous.ui],['data-visual-style',previous.style],['data-theme',previous.theme]
+    ]){
+      if(previousValue===undefined)root.removeAttribute(attribute);
+      else root.setAttribute(attribute,previousValue);
+    }
+  }
+});
+
 test('canonical grids center wrapped tools beside the entire title and description column',()=>{
   for(const header of document.querySelectorAll('.st-subsection-header')){
     const copy=header.querySelector(':scope > .subsection-heading-copy');

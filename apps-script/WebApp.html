@@ -498,11 +498,11 @@
     <dialog id="settings-dialog" aria-labelledby="settings-title">
       <header class="dialog-heading"><h2 id="settings-title"><?= __ST_TEXT__('shell.settings') ?></h2><button id="settings-close" class="ghost icon-button" data-icon="x" aria-label="<?= __ST_TEXT__('view.close_settings') ?>" title="<?= __ST_TEXT__('view.close_settings_esc') ?>"></button></header>
       <nav class="settings-tabs" role="tablist" aria-label="Settings categories">
-        <button id="settings-tab-case" type="button" role="tab" data-settings-tab="case" aria-controls="settings-page-case" aria-selected="true">Case</button>
-        <button id="settings-tab-appearance" type="button" role="tab" data-settings-tab="appearance" aria-controls="settings-page-appearance" aria-selected="false" tabindex="-1">Appearance</button>
-        <button id="settings-tab-simulation" type="button" role="tab" data-settings-tab="simulation" aria-controls="settings-page-simulation" aria-selected="false" tabindex="-1">Simulation</button>
-        <button id="settings-tab-gemini" type="button" role="tab" data-settings-tab="gemini" aria-controls="settings-page-gemini" aria-selected="false" tabindex="-1">Gemini</button>
-        <button id="settings-tab-storage" type="button" role="tab" data-settings-tab="storage" aria-controls="settings-page-storage" aria-selected="false" tabindex="-1">Storage</button>
+        <button id="settings-tab-case" type="button" role="tab" class="app-section-tab" data-icon="folder" data-settings-tab="case" aria-controls="settings-page-case" aria-selected="true">Case</button>
+        <button id="settings-tab-appearance" type="button" role="tab" class="app-section-tab" data-icon="sun" data-settings-tab="appearance" aria-controls="settings-page-appearance" aria-selected="false" tabindex="-1">Appearance</button>
+        <button id="settings-tab-simulation" type="button" role="tab" class="app-section-tab" data-icon="play" data-settings-tab="simulation" aria-controls="settings-page-simulation" aria-selected="false" tabindex="-1">Simulation</button>
+        <button id="settings-tab-gemini" type="button" role="tab" class="app-section-tab" data-icon="gemini" data-settings-tab="gemini" aria-controls="settings-page-gemini" aria-selected="false" tabindex="-1">Gemini</button>
+        <button id="settings-tab-storage" type="button" role="tab" class="app-section-tab" data-icon="save" data-settings-tab="storage" aria-controls="settings-page-storage" aria-selected="false" tabindex="-1">Storage</button>
       </nav>
       <div class="dialog-body">
         <div id="settings-page-case" role="tabpanel" aria-labelledby="settings-tab-case">
@@ -579,8 +579,8 @@
     <dialog id="theme-color-dialog" aria-labelledby="theme-color-title">
       <header class="dialog-heading"><h2 id="theme-color-title">Theme colors</h2><button id="theme-color-close" class="ghost icon-button" type="button" data-icon="x" aria-label="Close color picker"></button></header>
       <div class="theme-color-tabs settings-tabs" role="tablist" aria-label="Color role">
-        <button id="theme-color-primary-tab" type="button" role="tab" data-color-target="primary" aria-controls="theme-color-primary" aria-selected="true">Primary color</button>
-        <button id="theme-color-secondary-tab" type="button" role="tab" data-color-target="secondary" aria-controls="theme-color-secondary" aria-selected="false" tabindex="-1">Secondary color</button>
+        <button id="theme-color-primary-tab" type="button" role="tab" class="app-section-tab" data-icon="palette" data-color-target="primary" aria-controls="theme-color-primary" aria-selected="true">Primary color</button>
+        <button id="theme-color-secondary-tab" type="button" role="tab" class="app-section-tab" data-icon="palette" data-color-target="secondary" aria-controls="theme-color-secondary" aria-selected="false" tabindex="-1">Secondary color</button>
       </div>
       <div class="dialog-body">
         <p id="theme-color-description">Primary colors apply to actions and selections.</p>

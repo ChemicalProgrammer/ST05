@@ -26,7 +26,7 @@ window.STBasicMode=(function(){
     panel=document.createElement('aside');panel.id='basic-conveyor-panel';panel.setAttribute('aria-label',__ST_TEXT__('basic.conveyor_configuration'));
     var heading=document.createElement('div');heading.className='basic-conveyor-heading';panel.appendChild(heading);title=document.createElement('h3');heading.appendChild(title);layout.appendChild(panel);
     conveyorTabs=document.createElement('div');conveyorTabs.className='button-row basic-conveyor-tabs';
-    ['inputs','results'].forEach(function(view){var b=button(view==='inputs'?'Inputs':'Results','',function(){conveyorView=view;refreshData();});b.dataset.conveyorView=view;conveyorTabs.appendChild(b);});heading.appendChild(conveyorTabs);
+    ['inputs','results'].forEach(function(view){var b=button(view==='inputs'?'Inputs':'Results',view==='inputs'?'settings':'chart',function(){conveyorView=view;refreshData();});b.classList.add('app-section-tab');STIcons.button(b,b.dataset.icon);b.dataset.conveyorView=view;conveyorTabs.appendChild(b);});heading.appendChild(conveyorTabs);
     conveyorSummary=document.createElement('section');conveyorSummary.id='basic-conveyor-summary';panel.appendChild(conveyorSummary);
     var optionsSection=STSubsection.create({id:'basic-run-options',titleId:'basic-run-options-title',contentId:'basic-efficiencies',
       title:__ST_TEXT__('ui.simulation_settings'),description:'Review the current line efficiency and simulation settings.',native:false});

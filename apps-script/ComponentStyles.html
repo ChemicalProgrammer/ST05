@@ -228,15 +228,24 @@ button { --on-accent:#fff; }
     transition:none!important;transform:none!important;
   }
 }
-/* Pestaña de navegación principal: nombre reutilizable sin alterar acciones. */
-.app-section-tab {
-  color:var(--muted);background:transparent;border-color:transparent;
+/* One icon-and-label tab for page navigation and dialogs. Layout and
+   selection semantics stay with the owning navigation component. */
+button.app-section-tab {
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  min-height:32px;padding:var(--space-1) var(--space-3);
+  border:var(--border-width) solid transparent;border-radius:var(--radius-sm);
+  color:var(--muted);background:transparent;box-shadow:none;
+  font-size:var(--font-button);font-weight:var(--weight-medium);white-space:nowrap;
 }
-.app-section-tab[aria-current=page] {
-  color:var(--selected-text);background:var(--selected);
-  border-bottom-color:var(--accent);
+button.app-section-tab .icon {flex:none;width:var(--icon-size);height:var(--icon-size);color:currentColor;stroke:currentColor;}
+button.app-section-tab:hover:not(:disabled) {background:var(--surface-hover);color:var(--ink);border-color:transparent;}
+button.app-section-tab:is([aria-current=page],[aria-selected=true],[aria-pressed=true]):not(:disabled) {
+  color:var(--selected-text);background:var(--selected);border-color:transparent;
+  box-shadow:inset 0 -2px 0 var(--accent);
 }
-.app-section-tab:focus-visible {outline:var(--focus-width) solid var(--accent);outline-offset:2px;}
+button.app-section-tab:disabled {color:var(--disabled);background:transparent;border-color:transparent;box-shadow:none;}
+button.app-section-tab:focus-visible {outline:var(--focus-width) solid var(--accent);outline-offset:2px;}
+button.app-section-tab[hidden],button.app-section-tab.hidden {display:none!important;}
 /* Barra de iconos: botones homogéneos en Header y menú Basic. */
 :is(.topbar,#basic-case-actions) button.icon-button {
   width:var(--control-height);height:var(--control-height);

@@ -13,7 +13,6 @@ html[data-ui-mode=basic] .app-shell.case-open.assistant-open { padding-right:0; 
 #basic-section-row { display:flex; align-items:center; gap:var(--space-3); order:3; flex-basis:100%; min-width:0; }
 #basic-navigation { display:flex; gap:var(--space-1); flex-wrap:wrap; flex:1; min-width:0; }
 #basic-section-row > .header-case-actions { flex-shrink:0; margin-left:auto; }
-#basic-navigation [aria-current=page] { background:var(--selected); color:var(--selected-text); }
 #basic-case-actions { display:flex; align-items:center; }
 /* Explanatory prose follows one rule in Basic and Advance. Subsection copy,
    live status and actionable errors remain part of their controls. */
@@ -92,7 +91,6 @@ html[data-equipment-layout=split] .basic-buffer { display:block; text-align:righ
 html[data-equipment-layout=split] .basic-availability { color:var(--accent); }
 html[data-ui-mode=basic] #basic-efficiencies { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); }
 html[data-ui-mode=basic] #basic-efficiencies > div { border:var(--border-width) solid var(--line); border-radius:var(--radius-md); padding:var(--space-3); flex-direction:column; align-items:start; }
-html[data-equipment-layout=split] .basic-conveyor-tabs button[aria-pressed=true] { background:var(--selected); color:var(--selected-text); }
 html[data-ui-mode=basic][data-basic-view=conveyors] #basic-efficiencies { display:none; }
 html[data-equipment-layout=split][data-basic-view=conveyors] #equipment-list { display:grid; grid-template-columns:minmax(0,1fr); }
 

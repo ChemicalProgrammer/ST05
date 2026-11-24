@@ -415,6 +415,8 @@ function normaliseInput(input) {
   return {
     targetOverspeedPercent: numberOrUndefined(input.targetOverspeedPercent),
     targetPopulationPercent: numberOrUndefined(input.targetPopulationPercent),
+    resolvedConveyorSpeedMmPerSecond: numberOrUndefined(input.resolvedConveyorSpeedMmPerSecond),
+    resolvedProductPitchMm: numberOrUndefined(input.resolvedProductPitchMm),
     manualLbaMm: numberOrUndefined(input.manualLbaMm),
     installedLengthMm: numberOrUndefined(input.installedLengthMm),
     primeReserveMm: numberOrUndefined(input.primeReserveMm),
@@ -457,14 +459,14 @@ function calculate(values) {
     : undefined;
   const codingZoneSpeedMmPerSecond = multiplyIfFinite(dischargeZoneSpeedMmPerSecond, 1 + values.codingSpeedFactorPercent / 100);
   const infeedVelocity=multiplyAndDivide(values.downstreamHighSpeedBpm,values.downstreamInfeedPitchMm,60);
-  const conveyorSpeedMmPerSecond = values.targetPopulationPercent !== undefined
+  const conveyorSpeedMmPerSecond = values.resolvedConveyorSpeedMmPerSecond ?? (values.targetPopulationPercent !== undefined
     ? safeDivide(machineOutputRateMmPerSecond, values.targetPopulationPercent, 100)
     : values.targetOverspeedPercent !== undefined ? multiplyIfFinite(infeedVelocity,1+values.targetOverspeedPercent/100)
-    : multiplyIfFinite(codingZoneSpeedMmPerSecond, 1 + values.accumulationSpeedFactorPercent / 100);
+    : multiplyIfFinite(codingZoneSpeedMmPerSecond, 1 + values.accumulationSpeedFactorPercent / 100));
   const dischargePopulationPercent = safeDivide(machineOutputRateMmPerSecond, dischargeZoneSpeedMmPerSecond, 100);
   const codingPopulationPercent = safeDivide(machineOutputRateMmPerSecond, codingZoneSpeedMmPerSecond, 100);
   const populationPercent = safeDivide(machineOutputRateMmPerSecond, conveyorSpeedMmPerSecond, 100);
-  const effectiveProductPitchMm = safeDivide(values.packageLengthMm, populationPercent, 100);
+  const effectiveProductPitchMm = values.resolvedProductPitchMm ?? safeDivide(values.packageLengthMm, populationPercent, 100);
   const productGapMm = isFiniteNumber(effectiveProductPitchMm) && isFiniteNumber(values.packageLengthMm)
     ? effectiveProductPitchMm - values.packageLengthMm
     : undefined;
@@ -783,14 +785,14 @@ function resolveConveyorZone(equipment, owner, ownerIndex) {
     resolved.assumptions.push('Manual belt speed overrides the engineering speed calculation.');
   }
   const definition = resolved.definition;
-  if (format.movingGapMm !== undefined && (format.productSpacingOverride===true || format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined)) {
+  if (isFiniteNumber(definition.productLengthMm) && isFiniteNumber(format.movingGapMm) && (format.productSpacingOverride===true || format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined)) {
     definition.productPitchMm = definition.productLengthMm + format.movingGapMm;
     definition.gapMm = format.movingGapMm;
     resolved.sources.productPitchMm = 'product length + processData.accumulation.movingGapMm';
     for (const key of ['packagePassSensorSeconds', 'sensorClearGapSeconds', 'sensorCycleSeconds']) delete definition[key];
   }
   definition.accumulatedPitchMm = format.accumulatedPitchMm ??
-    (definition.productLengthMm !== undefined ? definition.productLengthMm + (format.accumulatedGapMm ?? 0) : definition.productPitchMm);
+    (isFiniteNumber(definition.productLengthMm) ? definition.productLengthMm + (format.accumulatedGapMm ?? 0) : definition.productPitchMm);
   resolved.sources.accumulatedPitchMm = format.accumulatedPitchMm !== undefined ? 'processData.accumulation.accumulatedPitchMm' : 'product length + accumulated gap (default 0 mm)';
   const sheetPitch = owner.processData?.upstream?.dischargePitchMm;
   if ((format.useSheetDesignPitch || owner.characteristics?.sourceSheetLayout === 'plant-sheet-v2') &&
@@ -802,6 +804,7 @@ function resolveConveyorZone(equipment, owner, ownerIndex) {
     resolved.sources.productPitchMm = 'Sheet conveyor design pitch';
     for (const key of ['packagePassSensorSeconds', 'sensorClearGapSeconds', 'sensorCycleSeconds']) delete definition[key];
   }
+  completeConveyorDerivedGeometry(resolved, owner, format, upstreamControl, downstreamControl);
   if (definition.engineering) {
     // Runtime geometry may override worksheet speed/spacing. Preserve the
     // worksheet audit separately rather than presenting it as the active model.
@@ -815,6 +818,92 @@ function resolveConveyorZone(equipment, owner, ownerIndex) {
     };
   }
   return resolved;
+}
+
+// The import does not contain every runtime field. Resolve only missing
+// derivatives from available physical inputs, never silently clamp a sensor
+// to fit an undersized conveyor or invent a belt speed or package dimension.
+function completeConveyorDerivedGeometry(resolved, owner, format, upstreamControl, downstreamControl) {
+  const d=resolved.definition,s=resolved.sources,positive=v=>isFiniteNumber(v)&&v>0;
+  const geometry=owner.processData?.geometry||{},upstream=owner.processData?.upstream||{};
+  const set=(key,value,source)=>{
+    if(!isDefined(d[key])&&isFiniteNumber(value)){
+      d[key]=value;s[key]=source;return true;
+    }
+    return false;
+  };
+  // Preserve direct geometry as a fallback for hybrid/imported records.
+  set('usableLengthMm',format.usableLengthMm,'processData.accumulation.usableLengthMm');
+  set('productLengthMm',format.productLengthMm,'processData.accumulation.productLengthMm');
+  set('productLengthMm',upstream.packageLengthMm,'processData.upstream.packageLengthMm');
+  if(!isDefined(d.productPitchMm)){
+    set('productPitchMm',format.productPitchMm,'processData.accumulation.productPitchMm');
+    if(!isDefined(d.productPitchMm)&&positive(d.productLengthMm)&&isFiniteNumber(format.gapMm))
+      set('productPitchMm',d.productLengthMm+format.gapMm,'calculated: package length + declared gap');
+    // If the worksheet factor is missing but the installed belt speed is
+    // known, the steady-feed pitch is v / q. A belt slower than the packed
+    // feed is capacity-limited, so its theoretical moving pitch is the
+    // packed pitch, not a negative inter-package gap.
+    const rate=upstreamControl?.nominalRatePerSecond;
+    if(!isDefined(d.productPitchMm)&&positive(d.productLengthMm)&&positive(d.conveyorSpeedMmPerSecond)&&positive(rate)){
+      const packed=positive(d.accumulatedPitchMm)?Math.max(d.productLengthMm,d.accumulatedPitchMm):d.productLengthMm;
+      const pitch=Math.max(packed,d.conveyorSpeedMmPerSecond/rate);
+      if(set('productPitchMm',pitch,'calculated: actual belt speed / upstream package rate, limited by packed pitch')){
+        resolved.assumptions.push('Missing moving pitch: calculated from actual belt velocity and upstream nominal package rate; packed spacing is the capacity-limited lower bound. This is modeled spacing, not a measured pitch.');
+      }
+    }
+  }
+  if(positive(d.productPitchMm)&&positive(d.productLengthMm)){
+    set('gapMm',d.productPitchMm-d.productLengthMm,'calculated: effective moving pitch - package length');
+    set('accumulatedPitchMm',d.productLengthMm+(format.accumulatedGapMm??0),'calculated: package length + accumulated gap');
+  }
+  set('primeSensorPositionMm',format.primeSensorPositionMm,'processData.accumulation.primeSensorPositionMm');
+  if(!isDefined(d.primeSensorPositionMm)&&isFiniteNumber(d.usableLengthMm)&&isFiniteNumber(geometry.lpPrimeMm))
+    set('primeSensorPositionMm',d.usableLengthMm-geometry.lpPrimeMm,'calculated: L_act - L_p');
+  // The installed sensor wins over an inferred recommendation. For an
+  // unmeasured Back-up use the existing engineering overflow calculation.
+  if(!isDefined(format.manualLbaMm))set('backupSensorPositionMm',format.backupSensorPositionMm,'processData.accumulation.backupSensorPositionMm');
+  if(isFiniteNumber(format.manualLbaMm)&&isFiniteNumber(d.primeSensorPositionMm))
+    set('backupSensorPositionMm',d.primeSensorPositionMm-format.manualLbaMm,'calculated: Prime position minus manual LBA');
+  const needPitchAudit=d.engineering&&!positive(d.engineering.calculated.effectiveProductPitchMm);
+  if((!isDefined(d.backupSensorPositionMm)||needPitchAudit)&&positive(d.productPitchMm)&&positive(d.productLengthMm)&&positive(d.conveyorSpeedMmPerSecond)&&positive(upstreamControl?.nominalRatePerSecond)){
+    const prior=d.engineering?.input||{};
+    const recalculated=calculateConveyorEngineering({
+      ...prior,installedLengthMm:d.usableLengthMm,
+      primeReserveMm:isFiniteNumber(d.primeSensorPositionMm)&&isFiniteNumber(d.usableLengthMm)?d.usableLengthMm-d.primeSensorPositionMm:geometry.lpPrimeMm,
+      packageLengthMm:d.productLengthMm,
+      upstreamDischargePitchMm:prior.upstreamDischargePitchMm??upstream.dischargePitchMm??upstreamControl?.processData?.upstream?.dischargePitchMm,
+      upstreamNominalSpeedBpm:rateBpm(upstreamControl),
+      downstreamHighSpeedBpm:prior.downstreamHighSpeedBpm??(downstreamControl?.processData?.productInputRatePerSecond!==undefined?downstreamControl.processData.productInputRatePerSecond*60:rateBpm(downstreamControl)),
+      downstreamInfeedPitchMm:prior.downstreamInfeedPitchMm??owner.processData?.downstream?.infeedPitchMm??downstreamControl?.processData?.downstream?.infeedPitchMm,
+      resolvedConveyorSpeedMmPerSecond:d.conveyorSpeedMmPerSecond,resolvedProductPitchMm:d.productPitchMm,
+      dischargeRunoutLengthMm:geometry.actualDischargeMm??format.dischargeRunoutLengthMm,
+      rejectRunoutLengthMm:geometry.actualCodingMm??format.rejectRunoutLengthMm,
+      blockedTimeDelaySeconds:format.blockedTimeDelaySeconds,
+      clearTimeDelaySeconds:format.clearTimeDelaySeconds,
+      insuranceFactorUnits:format.insuranceFactorUnits,
+      bottlesDischargedAtStop:format.bottlesDischargedAtStop??upstreamControl?.processData?.upstream?.bottlesDischargedAtStop,
+      upstreamStopResponseSeconds:format.upstreamStopResponseSeconds,
+      downstreamRampUpSeconds:format.downstreamRampUpSeconds??downstreamControl?.processData?.downstream?.rampUpTimeSeconds,
+      upstreamStartupTimeSeconds:upstream.startupTimeSeconds??upstreamControl?.processData?.upstream?.startupTimeSeconds,
+      manualLbaMm:format.manualLbaMm,backupSensorPositionMm:d.backupSensorPositionMm
+    });
+    if(set('backupSensorPositionMm',recalculated.calculated.actualBackupSensorPositionMm,'calculated: required overflow L_bu using resolved moving pitch')){
+      resolved.assumptions.push('No installed Back-up position: using the calculated engineering overflow reserve L_bu. Verify the actual photoeye position in the plant before treating this as a measured configuration.');
+    }
+    // Retain the audit of the resolved inputs instead of leaving a missing
+    // pitch/overflow audit when the fallback is what makes the model valid.
+    if(d.engineering)d.engineering=recalculated;
+  }
+  if(!isDefined(d.backupRestartPositionMm)&&isFiniteNumber(d.backupSensorPositionMm)){
+    set('backupRestartPositionMm',format.backupRestartPositionMm??d.backupSensorPositionMm,
+      isDefined(format.backupRestartPositionMm)?'processData.accumulation.backupRestartPositionMm':'same Back-up position; Clear Time Delay provides the restart debounce');
+  }
+  if(positive(d.productPitchMm)&&positive(d.conveyorSpeedMmPerSecond)){
+    set('packagePassSensorSeconds',positive(d.productLengthMm)?d.productLengthMm/d.conveyorSpeedMmPerSecond:undefined,'calculated: package length / actual conveyor speed');
+    set('sensorClearGapSeconds',isFiniteNumber(d.gapMm)?d.gapMm/d.conveyorSpeedMmPerSecond:undefined,'calculated: product gap / actual conveyor speed');
+    set('sensorCycleSeconds',d.productPitchMm/d.conveyorSpeedMmPerSecond,'calculated: effective pitch / actual conveyor speed');
+  }
 }
 
 function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl) {
@@ -1176,10 +1265,10 @@ function validateConveyorGeometry(allEquipment, index, path, details) {
   if(accumulation.targetOverspeedPercent!==undefined&&accumulation.targetPopulationPercent!==undefined)details.push(invalid(path+'.processData.accumulation','choose either target Population or target Overspeed, not both'));
   const resolved = resolveAccumulationZoneDefinition(allEquipment, index);
   if (accumulation.manualLbaMm !== undefined && !(positiveNumber(accumulation.manualLbaMm) && accumulation.manualLbaMm <= resolved.definition?.engineering?.calculated?.calculatedUsefulAccumulationLengthMm)) details.push(invalid(path + '.processData.accumulation.manualLbaMm', 'must be positive and fit after Prime and required overflow reserves'));
-  validatePhysicalZone(resolved.definition, path + '.processData.accumulation', details);
+  validatePhysicalZone(resolved.definition, path + '.processData.accumulation', details, allEquipment[index].name||allEquipment[index].id);
 }
 
-function validatePhysicalZone(zone, path, details) {
+function validatePhysicalZone(zone, path, details, conveyorName) {
   if (!zone || !['FORMAT_GEOMETRY', 'FLOWPILOT_ENGINEERING'].includes(zone.kind)) {
     details.push(invalid(path, 'could not resolve a physical conveyor zone'));
     return;
@@ -1204,7 +1293,7 @@ function validatePhysicalZone(zone, path, details) {
   const hasExplicitPitch = positiveNumber(zone.productPitchMm);
   const hasLengthAndGap = positiveNumber(zone.productLengthMm) && nonNegativeNumber(zone.gapMm);
   if (!hasExplicitPitch && !hasLengthAndGap) {
-    details.push(invalid(path, 'requires effective product pitch, or product length plus gap'));
+    details.push(invalid(path, conveyorName+': moving pitch could not be derived. Provide package length and a valid belt speed with upstream machine rate, or a measured pitch/gap.'));
   }
 
   if (zone.accumulatedPitchMm !== undefined && (!positiveNumber(zone.accumulatedPitchMm) || zone.accumulatedPitchMm < (zone.productLengthMm || 0) || zone.accumulatedPitchMm > (zone.productPitchMm ?? zone.productLengthMm + zone.gapMm))) {
@@ -1219,8 +1308,14 @@ function validatePhysicalZone(zone, path, details) {
     details.push(invalid(path + '.conveyorSpeedMmPerSecond', 'must be a number greater than zero'));
   }
   validateRequiredSensor(zone.primeSensorPositionMm, path + '.primeSensorPositionMm', zone.usableLengthMm, details);
-  validateRequiredSensor(zone.backupSensorPositionMm, path + '.backupSensorPositionMm', zone.usableLengthMm, details);
-  validateRequiredSensor(zone.backupRestartPositionMm, path + '.backupRestartPositionMm', zone.usableLengthMm, details);
+  if(zone.backupSensorPositionMm===undefined||zone.backupSensorPositionMm===null){
+    // One missing derivative must not generate a second missing restart-field
+    // error. The installed sensor is optional when engineering can resolve it.
+    if(hasExplicitPitch||hasLengthAndGap)details.push(invalid(path,conveyorName+': Back-up position could not be derived from the overflow reserve. Check the available package spacing, belt speed, upstream rate and geometry; enter the installed Back-up position only if known.'));
+  }else{
+    validateRequiredSensor(zone.backupSensorPositionMm, path + '.backupSensorPositionMm', zone.usableLengthMm, details);
+    validateRequiredSensor(zone.backupRestartPositionMm, path + '.backupRestartPositionMm', zone.usableLengthMm, details);
+  }
 
   if (nonNegativeNumber(zone.backupRestartPositionMm) && nonNegativeNumber(zone.backupSensorPositionMm) &&
       zone.backupRestartPositionMm < zone.backupSensorPositionMm) {

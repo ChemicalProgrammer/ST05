@@ -286,15 +286,15 @@ function populateFormatZoneInputs(card, equipment) {
         lbaEnabled: formatZone.manualLbaMm !== undefined,
         lba: formatZone.manualLbaMm ?? formatZone.inputValues?.lbaMm,
         overspeedEnabled:formatZone.targetOverspeedPercent!==undefined,
-        lact: geometry.lactMm,
-        lpPrime: geometry.lpPrimeMm,
-        packageLength: upstream.packageLengthMm,
+        lact: geometry.lactMm??formatZone.usableLengthMm,
+        lpPrime: geometry.lpPrimeMm??(Number.isFinite(formatZone.usableLengthMm)&&Number.isFinite(formatZone.primeSensorPositionMm)?formatZone.usableLengthMm-formatZone.primeSensorPositionMm:undefined),
+        packageLength: upstream.packageLengthMm??formatZone.productLengthMm,
         dischargePitch: upstream.dischargePitchMm,
         dischargeVelocity: upstream.dischargeVelocityMPerMinute,
         restartFirstPackage: formatZone.restartToFirstPackageSeconds,
         speedMode: formatZone.speedMode || 'AUTO',
         beltSpeed: formatZone.conveyorSpeedMmPerSecond,
-        movingGap: formatZone.movingGapMm,
+        movingGap: formatZone.movingGapMm??formatZone.gapMm??(Number.isFinite(formatZone.productPitchMm)&&Number.isFinite(upstream.packageLengthMm??formatZone.productLengthMm)?formatZone.productPitchMm-(upstream.packageLengthMm??formatZone.productLengthMm):undefined),
         accumulatedGap: firstDefinedValue(formatZone.accumulatedGapMm, formatZone.accumulatedPitchMm !== undefined ? formatZone.accumulatedPitchMm - firstDefinedValue(upstream.packageLengthMm, formatZone.productLengthMm) : 0),
         speedFactor: firstDefinedValue(formatZone.conveyorSpeedFactorPercent, equipment.processData?.speedAndSensors?.conveyorSpeedFactorVsDischargeVelocityPercent),
         backup: formatZone.backupSensorPositionMm,
@@ -397,6 +397,18 @@ function updateFormatZoneVisibility(card) {
         upstreamStartupTimeSeconds: upstreamMachine.processData?.upstream?.startupTimeSeconds
       });
       var derived = calculation.calculated;
+      if(manual&&values.conveyorSpeedMmPerSecond>0&&values.packageLengthMm>0&&upstreamMachine.nominalRatePerSecond>0&&!(derived.effectiveProductPitchMm>0)){
+        var packed=values.packageLengthMm+(values.accumulatedGapMm??0);
+        var inferredPitch=values.movingGapMm!==undefined?values.packageLengthMm+values.movingGapMm:Math.max(packed,values.conveyorSpeedMmPerSecond/upstreamMachine.nominalRatePerSecond);
+        calculation=calculator({...calculation.input,resolvedConveyorSpeedMmPerSecond:values.conveyorSpeedMmPerSecond,resolvedProductPitchMm:inferredPitch});
+        derived=calculation.calculated;
+      }
+      // Calculated defaults are placeholders, not measured values written
+      // into installation inputs. Blank overrides continue to inherit.
+      var backupField=equipmentField(card,'.format-zone-backup'),movingField=equipmentField(card,'.format-zone-moving-gap');
+      var es=document.documentElement.lang==='es',calculatedPrefix=es?'Calculado: ':'Calculated: ';
+      backupField.placeholder=Number.isFinite(derived.actualBackupSensorPositionMm)?calculatedPrefix+formatNumber(derived.actualBackupSensorPositionMm):'';
+      movingField.placeholder=Number.isFinite(derived.productGapMm)?calculatedPrefix+formatNumber(derived.productGapMm):'';
       if(!lbaEnabled)equipmentField(card,'.format-zone-lba').value=Number.isFinite(derived.usefulAccumulationLengthMm)?Number(derived.usefulAccumulationLengthMm.toFixed(2)):'';
       equipmentField(card,'.format-zone-lba').max=derived.calculatedUsefulAccumulationLengthMm;
       if(populationEnabled||overspeedEnabled)values.movingGapMm=derived.productGapMm;
@@ -506,7 +518,10 @@ function readFormatZoneInputs(card) {
       Object.keys(result.accumulation).forEach(function(key) {
         if (result.accumulation[key] === undefined) delete result.accumulation[key];
       });
-      ['usableLengthMm', 'productLengthMm', 'gapMm', 'productPitchMm', 'accumulatedPitchMm', 'primeSensorPositionMm', 'backupRestartPositionMm'].forEach(function(key) {
+      // Direct inputs were mapped onto the editable named geometry above.
+      // Remove their stale duplicates, but preserve the explicitly installed
+      // restart position when present (the direct-model fallback may use it).
+      ['usableLengthMm', 'productLengthMm', 'gapMm', 'productPitchMm', 'accumulatedPitchMm', 'primeSensorPositionMm'].forEach(function(key) {
         delete result.accumulation[key];
       });
       return result;

@@ -113,10 +113,10 @@ function validateConveyorGeometry(allEquipment, index, path, details) {
   if(accumulation.targetOverspeedPercent!==undefined&&accumulation.targetPopulationPercent!==undefined)details.push(invalid(path+'.processData.accumulation','choose either target Population or target Overspeed, not both'));
   const resolved = resolveAccumulationZoneDefinition(allEquipment, index);
   if (accumulation.manualLbaMm !== undefined && !(positiveNumber(accumulation.manualLbaMm) && accumulation.manualLbaMm <= resolved.definition?.engineering?.calculated?.calculatedUsefulAccumulationLengthMm)) details.push(invalid(path + '.processData.accumulation.manualLbaMm', 'must be positive and fit after Prime and required overflow reserves'));
-  validatePhysicalZone(resolved.definition, path + '.processData.accumulation', details);
+  validatePhysicalZone(resolved.definition, path + '.processData.accumulation', details, allEquipment[index].name||allEquipment[index].id);
 }
 
-function validatePhysicalZone(zone, path, details) {
+function validatePhysicalZone(zone, path, details, conveyorName) {
   if (!zone || !['FORMAT_GEOMETRY', 'FLOWPILOT_ENGINEERING'].includes(zone.kind)) {
     details.push(invalid(path, 'could not resolve a physical conveyor zone'));
     return;
@@ -141,7 +141,7 @@ function validatePhysicalZone(zone, path, details) {
   const hasExplicitPitch = positiveNumber(zone.productPitchMm);
   const hasLengthAndGap = positiveNumber(zone.productLengthMm) && nonNegativeNumber(zone.gapMm);
   if (!hasExplicitPitch && !hasLengthAndGap) {
-    details.push(invalid(path, 'requires effective product pitch, or product length plus gap'));
+    details.push(invalid(path, conveyorName+': moving pitch could not be derived. Provide package length and a valid belt speed with upstream machine rate, or a measured pitch/gap.'));
   }
 
   if (zone.accumulatedPitchMm !== undefined && (!positiveNumber(zone.accumulatedPitchMm) || zone.accumulatedPitchMm < (zone.productLengthMm || 0) || zone.accumulatedPitchMm > (zone.productPitchMm ?? zone.productLengthMm + zone.gapMm))) {
@@ -156,8 +156,14 @@ function validatePhysicalZone(zone, path, details) {
     details.push(invalid(path + '.conveyorSpeedMmPerSecond', 'must be a number greater than zero'));
   }
   validateRequiredSensor(zone.primeSensorPositionMm, path + '.primeSensorPositionMm', zone.usableLengthMm, details);
-  validateRequiredSensor(zone.backupSensorPositionMm, path + '.backupSensorPositionMm', zone.usableLengthMm, details);
-  validateRequiredSensor(zone.backupRestartPositionMm, path + '.backupRestartPositionMm', zone.usableLengthMm, details);
+  if(zone.backupSensorPositionMm===undefined||zone.backupSensorPositionMm===null){
+    // One missing derivative must not generate a second missing restart-field
+    // error. The installed sensor is optional when engineering can resolve it.
+    if(hasExplicitPitch||hasLengthAndGap)details.push(invalid(path,conveyorName+': Back-up position could not be derived from the overflow reserve. Check the available package spacing, belt speed, upstream rate and geometry; enter the installed Back-up position only if known.'));
+  }else{
+    validateRequiredSensor(zone.backupSensorPositionMm, path + '.backupSensorPositionMm', zone.usableLengthMm, details);
+    validateRequiredSensor(zone.backupRestartPositionMm, path + '.backupRestartPositionMm', zone.usableLengthMm, details);
+  }
 
   if (nonNegativeNumber(zone.backupRestartPositionMm) && nonNegativeNumber(zone.backupSensorPositionMm) &&
       zone.backupRestartPositionMm < zone.backupSensorPositionMm) {

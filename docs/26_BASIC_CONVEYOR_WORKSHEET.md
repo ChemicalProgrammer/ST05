@@ -87,3 +87,30 @@ packed capacity stay unchanged. Disabling the checkbox restores calculated
 LBA. Both settings are persisted with conveyor inputs and simulation records.
 Basic conveyor cards display only the configured conveyor name; detailed
 outputs remain in the selected conveyor's Results tab.
+
+## Derived runtime geometry with incomplete design fields
+
+The import template does not need separate moving pitch, installed Back-up or
+restart-position columns. Explicit valid moving spacing and applicable sheet
+design pitch retain precedence. If the existing worksheet cannot resolve pitch
+but a positive actual belt speed, package length and upstream native package
+rate are available, the runtime uses a modeled moving pitch:
+
+`max(packed pitch, actual belt speed / upstream packages per second)`.
+
+The packed-pitch lower bound represents a capacity-limited belt rather than
+negative spacing. It is not a measured gap. Missing Back-up position is derived
+from the existing engine overflow calculation with the resolved pitch:
+
+`Lbu = discharge + coding + (packages during block delay + residual + insurance) × pitch`.
+
+The existing optional zero-default policy for the overflow terms is retained.
+An installed Back-up override wins when provided, subject to manual LBA
+precedence. Without a separate restart position, the model uses the Back-up
+position and its clear-time delay. No sensor position is clamped into an
+undersized conveyor. Missing genuinely necessary physical inputs and infeasible
+geometry remain validation errors, with the conveyor identified by name.
+Editor placeholders distinguish calculated values from installed overrides.
+
+This fallback changes only the previously unresolved derivatives. It does not
+modify source sheet cells or substitute calculated positions for measurements.

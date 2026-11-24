@@ -15,6 +15,8 @@ function normaliseInput(input) {
   return {
     targetOverspeedPercent: numberOrUndefined(input.targetOverspeedPercent),
     targetPopulationPercent: numberOrUndefined(input.targetPopulationPercent),
+    resolvedConveyorSpeedMmPerSecond: numberOrUndefined(input.resolvedConveyorSpeedMmPerSecond),
+    resolvedProductPitchMm: numberOrUndefined(input.resolvedProductPitchMm),
     manualLbaMm: numberOrUndefined(input.manualLbaMm),
     installedLengthMm: numberOrUndefined(input.installedLengthMm),
     primeReserveMm: numberOrUndefined(input.primeReserveMm),
@@ -57,14 +59,14 @@ function calculate(values) {
     : undefined;
   const codingZoneSpeedMmPerSecond = multiplyIfFinite(dischargeZoneSpeedMmPerSecond, 1 + values.codingSpeedFactorPercent / 100);
   const infeedVelocity=multiplyAndDivide(values.downstreamHighSpeedBpm,values.downstreamInfeedPitchMm,60);
-  const conveyorSpeedMmPerSecond = values.targetPopulationPercent !== undefined
+  const conveyorSpeedMmPerSecond = values.resolvedConveyorSpeedMmPerSecond ?? (values.targetPopulationPercent !== undefined
     ? safeDivide(machineOutputRateMmPerSecond, values.targetPopulationPercent, 100)
     : values.targetOverspeedPercent !== undefined ? multiplyIfFinite(infeedVelocity,1+values.targetOverspeedPercent/100)
-    : multiplyIfFinite(codingZoneSpeedMmPerSecond, 1 + values.accumulationSpeedFactorPercent / 100);
+    : multiplyIfFinite(codingZoneSpeedMmPerSecond, 1 + values.accumulationSpeedFactorPercent / 100));
   const dischargePopulationPercent = safeDivide(machineOutputRateMmPerSecond, dischargeZoneSpeedMmPerSecond, 100);
   const codingPopulationPercent = safeDivide(machineOutputRateMmPerSecond, codingZoneSpeedMmPerSecond, 100);
   const populationPercent = safeDivide(machineOutputRateMmPerSecond, conveyorSpeedMmPerSecond, 100);
-  const effectiveProductPitchMm = safeDivide(values.packageLengthMm, populationPercent, 100);
+  const effectiveProductPitchMm = values.resolvedProductPitchMm ?? safeDivide(values.packageLengthMm, populationPercent, 100);
   const productGapMm = isFiniteNumber(effectiveProductPitchMm) && isFiniteNumber(values.packageLengthMm)
     ? effectiveProductPitchMm - values.packageLengthMm
     : undefined;

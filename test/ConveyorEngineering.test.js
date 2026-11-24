@@ -256,3 +256,46 @@ test('Sheet conveyors use the design pitch during transport and the package leng
   assert.equal(rawImport.movingPitchMm, 150);
   assert.equal(rawImport.accumulatedPitchMm, 85);
 });
+
+test('a manually measured belt speed supplies missing pitch and derived Back-up positions',()=>{
+  const line=createFlowPilotLine(),belt=line.equipment[1],acc=belt.processData.accumulation;
+  delete belt.processData.speedAndSensors.conveyorSpeedFactorVsDischargeVelocityPercent;
+  delete acc.backupSensorPositionMm;
+  acc.speedMode='MANUAL';acc.conveyorSpeedMmPerSecond=630;
+  const before=JSON.stringify(line),response=simulateLine({case:line,run:{durationSeconds:20,tickSeconds:.25,sampleEverySeconds:1,seed:17}});
+  assert.equal(response.ok,true,JSON.stringify(response.error));
+  const z=response.result.accumulationZoneMetrics['conveyor--physical-zone'];
+  closeTo(z.movingPitchMm,90);
+  closeTo(z.backupSensorPositionMm??z.geometry?.backupSensorPositionMm??z.engineering.calculated.actualBackupSensorPositionMm,250+350+(7*.5+4+2)*90);
+  assert.equal(JSON.stringify(line),before);
+});
+test('derived sensors still reject impossible overflow geometry and a genuinely missing belt speed',()=>{
+  for(const change of ['too-short','missing-speed']){
+    const line=createFlowPilotLine(),belt=line.equipment[1],acc=belt.processData.accumulation;
+    delete belt.processData.speedAndSensors.conveyorSpeedFactorVsDischargeVelocityPercent;delete acc.backupSensorPositionMm;
+    if(change==='too-short'){acc.speedMode='MANUAL';acc.conveyorSpeedMmPerSecond=630;belt.processData.geometry={lactMm:1000,lpPrimeMm:100};}
+    const result=simulateLine({case:line,run:{durationSeconds:5,tickSeconds:.25,sampleEverySeconds:1,seed:17}});
+    assert.equal(result.ok,false,change);
+  }
+});
+
+test('manual speed with measured sheet pitch and missing Back-up does not replace the design pitch',()=>{
+ const line=createFlowPilotLine(),belt=line.equipment[1],acc=belt.processData.accumulation;
+ belt.characteristics={sourceSheetLayout:'plant-sheet-v2'};
+ delete belt.processData.speedAndSensors.conveyorSpeedFactorVsDischargeVelocityPercent;
+ delete acc.backupSensorPositionMm;
+ acc.speedMode='MANUAL';acc.conveyorSpeedMmPerSecond=630;
+ const r=simulateLine({case:line,run:{durationSeconds:10,tickSeconds:.25,sampleEverySeconds:1,seed:17}});
+ assert.equal(r.ok,true,JSON.stringify(r.error));
+ const z=r.result.accumulationZoneMetrics['conveyor--physical-zone'];
+ assert.equal(z.movingPitchMm,85);
+ closeTo(z.engineering.calculated.actualBackupSensorPositionMm,250+350+(7*.5+4+2)*85);
+});
+test('direct geometry can reuse the same Back-up photoeye on restart without a separate position',()=>{
+ const line=createFlowPilotLine(),belt=line.equipment[1];
+ belt.processData={role:'CONVEYOR',accumulation:{usableLengthMm:20000,productLengthMm:66,productPitchMm:90,conveyorSpeedMmPerSecond:630,primeSensorPositionMm:18500,backupSensorPositionMm:1600,upstreamStopResponseSeconds:1,bottlesDischargedAtStop:4,downstreamRampUpSeconds:8,blockedTimeDelaySeconds:.5,clearTimeDelaySeconds:.5}};
+ const r=simulateLine({case:line,run:{durationSeconds:10,tickSeconds:.25,sampleEverySeconds:1,seed:17}});
+ assert.equal(r.ok,true,JSON.stringify(r.error));
+ const z=r.result.accumulationZoneMetrics['conveyor--physical-zone'];
+ assert.equal(z.movingPitchMm,90);
+});

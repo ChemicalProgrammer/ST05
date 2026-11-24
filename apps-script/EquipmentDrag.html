@@ -28,7 +28,7 @@ window.STEquipmentDrag=(function(){
    if(handle.disabled||!['ArrowUp','ArrowDown'].includes(e.key))return;
    e.preventDefault();
    var visible=cards(),destination=visible[visible.indexOf(card)+(e.key==='ArrowUp'?-1:1)];
-   if(destination)move(index,Number(destination.dataset.index));
+   if(destination)move(Number(card.dataset.index),Number(destination.dataset.index));
   };
   handle.onpointerdown=function(e){
    if(e.button!==0||handle.disabled)return;
@@ -97,7 +97,7 @@ window.STEquipmentDrag=(function(){
       lastX=ev.clientX||0;lastY=ev.clientY;preview();
       if(target!==from){
         var before=positions(),destination=Number(all[target].dataset.index);
-        clear(ev,true);move(index,destination,before);return;
+        clear(ev,true);move(Number(card.dataset.index),destination,before);return;
       }
     }
     clear(ev);

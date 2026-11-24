@@ -47,6 +47,7 @@
         target.innerHTML = ("<p class=\"empty\">" + __ST_HTML_TEXT__('client.this_draft_has_no_equipment_add_at_least_two_units_before_simulation_2') + "</p>");
       }
       STEquipmentInspector.restore(selection);
+      refreshEquipmentPositions();
       STEquipmentFilter.apply();
       assistant.sync();
       renderRawJson();
@@ -75,18 +76,33 @@
       var unitInput=document.createElement('input'),inputUnit=document.createElement('input');unitInput.type=inputUnit.type='hidden';unitInput.className='equipment-unit';inputUnit.className='equipment-input-unit';
       unitInput.value=selectedProfile.outputUnit||equipment.processData?.flowUnits?.output||'';inputUnit.value=selectedProfile.inputUnit||equipment.processData?.flowUnits?.input||'';
       unitInput.dataset.originalValue=unitInput.value;inputUnit.dataset.originalValue=inputUnit.value;
-      var label=document.createElement('label'),flow=document.createElement('select');label.textContent=equipment.type==='CONVEYOR'?'Transport unit':'Material flow';flow.className='equipment-material-flow';
-      var choices=equipment.type==='CONVEYOR'?[['BOTTLES/BOTTLES','Bottle'],['CASES/CASES','Case']]:[['BOTTLES/BOTTLES','Bottle → Bottle'],['BOTTLES/CASES','Bottle → Case'],['CASES/CASES','Case → Case']];
-      // Preserve legacy unitless models until the user explicitly selects a physical flow.
-      var original=(inputUnit.value&&unitInput.value)?inputUnit.value+'/'+unitInput.value:'';
-      if(original&&!choices.some(v=>v[0]===original))choices.push([original,'Existing: '+original.replace('/',' → ')]);
-      choices.forEach(function(v){var o=document.createElement('option');o.value=v[0];o.textContent=v[1];flow.append(o);});flow.value=original||'BOTTLES/BOTTLES';
+      var label=document.createElement('label'),flow=document.createElement('select');label.append(document.createTextNode(''));flow.className='equipment-material-flow';
+      function configureMaterialFlow(type,initial){
+        var conveyor=type==='CONVEYOR';
+        label.firstChild.nodeValue=conveyor?'Transport unit':'Material flow';
+        var choices=conveyor?[['BOTTLES/BOTTLES','Bottle'],['CASES/CASES','Case']]:[['BOTTLES/BOTTLES','Bottle → Bottle'],['BOTTLES/CASES','Bottle → Case'],['CASES/CASES','Case → Case']];
+        var original=inputUnit.value&&unitInput.value?inputUnit.value+'/'+unitInput.value:'';
+        if(initial&&original&&!choices.some(v=>v[0]===original))choices.push([original,'Existing: '+original.replace('/',' → ')]);
+        if(!initial&&conveyor&&original&&!choices.some(v=>v[0]===original)){
+          var transport=unitInput.value==='CASES'?'CASES':'BOTTLES';
+          inputUnit.value=unitInput.value=transport;original=transport+'/'+transport;
+        }
+        flow.replaceChildren();
+        choices.forEach(function(v){var o=document.createElement('option');o.value=v[0];o.textContent=v[1];flow.append(o);});
+        flow.value=choices.some(v=>v[0]===original)?original:'BOTTLES/BOTTLES';
+      }
+      configureMaterialFlow(equipment.type,true);
       flow.onchange=function(){var pair=flow.value.split('/');inputUnit.value=pair[0]||'';unitInput.value=pair[1]||'';unitInput.dispatchEvent(new Event('change',{bubbles:true}));};label.append(flow);equipmentField(card,'.equipment-grid').append(label,unitInput,inputUnit);
       equipmentField(card, 'strong').textContent = (equipment.type || 'CUSTOM') + ' · ' + (equipment.name || equipment.id || 'Unnamed') + ' · ' + formatNumber(Number(equipment.nominalRatePerSecond || 0) * 60) + __ST_TEXT__('client.bpm');
-      equipmentField(card, '.equipment-type').value = STEquipmentRoles.machineType(equipment);
+      var typeControl=equipmentField(card, '.equipment-type'),initialType=STEquipmentRoles.machineType(equipment);
+      if(!Array.from(typeControl.options).some(o=>o.value===initialType)){
+        // An unrecognized imported type stays visible and is never silently rewritten.
+        var originalType=document.createElement('option');originalType.value=initialType;originalType.textContent=initialType;typeControl.append(originalType);
+      }
+      typeControl.value=initialType;
       equipmentField(card, '.equipment-name').value = equipment.name || '';
       unitInput.dataset.legacyLabel=equipment.unitOfFlow||'';
-      function updateRateUnit(){var rate=equipmentField(card,'.equipment-rate');rate.closest('label').firstChild.nodeValue='Nominal rate ('+STFlowUnits.labels(unitInput.value).rate+')';if(unitInput.value&&!inputUnit.value)inputUnit.value=equipment.type==='CONVEYOR'?unitInput.value:(state.activeCase.equipment[index-1]?.processData?.flowUnits?.output||'BOTTLES');}
+      function updateRateUnit(){var owner=fields?._owner||card,rate=equipmentField(owner,'.equipment-rate');rate.closest('label').firstChild.nodeValue='Nominal rate ('+STFlowUnits.labels(unitInput.value).rate+')';if(unitInput.value&&!inputUnit.value)inputUnit.value=equipmentField(owner,'.equipment-type').value==='CONVEYOR'?unitInput.value:(state.activeCase.equipment[Number(owner.dataset.index)-1]?.processData?.flowUnits?.output||'BOTTLES');}
       unitInput.addEventListener('change',updateRateUnit);updateRateUnit();
       var rateInput=equipmentField(card,'.equipment-rate');
       var displayedRate=selectedProfile.ratePerMinute===undefined?equipment.nominalRatePerSecond:selectedProfile.ratePerMinute/60;
@@ -120,15 +136,37 @@
 
       STEquipmentDrag.bind(card,index,moveEquipment);
       var remove=equipmentField(card, '.remove-equipment');remove.innerHTML=STIcons.svg('trash');remove.classList.add('icon-button');remove.title=__ST_TEXT__('client.delete_equipment');remove.setAttribute('aria-label',__ST_TEXT__('client.delete_equipment'));
-      equipmentField(card, '.remove-equipment').addEventListener('click', function() { removeEquipment(index); });
+      equipmentField(card, '.remove-equipment').addEventListener('click', function() { removeEquipment(Number(card.dataset.index)); });
+      var positionControl=document.createElement('select');
+      positionControl.className='equipment-line-position';
+      positionControl.addEventListener('input',function(event){event.stopPropagation();});
+      positionControl.addEventListener('change',function(event){
+        event.stopPropagation();
+        moveEquipment(Number(card.dataset.index),Number(positionControl.value),null,true);
+      });
+      card.querySelector('.equipment-header .button-row').prepend(positionControl);
       card.tabIndex=0;
       card.setAttribute('aria-label',__ST_TEXT__('inspector.select')+' '+equipment.name);
       card.addEventListener('click',function(event){if(!event.target.closest('button,input,select,textarea,details'))STEquipmentInspector.select(card);});
       card.addEventListener('keydown',function(event){if(event.target===card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();STEquipmentInspector.select(card);}});
-      equipmentField(card, '.equipment-type').addEventListener('change', function() {
-        updateFormatZoneVisibility(fields._owner);
-        renderFormatZonePreview(fields._owner);
-      });
+      function changeEquipmentType(){
+        var owner=fields._owner,type=typeControl.value,previous=owner.dataset.lastEditorType||initialType;
+        if(previous!==type){
+          owner.dataset.lastEditorType=type;
+          configureMaterialFlow(type,false);updateRateUnit();
+          // A type correction can cross the separate Equipment/Conveyors tabs.
+          // Stay with the edited card without requiring a valid simulation draft.
+          if(window.STBasicMode?.isSplit()&&state.uiView==='editor'){
+            state.basicView=type==='CONVEYOR'?'conveyors':'equipment';
+            window.STBasicMode.sync(state);
+            if(type==='CONVEYOR')STEquipmentInspector.select(owner,false);
+          }
+        }
+        updateFormatZoneVisibility(owner);
+        renderFormatZonePreview(owner);
+      }
+      typeControl.addEventListener('input',changeEquipmentType);
+      typeControl.addEventListener('change',changeEquipmentType);
       Array.prototype.slice.call(equipmentFields(card, '.format-zone-grid input, .format-zone-grid select')).forEach(function(input) {
         input.addEventListener('input', function() {
           state.isDirty = true;
@@ -137,6 +175,15 @@
         input.addEventListener('change', function() { state.isDirty = true; renderFormatZonePreview(fields._owner); });
       });
       if(equipment.type==='CONVEYOR'){var defaultsNote=document.createElement('p');defaultsNote.className='chart-note';defaultsNote.textContent='Conveyor inputs are defaults. Blank product / box fields inherit these values. Installation geometry and sensors are configured here.';equipmentField(card,'.format-zone-grid').before(defaultsNote);}
+      if(window.STConveyorAnalysis){
+        var conveyorVerdict=window.STConveyorAnalysis.createEvaluationButton(function(){
+          var context=editorConveyorWorksheet(card.dataset.equipmentId);
+          if(context)window.STConveyorAnalysis.open(equipmentField(card,'.equipment-name').value||card.dataset.equipmentId,context);
+        });
+        card.querySelector('.equipment-header .button-row').prepend(conveyorVerdict);
+        card._editorConveyorVerdict=conveyorVerdict;
+        conveyorVerdict.hidden=typeControl.value!=='CONVEYOR';
+      }
       if(window.STEquipmentAnalysis){
       var reliabilityVerdict=window.STEquipmentAnalysis.createButton(function(){
         var simulation=equipmentAnalysisEditorContext();
@@ -146,9 +193,9 @@
       card._equipmentReliabilityVerdict=reliabilityVerdict;
       reliabilityVerdict.hidden=equipment.type==='CONVEYOR'||equipment.processData?.role==='CONVEYOR';
       window.STEquipmentAnalysis.paint(reliabilityVerdict,window.STEquipmentAnalysis.assess(equipment,activePersistentSimulation()?.dynamicConfig||{}));
-      function refreshReliability(){queueMicrotask(function(){if(card.isConnected)refreshEquipmentReliabilityBadges();});}
-      fields.addEventListener('change',refreshReliability);
       }
+      function refreshEvaluation(){queueMicrotask(function(){if(fields._owner?.isConnected)refreshEquipmentReliabilityBadges();});}
+      fields.addEventListener('change',refreshEvaluation);
       return card;
     }
 
@@ -503,30 +550,51 @@ function numericInputValue(input) {
       return typeof value === 'number' && Number.isFinite(value);
     }
 
-    function moveEquipment(index, targetIndex, before) {
-      if(!STEquipmentFilter.canReorder()||index===targetIndex||!syncEquipmentFromEditor())return;
-      var line=state.activeCase.equipment;
-      if(!line[index]||!line[targetIndex])return;
-      var positions=before||STEquipmentDrag.positions(),moved=line[index];
-      if(STBasicMode.isSplit()){
-        var conveyor=moved.type==='CONVEYOR';
-        var group=line.filter(function(item){return (item.type==='CONVEYOR')===conveyor;});
-        var to=group.indexOf(line[targetIndex]);
-        if(to<0)return;
-        group.splice(group.indexOf(moved),1);
-        group.splice(to,0,moved);
-        var machines=conveyor?line.filter(function(item){return item.type!=='CONVEYOR';}):group;
-        var conveyors=conveyor?group:line.filter(function(item){return item.type==='CONVEYOR';});
-        state.activeCase.equipment=machines.flatMap(function(machine,i){return conveyors[i]?[machine,conveyors[i]]:[machine];}).concat(conveyors.slice(machines.length));
-      }else{
-        line.splice(index,1);
-        line.splice(targetIndex,0,moved);
+    function equipmentDraftCards(){
+      var line=state.activeCase?.equipment||[],cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
+      if(cards.length!==line.length||cards.some((card,index)=>card.dataset.equipmentId!==line[index]?.id)){
+        showError({code:'EQUIPMENT_EDITOR_INCOMPLETE',message:'Equipment editor is incomplete. The existing line was preserved; reopen Equipment before changing its order.'});
+        return null;
       }
-      state.isDirty = true;
-      renderEquipment();
-      STEquipmentDrag.animate(positions,moved.id);
-      invalidateActiveResult();autosave.change(true);
+      return cards;
+    }
+    function refreshEquipmentPositions(){
+      var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
+      var names=cards.map(c=>equipmentField(c,'.equipment-name')?.value||c.dataset.equipmentId);
+      var es=document.documentElement.lang==='es',label=es?'Posición en la línea (equipos y conveyors)':'Position in line (machines and conveyors)';
+      var signature=JSON.stringify([names,es]);
+      cards.forEach(function(card,index){
+        card.dataset.index=String(index);
+        var control=card.querySelector('.equipment-line-position');
+        if(!control)return;
+        if(control._positionsSignature!==signature+':'+index){
+          control.replaceChildren();
+          names.forEach(function(name,i){
+            var option=document.createElement('option');option.value=String(i);option.textContent=i===index?'#'+(i+1):(i+1)+' · '+name;control.append(option);
+          });
+          control._positionsSignature=signature+':'+index;
+        }
+        control.value=String(index);control.disabled=cards.length<2;
+        control.title=label;control.setAttribute('aria-label',label+' · '+names[index]);
+      });
+    }
+    function moveEquipment(index, targetIndex, before, absolute){
+      if(!state.activeCase||(!absolute&&!STEquipmentFilter.canReorder())||index===targetIndex)return;
+      var line=state.activeCase.equipment,cards=equipmentDraftCards();
+      if(!cards||!Number.isInteger(index)||!Number.isInteger(targetIndex)||!line[index]||!line[targetIndex])return;
+      var positions=before||STEquipmentDrag.positions(),moved=line[index],card=cards[index],destination=cards[targetIndex];
+      // Reorder only the requested item in the physical line, not a zip of
+      // the two filtered lists. Move live DOM nodes so incomplete inputs,
+      // expanded controls and inspector ownership survive unchanged.
+      line.splice(index,1);line.splice(targetIndex,0,moved);
+      if(index<targetIndex)destination.after(card);else destination.before(card);
+      refreshEquipmentPositions();
+      cards.forEach(function(item){item._refreshFormatPreview?.();});
+      state.isDirty=true;
+      invalidateActiveResult();autosave.change();
       renderRunWorkspace();
+      window.STBasicMode?.sync(state);refreshDesignGraph();renderRawJson();
+      STEquipmentDrag.animate(positions,moved.id);
     }
 
     async function removeEquipment(index) {
@@ -606,20 +674,61 @@ function numericInputValue(input) {
       }
       return {...tab,equipment:models,unitOfFlow:state.activeCase?.unitOfFlow,dynamicConfig:config};
     }
-    function refreshEquipmentReliabilityBadges(preview){
-      if(!state.activeCase||!window.STEquipmentAnalysis)return;
-      try{
-        var simulation=equipmentAnalysisEditorContext(preview);
+    function editorConveyorProfiles(simulation){
+      var api=window.STConveyorAnalysis;
+      if(!api)return null;
+      var equipment=simulation.equipment,format=window.STProducts?.currentFormat?.(),formats=window.STProducts?.formats?.()||[];
+      // Apply the active format's current rate/flow edits to a temporary
+      // format record only. Other formats retain their saved overrides.
+      if(format){
+        var active=cloneJson(format);active.equipment=active.equipment||{};
         document.querySelectorAll('#equipment-list .equipment-card').forEach(function(card){
-          var e=simulation.equipment.find(x=>x.id===card.dataset.equipmentId),button=card._equipmentReliabilityVerdict;
-          if(!e||!button)return;
-          button.hidden=e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR';
-          if(!button.hidden)window.STEquipmentAnalysis.paint(button,window.STEquipmentAnalysis.assess(e,simulation.dynamicConfig));
+          var model=equipment.find(e=>e.id===card.dataset.equipmentId);if(!model)return;
+          var rate=equipmentField(card,'.equipment-rate'),output=equipmentField(card,'.equipment-unit'),input=equipmentField(card,'.equipment-input-unit');
+          var profile=active.equipment[model.id]||{};
+          if(rate?.dataset.profileRate==='true'&&rate.value!=='')profile.ratePerMinute=Number(rate.value);
+          if(output&&input&&(output.value!==output.dataset.originalValue||input.value!==input.dataset.originalValue)){
+            if(output.value)profile.outputUnit=output.value;if(input.value)profile.inputUnit=model.type==='CONVEYOR'?output.value:input.value;
+          }
+          active.equipment[model.id]=profile;
+        });
+        format=active;formats=formats.map(f=>f.id===active.id?active:f);
+      }
+      return api.resolveProfiles(equipment,format,formats);
+    }
+    function editorConveyorWorksheet(equipmentId,simulation,resolved){
+      simulation=simulation||equipmentAnalysisEditorContext();
+      var index=simulation.equipment.findIndex(e=>e.id===equipmentId&&e.type==='CONVEYOR');
+      if(index<0)return null;
+      try{if(resolved===undefined)resolved=editorConveyorProfiles(simulation);}catch(_){}
+      if(resolved?.models?.[index]&&resolved.zones[index])return {zone:resolved.zones[index],data:resolved.models[index].processData||{},designProfiles:resolved.designProfiles,index};
+      // A partial imported record still opens the worksheet as NOT EVALUATED.
+      return {zone:{},data:simulation.equipment[index].processData||{},designProfiles:[],index};
+    }
+    function refreshEquipmentReliabilityBadges(preview){
+      if(!state.activeCase)return;
+      try{
+        var simulation=equipmentAnalysisEditorContext(preview),resolved=null;
+        if(simulation.equipment.some(e=>e.type==='CONVEYOR'))try{resolved=editorConveyorProfiles(simulation);}catch(_){}
+        document.querySelectorAll('#equipment-list .equipment-card').forEach(function(card){
+          var e=simulation.equipment.find(x=>x.id===card.dataset.equipmentId),button=card._equipmentReliabilityVerdict,conveyorButton=card._editorConveyorVerdict;
+          if(!e)return;
+          var conveyor=e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR';
+          if(button){button.hidden=conveyor;if(!conveyor)window.STEquipmentAnalysis.paint(button,window.STEquipmentAnalysis.assess(e,simulation.dynamicConfig));}
+          if(conveyorButton){
+            conveyorButton.hidden=!conveyor;
+            if(conveyor){
+              try{
+                var worksheet=editorConveyorWorksheet(e.id,simulation,resolved);
+                window.STConveyorAnalysis.paintEvaluationButton(conveyorButton,worksheet?window.STConveyorAnalysis.calculate(worksheet).geometry:null);
+              }catch(_){window.STConveyorAnalysis.paintEvaluationButton(conveyorButton,null);}
+            }
+          }
         });
       }catch(error){/* Incomplete editor inputs must not block editing. */}
     }
-    function refreshDesignGraph(){if(state.activeCase){var preview=basicEquipmentPreview();STLinePerformance.render(null,preview);refreshEquipmentReliabilityBadges(preview);}}
-    window.addEventListener('st-language-change',function(){refreshEquipmentReliabilityBadges();});
+    function refreshDesignGraph(){if(state.activeCase){var preview=basicEquipmentPreview();STLinePerformance.render(null,preview);refreshEquipmentPositions();refreshEquipmentReliabilityBadges(preview);}}
+    window.addEventListener('st-language-change',function(){refreshEquipmentPositions();refreshEquipmentReliabilityBadges();});
     function readEquipmentRate(card){
       var input=equipmentField(card,'.equipment-rate');
       return input.value!==''&&Number(input.value)===Number(input.dataset.originalBpm)&&input.dataset.originalRate!==''?Number(input.dataset.originalRate):Number(input.value)/60;
@@ -717,7 +826,7 @@ function parseJsonObject(rawValue, label, step) {
 
 function createBlankEquipment() {
       return {
-        id: 'equipment-'+Date.now().toString(36),
+        id: 'equipment-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
         type: window.STBasicMode?.newType() || 'CUSTOM',
         name: __ST_TEXT__('simulation.new_equipment'),
         nominalRatePerSecond: 1,

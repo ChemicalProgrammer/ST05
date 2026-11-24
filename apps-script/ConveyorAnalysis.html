@@ -387,6 +387,20 @@ window.STConveyorAnalysis=(function(){
     dialog.showModal();
   }
   document.getElementById('conveyor-analysis-close').addEventListener('click',close);
-  return {open,close,calculate,resolveProfiles,recommendedSpeed,verdictColors,lengthHelp};
+  function paintEvaluationButton(button,geometry){
+    const status=geometry?.status||'NOT EVALUATED',es=document.documentElement.lang==='es';
+    const text=es?({'PASS':'CUMPLE','FAIL':'NO CUMPLE','AT LIMIT':'AL LÍMITE','NOT EVALUATED':'NO EVALUADO'}[status]||status):status;
+    button.textContent=text;button.dataset.evaluation=status;
+    button.classList.toggle('is-pass',status==='PASS');button.classList.toggle('is-fail',status==='FAIL');button.classList.toggle('is-review',status==='AT LIMIT');
+    button.title=(es?'Abrir análisis de conveyor':'Open conveyor analysis')+' · '+text+' · '+(geometry?.statusReason||(es?'Geometría o datos requeridos pendientes.':'Required geometry or inputs are pending.'));
+    button.setAttribute('aria-label',button.title);
+  }
+  function createEvaluationButton(openAnalysis){
+    const button=document.createElement('button');button.type='button';button.className='equipment-analysis-pill conveyor-editor-verdict st-status-pill';
+    button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-controls','conveyor-analysis-dialog');
+    button.addEventListener('click',event=>{event.stopPropagation();openAnalysis();});
+    paintEvaluationButton(button,null);return button;
+  }
+  return {open,close,calculate,resolveProfiles,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton};
 })();
 </script>

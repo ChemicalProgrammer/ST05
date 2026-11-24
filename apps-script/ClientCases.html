@@ -500,15 +500,26 @@ async function openCase(caseId, initialView) {
     }
 
     function addEquipment() {
-      if (!syncEquipmentFromEditor()) return;
-      STEquipmentFilter.set('all');
-      state.activeCase.equipment.push(createBlankEquipment());
+      if(!state.activeCase)return;
+      var target=document.getElementById('equipment-list');
+      if(!target.querySelector('.equipment-card')&&state.activeCase.equipment.length)renderEquipment();
+      if(!equipmentDraftCards())return;
+      var equipment=createBlankEquipment(),index=state.activeCase.equipment.length;
+      state.activeCase.equipment.push(equipment);
       STProducts.reconcile();
-      state.isDirty = true;
-      renderEquipment();
-      STEquipmentInspector.select(document.querySelector('#equipment-list .equipment-card:last-child'));
-      invalidateActiveResult();autosave.change(true);
-      renderRunWorkspace();
+      state.isDirty=true;
+      // Keep every previously entered draft field mounted, even if the
+      // user has not completed its reliability or geometry inputs yet.
+      if(!index)target.replaceChildren();
+      var card=createEquipmentCard(equipment,index);target.append(card);
+      refreshEquipmentPositions();
+      if(window.STBasicMode?.isSplit())STEquipmentFilter.apply();else STEquipmentFilter.set('all');
+      window.STBasicMode?.sync(state);
+      STEquipmentInspector.select(card,false);
+      equipmentField(card,'.equipment-type')?.focus({preventScroll:true});
+      card.scrollIntoView?.({block:'nearest'});
+      invalidateActiveResult();autosave.change();
+      renderRunWorkspace();renderRawJson();refreshDesignGraph();
     }
 
     var cloningCases = new Set();

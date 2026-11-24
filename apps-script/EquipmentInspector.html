@@ -13,25 +13,6 @@ window.STEquipmentInspector=(function(){
     var card=Array.from(document.querySelectorAll('#equipment-list .equipment-card')).find(function(c){return c.dataset.equipmentId===selection.id;});
     if(card){select(card,false);opened=selection.opened;}else opened=false;
   }
-  function exchangeValues(a,b){
-    var left=Array.from(a.querySelectorAll('input,select,textarea'));
-    var right=Array.from(b.querySelectorAll('input,select,textarea'));
-    if(left.length!==right.length)return false;
-    left.forEach(function(control,index){
-      var other=right[index],value=control.value,checked=control.checked;
-      var bpm=control.dataset.originalBpm,rate=control.dataset.originalRate;
-      ['manualValue','inputMode'].forEach(function(key){var value=control.dataset[key];if(other.dataset[key]===undefined)delete control.dataset[key];else control.dataset[key]=other.dataset[key];if(value===undefined)delete other.dataset[key];else other.dataset[key]=value;});
-      control.value=other.value;control.checked=other.checked;
-      other.value=value;other.checked=checked;
-      if(control.classList.contains('equipment-rate')){
-        control.dataset.originalBpm=other.dataset.originalBpm;
-        control.dataset.originalRate=other.dataset.originalRate;
-        other.dataset.originalBpm=bpm;other.dataset.originalRate=rate;
-      }
-    });
-    return true;
-  }
-  function layout(card){return card._fields.querySelector('.equipment-type').value==='CONVEYOR'?'CONVEYOR':'EQUIPMENT';}
   function refreshTitle(card){
     var fields=card._fields;if(!fields)return;
     var control=fields.querySelector('.equipment-type'),type=control.value,header=card.querySelector('.equipment-header'),title=header.querySelector('strong');
@@ -49,31 +30,15 @@ window.STEquipmentInspector=(function(){
     if(window.STBasicMode?.inline(card))return;
     if(selected===card){opened=true;return;}
     var previous=selected,panel=el('equipment-inspector'),scroll=panel.scrollTop;
-    var sameLayout=previous&&context===key()&&layout(previous)===layout(card);
-    if(sameLayout){
-      if(!card._helpReady){decorate(card);card._helpReady=true;}
-      var retained=previous._fields,incoming=card._fields;
-      if(exchangeValues(retained,incoming)){
-        release();
-        previous._fields=incoming;card._fields=retained;
-        incoming._owner=previous;retained._owner=card;
-        previous.appendChild(incoming);
-        previous._refreshFormatPreview?.();card._refreshFormatPreview?.();
-        selected=card;context=key();opened=true;
-        panel.appendChild(retained);card.classList.add('equipment-selected');
-        panel.scrollTop=scroll;
-        window.dispatchEvent(new Event('st:inspector'));
-        panel.scrollTop=scroll;
-        if(focus!==false)panel.querySelector('input,select,textarea')?.focus({preventScroll:true});
-        panel.scrollTop=scroll;
-        return;
-      }
-    }
+    // Keep field instances bound to their equipment. Swapping values between
+    // cards also swaps context-dependent metadata incompletely (format and
+    // reliability inputs), risking accidental edits to a different item.
     release();selected=card;context=key();opened=true;
     if(!card._helpReady){decorate(card);card._helpReady=true;}
     panel.appendChild(card._fields);card.classList.add('equipment-selected');
     window.dispatchEvent(new Event('st:inspector'));
-    if(focus!==false)panel.querySelector('input,select,textarea')?.focus();
+    if(previous)panel.scrollTop=scroll;
+    if(focus!==false)panel.querySelector('input,select,textarea')?.focus({preventScroll:true});
   }
   function sync(){
     if(context!==key()){release();opened=false;el('equipment-inspector').textContent='';}

@@ -32,6 +32,20 @@
 
 
 .equipment-drag { cursor:grab; touch-action:none; }
+#equipment-list .equipment-header .equipment-line-position { width:4.5rem; min-width:3.5rem; max-width:100%; min-height:var(--control-height); flex:0 0 auto; padding-inline:var(--space-1); font-size:var(--font-secondary); font-variant-numeric:tabular-nums; }
+#equipment-list .equipment-header .equipment-analysis-pill { flex:0 0 auto; max-width:9rem; }
+#equipment-list .equipment-header .button-row { min-width:0; }
+#equipment-list .equipment-header .equipment-analysis-pill[hidden] {display:none!important;}
+/* Keep the name legible on compact split cards: tools wrap as a group only
+   when the card itself is too narrow, independent of screen width. */
+html[data-equipment-layout=split] #equipment-list .equipment-card .equipment-header {flex-wrap:wrap;}
+html[data-equipment-layout=split] #equipment-list .equipment-card .equipment-header strong {flex:1 1 6rem;}
+html[data-equipment-layout=split] #equipment-list .equipment-card .equipment-header .button-row {max-width:100%;margin-inline-start:auto;flex-wrap:wrap;justify-content:flex-end;}
+@media(max-width:600px){
+ html[data-equipment-layout=combined] #equipment-list .equipment-card .equipment-header {display:flex;flex-wrap:wrap;}
+ html[data-equipment-layout=combined] #equipment-list .equipment-card .equipment-header strong {flex:1 1 6rem;min-width:0;}
+ html[data-equipment-layout=combined] #equipment-list .equipment-card .equipment-header .button-row {max-width:100%;margin-inline-start:auto;flex-wrap:wrap;justify-content:flex-end;}
+}
 .equipment-card { transition:background var(--duration-fast), opacity var(--duration-fast); }
 
 .equipment-card .equipment-fields { display:none; }

@@ -1087,6 +1087,7 @@
       // Geometry section and must not be assumed to exist in older cards.
       heading.after(geometryVerdict);
       card._numericConveyorVerdict=geometryVerdict;
+      if(window.STEquipmentAnalysis){
       var equipmentVerdict=window.STEquipmentAnalysis.createButton(function(){
         var snapshot=card._equipmentAnalysisSnapshot;
         if(!snapshot)return;
@@ -1097,6 +1098,7 @@
       });
       geometryVerdict.after(equipmentVerdict);card._numericEquipmentVerdict=equipmentVerdict;
       equipmentVerdict.hidden=true;
+      }
       // The equipment name itself is the accessible card disclosure control.
       cardToggle.setAttribute('aria-label','Collapse equipment details');
       cardToggle.setAttribute('aria-expanded','true');

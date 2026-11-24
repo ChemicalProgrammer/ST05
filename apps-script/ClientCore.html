@@ -165,7 +165,7 @@
         }
         simulation.results=null;
         cancelRoundSession();stopPlaybackTimer();state.run.result=null;state.run.representative=null;state.run.configuration=null;
-        toggle('simulation-results',false);markCaseDirty();renderSimulationAnalysis();shell.sync();
+        toggle('simulation-results',false);markCaseDirty();renderSimulationAnalysis();shell.sync();refreshEquipmentReliabilityBadges();
       },runControlsLocked);
       window.addEventListener('st-simpy-status',function(event){if(roundSession?.pending)document.getElementById('batch-status').textContent=event.detail.message;});
       STPreferences.connectCase(function(){return state.activeCase;},function(){autosave.change();});

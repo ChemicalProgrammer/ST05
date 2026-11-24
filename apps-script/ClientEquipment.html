@@ -137,6 +137,7 @@
         input.addEventListener('change', function() { state.isDirty = true; renderFormatZonePreview(fields._owner); });
       });
       if(equipment.type==='CONVEYOR'){var defaultsNote=document.createElement('p');defaultsNote.className='chart-note';defaultsNote.textContent='Conveyor inputs are defaults. Blank product / box fields inherit these values. Installation geometry and sensors are configured here.';equipmentField(card,'.format-zone-grid').before(defaultsNote);}
+      if(window.STEquipmentAnalysis){
       var reliabilityVerdict=window.STEquipmentAnalysis.createButton(function(){
         var simulation=equipmentAnalysisEditorContext();
         window.STEquipmentAnalysis.open(simulation,card.dataset.equipmentId);
@@ -147,6 +148,7 @@
       window.STEquipmentAnalysis.paint(reliabilityVerdict,window.STEquipmentAnalysis.assess(equipment,activePersistentSimulation()?.dynamicConfig||{}));
       function refreshReliability(){queueMicrotask(function(){if(card.isConnected)refreshEquipmentReliabilityBadges();});}
       fields.addEventListener('change',refreshReliability);
+      }
       return card;
     }
 

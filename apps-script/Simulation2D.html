@@ -520,7 +520,7 @@ window.STSimulation2D=(function(){
     const target=el('machine-controls');
     target.replaceChildren();machineControls.clear();analysisButtons.clear();
     window.STConveyorAnalysis.close();
-    window.STEquipmentAnalysis.close();
+    window.STEquipmentAnalysis?.close();
     const actions=[['RUN','play','Start / resume'],['PAUSE','pause','Pause'],['STOP','stop','Stop'],
       ['EMERGENCY_STOP','error','Emergency stop'],['RESET','refresh','Reset emergency stop']];
     for(const item of definitions){
@@ -538,6 +538,7 @@ window.STSimulation2D=(function(){
         target.append(button);analysisButtons.set(item.id,button);
         continue;
       }
+      if(window.STEquipmentAnalysis){
       const reliabilityButton=window.STEquipmentAnalysis.createButton(()=>{
         if(!equipmentAnalysisContext)return;
         const live=model?.line?.find(x=>x.id===item.id),duration=model?.time||0;
@@ -549,6 +550,7 @@ window.STSimulation2D=(function(){
       });
       reliabilityButton.classList.add('simulation2d-analysis-action');
       target.append(reliabilityButton);analysisButtons.set(item.id,reliabilityButton);
+      }
       const group=document.createElement('div');
       group.className='simulation2d-machine-actions';
       group.setAttribute('role','group');

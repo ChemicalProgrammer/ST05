@@ -1,13 +1,21 @@
+import {completeSyntheticScenarioSource} from './helpers/CompletedScenarioFixture.js';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 function setup(){
  let record,writes=0,held=false,releases=0;
  const ctx={Utilities:{getUuid:()=> 'unique-scenario'},createSimulatorError_:(code,message,details)=>Object.assign(new Error(message),{code,details}),withCaseWriteLock_:fn=>{assert(!held);held=true;try{return fn();}finally{held=false;releases++;}},persistCaseRecord_:(record,owned)=>{owned.file.setContent(JSON.stringify(record));return owned.file;},getOwnedCaseFile_:(id,user)=>{assert.equal(user.email,'owner@test');assert(held,'ownership and revision must be checked inside the lock');return {caseData:JSON.parse(JSON.stringify(record)),file:{setContent:value=>{assert(held);writes++;record=JSON.parse(value);}}};},ensureCaseSimulations_:c=>c,generateSimulationId_:()=> 'scenario'};
  vm.createContext(ctx);for(const file of ['DemoCaseFactory.gs','ScenarioEngine.gs','ScenarioService.gs'])vm.runInContext(fs.readFileSync('apps-script/'+file,'utf8'),ctx);
- const source={id:'a',name:'Baseline',equipment:JSON.parse(JSON.stringify(ctx.createDemoCaseRequest_().equipment)),dynamicConfig:{durationSeconds:60,tickSeconds:.25,sampleEverySeconds:1,seed:23,commands:[]},results:{summary:{throughput:41},replay:{samples:[1,2]}}};record={id:'case-a',revision:1,simulations:[source]};
+ const source={id:'a',name:'Baseline',equipment:JSON.parse(JSON.stringify(ctx.createDemoCaseRequest_().equipment)),dynamicConfig:{durationSeconds:60,tickSeconds:.25,sampleEverySeconds:1,seed:23,commands:[]},results:{summary:{throughput:41},replay:{samples:[1,2]}}};completeSyntheticScenarioSource(source);record={id:'case-a',revision:1,simulations:[source]};
  const proposal=ctx.STScenarioEngine_.plan(source).projects.find(p=>p.canApply);proposal.title='Infeed study';
  const request={caseId:'case-a',simulationId:'a',expectedRevision:1,sourceSignature:ctx.STScenarioEngine_.signature(source),proposal,origin:'GEMINI'};
  return {ctx,request,record:()=>record,writes:()=>writes,releases:()=>releases};
 }
+test('scenario creation requires a complete current numerical result even for STATIC proposals',()=>{
+ for(const mutate of [source=>source.results=null,source=>source.results.replicationStatus.state='CALCULATING',source=>source.results.batch.rows=[],source=>source.dynamicConfig.durationSeconds++]){
+  const h=setup();mutate(h.record().simulations[0]);
+  assert.throws(()=>h.ctx.createScenario_(h.request,{email:'owner@test'}),error=>error.code==='SCENARIO_SOURCE_NOT_READY');
+  assert.equal(h.writes(),0);assert.equal(h.record().simulations.length,1);
+ }
+});
 test('scenario cloning and overrides are one owned, revision-checked write with baseline and seed preserved',()=>{
  const h=setup(),baseline=JSON.stringify(h.record().simulations[0]);
  const response=h.ctx.createScenario_(h.request,{email:'owner@test'});assert.equal(h.writes(),1);assert.equal(h.releases(),1);assert.equal(response.case.simulations.length,2);

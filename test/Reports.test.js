@@ -170,11 +170,30 @@ test('loss exports retain matched percentages and reject stale diagnostic inputs
 test('scenario PDF and JSON include retained sensor targets, reliability scope and ANOVA',()=>{
  const h=setup();try{
   const c={equipmentId:h.sim.equipment[1].id,path:'processData.accumulation.backupSensorPositionMm',before:100,after:123.456789,unit:'mm'};
-  const anova={complete:true,interpretation:'Exploratory unadjusted p-values',metrics:{oee:{effects:[{factors:[0],effect:2,f:12,pValue:.00001234,significant:true}]}}};
+  const anova={complete:true,alpha:.05,interpretation:'Primary paired contrasts with a joint Holm family',metrics:{oee:{effects:[{factors:[0],effect:2,f:12,pValue:.00001234,significant:true,paired:{inferenceAvailable:true,pAdjusted:.00002468,significantAdjusted:true}}]}}};
   const e={title:'Conditional experiment',status:'REPRODUCED',evaluatedChanges:[c],doe:{factors:[],observations:[],fixedChanges:[],anova},reliabilityTargetSearch:{ranking:[{name:'Sleever',deltaThroughput:3}],selectedChanges:[]}};
   h.w.STScenarioExplorer={evaluations:()=>[e]};h.sim.results=h.result;h.sim.whatIf={searchDepth:'HIGH',reliabilitySettings:{scope:'MANUAL',equipmentIds:['sleever']}};
   const plan=h.w.STScenarios.plan(h.sim),data=h.w.STReports.whatIfData(h.sim,plan);assert.equal(data.evaluations[0].doe.anova.metrics.oee.effects[0].pValue,.00001234);assert.equal(data.scenarioConfiguration.reliabilitySettings.scope,'MANUAL');
   for(const mode of ['basic','advance']){h.w.document.documentElement.dataset.uiMode=mode;const doc=new JSDOM(h.w.STReports.whatIfHtml(h.sim,plan));const text=doc.window.document.body.textContent;assert(text.includes('ANOVA'));assert(text.includes('<0.0001'));assert(text.includes('Sleever'));assert(text.includes('123.46 mm'));assert.equal(doc.window.document.querySelectorAll('script').length,0);doc.window.close();}
+ }finally{h.dom.window.close();}
+});
+
+test('ANOVA report uses paired Holm evidence and never promotes legacy or deterministic significance',()=>{
+ const h=setup();try{
+  const effects=[
+   {factors:[0],effect:2,f:100,pValue:.000001,significant:true,paired:{inferenceAvailable:true,pAdjusted:.12,significantAdjusted:false}},
+   {factors:[1],effect:3,f:200,pValue:.000001,significant:true},
+   {factors:[0,1],effect:4,f:300,pValue:.000001,significant:true,pAdjusted:0,paired:{inferenceAvailable:false,pAdjusted:null,reason:'ZERO_OBSERVED_VARIANCE'}}
+  ];
+  h.w.STScenarioExplorer={evaluations:()=>[{title:'Inference review',status:'IMPROVEMENT_REPRODUCED',evaluatedChanges:[],doe:{factors:[],observations:[],fixedChanges:[],anova:{complete:true,alpha:.05,metrics:{throughput:{effects}}}}}]};
+  const doc=new JSDOM(h.w.STReports.whatIfHtml(h.sim,h.w.STScenarios.plan(h.sim)));
+  const table=Array.from(doc.window.document.querySelectorAll('table')).find(t=>t.querySelector('thead')?.textContent.includes('p (Holm)'));
+  assert(table);assert.match(table.querySelector('thead').textContent,/F \(exploratory\)/);
+  const rows=Array.from(table.querySelectorAll('tbody tr')).map(row=>Array.from(row.querySelectorAll('td')).map(cell=>cell.textContent));
+  assert.equal(rows[0][3],'0.12');assert.equal(rows[0][4],'No');
+  assert.deepEqual(rows[1].slice(3),['—','—']);assert.deepEqual(rows[2].slice(3),['—','—']);
+  assert.match(doc.window.document.body.textContent,/zero observed contrast variance do not establish significance/);
+  doc.window.close();
  }finally{h.dom.window.close();}
 });
 

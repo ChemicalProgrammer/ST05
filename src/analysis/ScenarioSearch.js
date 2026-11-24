@@ -1,9 +1,10 @@
 import {scenarioPairedSummary,planScenarioReplications} from './ScenarioStatistics.js';
+import {resolvePlannedStops} from '../simulation/PlantCalendarSchedule.js';
 
 export const SCENARIO_SEARCH_PROFILES = Object.freeze({
-  LIGHT: {explorationSeconds:300,confirmationSeconds:1800,maxCandidates:48,maxSearchMs:120000,maxWithoutImprovement:16,maxFactors:0,passes:1,finalists:4},
-  MEDIUM: {explorationSeconds:600,confirmationSeconds:1800,maxCandidates:128,maxSearchMs:300000,maxWithoutImprovement:32,maxFactors:3,passes:2,finalists:6},
-  HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6}
+  LIGHT: {explorationSeconds:300,confirmationSeconds:1800,maxCandidates:48,maxSearchMs:120000,maxWithoutImprovement:16,maxFactors:0,passes:1,finalists:4,fullHorizonFinalists:2},
+  MEDIUM: {explorationSeconds:600,confirmationSeconds:1800,maxCandidates:128,maxSearchMs:300000,maxWithoutImprovement:32,maxFactors:3,passes:2,finalists:6,fullHorizonFinalists:2},
+  HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6,fullHorizonFinalists:3}
 });
 export function scenarioSearchProfile(level) { return SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM; }
 export function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
@@ -15,6 +16,39 @@ export function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
   // What-If compares complete equal calendar horizons and records that choice.
   delete copy.effectiveRuntimeTargetSeconds;
   return copy;
+}
+
+// The intermediate screen selects where to spend simulation time; it never
+// certifies a gain. Selection and independent confirmation retain the full day.
+export function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
+  const profile=scenarioSearchProfile(level),fullRun=scenarioSearchRun(run,level,'validation');
+  const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
+  const screenRun=scenarioSearchRun(run,level,true);
+  // A short prefix does not represent an entire shift/calendar/product program.
+  // Keep every finalist when the run has explicit changes over time.
+  const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);
+  const reason=scheduled?'SCHEDULED_CONDITIONS_REQUIRE_FULL_HORIZON':fullRun.durationSeconds<=2*screenRun.durationSeconds?'SHORT_CONFIGURED_HORIZON':candidateCount<=limit?'WITHIN_FULL_HORIZON_BUDGET':null;
+  return {policy:'STAGED_FINALIST_RANKING_V1',staged:!reason,reason,screenRun,fullRun,fullHorizonFinalists:reason?candidateCount:limit,
+    screeningSeedOffset:50003,rankingSeedOffset:100003,confirmationSeedOffset:1000003,
+    interpretation:'A bounded intermediate screen may omit a configuration whose benefit emerges later. Final recommendations still require full-horizon ranking and independent confirmation; this is not a global optimum search.'};
+}
+
+export function selectScenarioFinalists(screened,baseline,limit) {
+  const valid=screened.filter(item=>item?.changes?.length&&Number.isFinite(item.result?.throughput)&&Number.isFinite(item.result?.oee));
+  // Compare paired gains only within the common intermediate horizon. Prefer
+  // valid engineering, then observed OEE non-regression and throughput gain.
+  const score=item=>item.result.throughput-baseline.throughput;
+  valid.sort((a,b)=>Number(!!a.result.warnings?.length)-Number(!!b.result.warnings?.length)||Number(a.result.oee<baseline.oee-1e-9)-Number(b.result.oee<baseline.oee-1e-9)||score(b)-score(a));
+  const chosen=[],combinations=new Set();
+  const key=item=>item.changes.map(c=>c.equipmentId+':'+c.path).sort().join('|');
+  function add(item){if(item&&!chosen.includes(item)){chosen.push(item);combinations.add(key(item));}}
+  // Reliability interventions may show no event in a short prefix. Preserve
+  // them for long-horizon review rather than declaring no benefit from silence.
+  valid.filter(item=>item.changes.some(c=>c.path.startsWith('noiseProfile.reliability.'))).forEach(add);
+  add(valid[0]);
+  for(const item of valid)if(chosen.length<limit&&!combinations.has(key(item)))add(item);
+  for(const item of valid)if(chosen.length<limit)add(item);
+  return chosen;
 }
 export function scenarioConfirmationNeedsMore(base,candidate) {
   const a=base?.roundMetrics,b=candidate?.roundMetrics;

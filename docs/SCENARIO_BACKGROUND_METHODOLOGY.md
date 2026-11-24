@@ -2,7 +2,7 @@
 
 ## Propósito y alcance
 
-La política `MATCHED_CAPEX_V10` incorpora una cadena de evidencia para los escenarios existentes: diagnóstico compatible, hipótesis de intervención, experimentos, confirmación independiente, estimación económica y revisión pendiente en planta. La lógica trabaja detrás de las tarjetas y los controles actuales. No añade un formulario de inversión ni cambia la organización de la interfaz.
+La política `MATCHED_CAPEX_V11` incorpora una cadena de evidencia para los escenarios existentes: resultado numérico completo, diagnóstico compatible, hipótesis de intervención, experimentos, selección escalonada, confirmación independiente y revisión pendiente en planta. La lógica trabaja detrás de las tarjetas y los controles actuales. No cambia la organización de la interfaz. En esta etapa, los presupuestos, montos de inversión y cálculos financieros quedan fuera del estudio normal; CAPEX clasifica el tipo de intervención.
 
 El resultado es un estudio trazable del paquete de cambios evaluado. Una mejora reproducida en el modelo no demuestra por sí misma la causa física de una falla, la posibilidad de alcanzar un MTBF propuesto, la conveniencia de comprar una máquina o el resultado futuro en planta.
 
@@ -10,11 +10,11 @@ Las implementaciones de referencia son:
 
 | Responsabilidad | Fuente |
 |---|---|
-| Procedencia de resultados y diagnóstico de pérdidas | [ScenarioPlanner.js](../src/analysis/ScenarioPlanner.js), [SimulationProvenance.js](../src/simulation/SimulationProvenance.js) |
+| Procedencia de resultados y diagnóstico de pérdidas | [ScenarioReadiness.js](../src/analysis/ScenarioReadiness.js), [ScenarioPlanner.js](../src/analysis/ScenarioPlanner.js), [SimulationProvenance.js](../src/simulation/SimulationProvenance.js) |
 | Capacidad nominal y pérdidas observadas | [LinePerformanceAnalysis.js](../src/analysis/LinePerformanceAnalysis.js) |
 | Diseño factorial y análisis | [ScenarioDOE.js](../src/analysis/ScenarioDOE.js) |
 | Estadística de réplicas y tamaño de confirmación | [ScenarioStatistics.js](../src/analysis/ScenarioStatistics.js), [ScenarioSearch.js](../src/analysis/ScenarioSearch.js) |
-| Estudio compacto y economía | [ScenarioMethodology.js](../src/analysis/ScenarioMethodology.js) |
+| Estudio técnico compacto y API económica separada | [ScenarioMethodology.js](../src/analysis/ScenarioMethodology.js) |
 | Ejecución y guardado de la evaluación | [ScenarioExplorer.html](../apps-script/ScenarioExplorer.html) |
 | Creación del escenario y reconstrucción del estudio | [ScenarioService.gs](../apps-script/ScenarioService.gs) |
 | Contexto resumido para el asistente | [GeminiContext.gs](../apps-script/GeminiContext.gs) |
@@ -24,25 +24,30 @@ Las implementaciones de referencia son:
 
 | Etapa | Información utilizada | Resultado y alcance |
 |---|---|---|
+| Requisito de entrada | Corrida numérica al 100%, con las réplicas solicitadas, semillas únicas, duración y firma actuales | Habilita búsqueda y creación; resultados incompletos, históricos o desactualizados se rechazan. |
 | Diagnóstico | Resultados completos compatibles con el equipo, configuración, motor y procedencia actuales | Tiempos, frecuencias registradas, rankings y oportunidades; las causas permanecen como hipótesis. |
 | Intervención | Cambios seleccionados, límites y fuentes reportadas | Diferencia entre ajuste operativo, mantenimiento, retrofit, reemplazo y sensibilidad exploratoria. |
 | Exploración y DOE | Factores acotados, cambios fijos y réplicas con semillas pareadas | Comparaciones dentro del dominio ensayado; identifica efectos e interacciones. |
+| Selección escalonada | Finalistas de exploración comparados a 30 minutos, si el programa temporal permite el filtro | Reduce los finalistas enviados al horizonte completo; no certifica una mejora. |
 | Plan de confirmación | Diferencias entre réplicas del piloto de selección de finalistas | Número de réplicas fijado antes de observar la confirmación, con objetivo de precisión y tope. |
 | Confirmación independiente | Base y candidato con iguales condiciones y semillas nuevas respecto del piloto | Evidencia de mejora práctica dentro del modelo, con precisión observada y protección frente a regresión media de OEE. |
-| Economía | Diferencia de throughput confirmada y presupuesto asociado al paquete exacto | Producción aprovechable, contribución, VPN, recuperación simple y sensibilidad condicionada. |
+| Clasificación CAPEX | Tipo de intervención y alcance físico | Cero: recursos existentes/mantenimiento; medio: retrofit; alto: reemplazo o rediseño mayor. No utiliza presupuesto. |
 | Validación en planta | Fuentes de ingeniería, cotizaciones, pruebas piloto y seguimiento | Se conserva lo reportado; el programa no certifica automáticamente esos documentos ni resultados. |
 
 El estudio permite conservar una etapa como `NOT_EVALUATED` sin sustituir información faltante por cero, certeza o supuestos de factibilidad.
 
-## 2. Diagnóstico compatible antes de proponer inversión
+## 2. Resultado completo y diagnóstico compatible
 
-`diagnoseScenarioLosses(simulation)` revisa que exista un resultado completo con firma de entrada válida y versión de procedencia compatible. Compara los equipos, el motor, la unidad de flujo y la configuración de corrida con los datos actuales. Los resultados históricos o desactualizados conservan motivos explícitos, como `PROVENANCE_VERSION_MISMATCH`, `EQUIPMENT_CHANGED` o `RUN_CONFIGURATION_CHANGED`; no se convierten en un diagnóstico vigente.
+`scenarioSourceReadiness(simulation)` se aplica antes de buscar o crear escenarios tanto en navegador como en servidor. Exige estado `COMPLETE`, las réplicas previstas, semillas únicas correspondientes al caso, métricas finitas y finalización del horizonte calendario o del objetivo de tiempo efectivo/límite configurado. Un indicador visual del 100% no sustituye esa evidencia. Las propuestas estáticas internas siguen disponibles como catálogo de variables e hipótesis; no autorizan a generar un escenario sin la corrida numérica completa.
+
+`diagnoseScenarioLosses(simulation)` reutiliza ese mismo requisito y revisa que exista un resultado completo con firma de entrada válida y versión de procedencia compatible. Compara los equipos, el motor, la unidad de flujo y la configuración de corrida con los datos actuales. Los resultados históricos o desactualizados conservan motivos explícitos, como `PROVENANCE_VERSION_MISMATCH`, `EQUIPMENT_CHANGED` o `RUN_CONFIGURATION_CHANGED`; no se convierten en un diagnóstico vigente.
 
 En resultados con varias réplicas, el diagnóstico utiliza medias por equipo cuando están disponibles. No sustituye silenciosamente una media faltante por la observación de la primera réplica. La base temporal se identifica como duración media real de las réplicas o duración registrada del resultado.
 
 Los rankings distinguen:
 
-- Duración de paros propios, fallas y microparos.
+- Duración de paros propios y fallas MTBF/MTTR, con categorías `MINOR`, `MAJOR` y `GENERAL`.
+- Duración del proceso independiente `MICRO_STOP`, sin confundirlo con `MINOR`.
 - Duración de falta de suministro y bloqueo.
 - Frecuencia de fallas y microparos, solamente cuando los eventos fueron registrados.
 
@@ -52,21 +57,40 @@ La estructura `attribution` declara que los estados de equipos no son pérdidas 
 
 `opportunities` conserva hipótesis como reducción de paros internos, revisión de suministro o buffer aguas arriba y capacidad o buffer aguas abajo. No elige automáticamente entre mantenimiento y reemplazo. El diagnóstico de capacidad nominal también es una referencia de diseño: excluye restricciones adicionales de transporte, arranques y paros, y no demuestra por sí solo el cuello de botella dinámico.
 
+### Desglose de paradas y alcance de los ajustes
+
+`scenarioStopDataCoverage(simulation, equipment)` declara el origen y la cobertura de los datos. No utiliza un umbral de duración para inventar clases.
+
+| Datos del caso | Lectura del algoritmo | Alcance disponible |
+|---|---|---|
+| Solo MTBF/MTTR general | `GENERAL`, sin división inferida | Simulación y comparación de flujo; no atribuye los beneficios a minor o major. |
+| `stopInputs.minor` y `stopInputs.major` válidos | `SPLIT`; conserva sus frecuencias, duraciones y categorías declaradas | Diagnóstico por clase; la causa física aún necesita evidencia. |
+| `noiseProfile.microStop` | Proceso `MICRO_STOP` independiente | Se mantiene separado de los eventos MTBF/MTTR minor. |
+| Réplicas sin métricas por categoría | La métrica faltante queda `null` | No se sustituye por la primera réplica, por cero ni por una proporción supuesta. |
+
+Se recomienda medir el desglose cuando la pregunta consiste en recuperar microparadas o decidir una intervención por tipo de paro. Las frecuencias minor/major deben referirse a la misma exposición operativa. Un MTBF y MTTR agregados no permiten reconstruir de manera única las dos frecuencias y las dos duraciones; clases con la misma media pueden producir consecuencias de acumulación diferentes. Por eso el desglose es necesario para atribución específica, pero no bloquea un experimento honesto de flujo con datos generales.
+
+El dimensionamiento de recuperación usa el **MTTR minor declarado**. Un MTTR agregado corto no se convierte automáticamente en microparada; una clase minor larga tampoco se reclasifica por duración. La existencia de paradas major solicita revisión de causa e intervención, sin concluir que sean externas ni que el equipo deba reemplazarse.
+
+Los candidatos de sensores, balanceo y recuperación reciben prioridad por exposición minor, `MICRO_STOP` y propagación de falta de suministro/bloqueo. Los tiempos propios major o generales no incrementan esa prioridad. Los ajustes de sensores/velocidad mantienen intactos los parámetros de ambos tipos de falla: buscan cambiar la propagación y recuperación del flujo. El número observado de eventos puede variar por la exposición productiva, sin demostrar una mejora física de confiabilidad.
+
+Una modificación agregada de MTBF/MTTR, cuando se aporta como intervención documentada o sensibilidad explícita, afecta proporcionalmente **todas las clases de confiabilidad configuradas**; no se presenta como una mejora exclusiva de minor y no cambia el proceso `MICRO_STOP`. La búsqueda de confiabilidad prioriza fallas MTBF/MTTR, excluyendo ese proceso independiente. El estudio conserva `targetScope`, `stopDataCoverage` y `modeledStopEffect` para que ese alcance sea visible en la evidencia interna.
+
 ## 3. Hipótesis y clasificación de las intervenciones
 
 El estudio relaciona los cambios de cada equipo con sus observaciones de pérdida y, cuando existe, su evidencia de limitación nominal. Se pueden añadir fuentes y una descripción mediante `simulation.whatIf.methodology.interventions`.
 
-| Tipo reportado | Clase registrada | Interpretación |
-|---|---|---|
-| `OPERATIONAL` | `NONE` | Recursos existentes o prácticas de operación. |
-| `MAINTENANCE` | `OPEX` | Recursos o actividades adicionales de mantenimiento. |
-| `RETROFIT` | `CAPEX` | Rehabilitación o modificación localizada. |
-| `REPLACEMENT` | `CAPEX` | Reemplazo completo del equipo. |
-| `SENSITIVITY` o cambio `analysisOnly` | `UNASSIGNED` | Objetivo exploratorio del modelo; falta establecer la intervención realizable. |
+| Tipo reportado | Categoría de escenario | Naturaleza cualitativa | Interpretación |
+|---|---|---|---|
+| `OPERATIONAL` | `ZERO` | `NONE` | Recursos existentes o prácticas de operación. |
+| `MAINTENANCE` | `ZERO` | `OPEX` | Actividades de mantenimiento sin nueva inversión de capital. |
+| `RETROFIT` | `MEDIUM` | `CAPEX` | Rehabilitación o modificación localizada. |
+| `REPLACEMENT` | `HIGH` | `CAPEX` | Reemplazo completo del equipo, cualquiera que sea su costo. |
+| `SENSITIVITY` o cambio `analysisOnly` | `UNASSIGNED` | `UNASSIGNED` | Objetivo exploratorio del modelo; falta establecer la intervención realizable. |
 
 Los alcances de las categorías de escenario siguen siendo `ZERO`, `MEDIUM` y `HIGH`. No se clasifican por un porcentaje obligatorio de mejora o por una cantidad monetaria inventada. Una sustitución puede aportar una mejora pequeña; esa mejora no establece que la sustitución sea rentable.
 
-Si falta una intervención documentada, el estudio conserva clasificaciones como `INTERVENTION_UNSPECIFIED`, `PHYSICAL_CHANGE_UNSPECIFIED` u `OPERATING_PARAMETER_ADJUSTMENT`. Una descripción o cotización reportada no cambia `rootCauseVerified` ni `targetAchievabilityVerified` a verdadero. Los objetivos exploratorios conservan su condición aun cuando exista una descripción de reemplazo.
+Si falta una intervención documentada, el estudio conserva clasificaciones como `INTERVENTION_UNSPECIFIED` u `OPERATING_PARAMETER_ADJUSTMENT`; la ampliación geométrica se registra como `LINE_REDESIGN`. Una descripción o cotización reportada no cambia `rootCauseVerified` ni `targetAchievabilityVerified` a verdadero. Los objetivos exploratorios conservan su condición aun cuando exista una descripción de reemplazo.
 
 ## 4. DOE factorial, semillas pareadas y multiplicidad
 
@@ -88,7 +112,9 @@ Si la variación observada del contraste es cero, se conserva el efecto descript
 
 Los efectos se interpretan **condicionados a `doe.fixedChanges`, a la base y al rango de factores ensayado**. Por ejemplo, una mejora de sensor ensayada junto con una hipótesis fija de MTBF no demuestra el mismo efecto sin esa mejora de confiabilidad. Tampoco demuestra un óptimo global.
 
-Las APIs de análisis aceptan `options.confidenceLevel`. La integración actual del explorador las llama sin esa opción, de modo que el DOE usa 0.95. El valor opcional `methodology.replications.confidenceLevel` se aplica a la confirmación final; actualmente no modifica la confianza del DOE integrado.
+Los controles existentes conservan su alcance: `metadata.includeDOE` habilita DOE en el caso; profundidad, selección de variables, casilla DOE, límites bajo/alto y límite factible se guardan en la configuración del escenario. `LIGHT` omite DOE, `MEDIUM` admite hasta tres factores y `HIGH` hasta cuatro, también en la selección automática. Se evalúan las `2^k` combinaciones con tres réplicas pareadas por combinación. El ANOVA se calcula sobre esas mismas observaciones en `MEDIUM` y `HIGH`, sin añadir corridas.
+
+`methodology.replications.confidenceLevel` se utiliza ahora en el screening, DOE/ANOVA y confirmación, con 0.95 por defecto. Las APIs aceptan `options.confidenceLevel`, `options.alpha` o el alias `options.confidence`; parámetros contradictorios se rechazan y `alpha = 1 - confidenceLevel`. No se añade un formulario nuevo. La ampliación exploratoria de tres a seis semillas sigue siendo selección preliminar; no se confunde con la confirmación independiente de tamaño fijado por anticipado.
 
 ## 5. Horizontes comparables y plan fijo de confirmación
 
@@ -100,7 +126,33 @@ La exploración utiliza los perfiles existentes:
 | `MEDIUM` | 600 s | 3 |
 | `HIGH` | 900 s | 4 |
 
-La selección de finalistas y la confirmación utilizan el horizonte completo previsto por What-If: al menos 1.800 s y, cuando es mayor, la duración configurada. `scenarioSearchRun()` prepara una copia con duración calendario fija. Retira el objetivo de tiempo efectivo de esa copia porque detener cada alternativa al alcanzar el mismo tiempo efectivo produciría exposiciones calendario diferentes. La configuración original del usuario permanece como fuente y el estudio registra esa base de comparación.
+Para horizontes largos se añade una selección intermedia de 1.800 s antes de invertir el tiempo de cálculo del día completo. Por defecto, se conservan hasta dos finalistas de flujo en `LIGHT`/`MEDIUM` y tres en `HIGH`; los finalistas retenidos que incluyen cambios de confiabilidad se protegen porque una falla rara puede no aparecer en treinta minutos, por lo que el total puede superar ese límite. Esta protección no garantiza que todos los objetivos inicialmente explorados entren a la lista de finalistas. Se omite el filtro corto si existen órdenes o eventos de calendario que realmente se ejecutan, si el horizonte completo es de una hora o menos, o si ya hay pocos candidatos. Un calendario deshabilitado o usado únicamente para contabilidad no obliga a saltarse el filtro.
+
+El filtro es exploratorio y puede omitir una configuración cuya ventaja aparece tarde; no demuestra ausencia de mejora ni un óptimo global. `rankingPlan` y `phaseAudit.finalistScreening` registran horizontes, seleccionados, omitidos y candidatos protegidos. La instantánea compacta conserva esos datos en `study.evidence.finalistSelection`.
+
+### Costo de cálculo y comprobación de rendimiento
+
+Con residencia de máquinas habilitada, el motor conserva un paso físico de 1/120 s. Un día representa 10.368.000 pasos por réplica; seis finalistas con tres réplicas representan 186.624.000 pasos, antes de sumar base, exploración y confirmación. `summaryOnly` y los workers evitan tareas de presentación y mantienen la interfaz disponible, pero no eliminan ese trabajo físico.
+
+Ejemplo de trabajo virtual en la clasificación de seis finalistas de flujo, sin eventos que impidan el filtro, con horizonte de 1.440 minutos y profundidad `MEDIUM`:
+
+| Trabajo | Antes | Con selección intermedia |
+|---|---:|---:|
+| Base y seis finalistas a 30 min × 3 réplicas | 0 min virtuales | 630 min virtuales |
+| Clasificación a 1.440 min × 3 réplicas | 7 configuraciones: 30.240 min virtuales | Base y dos finalistas: 12.960 min virtuales |
+| Total de esta fase | 30.240 min virtuales | 13.590 min virtuales |
+
+La reducción es aproximadamente 55 % del trabajo virtual de esta fase. No es una promesa del mismo porcentaje de reducción en el tiempo total; exploración, DOE, confirmación y costos de ejecución permanecen. La confirmación no se acorta.
+
+El motor además omite el paso de transporte en conexiones internas sin cinta física; la transferencia directa sigue calculándose. Benchmark local con Node 24.22.3, cuatro variantes demo de 19 equipos, dos semillas y 600 s por corrida: 13,574 s acumulados antes frente a 12,508 s después (aproximadamente 7,9 % menos). Se comparó la respuesta completa con igualdad exacta en modo resumen y también en corridas detalladas con eventos y replay. No se modificaron el paso, las semillas ni los resultados físicos. Es una medición local, no la latencia del navegador del usuario ni una ejecución de su caso de 24 horas.
+
+Comando reproducible con una copia del motor anterior en `BASELINE_DIR`:
+
+```bash
+node scripts/benchmark-simulation.mjs --baseline BASELINE_DIR --duration 600 --rounds 2 --output benchmark.json
+```
+
+Los finalistas retenidos y la confirmación siguen utilizando el horizonte completo previsto por What-If: al menos 1.800 s y, cuando es mayor, la duración configurada. `scenarioSearchRun()` prepara una copia con duración calendario fija. Retira el objetivo de tiempo efectivo de esa copia porque detener cada alternativa al alcanzar el mismo tiempo efectivo produciría exposiciones calendario diferentes. La configuración original del usuario permanece como fuente y el estudio registra esa base de comparación.
 
 La exploración y el DOE utilizan sus propias réplicas, normalmente tres. La confirmación tiene un tamaño calculado por separado; no debe describirse un DOE de tres réplicas como un DOE de 12 porque su candidato luego se confirmó con 12.
 
@@ -174,99 +226,19 @@ Las metas requieren unidad y magnitud coherentes para que el estudio las declare
 
 Las fuentes, factibilidad y piloto son datos reportados. Incluso un campo proporcionado con el nombre `verified` o `validated` queda dentro de `REPORTED_NOT_VERIFIED`; no altera la validación del estudio.
 
-## 8. Contrato económico
+## 8. Presupuestos fuera del estudio técnico
 
-`evaluateScenarioEconomics(simulation, evaluation, config?)` recibe por defecto `simulation.whatIf.methodology.economics`. Utiliza exclusivamente el paquete `evaluation.evaluatedChanges` y los promedios de su `independentCheck` satisfactorio. No utiliza la mejor cifra encontrada durante exploración.
+El estudio normal devuelve `economics.status: "NOT_EVALUATED"`, `reason: "OUT_OF_SCOPE"` y `monetaryInputsRequired: false`. No solicita montos, no calcula rentabilidad y no usa presupuestos para ordenar o clasificar escenarios. Una sustitución completa es `HIGH` por el tipo de intervención; una optimización de sensores con los recursos existentes es `ZERO` por su alcance.
 
-### Datos requeridos
+`scenarioTechnicalMethodology(methodology)` prepara los metadatos técnicos para la identidad de la búsqueda: crea una copia canónica con claves ordenadas y excluye únicamente los campos monetarios de primer nivel `economics`, `budget`, `capexBudget` e `investmentBudget`. Conserva las hipótesis, fuentes, objetivos, parámetros estadísticos y `costClass` cualitativo. Cambiar un presupuesto no obliga a repetir la simulación técnica.
 
-| Campo de `economics` | Unidad o condición |
-|---|---|
-| `packageSignature` | Firma canónica completa del paquete: `study.evaluatedPackage.signature`. Obligatoria. |
-| `packageId` | Identificador corto opcional; si se proporciona, también debe coincidir. |
-| `currency` | Tres letras mayúsculas, por ejemplo `MXN` o `USD`. La validación es sintáctica; no hace conversión de monedas. |
-| `unitOfFlow` | `bottles`, `cases`, `pallets` o `units`, coherente con la comparación. No hay conversión automática entre botellas y cajas. |
-| `investment` | Inversión inicial, en la moneda indicada; valor no negativo. |
-| `installationCost` | Costo inicial de instalación; no negativo. |
-| `implementationLoss` | Pérdida incremental durante la implementación, monetizada; no negativa. |
-| `lifeYears` | Horizonte de vida: entero de 1 a 100 años. |
-| `discountRate` | Tasa anual como fracción de 0 a 1; `0.10` equivale a 10%. |
-| `annualOperatingMinutes` | Minutos calendario anuales aplicables: mayor que cero y hasta 527.040. |
-| `contributionMarginPerUnit` | Contribución incremental por unidad de flujo; no es precio bruto de venta. |
-| `annualIncrementalDemand` | Demanda adicional aprovechable por año en la misma unidad de flujo; no es demanda total de planta. |
-| `annualAvoidableSavings` | Ahorros anuales evitables adicionales y separados del margen; no negativos. |
-| `annualIncrementalOpex` | OPEX anual adicional separado de margen y ahorro; no negativo. |
-| `residualValue` | Valor residual al final del último año; no negativo. |
-| `benefitBasis` | Literal obligatorio: `INCREMENTAL_NON_OVERLAPPING`. |
-| `annualizationBasis` | Literal obligatorio: `REPRESENTATIVE_CONFIRMATION_RATE`. |
-
-Todos los números de la tabla son obligatorios para calcular la economía. Cero es válido donde se indica, pero ausencia, `null` y cadena vacía no significan cero. Los valores numéricos deben ser números, no cadenas. La función devuelve `missingInputs`, `invalidInputs` y `blockers` cuando corresponde; una comparación degradada, sin confirmación o sin fuente trazable queda `NOT_EVALUATED`.
-
-### Ecuaciones y prevención de doble conteo
-
-Sean `deltaQ` la diferencia confirmada de throughput, `M` los minutos anuales y `D` la demanda incremental aprovechable:
-
-```text
-Capacidad adicional anual = deltaQ * M
-Producción adicional aprovechada = min(Capacidad adicional anual, D)
-Contribución adicional = Producción adicional aprovechada * Margen por unidad
-Beneficio neto anual = Contribución adicional + Ahorro evitable - OPEX adicional
-Desembolso inicial = Inversión + Instalación + Pérdida de implementación
-```
-
-El margen debe descontar los costos incrementales propios de cada unidad. Esos mismos costos no deben cargarse de nuevo como OPEX ni reaparecer como ahorro. El ahorro separado debe corresponder a un gasto realmente evitable y distinto de la contribución de la producción adicional. La inversión y los gastos iniciales no se repiten en el flujo anual.
-
-La implementación calcula flujos anuales constantes al final de cada año, con residual al final del último. El VPN descuenta esos flujos y resta el desembolso inicial. No incorpora por su cuenta impuestos, financiación, inflación, rampas de adopción, crecimiento comercial o valores residuales faltantes.
-
-`simplePaybackYears` divide el desembolso inicial entre beneficio neto anual positivo. Excluye descuento y residual. `paybackWithinHorizon` indica si ese plazo cabe dentro de la vida declarada. Con desembolso cero o beneficio no positivo, el plazo es `null`.
-
-`simpleLifetimeRoi` es una fracción acumulada de toda la vida: beneficio anual por años más residual menos desembolso inicial, dividido entre ese desembolso. No es una tasa anualizada y es `null` si el desembolso es cero. Un VPN positivo sigue siendo una estimación condicionada, no una autorización de inversión.
-
-### Firma exacta y estimación consultiva
-
-La firma canónica del paquete incluye la simulación y firma de origen, los cambios ordenados y sus datos de intervención, unidades y naturaleza exploratoria. El hash corto no basta: `packageSignature` debe coincidir íntegramente. Un presupuesto de una máquina no se hereda automáticamente cuando cambia el paquete evaluado.
-
-Ejemplo de consulta desde el navegador, con importes ficticios explícitos y sin guardar ni aprobar un escenario:
-
-```js
-const study = STScenarios.study(simulation, evaluation);
-const budget = {
-  packageSignature: study.evaluatedPackage.signature,
-  packageId: study.evaluatedPackage.id,
-  currency: "MXN",
-  unitOfFlow: "bottles",
-  investment: 200000,
-  installationCost: 20000,
-  implementationLoss: 10000,
-  lifeYears: 5,
-  discountRate: 0.10,
-  annualOperatingMinutes: 240000,
-  contributionMarginPerUnit: 0.50,
-  annualIncrementalDemand: 500000,
-  annualAvoidableSavings: 0,
-  annualIncrementalOpex: 12000,
-  residualValue: 0,
-  benefitBasis: "INCREMENTAL_NON_OVERLAPPING",
-  annualizationBasis: "REPRESENTATIVE_CONFIRMATION_RATE"
-};
-const advisoryEstimate = STScenarios.economics(simulation, evaluation, budget);
-```
-
-La API pura no recalcula la firma actual del simulador ni vuelve a ejecutar el motor. El llamador debe usar una evaluación y una fuente verificadas. El flujo de creación en servidor sí comprueba la fuente vigente y vuelve a evaluar la confirmación guardada antes de reconstruir el estudio.
-
-Los metadatos completos, incluidos los costos, participan en `methodologySignature`. Guardar un presupuesto nuevo dentro de `methodology` invalida la elegibilidad de una evaluación asociada a otros metadatos hasta recalcularla. Esta regla es conservadora, aunque pueda repetir cálculo cuando solo cambió un costo. La consulta con `config` explícita permite preparar una estimación aparte; no la convierte en evidencia vigente aprobada ni en validación de inversión.
-
-### Sensibilidad económica
-
-Cuando existe un intervalo de la diferencia media de throughput, la función propaga sus extremos manteniendo constantes los datos comerciales y financieros. El intervalo debe ser coherente con la diferencia confirmada. No se emplea un intervalo de exploración.
-
-Esta sensibilidad representa únicamente incertidumbre de la media de la simulación condicionada al modelo. No incluye incertidumbre de costos, demanda, vida útil, datos de entrada o fidelidad del modelo. Si no existe inferencia por varianza observada cero, no se genera un intervalo monetario. Si un extremo implica pérdida de throughput, ese extremo queda sin valorar: monetizar esa pérdida requeriría demanda base adicional; no se reemplaza silenciosamente por cero.
+La función separada `evaluateScenarioEconomics(simulation, evaluation, config?)` se conserva como API de uso explícito para trabajos futuros. No se ejecuta al construir un estudio CAPEX normal. Si se llama deliberadamente, exige datos suficientes asociados al paquete exacto y evidencia de confirmación; la ausencia de datos nunca se sustituye por costo cero. Su resultado separado no constituye un requisito de búsqueda, criterio de selección ni validación de inversión.
 
 ## 9. Guardado y trazabilidad
 
-Una evaluación conserva `searchPolicyVersion: "MATCHED_CAPEX_V10"`, `sourceSimulationId`, `sourceSignature`, metadatos canónicos y `methodologySignature`. Al guardarse, incluye su `study`; `lastResult` conserva el estudio del resultado anterior cuando se necesita mostrarlo junto a una configuración posterior todavía no evaluada.
+Una evaluación conserva `searchPolicyVersion: "MATCHED_CAPEX_V11"`, `sourceSimulationId`, `sourceSignature`, metadatos técnicos canónicos y `methodologySignature`. Al guardarse, incluye su `study`; `lastResult` conserva el estudio del resultado anterior cuando se necesita mostrarlo junto a una configuración posterior todavía no evaluada.
 
-Al crear un clon, el servidor busca una evaluación guardada del paquete exacto, la misma fuente, la política actual y los mismos metadatos. No acepta un estudio redactado por el cliente o por un agente como evidencia autoritativa. Recalcula la confirmación usando las réplicas conservadas y reconstruye el estudio. Sin evaluación actual coincidente, conserva el escenario como propuesta pendiente de evaluación.
+Al crear un clon, el servidor busca una evaluación guardada del paquete exacto, la misma fuente, la política actual y los mismos metadatos. La fuente debe seguir teniendo una corrida numérica completa y vigente. No acepta un estudio redactado por el cliente o por un agente como evidencia autoritativa. Recalcula la confirmación usando las réplicas conservadas y reconstruye el estudio. Sin evaluación actual coincidente, conserva el escenario como propuesta pendiente de evaluación.
 
 El clon guarda la instantánea en `scenario.study`. Sus resultados de simulación se reinician y su `whatIf` no hereda el historial de búsqueda de la fuente. El estudio conserva el contexto de la decisión aunque luego se sustituya o elimine la evaluación fuente; no convierte la corrida de la base en una nueva corrida del clon.
 
@@ -277,7 +249,8 @@ La instantánea contiene:
 - Factores DOE, cambios fijos, efectos, ANOVA, horizonte, semilla y réplicas por combinación.
 - Respuestas DOE por réplica con solo `{seed, oee, throughput}`: hasta 16 combinaciones y 100 réplicas, con contadores explícitos de omisiones.
 - Plan de confirmación, piloto, semillas, precisión, métricas e intervalos resumidos; el plan se etiqueta `CONFIRMATION_NOT_DOE` donde corresponde.
-- Datos, fórmulas declaradas y resultado económico, cuando es evaluable.
+- Política de selección escalonada, horizontes, candidatos retenidos/omitidos y limitación del filtro corto.
+- Clasificación por intervención y exclusión explícita de presupuestos del estudio técnico.
 - Estado separado de factibilidad y validación en planta.
 
 Las copias generales están acotadas y excluyen replay, historiales completos de pruebas y estudios recursivos. El estudio compacto no pretende sustituir un archivo completo del modelo y de todas las corridas para reproducir cada detalle. El contexto de Gemini utiliza un resumen aún menor y conserva las limitaciones para no confundir fuentes reportadas con verificadas.
@@ -292,11 +265,11 @@ Las copias generales están acotadas y excluyen replay, historiales completos de
 | `NOT_REPRODUCED` | La confirmación registrada no aprobó el criterio. |
 | `INVALID_OR_INCOMPLETE_CONFIRMATION` | Una afirmación de aprobación no está respaldada por métricas completas y coherentes. |
 | `REQUIRES_ENGINEERING_REVIEW` | La factibilidad y la capacidad de alcanzar los objetivos requieren revisión. |
-| `economics.status: ESTIMATED` | Existe un cálculo incremental condicionado y ligado al paquete exacto. |
-| `REPORTED_NOT_VERIFIED` | Documento, piloto, factibilidad o dato económico proporcionado, sin verificación automática. |
+| `economics.reason: OUT_OF_SCOPE` | Presupuestos y cálculo financiero no intervienen en el estudio técnico normal. |
+| `REPORTED_NOT_VERIFIED` | Documento, piloto o factibilidad proporcionados, sin verificación automática. |
 | `plantValidated: false` / `plantValidation.verified: false` | El resultado de la simulación no certifica una mejora en planta. |
 
-La incertidumbre de las réplicas no corrige un modelo incompleto. Si la relación entre velocidad y calidad, MTBF y esfuerzo, disponibilidad de personal, obsolescencia o costos no está modelada, ningún DOE sobre ese modelo demuestra esas relaciones físicas. La decisión de inversión necesita intervención realizable, revisión económica con datos de negocio y confirmación posterior en planta.
+La incertidumbre de las réplicas no corrige un modelo incompleto. Si la relación entre velocidad y calidad, MTBF y esfuerzo, disponibilidad de personal, obsolescencia o costos no está modelada, ningún DOE sobre ese modelo demuestra esas relaciones físicas. Esta etapa genera hipótesis y compara desempeño técnico; no toma una decisión monetaria de inversión. La intervención requiere revisión de factibilidad y confirmación posterior en planta.
 
 ## 11. Fundamento cualitativo de los manuales
 
@@ -308,7 +281,7 @@ Estas referencias se usan como fundamento cualitativo. Los manuales no se incorp
 
 | Entorno | API |
 |---|---|
-| Módulos ESM | `buildScenarioStudy`, `evaluateScenarioEconomics`, `planScenarioConfirmation`, `assessScenarioConfirmation`, `scenarioPairedSummary`, `planScenarioReplications`, `createScenarioDOE`, `analyzeScenarioDOE`, `analyzeScenarioANOVA` |
+| Módulos ESM | `scenarioSourceReadiness`, `scenarioStopDataCoverage`, `scenarioTechnicalMethodology`, `buildScenarioStudy`, `evaluateScenarioEconomics`, `planScenarioConfirmation`, `assessScenarioConfirmation`, `scenarioPairedSummary`, `planScenarioReplications`, `createScenarioDOE`, `analyzeScenarioDOE`, `analyzeScenarioANOVA` |
 | Navegador | `STScenarios.study`, `STScenarios.economics`, `STScenarioSearch.planConfirmation`, `STScenarioSearch.confirm`, `STScenarioSearch.pairedSummary`, `STScenarioDOE.design/analyze/anova` |
 | Apps Script | `STScenarioEngine_.study`, `.economics`, `.confirm`, `.pairedSummary`, junto a las APIs existentes de diagnóstico y escenarios |
 
@@ -321,7 +294,7 @@ npm run build:apps-script
 La cobertura pertinente incluye valores estadísticos conocidos, pareamiento de semillas, contrastes con interacción, Holm, planificación del tamaño, rechazo de evidencia incompatible, cálculo financiero conocido, demanda limitada, costos faltantes, firma de paquete, snapshots, creación de escenarios y contexto del asistente. Las pruebas de `ScenarioStatistics.js` están incluidas en `ScenarioDOE.test.js`. Los siguientes archivos de prueba sirven como referencia de mantenimiento:
 
 ```bash
-node --test test/ScenarioDOE.test.js test/ScenarioSearch.test.js test/ScenarioMethodology.test.js test/ScenarioService.test.js test/GeminiService.test.js
+node --test test/ScenarioDOE.test.js test/ScenarioSearch.test.js test/ScenarioMethodology.test.js test/ScenarioService.test.js test/ScenarioStopClasses.test.js test/GeminiService.test.js
 ```
 
 Una modificación de las reglas de búsqueda, la procedencia o el contrato de metadatos debe revisar también la política de reutilización. Las evaluaciones históricas pueden conservar su valor documental sin adquirir automáticamente la condición de evaluación vigente bajo una política posterior.

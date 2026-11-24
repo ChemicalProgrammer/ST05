@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {simulatedEvidence} from './helpers/ScenarioEvidenceFixture.js';
+import {completeSyntheticScenarioSource} from './helpers/CompletedScenarioFixture.js';
 function setup({status=200,denied=false,answer='Observed throughput: 42.'}={}) {
  const values={GEMINI_API_KEY:'private-test-key'},calls=[];
  let record;
@@ -11,6 +12,7 @@ function setup({status=200,denied=false,answer='Observed throughput: 42.'}={}) {
  for(const file of ['TextResources.gs','DemoCaseFactory.gs','ScenarioEngine.gs','ScenarioService.gs','GeminiContext.gs','ApplicationGuide.gs','GeminiService.gs'])vm.runInContext(fs.readFileSync('apps-script/'+file,'utf8'),ctx);
  const demo=JSON.parse(JSON.stringify(ctx.createDemoCaseRequest_()));
  record={id:'case-a',name:'Case A',revision:1,unitOfFlow:'units',simulations:[{id:'a',name:'Simulation A',equipment:demo.equipment,dynamicConfig:{durationSeconds:60,tickSeconds:.25,sampleEverySeconds:1,seed:7,commands:[]},results:{summary:{throughput:42},equipmentMetrics:{},replay:{samples:[{privateReplay:'x'.repeat(2100000)}]}}}]};
+ completeSyntheticScenarioSource(record.simulations[0]);
  return {ctx,calls,values,record};
 }
 const request={caseId:'case-a',simulationId:'a',question:'Analyze',history:[]},user={email:'owner@test'};
@@ -39,9 +41,33 @@ test('Gemini accepts validated changes and binds buttons to the original simulat
  const result=h.ctx.askGemini_(request,user);assert.equal(result.proposals.length,1);assert.equal(result.proposals[0].sourceSimulationId,'a');assert(result.proposals[0].sourceSignature);assert.match(result.text,/did not pass/);
  assert.equal(Object.prototype.bad,undefined);
 });
+
+test('Gemini context and action validation require a complete current numerical baseline',()=>{
+ const fixture=setup(),project=fixture.ctx.STScenarioEngine_.plan(fixture.record.simulations[0]).projects.find(p=>p.canApply);
+ const answer=JSON.stringify({text:'Hypothesis',proposals:[{...project,title:'Readiness hypothesis'}]});
+ for(const damage of [
+  simulation=>{delete simulation.results;},
+  simulation=>{simulation.results.replicationStatus.state='RUNNING';},
+  simulation=>{simulation.results.batch.rows=[];},
+  simulation=>{simulation.dynamicConfig.seed++;}
+ ]){
+  const h=setup({answer});damage(h.record.simulations[0]);
+  const context=JSON.parse(h.ctx.buildGeminiContext_(h.record,'a').json);
+  assert.equal(context.selectedSimulation.sourceReadiness.ready,false);assert.deepEqual(context.localProposals,[]);
+  const result=h.ctx.askGemini_(request,user);assert.equal(result.proposals.length,0);
+  assert.match(JSON.parse(h.calls[0].options.payload).systemInstruction.parts[0].text,/requires sourceReadiness\.ready === true/);
+ }
+ const ready=setup({answer}),source=ready.record.simulations[0];source.dynamicConfig.rounds=3;completeSyntheticScenarioSource(source);
+ const context=JSON.parse(ready.ctx.buildGeminiContext_(ready.record,'a').json);
+ assert.equal(context.selectedSimulation.sourceReadiness.ready,true);assert.equal(context.selectedSimulation.sourceReadiness.completedRounds,3);assert(context.localProposals.length>0);
+ assert.equal(ready.ctx.askGemini_(request,user).proposals.length,1);
+ assert.equal(context.selectedSimulation.replications.rounds,3);assert(!JSON.stringify(context).includes('privateReplay'));
+});
 test('history uses a bounded suffix and reports omitted messages',()=>{
  const h=setup();const history=Array.from({length:24},(_,i)=>({role:i%2?'model':'user',text:'text'.repeat(2000)}));
- const result=h.ctx.askGemini_({...request,history},user);assert(result.historyOmitted>0);assert(h.calls[0].options.payload.length<125000);
+ const result=h.ctx.askGemini_({...request,history},user);assert(result.historyOmitted>0);assert(h.calls[0].options.payload.length<=h.ctx.GEMINI_CONTEXT_BUDGET_.requestCharacters);
+ const sent=JSON.parse(h.calls[0].options.payload),historySize=sent.contents.slice(0,-1).reduce((sum,message)=>sum+message.parts.reduce((partSum,part)=>partSum+(part.text?.length||0),0),0);
+ assert(historySize<=h.ctx.GEMINI_CONTEXT_BUDGET_.historyCharacters);
 });
 
 test('Gemini standalone scenario JSON becomes a validated actionable proposal',()=>{
@@ -91,6 +117,7 @@ test('Gemini rounded before values bind to exact saved inputs and survive the cr
  assert.equal(writes,1);assert.equal(created.case.simulations.length,2);assert.equal(created.case.simulations[0].dynamicConfig.seed,7);assert.equal(created.case.simulations[1].results,null);
  const changed=setup({answer:JSON.stringify({text:'Review',proposals:[proposal]})});const old=changed.ctx.askGemini_(request,user).proposals[0];
  changed.record.simulations[0].equipment[0].nominalRatePerSecond+=1;
+ completeSyntheticScenarioSource(changed.record.simulations[0]);
  changed.ctx.withCaseWriteLock_=fn=>fn();changed.ctx.getOwnedCaseFile_=()=>({caseData:changed.record});changed.ctx.ensureCaseSimulations_=c=>c;
  assert.throws(()=>changed.ctx.createScenario_({caseId:'case-a',simulationId:'a',expectedRevision:1,origin:'GEMINI',sourceSignature:old.sourceSignature,proposal:old},user),e=>e.code==='SCENARIO_STALE');
 });
@@ -172,6 +199,10 @@ test('Gemini search evidence respects section and overall budgets with explicit 
  for(const e of sim.whatIf.evaluations){e.trialHistory=e.trialHistory.slice(0,1);e.evaluatedChanges=changes.slice(0,1);}
  h.ctx.GEMINI_CONTEXT_BUDGET_.contextCharacters=14000;
  analysis=h.ctx.buildGeminiContext_(h.record,sim.id);data=JSON.parse(analysis.json);assert(analysis.characters<=14000);assert(data.coverage.searchEvaluationsIncluded+data.coverage.searchEvaluationsOmitted===30);assert(data.searchEvidence.evaluations.length<=6);assert(data.searchEvidence.evaluations.every(e=>e.tested.length<=12&&e.tested[0].changes.length<=12&&e.tested[0].changesOmitted===68&&e.testedOmitted===50));
+ assert.equal(data.selectedSimulation.sourceReadiness.ready,true);assert.equal(data.lossDiagnosis.stopDataQuality.splitInferred,false);
+ assert(data.coverage.diagnostics.sections.lossOpportunities.omitted>0);
+ for(const section of Object.values(data.coverage.diagnostics.sections))assert.equal(section.included+section.omitted,section.total);
+ assert.equal(data.lossDiagnosis.opportunities.length,data.coverage.diagnostics.sections.lossOpportunities.included);
 });
 
 test('Gemini older evaluations disclose unavailable trial history and search policy is editable in both modes',()=>{

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildScenarioStudy, evaluateScenarioEconomics } from '../src/analysis/ScenarioMethodology.js';
+import { buildScenarioStudy, evaluateScenarioEconomics, scenarioTechnicalMethodology } from '../src/analysis/ScenarioMethodology.js';
 
 function fixture() {
   const simulation = { id: 'line', unitOfFlow: 'bottles', equipment: [{ id: 'filler', name: 'Filler', nominalRatePerSecond: 1 }], whatIf: { methodology: {} } };
@@ -22,6 +22,35 @@ function fixture() {
 }
 function near(actual, expected, tolerance = 1e-9) { assert.ok(Math.abs(actual - expected) <= tolerance, actual + ' differs from ' + expected); }
 function freeze(value) { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
+
+test('technical identity excludes monetary sections while retaining complete intervention and statistical inputs',()=>{
+  const input={economics:{investment:1},budget:2,capexBudget:3,investmentBudget:4,
+    objective:{target:150,metric:'throughput'},replications:{maximum:12,minimum:3},
+    interventions:[{type:'REPLACEMENT',costClass:'CAPEX',sourceReference:'s'.repeat(5000)}],extra:{z:1,a:2,absent:undefined}};
+  const before=structuredClone(input),technical=scenarioTechnicalMethodology(input);
+  assert.deepEqual(input,before);assert.deepEqual(Object.keys(technical),['extra','interventions','objective','replications']);
+  assert.equal(technical.interventions[0].costClass,'CAPEX');assert.equal(technical.interventions[0].sourceReference.length,5000);
+  const signature=JSON.stringify(technical);
+  input.economics.investment=999999999;input.budget=0;
+  assert.equal(JSON.stringify(scenarioTechnicalMethodology(input)),signature);
+  input.replications.maximum=15;assert.notEqual(JSON.stringify(scenarioTechnicalMethodology(input)),signature);
+  assert.deepEqual(scenarioTechnicalMethodology(null),{});
+  const circular={};circular.self=circular;assert.throws(()=>scenarioTechnicalMethodology(circular),/SCENARIO_INVALID_METHODOLOGY_CYCLE/);
+});
+
+test('study retains staged selection counts and horizons without copying bulky finalist observations',()=>{
+  const {simulation,evaluation}=fixture();
+  evaluation.rankingPlan={policy:'STAGED_FINALIST_RANKING_V1',staged:true,reason:null,screenRun:{durationSeconds:1800,rounds:3,commands:[{private:'do not copy'}]},
+    fullRun:{durationSeconds:86400,rounds:3},fullHorizonFinalists:2,interpretation:'Short screening may miss delayed benefits.'};
+  evaluation.phaseAudit={finalistScreening:{run:{durationSeconds:1800,rounds:3,seed:50010},observations:Array.from({length:6},()=>({large:'x'.repeat(10000)})),
+    selected:2,omitted:4,protectedReliabilityCandidates:0},ranking:{finalists:2,run:{durationSeconds:86400,rounds:3,seed:100010}}};
+  const study=buildScenarioStudy(simulation,evaluation),selection=study.evidence.finalistSelection;
+  assert.equal(selection.candidatesScreened,6);assert.equal(selection.selected,2);assert.equal(selection.omitted,4);
+  assert.equal(selection.intermediateRun.durationSeconds,1800);assert.equal(selection.fullRun.durationSeconds,86400);
+  assert.equal(selection.fullHorizonFinalists,2);assert.equal(selection.shortScreenMayMissLateBenefits,true);
+  assert.equal(selection.role,'EXPLORATORY_SELECTION_NOT_CONFIRMATION');
+  assert.equal(JSON.stringify(study).includes('do not copy'),false);assert.equal(JSON.stringify(study).includes('large'),false);
+});
 
 test('economics use the confirmed complete package with known NPV, payback and lifetime ROI', () => {
   const { simulation, evaluation } = fixture();
@@ -167,7 +196,7 @@ test('zero observed simulation variance remains descriptive and a negative bound
   assert.equal(result.sensitivity.lower.annualNetBenefit, undefined);
 });
 
-test('study keeps diagnosis, hypotheses, simulated evidence, economics and plant reports separate', () => {
+test('technical study keeps evidence and plant reports separate and leaves budget outside scope', () => {
   const { simulation, evaluation } = fixture();
   simulation.whatIf.methodology.objective = { metric: 'throughput', target: 18, unit: 'bottles/min', minimumPracticalGain: 5 };
   simulation.whatIf.methodology.interventions = [{ id: 'replace-filler', equipmentId: 'filler', type: 'REPLACEMENT',
@@ -191,8 +220,14 @@ test('study keeps diagnosis, hypotheses, simulated evidence, economics and plant
   assert.equal(study.feasibility.verified, false);
   assert.equal(study.plantValidation.status, 'REPORTED_NOT_VERIFIED');
   assert.equal(study.plantValidation.verified, false);
-  assert.equal(study.economics.npvPositive, true);
+  assert.equal(study.hypotheses[0].capexClassification.tier,'HIGH');
+  assert.equal(study.hypotheses[0].capexClassification.budgetUsed,false);
+  assert.equal(study.economics.status,'NOT_EVALUATED');
+  assert.equal(study.economics.reason,'OUT_OF_SCOPE');
+  assert.equal(study.economics.monetaryInputsRequired,false);
+  assert.equal(study.economics.npvPositive,undefined);
   assert.equal(study.economics.plantValidated, false);
+  assert.equal(evaluateScenarioEconomics(simulation,evaluation).npvPositive,true,'the separate API remains available only when explicitly called');
 });
 
 test('exploratory targets do not inherit CAPEX or feasibility from a reported replacement', () => {
@@ -244,7 +279,8 @@ test('missing source prevents traceable conclusions and missing methodology prod
   assert.equal(study.evidence.confirmation.status, 'UNTRACEABLE_EVIDENCE');
   assert.equal(study.objective.status, 'NOT_DEFINED');
   assert.equal(study.economics.status, 'NOT_EVALUATED');
-  assert.ok(study.economics.missingInputs.includes('evaluation.sourceSignature'));
+  assert.equal(study.economics.reason,'OUT_OF_SCOPE');
+  assert.deepEqual(study.economics.missingInputs,[],'the technical study does not ask for financial inputs');
   assert.equal(study.plantValidation.status, 'NOT_EVALUATED');
   assert.doesNotThrow(() => JSON.stringify(buildScenarioStudy(undefined, undefined)));
 });
@@ -272,7 +308,8 @@ test('both confirmation OEE metrics are required for reproduced claims and econo
     assert.equal(study.evidence.confirmation.status, 'INVALID_OR_INCOMPLETE_CONFIRMATION');
     assert.equal(study.objective.assessment.status, 'NOT_EVALUATED');
     assert.equal(study.economics.status, 'NOT_EVALUATED');
-    assert.ok(study.economics.missingInputs.includes('evaluation.independentCheck.' + key + '.oee'));
+    assert.equal(study.economics.reason,'OUT_OF_SCOPE');
+    assert.ok(evaluateScenarioEconomics(simulation,evaluation).missingInputs.includes('evaluation.independentCheck.' + key + '.oee'));
   }
 });
 

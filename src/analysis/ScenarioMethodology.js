@@ -1,6 +1,8 @@
 // Scenario evidence is conditional on the model. Reported sources, quotations
 // and pilots never become verified causes, feasible targets or plant validation.
-// All economics concern the complete independently checked package of changes.
+// The standard study is technical: no budget amounts or financial ranking.
+// The separate explicit economics API concerns the complete checked package.
+import { scenarioStopDataCoverage } from './ScenarioPlanner.js';
 
 const scenarioStudyEconomicNumbers = Object.freeze({
   investment: [0, Infinity], installationCost: [0, Infinity], implementationLoss: [0, Infinity],
@@ -9,6 +11,22 @@ const scenarioStudyEconomicNumbers = Object.freeze({
   annualAvoidableSavings: [0, Infinity], annualIncrementalOpex: [0, Infinity], residualValue: [0, Infinity]
 });
 const scenarioStudyExcludedKeys = new Set(['__proto__', 'constructor', 'prototype', 'replay', 'study', 'trialHistory', 'roundMetrics', 'inputSignature']);
+
+// Canonical technical inputs for cache/confirmation identity. Monetary sections
+// are intentionally excluded only at the top level; qualitative intervention
+// types and costClass, replication settings and all other technical data remain.
+export function scenarioTechnicalMethodology(methodology={}) {
+  if(!scenarioStudyRecord(methodology))return {};
+  const monetary=new Set(['economics','budget','capexBudget','investmentBudget']);
+  function canonical(value,ancestors=new Set()){
+    if(!value||typeof value!=='object')return value;
+    if(ancestors.has(value))throw Error('SCENARIO_INVALID_METHODOLOGY_CYCLE');
+    const next=new Set(ancestors);next.add(value);
+    if(Array.isArray(value))return value.map(item=>canonical(item,next));
+    return Object.fromEntries(Object.keys(value).sort().filter(key=>value[key]!==undefined).map(key=>[key,canonical(value[key],next)]));
+  }
+  return canonical(Object.fromEntries(Object.entries(methodology).filter(([key])=>!monetary.has(key))));
+}
 
 function scenarioStudyText(value, limit = 2000) {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null;
@@ -256,7 +274,7 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
     const explicitType = scenarioStudyText(record?.type || change.interventionType);
     const classification = exploratory ? 'EXPLORATORY_SENSITIVITY' : explicitType ||
       (change.path?.startsWith('noiseProfile.reliability.') ? 'INTERVENTION_UNSPECIFIED' :
-        change.path?.includes('geometry.') ? 'PHYSICAL_CHANGE_UNSPECIFIED' : 'OPERATING_PARAMETER_ADJUSTMENT');
+        change.path==='processData.geometry.lactMm' ? 'LINE_REDESIGN' : 'OPERATING_PARAMETER_ADJUSTMENT');
     const key = change.equipmentId + ':' + classification + ':' + (record?.id || '');
     if (!groups.has(key)) {
       const equipment = (Array.isArray(simulation?.equipment) ? simulation.equipment : []).find(item => item?.id === change.equipmentId);
@@ -264,9 +282,14 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
         id: key, equipmentId: change.equipmentId, equipmentName: scenarioStudyText(equipment?.name), classification,
         classificationBasis: exploratory ? 'EXPLORATORY_TARGET' : explicitType ? 'REPORTED_INTERVENTION' : 'PARAMETER_TYPE_ONLY',
         costClass: ({ OPERATIONAL: 'NONE', MAINTENANCE: 'OPEX', RETROFIT: 'CAPEX', REPLACEMENT: 'CAPEX' })[classification] || 'UNASSIGNED',
+        capexClassification: {tier:({OPERATIONAL:'ZERO',MAINTENANCE:'ZERO',RETROFIT:'MEDIUM',REPLACEMENT:'HIGH',LINE_REDESIGN:'HIGH',OPERATING_PARAMETER_ADJUSTMENT:'ZERO'})[classification]||'UNASSIGNED',
+          basis:'INTERVENTION_SCOPE',budgetUsed:false},
+        stopDataCoverage:scenarioStopDataCoverage(simulation,equipment),
+        modeledStopEffect:{reliabilityParametersChanged:false,microStopParametersChanged:false,flowEffectsRequireSimulation:true},
         description: scenarioStudyText(record?.description || change.justification),
         diagnosticEvidence: (Array.isArray(evaluation?.lossDiagnosis?.equipment) ? evaluation.lossDiagnosis.equipment : []).filter(item => item?.equipmentId === change.equipmentId).slice(0, 1).map(item =>
-          scenarioStudyPick(item, ['equipmentId', 'failureSeconds', 'microStopSeconds', 'starvedSeconds', 'blockedSeconds', 'dominantLoss', 'ownStopPercent'])),
+          scenarioStudyPick(item, ['equipmentId', 'failureSeconds', 'microStopSeconds', 'minorFailureSeconds', 'majorFailureSeconds', 'generalFailureSeconds',
+            'failureCategories', 'stopDataCoverage', 'starvedSeconds', 'blockedSeconds', 'dominantLoss', 'ownStopPercent'])),
         capacityEvidence: (Array.isArray(evaluation?.capacityDiagnosis?.limitingEquipment) ? evaluation.capacityDiagnosis.limitingEquipment : []).filter(item => item?.id === change.equipmentId).slice(0, 1).map(item =>
           scenarioStudyPick(item, ['id', 'name', 'bpm', 'maximumBpm'])),
         targetSource: { status: record?.targetSource || record?.sourceReference || change.targetSource || change.justification ? 'REPORTED_NOT_VERIFIED' : 'NOT_PROVIDED',
@@ -276,7 +299,15 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
         reportedPilot: record?.pilot === undefined ? null : { status: 'REPORTED_NOT_VERIFIED', reported: scenarioStudyCopy(record.pilot) }
       });
     }
-    groups.get(key).changes.push(scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'replacementMaximumBpm']));
+    const hypothesis=groups.get(key);
+    if(change.path.startsWith('noiseProfile.reliability.')){
+      hypothesis.modeledStopEffect.reliabilityParametersChanged=true;
+      hypothesis.modeledStopEffect.reliabilityScope=hypothesis.stopDataCoverage.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED';
+      hypothesis.modeledStopEffect.interpretation='Aggregate MTBF/MTTR edits scale all configured reliability stop classes proportionally; the separate MICRO_STOP process is unchanged.';
+    }else if(!hypothesis.modeledStopEffect.reliabilityParametersChanged){
+      hypothesis.modeledStopEffect.interpretation='Operating or geometry changes affect line flow and recovery; they do not directly reduce the frequency or duration of configured reliability or MICRO_STOP events.';
+    }
+    hypothesis.changes.push(scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'replacementMaximumBpm']));
   });
   return [...groups.values()];
 }
@@ -297,6 +328,7 @@ export function buildScenarioStudy(simulation, evaluation) {
     actualCandidate.oee >= actualBase.oee - 1e-9;
   const stats = scenarioStudyPick(check?.statisticalEvidence, ['available', 'n', 'seedIds', 'confidenceLevel', 'metrics', 'reason']);
   const confirmationPlan = scenarioStudyConfirmationPlan(evaluation?.confirmationPlan);
+  const rankingPlan=evaluation?.rankingPlan,finalistScreen=evaluation?.phaseAudit?.finalistScreening,ranking=evaluation?.phaseAudit?.ranking;
   const doe = evaluation?.doe;
   const fixedChanges = (Array.isArray(doe?.fixedChanges) ? doe.fixedChanges : []).slice(0, 64).map(change =>
     scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'interventionType', 'replacementMaximumBpm']));
@@ -314,12 +346,15 @@ export function buildScenarioStudy(simulation, evaluation) {
     'Observed equipment downtime and propagated starvation/blocking are not additive causal line losses.',
     'A simulated target does not establish the physical intervention, attainable reliability or supplier performance.',
     'DOE and independent confirmation support this model and evaluated package; they do not prove a global optimum or plant outcome.',
-    'Reported financial inputs and source references are not independently verified.'
+    'Minor/major stop classes require supplied data; general stops are not split by duration, and stop class does not establish root cause.',
+    'CAPEX classification uses intervention type and scope; budget amounts and financial evaluation are outside the current technical study.',
+    'Reported source references are not independently verified.'
   ];
   const confirmationStatus = !check ? 'NOT_EVALUATED' : !traceable ? 'UNTRACEABLE_EVIDENCE' : check.passed !== true ? 'NOT_REPRODUCED' :
     validConfirmation ? 'MODEL_REPRODUCED' : 'INVALID_OR_INCOMPLETE_CONFIRMATION';
   return {
     version: 1,
+    analysisScope:{objective:'TECHNICAL_LINE_EFFICIENCY',capexClassificationBasis:'INTERVENTION_SCOPE',budgetAmountsUsed:false},
     source: {
       simulationId: scenarioStudyText(simulation?.id), sourceSimulationId: scenarioStudyText(evaluation?.sourceSimulationId),
       sourceSignature: scenarioStudyText(evaluation?.sourceSignature), status: traceable ? 'RECORDED' : 'INCOMPLETE_OR_MISMATCHED',
@@ -336,13 +371,23 @@ export function buildScenarioStudy(simulation, evaluation) {
     diagnosis: {
       causalStatus: 'HYPOTHESES_ONLY',
       observedLosses: scenarioStudyPick(evaluation?.lossDiagnosis, ['status', 'reason', 'sourceStatus', 'provenance', 'referenceId', 'durationSeconds', 'durationBasis',
-        'rounds', 'equipment', 'rankings', 'opportunities', 'attribution', 'interpretation']),
+        'rounds', 'equipment', 'rankings', 'opportunities', 'stopDataQuality', 'attribution', 'interpretation']),
       capacity: scenarioStudyPick(evaluation?.capacityDiagnosis, ['reason', 'sourceStatus', 'referenceId', 'referenceBpm', 'minimumBpm', 'capacityCeilingPercent', 'limitingEquipment', 'achievedPercent', 'capacityGapPp', 'residualLossPp', 'accountingAvailable', 'interpretation']),
       reliabilitySensitivity: scenarioStudyPick(evaluation?.reliabilityTargetSearch, ['status', 'analysisOnly', 'classification', 'conditionalReliabilityGain', 'coverage', 'ranking', 'interpretation'])
     },
     hypotheses,
     evidence: {
       screening: { baseline: scenarioStudyMetrics(evaluation?.baseline), candidate: scenarioStudyMetrics(evaluation?.candidate), role: 'EXPLORATION_ONLY' },
+      finalistSelection:{status:rankingPlan?'RECORDED':'NOT_RECORDED',role:'EXPLORATORY_SELECTION_NOT_CONFIRMATION',
+        policy:scenarioStudyText(rankingPlan?.policy),staged:rankingPlan?.staged===true,reason:scenarioStudyText(rankingPlan?.reason),
+        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId']),
+        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId']),
+        candidatesScreened:Array.isArray(finalistScreen?.observations)?finalistScreen.observations.length:null,
+        selected:scenarioStudyNumber(finalistScreen?.selected),omitted:scenarioStudyNumber(finalistScreen?.omitted),
+        protectedReliabilityCandidates:scenarioStudyNumber(finalistScreen?.protectedReliabilityCandidates),
+        fullHorizonFinalists:scenarioStudyNumber(ranking?.finalists)??scenarioStudyNumber(rankingPlan?.fullHorizonFinalists),
+        shortScreenMayMissLateBenefits:rankingPlan?.staged===true,
+        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the full-horizon independent confirmation supports a reproduced improvement.'},
       experiment: {
         status: doe ? doe.analysis?.complete === true ? 'COMPLETE_DESIGN' : 'INCOMPLETE_DESIGN' : 'NOT_PERFORMED',
         type: scenarioStudyText(doe?.type || doe?.design?.type),
@@ -377,7 +422,9 @@ export function buildScenarioStudy(simulation, evaluation) {
       warnings: scenarioStudyCopy(evaluation?.warnings || []),
       reportedAcknowledgement: evaluation?.engineeringReviewAcknowledged === true,
       interpretation: 'Parameter checks or reported acknowledgement do not establish engineering feasibility, installation scope or target achievability.' },
-    economics: evaluateScenarioEconomics(simulation, evaluation),
+    economics: {status:'NOT_EVALUATED',reason:'OUT_OF_SCOPE',scope:'TECHNICAL_SCENARIO_ANALYSIS',monetaryInputsRequired:false,
+      usedForClassification:false,usedForRanking:false,missingInputs:[],invalidInputs:[],plantValidated:false,
+      interpretation:'This study compares technical line performance and classifies the intervention scope. No budget amount is requested or used. Financial estimates require a separate explicit API call.'},
     plantValidation: { status: pilots.length ? 'REPORTED_NOT_VERIFIED' : 'NOT_EVALUATED', verified: false, reports: pilots },
     limitations: constraints
   };

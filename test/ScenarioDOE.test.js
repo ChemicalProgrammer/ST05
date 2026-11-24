@@ -193,3 +193,29 @@ test('factorial inference is invariant to row order, includes higher interaction
  assert.equal(analyzeScenarioANOVA({},observations).complete,false);
 });
 
+test('DOE and ANOVA share confidence, alpha and the predeclared two-metric family',()=>{
+ const design=createScenarioDOE([factor(0),factor(1)]),noise=[-2,-1,0,1,2,0];
+ const observations=replicatedFactorial(design,([a,b],j)=>({throughput:100+3*a+2*b+(.2*a+.8*b+.3*a*b)*noise[j],oee:50+2*b+.1*a*noise[j]}));
+ const ordinary=analyzeScenarioANOVA(design,observations),strict=analyzeScenarioANOVA(design,observations,{confidenceLevel:.99});
+ assert.equal(ordinary.alpha,.05);assert.equal(strict.alpha,.01);assert.equal(strict.confidenceLevel,.99);
+ assert.equal(strict.multiplicity.familySize,6);
+ const before=ordinary.metrics.throughput.effects[0],after=strict.metrics.throughput.effects[0];
+ assert(after.lower<before.lower);assert(after.upper>before.upper);assert.equal(after.pAdjusted,before.pAdjusted);
+ assert.deepEqual(analyzeScenarioANOVA(design,observations,{alpha:.01}),strict);
+ assert.deepEqual(analyzeScenarioANOVA(design,observations,{confidence:.99,alpha:.01}),strict);
+ const effects=analyzeScenarioDOE(design,observations,{confidenceLevel:.99,alpha:.01});
+ assert.equal(effects.confidenceLevel,.99);assert.equal(effects.alpha,.01);
+ assert.equal(effects.effects[0].statistics.throughput.lower,after.lower);
+});
+
+test('invalid or conflicting inference settings cannot silently produce significance',()=>{
+ const design=createScenarioDOE([factor(0)]),observations=replicatedFactorial(design,([a],j)=>({throughput:100+a*(j+1),oee:50+a*(j+1)/10}));
+ for(const analyze of [analyzeScenarioDOE,analyzeScenarioANOVA]){
+  for(const confidenceLevel of [0,1,-.1,1.1,NaN,null,'0.95'])assert.equal(analyze(design,observations,{confidenceLevel}).reason,'INVALID_CONFIDENCE_LEVEL');
+  for(const alpha of [0,1,-.1,1.1,NaN,null,'0.05'])assert.equal(analyze(design,observations,{alpha}).reason,'INVALID_ALPHA');
+  assert.equal(analyze(design,observations,{confidenceLevel:.95,alpha:.01}).reason,'INCONSISTENT_INFERENCE_SETTINGS');
+  assert.equal(analyze(design,observations,{confidenceLevel:.95,confidence:.99}).reason,'INCONSISTENT_INFERENCE_SETTINGS');
+  assert.equal(analyze(design,observations,null).complete,false);
+ }
+});
+

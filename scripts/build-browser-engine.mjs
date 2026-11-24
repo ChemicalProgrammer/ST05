@@ -21,6 +21,7 @@ const sourceFiles = [
   'src/simulation/SimPyBrowserEngine.js',
   'src/simulation/SimulationProvenance.js',
   'src/analysis/LinePerformanceAnalysis.js',
+  'src/analysis/ScenarioReadiness.js',
   'src/analysis/ScenarioPlanner.js',
   'src/analysis/ScenarioStatistics.js',
   'src/analysis/ScenarioDOE.js',
@@ -168,19 +169,19 @@ window.SimulatorEngine = {
   analyzeLinePerformance: analyzeLinePerformance,diagnoseLineEfficiency:diagnoseLineEfficiency
 };
 window.STScenarioDOE = {design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
-window.STScenarioSearch = {screenFlow:screenFlowFactors,reliabilityTargets:searchReliabilityTargets,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary,practicalGain:scenarioPracticalGain};
-window.STScenarios = {plan:planScenarios,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics};
+window.STScenarioSearch = {screenFlow:screenFlowFactors,reliabilityTargets:searchReliabilityTargets,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary,practicalGain:scenarioPracticalGain};
+window.STScenarios = {plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics};
 })(window);
 </script>
 `;
 
 fs.writeFileSync(targetFile, output);
 
-const scenarioSources = ['src/simulation/SimulationProvenance.js','src/simulation/FormatCatalog.js','src/simulation/ProductProfiles.js','src/simulation/PlantCalendarSchedule.js','src/simulation/ConveyorEngineering.js','src/simulation/FormatGeometryAdapter.js','src/simulation/SimulationValidation.js','src/analysis/LinePerformanceAnalysis.js','src/analysis/ScenarioPlanner.js','src/analysis/ScenarioStatistics.js','src/analysis/ScenarioSearch.js','src/analysis/ScenarioMethodology.js'];
+const scenarioSources = ['src/simulation/SimulationProvenance.js','src/simulation/FormatCatalog.js','src/simulation/ProductProfiles.js','src/simulation/PlantCalendarSchedule.js','src/simulation/ConveyorEngineering.js','src/simulation/FormatGeometryAdapter.js','src/simulation/SimulationValidation.js','src/analysis/LinePerformanceAnalysis.js','src/analysis/ScenarioReadiness.js','src/analysis/ScenarioPlanner.js','src/analysis/ScenarioStatistics.js','src/analysis/ScenarioSearch.js','src/analysis/ScenarioMethodology.js'];
 fs.writeFileSync(path.join(repositoryRoot,'apps-script','ScenarioEngine.gs'),
   'var STScenarioEngine_ = (function(){\n'+
   scenarioSources.map(file=>removeModuleSyntax(fs.readFileSync(path.join(repositoryRoot,file),'utf8'))).join('\n')+
-  '\nreturn {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary};\n})();\n');
+  '\nreturn {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary};\n})();\n');
 
 function removeModuleSyntax(moduleSource) {
   return moduleSource

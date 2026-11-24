@@ -3,7 +3,14 @@ function getScenarioSourceSignature_(request,user) {
   if(Number(request.expectedRevision)!==Number(record.revision))throw createSimulatorError_('CASE_CONFLICT','The case changed. Review the latest version before creating a scenario.');
   var source=record.simulations.find(function(s){return s.id===request.simulationId;});
   if(!source)throw createSimulatorError_('SIMULATION_NOT_FOUND','The source simulation no longer exists.');
+  requireCompletedScenarioSource_(source);
   return {revision:record.revision,simulationId:source.id,signature:STScenarioEngine_.signature(source)};
+}
+
+function requireCompletedScenarioSource_(source) {
+  var readiness=STScenarioEngine_.readiness?.(source);
+  if(!readiness?.ready)throw createSimulatorError_('SCENARIO_SOURCE_NOT_READY','Complete the numerical simulation to 100% with the current inputs before generating CAPEX scenarios.',[readiness?.reason||'SOURCE_VALIDATION_UNAVAILABLE']);
+  return readiness;
 }
 
 function createScenario_(request,user) {
@@ -17,6 +24,7 @@ function prepareScenarioFromRecord_(request,record,user) {
     if(Number(request.expectedRevision)!==Number(record.revision))throw createSimulatorError_('CASE_CONFLICT','The case changed. Review the latest version before creating a scenario.');
     var source=record.simulations.find(function(s){return s.id===request.simulationId;});
     if(!source)throw createSimulatorError_('SIMULATION_NOT_FOUND','The source simulation no longer exists.');
+    requireCompletedScenarioSource_(source);
     var sourceSignature=STScenarioEngine_.signature(source),submitted=request.proposal;
     if(request.origin==='LOCAL'){
       // Recompute the recommendation from the supplied source. A local
@@ -48,8 +56,8 @@ function prepareScenarioFromRecord_(request,record,user) {
 function buildSavedScenarioStudy_(source,proposal,sourceSignature,warnings) {
   function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.keys(value).sort().reduce(function(copy,key){if(value[key]!==undefined)copy[key]=canonical(value[key]);return copy;},{});return value;}
   function changesKey(changes){return JSON.stringify((changes||[]).map(function(c){return canonical({equipmentId:c.equipmentId,path:c.path,before:c.before,after:c.after,replacementMaximumBpm:c.replacementMaximumBpm,analysisOnly:c.analysisOnly===true,external:c.external===true,interventionType:c.interventionType,originTier:c.originTier});}).sort(function(a,b){return (a.equipmentId+':'+a.path).localeCompare(b.equipmentId+':'+b.path);}));}
-  var key=changesKey(proposal.changes),methodologySignature=JSON.stringify(canonical(source.whatIf?.methodology||{}));
-  var matched=(source.whatIf?.evaluations||[]).filter(function(entry){return entry.sourceSimulationId===source.id&&entry.sourceSignature===sourceSignature&&entry.searchPolicyVersion==='MATCHED_CAPEX_V10'&&entry.methodologySignature===methodologySignature&&changesKey(entry.evaluatedChanges)===key&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(entry.status);}).sort(function(a,b){return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));})[0];
+  var key=changesKey(proposal.changes),methodologySignature=JSON.stringify(STScenarioEngine_.methodologyInputs(source.whatIf?.methodology||{}));
+  var matched=(source.whatIf?.evaluations||[]).filter(function(entry){return entry.sourceSimulationId===source.id&&entry.sourceSignature===sourceSignature&&entry.searchPolicyVersion==='MATCHED_CAPEX_V11'&&entry.methodologySignature===methodologySignature&&changesKey(entry.evaluatedChanges)===key&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(entry.status);}).sort(function(a,b){return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));})[0];
   var evidence=matched?JSON.parse(JSON.stringify(matched)):{sourceSimulationId:source.id,sourceSignature:sourceSignature,unitOfFlow:source.unitOfFlow||'units',evaluatedChanges:proposal.changes,analysisOnly:proposal.analysisOnly,status:'NO_MATCHING_CURRENT_EVALUATION'};
   evidence.warnings=(evidence.warnings||[]).concat(warnings);
   if(evidence.independentCheck){
@@ -76,6 +84,7 @@ function resolveLocalScenarioProposal_(proposal,source) {
   return Object.assign({},current,{title:proposal.title});
 }
 function normalizeScenarioProposal_(proposal,source) {
+  requireCompletedScenarioSource_(source);
   if(!proposal||!['ZERO','MEDIUM','HIGH'].includes(proposal.tier)||!['STATIC','DYNAMIC','HYBRID'].includes(proposal.basis)||!Array.isArray(proposal.changes))throw createSimulatorError_('INVALID_SCENARIO','The scenario format is invalid.');
   if(proposal.basis!=='STATIC'&&!source.results?.summary)throw createSimulatorError_('INVALID_SCENARIO','Dynamic evidence requires a completed simulation.');
   var title=typeof proposal.title==='string'?proposal.title.trim().slice(0,120):'';

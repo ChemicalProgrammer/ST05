@@ -1,3 +1,4 @@
+import {completeSyntheticScenarioSource} from './helpers/CompletedScenarioFixture.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -41,21 +42,23 @@ function setup() {
     results:{summary:{throughput:100},replay:{samples:[1,2]}},
     whatIf:{methodology:{objective:{metric:'throughput',target:104,unit:'bpm',minimumPracticalGain:1},
       replications:{minimum:6,maximum:30,confidenceLevel:.95,relativePrecision:.005}},evaluations:[]}};
-  record={id:'case-methodology',revision:1,simulations:[source]};
-  const proposal=plain(context.STScenarioEngine_.plan(source).projects.find(item=>item.canApply&&item.kind==='BUFFER_RECOVERY'));
-  assert(proposal,'The fixture needs a physically valid buffer package from the existing planner');
-  proposal.title='Reviewed buffer experiment';
+  completeSyntheticScenarioSource(source);record={id:'case-methodology',revision:1,simulations:[source]};
+  const candidates=context.STScenarioEngine_.plan(source).candidates;
+  const speed=candidates.find(item=>item.canApply&&item.kind==='SPEED_BALANCE');
+  const sensor=candidates.find(item=>item.canApply&&item.kind==='SENSOR_WINDOW');
+  assert(speed&&sensor,'The fixture needs two physically supported flow changes');
+  const proposal=plain({...speed,kind:'CUSTOM',title:'Reviewed flow experiment',changes:[...speed.changes,...sensor.changes]});
   const normalized=context.normalizeScenarioProposal_(proposal,source),sourceSignature=context.STScenarioEngine_.signature(source);
   const pilot=metrics([4.8,5,5.2],1),confirmation=metrics([4,5,6,4,5,6],100);
   const confirmationPlan=planScenarioConfirmation(pilot.base,pilot.candidate,source.whatIf.methodology);
   assert.equal(confirmationPlan.rounds,6);
-  const variable=normalized.changes[1],factor={equipmentId:variable.equipmentId,path:variable.path,before:variable.before,low:variable.before,high:variable.after,unit:variable.unit};
+  const variable=normalized.changes[1],factor={equipmentId:variable.equipmentId,path:variable.path,before:variable.before,low:Math.min(variable.before,variable.after),high:Math.max(variable.before,variable.after),unit:variable.unit};
   const design=createScenarioDOE([factor]);
   const observations=design.designPoints.map(point=>{
     const roundMetrics=[-.1,0,.1].map((noise,i)=>({seed:10+i,throughput:100+(2+noise)*point.levels[0],oee:50+(.5+noise)*point.levels[0]}));
     return {index:point.index,levels:point.levels,feasible:true,throughput:roundMetrics.reduce((sum,row)=>sum+row.throughput,0)/3,oee:roundMetrics.reduce((sum,row)=>sum+row.oee,0)/3,roundMetrics};
   });
-  const evaluation={recordKey:'saved-v10-experiment',sourceSimulationId:source.id,sourceSignature,searchPolicyVersion:'MATCHED_CAPEX_V10',
+  const evaluation={recordKey:'saved-v11-experiment',sourceSimulationId:source.id,sourceSignature,searchPolicyVersion:'MATCHED_CAPEX_V11',
     methodologySignature:JSON.stringify(canonical(source.whatIf.methodology)),evaluatedChanges:plain(normalized.changes),unitOfFlow:'bottles',status:'IMPROVEMENT_REPRODUCED',updatedAt:'2026-11-24T12:00:00Z',
     baseline:pilot.base,candidate:pilot.candidate,confirmationPlan,
     independentCheck:{passed:true,durationSeconds:1800,rounds:6,seed:100,unitOfFlow:'bottles',baseline:confirmation.base,candidate:confirmation.candidate,
@@ -70,7 +73,7 @@ function setup() {
     create:()=>context.createScenario_(request,{email:'owner@test'}).case.simulations[1]};
 }
 
-test('server clone rebuilds study from the exact saved V10 evaluation and ignores client-authored certification',()=>{
+test('server clone rebuilds study from the exact saved V11 evaluation and ignores client-authored certification',()=>{
   const h=setup(),baseline=JSON.stringify(h.source),created=h.create(),study=created.scenario.study;
   assert.equal(h.writes(),1);assert.equal(h.record().revision,2);assert.equal(JSON.stringify(h.record().simulations[0]),baseline);
   assert.equal(created.results,null);assert.equal(created.whatIf,undefined);
@@ -85,6 +88,14 @@ test('server clone rebuilds study from the exact saved V10 evaluation and ignore
   assert.equal(study.economics.status,'NOT_EVALUATED');assert.equal(created.scenario.plantValidated,false);
   assert.equal(study.objective.assessment.targetMet,true);assert.equal(study.objective.assessment.minimumPracticalGainMet,true);
   assert.notEqual(study.economics.npv,999999999);
+});
+
+test('monetary metadata neither blocks technical scenario creation nor invalidates its confirmed study',()=>{
+  const h=setup();
+  Object.assign(h.source.whatIf.methodology,{economics:{investment:500000},budget:0,capexBudget:10});
+  const study=h.create().scenario.study;
+  assert.equal(study.evidence.confirmation.status,'MODEL_REPRODUCED');
+  assert.equal(study.economics.reason,'OUT_OF_SCOPE');assert.equal(study.economics.monetaryInputsRequired,false);
 });
 
 test('cloning removes What-If state while retaining DOE factors, fixed context, observations and its own run horizon',()=>{

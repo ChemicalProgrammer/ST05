@@ -44,3 +44,40 @@ test('parallel screening preserves serial evidence and shares one extra baseline
  assert.equal(parallel.report.screened,16);assert.equal(parallel.report.omitted,0);
  assert.equal(new Set(parallel.report.pairs.flatMap(pair=>pair.keys)).size,16,'pair coverage includes each screened factor');
 });
+
+test('High screening can retain four factors while descriptive reproduction supplies no fictitious interval',async()=>{
+ const many=Array.from({length:5},(_,i)=>({change:c('a','p'+i),priority:5-i}));
+ const report=await screenFlowFactors(model,{targets:many,maxFactors:4,maximumPairs:0,run:{seed:10},measure:async(s,changes,run)=>value(run,Array(3).fill(changes.length?10:0))});
+ assert.equal(report.method,'ADAPTIVE_CONDITIONAL_FLOW_V4');assert.equal(report.maximumFactors,4);assert.equal(report.selectedFactors.length,4);
+ for(const observation of report.observations){
+  assert.equal(observation.paired.kind,'DESCRIPTIVE_REPRODUCTION');assert.equal(observation.paired.lower,null);assert.equal(observation.paired.upper,null);
+  assert.equal(observation.paired.inferenceAvailable,false);assert.equal(observation.paired.selectionScore,10);assert(observation.paired.stable);
+ }
+});
+
+test('screening uses its configured Student confidence level in initial and extended batches',async()=>{
+ const measure=async(s,changes,run)=>value(run,changes.length?[4,5,6]:[0,0,0]);
+ const normal=await screenFlowFactors(model,{targets:[targets[0]],maximumPairs:0,run:{seed:10},measure});
+ const strict=await screenFlowFactors(model,{targets:[targets[0]],maximumPairs:0,run:{seed:10},measure,confidenceLevel:.99});
+ assert.equal(normal.calculations,2);assert.equal(normal.observations[0].paired.rounds,3);assert.equal(normal.observations[0].paired.confidenceLevel,.95);
+ assert.equal(strict.calculations,4);assert.equal(strict.observations[0].paired.rounds,6);assert.equal(strict.observations[0].paired.confidenceLevel,.99);assert.equal(strict.confidenceLevel,.99);
+ assert(strict.observations[0].extended);assert.equal(strict.selectedFactors.length,1);
+});
+
+test('screening pairs observations by seed and rejects duplicate evidence without relabeling it no gain',async()=>{
+ async function screen(damage){return screenFlowFactors(model,{targets:[targets[0]],maximumPairs:0,run:{seed:10},measure:async(s,changes,run)=>{
+  const result=value(run,changes.length?[8,10,12]:[0,0,0]);if(changes.length)damage(result.roundMetrics);return result;
+ }});}
+ const normal=await screen(()=>{}),reordered=await screen(rows=>rows.reverse());
+ assert.deepEqual(reordered.observations[0].paired,normal.observations[0].paired);assert.equal(reordered.calculations,normal.calculations);
+ const damaged=await screen(rows=>{rows[1].seed=rows[0].seed;});
+ assert.equal(damaged.selectedFactors.length,0);assert.equal(damaged.observations[0].reason,'INVALID_REPLICATION_EVIDENCE');assert.equal(damaged.observations[0].paired.reason,'DUPLICATE_SEED_IDS');
+ assert.equal(damaged.outcome,'INCOMPLETE_SCREENING_EVIDENCE');assert.equal(damaged.calculations,2);
+});
+
+test('screening validates confidence and the one-to-four-factor limit before measuring',async()=>{
+ let calls=0;const options={targets,run:{seed:1},measure:async(s,changes,run)=>{calls++;return value(run,[0,0,0]);}};
+ for(const confidenceLevel of [0,1,NaN,null])await assert.rejects(()=>screenFlowFactors(model,{...options,confidenceLevel}),/INVALID_FLOW_SCREEN_CONFIDENCE/);
+ for(const maxFactors of [0,5,2.5,NaN])await assert.rejects(()=>screenFlowFactors(model,{...options,maxFactors}),/INVALID_FLOW_SCREEN_LIMITS/);
+ assert.equal(calls,0);
+});

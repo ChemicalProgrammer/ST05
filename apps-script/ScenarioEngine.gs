@@ -1465,12 +1465,60 @@ function diagnoseLineEfficiency(equipment,result){
 }
 
 
+// A progress label alone is not completion evidence. Check the current model,
+// requested replications, seed identities and terminal calendar/runtime exposure.
+function scenarioSourceReadiness(simulation) {
+  const result=simulation?.results;
+  const fail=(reason,sourceStatus='UNAVAILABLE',extra={})=>({ready:false,reason,sourceStatus,...extra});
+  if(!result?.summary)return fail('NO_RESULTS');
+  if(result.provisional===true)return fail('INCOMPLETE_REPLICATIONS','INCOMPLETE');
+  if(!(Number.isFinite(result.durationSeconds)&&result.durationSeconds>0))return fail('INVALID_RESULT_DURATION');
+  if(result.replicationStatus?.state!=='COMPLETE')return fail('INCOMPLETE_REPLICATIONS','INCOMPLETE');
+  if(!result.inputSignature)return fail('MISSING_INPUT_SIGNATURE');
+  let provenance;try{provenance=JSON.parse(result.inputSignature);}catch(_){return fail('INVALID_INPUT_SIGNATURE');}
+  if(!provenance||typeof provenance!=='object')return fail('INVALID_INPUT_SIGNATURE');
+  if(provenance.version!==SIMULATION_PROVENANCE_VERSION)return fail('PROVENANCE_VERSION_MISMATCH','HISTORICAL',{provenance:{recordedVersion:provenance.version??null,currentVersion:SIMULATION_PROVENANCE_VERSION}});
+  const run={...simulation.dynamicConfig};
+  if(run.durationMode==='SHIFTS')run.durationSeconds=(run.shiftHours||8)*(run.shiftCount||1)*3600;
+  const expected=JSON.parse(canonicalSimulationInputSignature({case:{equipment:simulation.equipment,unitOfFlow:simulation.unitOfFlow||result.unitOfFlow||'units'},run}));
+  function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,canonical(value[k])]));return value;}
+  const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+  if(provenance.run?.engineId!==expected.run.engineId)return fail('ENGINE_MISMATCH','STALE');
+  if(expected.run.engineId!=='ST_CURRENT')return fail('UNVALIDATED_SCENARIO_ENGINE');
+  if(!equal(provenance.equipment,expected.equipment))return fail('EQUIPMENT_CHANGED','STALE');
+  if(provenance.unitOfFlow!==expected.unitOfFlow)return fail('FLOW_UNIT_CHANGED','STALE');
+  if(!equal(provenance.run,expected.run))return fail('RUN_CONFIGURATION_CHANGED','STALE');
+  const rounds=expected.run.rounds,baseSeed=expected.run.seed>>>0;
+  if(!Number.isInteger(rounds)||rounds<1||rounds>100)return fail('INVALID_REPLICATION_COUNT','INCOMPLETE');
+  if(result.replicationStatus.rounds!==undefined&&result.replicationStatus.rounds!==rounds||result.batch&&result.batch.rounds!==rounds)return fail('REPLICATION_COUNT_MISMATCH','INCOMPLETE');
+  const rows=result.batch?.rows||(rounds===1?[result]:[]);
+  if(!Array.isArray(rows)||rows.length!==rounds)return fail('INCOMPLETE_REPLICATION_ROWS','INCOMPLETE',{rounds,completedRounds:Array.isArray(rows)?rows.length:0});
+  const expectedSeeds=new Set(Array.from({length:rounds},(_,index)=>(baseSeed+index)>>>0));
+  if(new Set(rows.map(row=>row.seed)).size!==rounds||rows.some(row=>!Number.isInteger(row.seed)||!expectedSeeds.has(row.seed)))return fail('REPLICATION_SEEDS_MISMATCH','INCOMPLETE');
+  if(rows.some(row=>!row.summary||!Number.isFinite(row.summary.lineOeePercent)||row.summary.lineOeePercent<0||!Number.isFinite(row.summary.outputCount)||row.summary.outputCount<0))return fail('INVALID_REPLICATION_METRICS','INCOMPLETE');
+  const target=expected.run.effectiveRuntimeTargetSeconds,horizon=expected.run.durationSeconds;
+  if(!Number.isFinite(horizon)||horizon<=0)return fail('INVALID_RESULT_DURATION');
+  for(const row of rows){
+    const duration=row.durationSeconds??(target===undefined?result.durationSeconds:undefined);
+    if(!Number.isFinite(duration)||duration<=0||duration>horizon+1e-6)return fail('INCOMPLETE_REPLICATION_HORIZON','INCOMPLETE');
+    if(target===undefined){if(Math.abs(duration-horizon)>1e-6)return fail('INCOMPLETE_REPLICATION_HORIZON','INCOMPLETE');}
+    else {
+      const stop=row.effectiveRuntimeStop;
+      if(!stop||stop.targetSeconds!==target||stop.limitSeconds!==horizon||!['REACHED','LIMIT_REACHED'].includes(stop.status))return fail('INCOMPLETE_RUNTIME_TARGET','INCOMPLETE');
+      if(stop.status==='LIMIT_REACHED'&&Math.abs(duration-horizon)>1e-6)return fail('INCOMPLETE_RUNTIME_TARGET','INCOMPLETE');
+      if(stop.status==='REACHED'&&(!Number.isFinite(stop.accumulatedSeconds)||stop.accumulatedSeconds+1e-6<target))return fail('INCOMPLETE_RUNTIME_TARGET','INCOMPLETE');
+    }
+  }
+  return {ready:true,reason:null,sourceStatus:'CURRENT',rounds,completedRounds:rows.length,unitOfFlow:expected.unitOfFlow,comparisonBasis:target===undefined?'FIXED_CALENDAR_HORIZON':'COMPLETED_RUNTIME_TARGET_OR_LIMIT'};
+}
+
+
 // Scenario policy is separate from the unchanged simulation mathematics.
 const SCENARIO_POLICY = Object.freeze({microstopLimitMinutes:4,maxChanges:64});
 const SCENARIO_DEFINITIONS = Object.freeze({
   ZERO:{scope:'Optimize installed assets and work practices without capital investment.',reliability:'Supported operational improvements; additional maintenance is OPEX, not capital.',costBasis:'Intervention scope; no assumed monetary threshold or required efficiency gain.'},
-  MEDIUM:{scope:'Local component rehabilitation, monitoring or equipment retrofit.',reliability:'Documented retrofit MTBF/MTTR targets, with installation scope and target source.',costBasis:'Localized investment; costs must be supplied, not inferred from OEE.'},
-  HIGH:{scope:'Complete equipment replacement or major line/transport redesign.',reliability:'Replacement can improve reliability without changing speed; use supplier or measured targets.',costBasis:'Major investment scope; a small validated gain is a limited-benefit project, not proof of value.'}
+  MEDIUM:{scope:'Local component rehabilitation, monitoring or equipment retrofit.',reliability:'Documented retrofit MTBF/MTTR targets, with installation scope and target source.',costBasis:'Intervention type and physical scope only; no budget amount or monetary threshold is required.'},
+  HIGH:{scope:'Complete equipment replacement or major line/transport redesign.',reliability:'Replacement can improve reliability without changing speed; use supplier or measured targets.',costBasis:'Complete replacement or major redesign defines this category; no budget amount or minimum efficiency gain is required.'}
 });
 const SCENARIO_INTERVENTIONS = Object.freeze({
   OPERATIONAL:{tier:'ZERO',costClass:'NONE',label:'Existing resources / work practices'},
@@ -1478,6 +1526,24 @@ const SCENARIO_INTERVENTIONS = Object.freeze({
   RETROFIT:{tier:'MEDIUM',costClass:'CAPEX',label:'Local retrofit / rehabilitation'},
   REPLACEMENT:{tier:'HIGH',costClass:'CAPEX',label:'Complete equipment replacement'}
 });
+// Input classes are declarations, not causes inferred from mean stop duration.
+// The independent MICRO_STOP process is distinct from MINOR reliability events.
+function scenarioStopDataCoverage(simulation,equipment){
+  const reliability=equipment?.noiseProfile?.reliability,split=equipment?.processData?.equipment?.stopInputs;
+  const validPair=pair=>pair&&Number.isFinite(pair.mtbfMinutes)&&Number.isFinite(pair.mttrMinutes)&&
+    (pair.mtbfMinutes>0&&pair.mttrMinutes>0||pair.mtbfMinutes===0&&pair.mttrMinutes===0);
+  const mode=split!==undefined?(['minor','major'].every(kind=>validPair(split?.[kind]))?'SPLIT':'INVALID_SPLIT'):
+    reliability?.mtbfMinutes>0&&reliability?.mttrMinutes>0?'GENERAL':'NOT_CONFIGURED';
+  const enabled=simulation?.dynamicConfig?.reliabilityEnabled!==false&&!!reliability;
+  const categories=simulation?.dynamicConfig?.reliabilityCategories||{};
+  const enabledClasses=!enabled?[]:mode==='SPLIT'?['minor','major'].filter(kind=>split[kind].mtbfMinutes>0&&categories[kind]!==false).map(kind=>kind.toUpperCase()):
+    mode==='GENERAL'&&categories.general!==false?['GENERAL']:[];
+  return {mode,source:mode==='SPLIT'?'DECLARED_EQUIPMENT_STOP_CLASSES':mode==='GENERAL'?'AGGREGATE_RELIABILITY_INPUT':'NO_VALID_CLASS_INPUT',
+    enabledClasses,classSpecificAnalysisAvailable:mode==='SPLIT',breakdownRequiredForClassSpecificAttribution:mode==='GENERAL',
+    microStopProcessConfigured:(equipment?.noiseProfile?.microStop?.probabilityPerMinute||0)>0,
+    causeClassification:'NOT_ESTABLISHED',classesInferred:false,
+    interpretation:'MINOR and MAJOR use supplied stop classes; GENERAL remains unclassified. MICRO_STOP is a separate modeled process. Duration alone does not establish a failure cause, maintenance action or replacement.'};
+}
 function scenarioCategoryAllows(change,tier){
   if(change.analysisOnly)return false;
   if(change.replacementMaximumBpm!==undefined)return tier==='HIGH'&&change.path==='nominalRatePerSecond'&&change.interventionType==='REPLACEMENT'&&change.external===true;
@@ -1495,8 +1561,11 @@ function reliabilitySensitivityCandidates(simulation,{mtbfMultiplier=2,mttrMulti
   return (simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR'&&e.noiseProfile?.reliability?.mtbfMinutes>0&&e.noiseProfile?.reliability?.mttrMinutes>0).flatMap(e=>{
     const changes=['mtbfMinutes','mttrMinutes'].map((key,i)=>({...scenarioChange(e,'noiseProfile.reliability.'+key,Math.max(SCENARIO_FIELDS['noiseProfile.reliability.'+key][0],Math.min(SCENARIO_FIELDS['noiseProfile.reliability.'+key][1],e.noiseProfile.reliability[key]*(i?mttrMultiplier:mtbfMultiplier)))),external:true,analysisOnly:true,interventionType:'SENSITIVITY',justification:'Exploratory sensitivity level; not an achievable intervention target.'}));
     const observed=diagnosis.equipment.find(r=>r.equipmentId===e.id);
-    return ['MTBF','MTTR','JOINT'].map((kind,i)=>({equipmentId:e.id,equipmentName:e.name,kind,changes:i===2?changes:[changes[i]],ownStopPercent:observed?.ownStopPercent??null,availabilityBefore:e.noiseProfile.reliability.mtbfMinutes/(e.noiseProfile.reliability.mtbfMinutes+e.noiseProfile.reliability.mttrMinutes)}));
-  }).sort((a,b)=>(b.ownStopPercent??0)-(a.ownStopPercent??0));
+    const stopData= scenarioStopDataCoverage(simulation,e);
+    return ['MTBF','MTTR','JOINT'].map((kind,i)=>({equipmentId:e.id,equipmentName:e.name,kind,changes:i===2?changes:[changes[i]],ownStopPercent:observed?.ownStopPercent??null,
+      failureSeconds:observed?.failureSeconds??null,stopDataCoverage:stopData,targetScope:stopData.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED',
+      availabilityBefore:e.noiseProfile.reliability.mtbfMinutes/(e.noiseProfile.reliability.mtbfMinutes+e.noiseProfile.reliability.mttrMinutes)}));
+  }).sort((a,b)=>(b.failureSeconds??0)-(a.failureSeconds??0));
 }
 const SCENARIO_FIELDS = Object.freeze({
   'nominalRatePerSecond':[0.001,1000000,'units/s'],
@@ -1628,25 +1697,8 @@ function scenarioRecoveryPlan(engineering,requiredSeconds=0){
 }
 // Losses describe observed states, not proven causal attribution.
 function diagnoseScenarioLosses(simulation){
-  const result=simulation.results;
-  const unavailable=(reason,sourceStatus='UNAVAILABLE',extra={})=>({status:'NO_COMPATIBLE_RESULTS',reason,sourceStatus,equipment:[],referenceId:null,rankings:{},opportunities:[],...extra});
-  if(!result?.summary)return unavailable('NO_RESULTS');
-  if(!(result.durationSeconds>0))return unavailable('INVALID_RESULT_DURATION');
-  if(result.replicationStatus?.state!=='COMPLETE')return unavailable('INCOMPLETE_REPLICATIONS','INCOMPLETE');
-  if(!result.inputSignature)return unavailable('MISSING_INPUT_SIGNATURE');
-  let provenance;try{provenance=JSON.parse(result.inputSignature);}catch(_){return unavailable('INVALID_INPUT_SIGNATURE');}
-  if(!provenance||typeof provenance!=='object')return unavailable('INVALID_INPUT_SIGNATURE');
-  if(provenance.version!==SIMULATION_PROVENANCE_VERSION)return unavailable('PROVENANCE_VERSION_MISMATCH','HISTORICAL',{provenance:{recordedVersion:provenance.version??null,currentVersion:SIMULATION_PROVENANCE_VERSION}});
-  const equal=(a,b)=>JSON.stringify(stableScenarioValue(a))===JSON.stringify(stableScenarioValue(b));
-  const run={...simulation.dynamicConfig};
-  if(run.durationMode==='SHIFTS')run.durationSeconds=(run.shiftHours||8)*(run.shiftCount||1)*3600;
-  const expected=JSON.parse(canonicalSimulationInputSignature({case:{equipment:simulation.equipment,unitOfFlow:simulation.unitOfFlow||result.unitOfFlow||'units'},run}));
-  if(provenance.run?.engineId!==expected.run.engineId)return unavailable('ENGINE_MISMATCH','STALE');
-  if(expected.run.engineId!=='ST_CURRENT')return unavailable('UNVALIDATED_SCENARIO_ENGINE');
-  if(!equal(provenance.equipment,expected.equipment))return unavailable('EQUIPMENT_CHANGED','STALE');
-  if(provenance.unitOfFlow!==expected.unitOfFlow)return unavailable('FLOW_UNIT_CHANGED','STALE');
-  if(!equal(provenance.run,expected.run))return unavailable('RUN_CONFIGURATION_CHANGED','STALE');
-  if(result.batch?.rounds!==undefined&&result.batch.rounds!==expected.run.rounds)return unavailable('REPLICATION_COUNT_MISMATCH','INCOMPLETE');
+  const result=simulation.results,readiness=scenarioSourceReadiness(simulation);
+  if(!readiness.ready)return {status:'NO_COMPATIBLE_RESULTS',...readiness,equipment:[],referenceId:null,rankings:{},opportunities:[]};
   const referenceId=analyzeLinePerformance(simulation.equipment,result).referenceId;
   const rounds=result.batch?.rounds||1,replications=result.batch?.rows;
   const hasActualDurations=Array.isArray(replications)&&replications.length===rounds&&replications.every(r=>Number.isFinite(r.durationSeconds)&&r.durationSeconds>0);
@@ -1660,8 +1712,15 @@ function diagnoseScenarioLosses(simulation){
     const failureSeconds=read('failureSeconds'),microStopSeconds=read('microStopSeconds'),starvedSeconds=read('starvedSeconds'),blockedSeconds=read('blockedSeconds');
     const ownStopSeconds=failureSeconds!==null&&microStopSeconds!==null?failureSeconds+microStopSeconds:null;
     const failureCount=read('failureCount'),microStopCount=read('microStopCount');
+    const minorFailureSeconds=read('minorFailureSeconds'),majorFailureSeconds=read('majorFailureSeconds'),generalFailureSeconds=read('generalFailureSeconds');
+    const minorFailureCount=read('minorFailureCount'),majorFailureCount=read('majorFailureCount'),generalFailureCount=read('generalFailureCount');
+    const stopDataCoverage=scenarioStopDataCoverage(simulation,e);
+    stopDataCoverage.recordedCategoryDurations=[minorFailureSeconds,majorFailureSeconds,generalFailureSeconds].every(value=>value!==null);
+    stopDataCoverage.recordedCategoryCounts=[minorFailureCount,majorFailureCount,generalFailureCount].every(value=>value!==null);
+    stopDataCoverage.classSpecificAnalysisAvailable=stopDataCoverage.classSpecificAnalysisAvailable&&stopDataCoverage.recordedCategoryDurations;
     const causes=[['FAILURE',failureSeconds],['MICROSTOP',microStopSeconds],['STARVATION',starvedSeconds],['BLOCKING',blockedSeconds]].filter(x=>x[1]!==null).sort((a,b)=>b[1]-a[1]);
     return {equipmentId:e.id,name:e.name,isReference:e.id===referenceId,failureSeconds,microStopSeconds,ownStopSeconds,starvedSeconds,blockedSeconds,
+      minorFailureSeconds,majorFailureSeconds,generalFailureSeconds,minorFailureCount,majorFailureCount,generalFailureCount,stopDataCoverage,
       failureCount,microStopCount,countBasis:rounds>1?'MEAN_PER_REPLICATION':'RECORDED_RUN',
       failureCategories:['general','minor','major'].map(kind=>({kind:kind.toUpperCase(),count:read(kind+'FailureCount'),seconds:read(kind+'FailureSeconds')})),
       reliabilityExposureSeconds:read('reliabilityExposureSeconds'),
@@ -1669,31 +1728,56 @@ function diagnoseScenarioLosses(simulation){
       ownStopPercent:ownStopSeconds===null?null:100*ownStopSeconds/durationSeconds,
       starvationPercent:starvedSeconds===null?null:100*starvedSeconds/durationSeconds,
       blockingPercent:blockedSeconds===null?null:100*blockedSeconds/durationSeconds,
-      dataCoverage:{ownStopDuration:ownStopSeconds!==null,failureCount:failureCount!==null,microStopCount:microStopCount!==null}};
+      dataCoverage:{ownStopDuration:ownStopSeconds!==null,failureCount:failureCount!==null,microStopCount:microStopCount!==null,
+        declaredStopClasses:stopDataCoverage.mode==='SPLIT',classSpecificAnalysis:stopDataCoverage.classSpecificAnalysisAvailable}};
   });
   function rank(field,basis){return rows.filter(row=>row[field]!==null).slice().sort((a,b)=>b[field]-a[field]||a.equipmentId.localeCompare(b.equipmentId)).map((row,index)=>({rank:index+1,equipmentId:row.equipmentId,name:row.name,value:row[field],basis,...(basis==='DURATION_SECONDS'?{percentOfRun:100*row[field]/durationSeconds}:{countBasis:row.countBasis})}));}
-  const rankings={ownStopDuration:rank('ownStopSeconds','DURATION_SECONDS'),failureDuration:rank('failureSeconds','DURATION_SECONDS'),microStopDuration:rank('microStopSeconds','DURATION_SECONDS'),starvationDuration:rank('starvedSeconds','DURATION_SECONDS'),blockingDuration:rank('blockedSeconds','DURATION_SECONDS'),failureFrequency:rank('failureCount','OBSERVED_EVENT_COUNT'),microStopFrequency:rank('microStopCount','OBSERVED_EVENT_COUNT')};
+  const rankings={ownStopDuration:rank('ownStopSeconds','DURATION_SECONDS'),failureDuration:rank('failureSeconds','DURATION_SECONDS'),microStopDuration:rank('microStopSeconds','DURATION_SECONDS'),
+    minorFailureDuration:rank('minorFailureSeconds','DURATION_SECONDS'),majorFailureDuration:rank('majorFailureSeconds','DURATION_SECONDS'),generalFailureDuration:rank('generalFailureSeconds','DURATION_SECONDS'),
+    minorFailureFrequency:rank('minorFailureCount','OBSERVED_EVENT_COUNT'),majorFailureFrequency:rank('majorFailureCount','OBSERVED_EVENT_COUNT'),generalFailureFrequency:rank('generalFailureCount','OBSERVED_EVENT_COUNT'),
+    starvationDuration:rank('starvedSeconds','DURATION_SECONDS'),blockingDuration:rank('blockedSeconds','DURATION_SECONDS'),failureFrequency:rank('failureCount','OBSERVED_EVENT_COUNT'),microStopFrequency:rank('microStopCount','OBSERVED_EVENT_COUNT')};
   const opportunities=[];
   for(const row of rows){
     const base={equipmentId:row.equipmentId,name:row.name,evidenceLevel:'HYPOTHESIS',causalStatus:'NOT_ESTABLISHED'};
-    if((row.failureSeconds||0)+(row.microStopSeconds||0)>0)opportunities.push({...base,kind:'INTERNAL_STOP_REDUCTION',observed:{failureSeconds:row.failureSeconds,microStopSeconds:row.microStopSeconds,failureCount:row.failureCount,microStopCount:row.microStopCount},mechanismsToTest:['MTBF','MTTR'],requiredEvidence:['Failure-mode history','Paired line-output counterfactual','Achievable intervention target'],interpretation:'Internal stop exposure identifies a sensitivity hypothesis; it does not choose maintenance, retrofit or replacement.'});
+    if(row.failureSeconds>0)opportunities.push({...base,kind:'INTERNAL_STOP_REDUCTION',observed:{failureSeconds:row.failureSeconds,failureCount:row.failureCount,
+      minorFailureSeconds:row.minorFailureSeconds,majorFailureSeconds:row.majorFailureSeconds,generalFailureSeconds:row.generalFailureSeconds},
+      targetScope:row.stopDataCoverage.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED',
+      mechanismsToTest:['MTBF','MTTR'],requiredEvidence:['Failure-mode history with class and cause','Paired line-output counterfactual','Achievable intervention target'],
+      interpretation:'Reliability stop exposure identifies a hypothesis. Aggregate MTBF/MTTR changes affect all configured stop classes; they do not alter the separate MICRO_STOP process or determine an intervention category.'});
+    if((row.minorFailureSeconds||0)+(row.microStopSeconds||0)>0)opportunities.push({...base,kind:'SHORT_STOP_FLOW_RECOVERY',
+      observed:{minorFailureSeconds:row.minorFailureSeconds,microStopSeconds:row.microStopSeconds},mechanismsToTest:['SENSOR_CONTROL','FLOW_BALANCE','EXISTING_BUFFER_RECOVERY'],
+      interpretation:'Test recovery and propagation around declared minor stops or the separate MICRO_STOP process. Sensor and speed adjustments do not directly improve modeled failure MTBF/MTTR or eliminate stop events.'});
+    if(row.majorFailureSeconds>0)opportunities.push({...base,kind:'MAJOR_STOP_CAUSE_REVIEW',observedSeconds:row.majorFailureSeconds,
+      mechanismsToTest:['CAUSE_STRATIFICATION','DOCUMENTED_INTERVENTION'],requiredEvidence:['Stop cause and internal/external origin','Maintenance history or replacement target'],
+      interpretation:'A declared major stop is not proof of an external cause, irreparable equipment or a replacement requirement. CAPEX follows the supported intervention scope.'});
+    if(row.stopDataCoverage.mode==='GENERAL')opportunities.push({...base,kind:'STOP_CLASS_DATA_REQUIRED',observedSeconds:row.generalFailureSeconds,
+      requiredEvidence:['Separate minor and major stop frequencies and durations on the same operating exposure','Cause and internal/external origin'],
+      interpretation:'General inputs remain usable for line-flow experiments. Class-specific conclusions require measured or explicitly documented classes; no split is inferred from the aggregate MTTR.'});
     if(row.starvedSeconds>0)opportunities.push({...base,kind:'UPSTREAM_SUPPLY_OR_BUFFER',observedSeconds:row.starvedSeconds,mechanismsToTest:['UPSTREAM_CAPACITY','UPSTREAM_RELIABILITY','BUFFER_RECOVERY','SENSOR_CONTROL'],interpretation:'Missing input may be propagated from upstream. Starvation does not prove a fault in this equipment.'});
     if(row.blockedSeconds>0)opportunities.push({...base,kind:'DOWNSTREAM_CAPACITY_OR_BUFFER',observedSeconds:row.blockedSeconds,mechanismsToTest:['DOWNSTREAM_CAPACITY','DOWNSTREAM_RELIABILITY','BUFFER_RECOVERY','SENSOR_CONTROL'],interpretation:'Restricted discharge may be propagated from downstream. Blocking does not prove a fault in this equipment.'});
   }
   return {status:rows.some(r=>r.failureSeconds!==null||r.microStopSeconds!==null||r.starvedSeconds!==null||r.blockedSeconds!==null)?'OBSERVED':'MISSING_METRICS',sourceStatus:'CURRENT',referenceId,durationSeconds,durationBasis,rounds,equipment:rows,rankings,opportunities,
+    stopDataQuality:{splitEquipmentIds:rows.filter(row=>row.stopDataCoverage.mode==='SPLIT').map(row=>row.equipmentId),
+      generalEquipmentIds:rows.filter(row=>row.stopDataCoverage.mode==='GENERAL').map(row=>row.equipmentId),
+      classSpecificEquipmentIds:rows.filter(row=>row.stopDataCoverage.classSpecificAnalysisAvailable).map(row=>row.equipmentId),
+      splitInferred:false,scope:'STOP_CLASSES_NOT_ROOT_CAUSES',flowOptimizationRequiresSplit:false},
     attribution:{additive:false,basis:'OBSERVED_EQUIPMENT_STATES',causalStatus:'NOT_ESTABLISHED',countsInferred:false},
-    interpretation:'Observed losses and possible propagation paths; inactivity alone does not establish a line bottleneck. Equipment losses overlap and are not additive global OEE contributions. Event counts are reported only when recorded.'};
+    interpretation:'Observed losses and possible propagation paths; inactivity alone does not establish a line bottleneck. Equipment losses overlap and are not additive global OEE contributions. Event counts are reported only when recorded. MINOR/MAJOR reliability classes and the independent MICRO_STOP process are retained separately; general stops are not split or assigned a cause.'};
 }
 function scenarioLossEvidence(simulation,diagnosis,equipment,kind){
   if(diagnosis.status!=='OBSERVED')return {priorityBonus:0};
   const index=simulation.equipment.findIndex(e=>e.id===equipment.id),referenceIndex=simulation.equipment.findIndex(e=>e.id===diagnosis.referenceId);
   const ids=equipment.type==='CONVEYOR'?[simulation.equipment[index-1]?.id,simulation.equipment[index+1]?.id]:[equipment.id];
   const local=diagnosis.equipment.filter(r=>ids.includes(r.equipmentId)),reference=diagnosis.equipment.find(r=>r.isReference);
-  const seconds=local.reduce((sum,r)=>sum+(r.failureSeconds||0)+(r.microStopSeconds||0)+(r.starvedSeconds||0)+(r.blockedSeconds||0),0);
+  const reliabilityTarget=kind==='RELIABILITY_INTERVENTION';
+  const seconds=local.reduce((sum,r)=>sum+(reliabilityTarget?(r.failureSeconds||0):(r.minorFailureSeconds||0)+(r.microStopSeconds||0))+(r.starvedSeconds||0)+(r.blockedSeconds||0),0);
   const direction=index<referenceIndex?'UPSTREAM':index>referenceIndex?'DOWNSTREAM':'REFERENCE';
   const referenceLoss=direction==='UPSTREAM'?reference?.starvedSeconds:direction==='DOWNSTREAM'?reference?.blockedSeconds:0;
   const bonus=Math.min(30,seconds/diagnosis.durationSeconds*20+(referenceLoss||0)/diagnosis.durationSeconds*20);
-  return {priorityBonus:bonus,observedLosses:local,referenceInteraction:{direction,seconds:referenceLoss||0},interpretation:'Diagnostic priority, not a demonstrated causal gain.'};
+  return {priorityBonus:bonus,priorityBasis:reliabilityTarget?'RELIABILITY_FAILURE_EXPOSURE_AND_PROPAGATION':'MINOR_STOP_EXPOSURE_AND_FLOW_PROPAGATION',
+    observedLosses:local,referenceInteraction:{direction,seconds:referenceLoss||0},
+    reliabilityPriority:reliabilityTarget,interpretation:reliabilityTarget?'Diagnostic priority for documented reliability interventions, not a demonstrated causal gain.':
+      'Flow priority uses declared minor stops, the separate MICRO_STOP process and propagated starvation/blocking. Major and unclassified own-stop durations do not boost this priority. Flow adjustments do not directly change reliability stop parameters or establish the origin of propagated losses.'};
 }
 // Opportunity screening does not create undocumented implementation targets.
 function scenarioProposalNeeds(simulation){
@@ -1718,7 +1802,9 @@ function planScenarios(simulation){
   function add(kind,tier,equipment,changes,evidence,priority,basis){
     changes=changes.filter(c=>c.before!==c.after);if(!changes.length)return;
     let disabledReason=null;try{applyScenarioChanges(simulation,changes);}catch(error){disabledReason=error.message;}
-    const losses=scenarioLossEvidence(simulation,diagnosis,equipment,kind);evidence={...evidence,...losses};priority+=losses.priorityBonus;if(diagnosis.status==='OBSERVED')basis='HYBRID';
+    const losses=scenarioLossEvidence(simulation,diagnosis,equipment,kind);evidence={...evidence,...losses,
+      reliabilityParametersChanged:changes.some(change=>change.path.startsWith('noiseProfile.reliability.')),
+      classificationBasis:'INTERVENTION_SCOPE',budgetUsed:false};priority+=losses.priorityBonus;if(diagnosis.status==='OBSERVED')basis='HYBRID';
     candidates.push({id:kind+':'+equipment.id,kind,tier,titleKey:'scenario.'+kind.toLowerCase(),equipmentId:equipment.id,equipmentName:equipment.name,changes,evidence,priority,basis,canApply:!disabledReason,disabledReason,sourceSimulationId:simulation.id,sourceSignature:scenarioSignature(simulation)});
   }
   audit.forEach(item=>{
@@ -1746,18 +1832,29 @@ function planScenarios(simulation){
     if(zone?.usableLengthMm>0&&e.processData?.geometry?.lpPrimeMm>0){
       add('SENSOR_WINDOW','ZERO',e,[scenarioChange(e,'processData.geometry.lpPrimeMm',e.processData.geometry.lpPrimeMm*.5)],{installedLengthMm:zone.usableLengthMm},72,'STATIC');
     }
-    const upstream=simulation.equipment.find(x=>x.id===item.upstreamId),mttr=simulation.dynamicConfig?.reliabilityEnabled===false?null:upstream?.noiseProfile?.reliability?.mttrMinutes;
-    const microstop=mttr>0&&mttr<=SCENARIO_POLICY.microstopLimitMinutes;
-    const coverage=microstop&&Number.isFinite(c.antiStarveSeconds)?c.antiStarveSeconds/(mttr*60):null;
-    checks.push({equipmentId:e.id,rule:'ACCUMULATION_1_TO_2_MTTR',status:coverage===null?'NOT_EVALUATED':coverage>=1&&coverage<=2?'PASS':'REVIEW',coverage,referenceEquipmentId:upstream?.id});
+    const upstream=simulation.equipment.find(x=>x.id===item.upstreamId),stopData=scenarioStopDataCoverage(simulation,upstream);
+    const minorMttr=stopData.enabledClasses.includes('MINOR')?upstream.processData.equipment.stopInputs.minor.mttrMinutes:null;
+    const coverage=minorMttr>0&&Number.isFinite(c.antiStarveSeconds)?c.antiStarveSeconds/(minorMttr*60):null;
+    checks.push({equipmentId:e.id,rule:'ACCUMULATION_1_TO_2_MTTR',status:coverage===null?'NOT_EVALUATED':coverage>=1&&coverage<=2?'PASS':'REVIEW',coverage,referenceEquipmentId:upstream?.id,
+      stopClass:minorMttr>0?'MINOR':null,mttrMinutes:minorMttr,basis:minorMttr>0?'DECLARED_MINOR_STOP_MTTR':'MINOR_STOP_INPUT_REQUIRED',
+      interpretation:'Buffer coverage uses the declared minor-stop MTTR. Aggregate MTTR is not classified as a microstop by a duration cutoff.'});
     const recoveryFailed=['INSTALLED_LENGTH','SMOOTH_RECOVERY','BACKUP_POSITION'].some(id=>['FAIL','WARNING'].includes(scenarioGoal(engineering,id)));
     const observedDownstream=diagnosis.equipment.find(r=>r.equipmentId===item.downstreamId);
     const observedStarvation=diagnosis.status==='OBSERVED'&&(observedDownstream?.starvedSeconds||0)>diagnosis.durationSeconds*.01;
     if(recoveryFailed||(coverage!==null&&coverage<1)||observedStarvation){
-      const plan=scenarioRecoveryPlan(engineering,microstop?mttr*60:0);
+      const plan=scenarioRecoveryPlan(engineering,minorMttr>0?minorMttr*60:0);
       if(plan){
         const losses=result?.accumulationZoneMetrics&&Object.values(result.accumulationZoneMetrics).find(x=>x.ownerEquipmentId===e.id);
-        add('BUFFER_RECOVERY','HIGH',e,[scenarioChange(e,'processData.accumulation.backupSensorPositionMm',plan.backup),scenarioChange(e,'processData.geometry.lactMm',plan.length)],{recoveryLengthMm:c.recoveryLengthMm,requiredOverflowMm:c.overflowLengthMm,addedLengthMm:plan.length-input.installedLengthMm,coverage,overflowUnits:losses?.overflowUnits??null},96+(losses?.overflowUnits>0?5:0),losses?'HYBRID':'STATIC');
+        if(plan.length>input.installedLengthMm){
+          add('BUFFER_RECOVERY','HIGH',e,[scenarioChange(e,'processData.accumulation.backupSensorPositionMm',plan.backup),scenarioChange(e,'processData.geometry.lactMm',plan.length)],{recoveryLengthMm:c.recoveryLengthMm,requiredOverflowMm:c.overflowLengthMm,addedLengthMm:plan.length-input.installedLengthMm,coverage,
+            bufferStopTarget:minorMttr>0?{stopClass:'MINOR',mttrMinutes:minorMttr,basis:'DECLARED_INPUT'}:null,overflowUnits:losses?.overflowUnits??null},96+(losses?.overflowUnits>0?5:0),losses?'HYBRID':'STATIC');
+        }else{
+          // Existing length plus a sensor adjustment is an operational change,
+          // not a capital project merely because recovery sizing found it.
+          if(!candidates.some(candidate=>candidate.kind==='SENSOR_POSITION'&&candidate.equipmentId===e.id))
+            add('SENSOR_POSITION','ZERO',e,[scenarioChange(e,'processData.accumulation.backupSensorPositionMm',plan.backup)],{installedLengthMm:input.installedLengthMm,recoveryWithinInstalledLength:true},75,'STATIC');
+          checks.push({equipmentId:e.id,rule:'RECOVERY_WITHIN_INSTALLED_LENGTH',status:'PASS',classification:'ZERO',addedLengthMm:0});
+        }
       }
     }
     // The supplied design brief requires data not present in the current import contract.
@@ -1765,7 +1862,13 @@ function planScenarios(simulation){
   });
   (simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR').forEach(e=>{
     const r=e.noiseProfile?.reliability;if(!(r?.mtbfMinutes>0&&r?.mttrMinutes>0))return;
-    if(r.mttrMinutes>SCENARIO_POLICY.microstopLimitMinutes)checks.push({equipmentId:e.id,rule:'MAJOR_FAILURE_OUTSIDE_MICROSTOP_BUFFER_TARGET',status:'REVIEW'});
+    const stopData=scenarioStopDataCoverage(simulation,e);
+    if(stopData.mode==='GENERAL')checks.push({equipmentId:e.id,rule:'STOP_CLASS_BREAKDOWN_REQUIRED_FOR_TARGETED_DIAGNOSIS',status:'NOT_EVALUATED',
+      blocksFlowOptimization:false,interpretation:'Supply minor/major data to target a stop class. General reliability remains usable; its mean duration is not a class or cause.'});
+    if(stopData.enabledClasses.includes('MAJOR'))checks.push({equipmentId:e.id,rule:'MAJOR_STOPS_REQUIRE_CAUSE_AND_INTERVENTION_REVIEW',status:'REVIEW',
+      replacementRequired:null,interpretation:'A declared major stop does not determine its external/internal cause or the intervention category.'});
+    if(stopData.enabledClasses.includes('MINOR')&&e.processData.equipment.stopInputs.minor.mttrMinutes>SCENARIO_POLICY.microstopLimitMinutes)checks.push({equipmentId:e.id,
+      rule:'LONG_DECLARED_MINOR_STOP_BUFFER_TARGET',status:'REVIEW',stopClass:'MINOR',interpretation:'Review the long declared minor-stop buffer target; the input is not reclassified by duration.'});
   });
   analyzeLinePerformance(simulation.equipment,result).points.forEach(point=>{
     if(point.isPacemaker||!(point.maximumBpm>0)||!(point.recommendedBpm>0))return;
@@ -1783,7 +1886,7 @@ function planScenarios(simulation){
     const choices=candidates.filter(p=>p.tier===tier).sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority);
     return choices[0]||{tier,canApply:false,titleKey:'scenario.no_proposal',basis:'STATIC',changes:[],evidence:{},disabledReason:'SCENARIO_INSUFFICIENT_EVIDENCE'};
   });
-  return {proposalNeeds:scenarioProposalNeeds(simulation),capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
+  return {sourceReadiness:scenarioSourceReadiness(simulation),proposalNeeds:scenarioProposalNeeds(simulation),capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
 }
 
 
@@ -1945,9 +2048,9 @@ function planScenarioReplications(base,candidate,options={}) {
 
 
 const SCENARIO_SEARCH_PROFILES = Object.freeze({
-  LIGHT: {explorationSeconds:300,confirmationSeconds:1800,maxCandidates:48,maxSearchMs:120000,maxWithoutImprovement:16,maxFactors:0,passes:1,finalists:4},
-  MEDIUM: {explorationSeconds:600,confirmationSeconds:1800,maxCandidates:128,maxSearchMs:300000,maxWithoutImprovement:32,maxFactors:3,passes:2,finalists:6},
-  HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6}
+  LIGHT: {explorationSeconds:300,confirmationSeconds:1800,maxCandidates:48,maxSearchMs:120000,maxWithoutImprovement:16,maxFactors:0,passes:1,finalists:4,fullHorizonFinalists:2},
+  MEDIUM: {explorationSeconds:600,confirmationSeconds:1800,maxCandidates:128,maxSearchMs:300000,maxWithoutImprovement:32,maxFactors:3,passes:2,finalists:6,fullHorizonFinalists:2},
+  HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6,fullHorizonFinalists:3}
 });
 function scenarioSearchProfile(level) { return SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM; }
 function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
@@ -1959,6 +2062,39 @@ function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
   // What-If compares complete equal calendar horizons and records that choice.
   delete copy.effectiveRuntimeTargetSeconds;
   return copy;
+}
+
+// The intermediate screen selects where to spend simulation time; it never
+// certifies a gain. Selection and independent confirmation retain the full day.
+function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
+  const profile=scenarioSearchProfile(level),fullRun=scenarioSearchRun(run,level,'validation');
+  const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
+  const screenRun=scenarioSearchRun(run,level,true);
+  // A short prefix does not represent an entire shift/calendar/product program.
+  // Keep every finalist when the run has explicit changes over time.
+  const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);
+  const reason=scheduled?'SCHEDULED_CONDITIONS_REQUIRE_FULL_HORIZON':fullRun.durationSeconds<=2*screenRun.durationSeconds?'SHORT_CONFIGURED_HORIZON':candidateCount<=limit?'WITHIN_FULL_HORIZON_BUDGET':null;
+  return {policy:'STAGED_FINALIST_RANKING_V1',staged:!reason,reason,screenRun,fullRun,fullHorizonFinalists:reason?candidateCount:limit,
+    screeningSeedOffset:50003,rankingSeedOffset:100003,confirmationSeedOffset:1000003,
+    interpretation:'A bounded intermediate screen may omit a configuration whose benefit emerges later. Final recommendations still require full-horizon ranking and independent confirmation; this is not a global optimum search.'};
+}
+
+function selectScenarioFinalists(screened,baseline,limit) {
+  const valid=screened.filter(item=>item?.changes?.length&&Number.isFinite(item.result?.throughput)&&Number.isFinite(item.result?.oee));
+  // Compare paired gains only within the common intermediate horizon. Prefer
+  // valid engineering, then observed OEE non-regression and throughput gain.
+  const score=item=>item.result.throughput-baseline.throughput;
+  valid.sort((a,b)=>Number(!!a.result.warnings?.length)-Number(!!b.result.warnings?.length)||Number(a.result.oee<baseline.oee-1e-9)-Number(b.result.oee<baseline.oee-1e-9)||score(b)-score(a));
+  const chosen=[],combinations=new Set();
+  const key=item=>item.changes.map(c=>c.equipmentId+':'+c.path).sort().join('|');
+  function add(item){if(item&&!chosen.includes(item)){chosen.push(item);combinations.add(key(item));}}
+  // Reliability interventions may show no event in a short prefix. Preserve
+  // them for long-horizon review rather than declaring no benefit from silence.
+  valid.filter(item=>item.changes.some(c=>c.path.startsWith('noiseProfile.reliability.'))).forEach(add);
+  add(valid[0]);
+  for(const item of valid)if(chosen.length<limit&&!combinations.has(key(item)))add(item);
+  for(const item of valid)if(chosen.length<limit)add(item);
+  return chosen;
 }
 function scenarioConfirmationNeedsMore(base,candidate) {
   const a=base?.roundMetrics,b=candidate?.roundMetrics;
@@ -2078,7 +2214,8 @@ function scenarioComparisonEvidenceIssue(base,candidate,plan) {
 
 // Scenario evidence is conditional on the model. Reported sources, quotations
 // and pilots never become verified causes, feasible targets or plant validation.
-// All economics concern the complete independently checked package of changes.
+// The standard study is technical: no budget amounts or financial ranking.
+// The separate explicit economics API concerns the complete checked package.
 
 const scenarioStudyEconomicNumbers = Object.freeze({
   investment: [0, Infinity], installationCost: [0, Infinity], implementationLoss: [0, Infinity],
@@ -2087,6 +2224,22 @@ const scenarioStudyEconomicNumbers = Object.freeze({
   annualAvoidableSavings: [0, Infinity], annualIncrementalOpex: [0, Infinity], residualValue: [0, Infinity]
 });
 const scenarioStudyExcludedKeys = new Set(['__proto__', 'constructor', 'prototype', 'replay', 'study', 'trialHistory', 'roundMetrics', 'inputSignature']);
+
+// Canonical technical inputs for cache/confirmation identity. Monetary sections
+// are intentionally excluded only at the top level; qualitative intervention
+// types and costClass, replication settings and all other technical data remain.
+function scenarioTechnicalMethodology(methodology={}) {
+  if(!scenarioStudyRecord(methodology))return {};
+  const monetary=new Set(['economics','budget','capexBudget','investmentBudget']);
+  function canonical(value,ancestors=new Set()){
+    if(!value||typeof value!=='object')return value;
+    if(ancestors.has(value))throw Error('SCENARIO_INVALID_METHODOLOGY_CYCLE');
+    const next=new Set(ancestors);next.add(value);
+    if(Array.isArray(value))return value.map(item=>canonical(item,next));
+    return Object.fromEntries(Object.keys(value).sort().filter(key=>value[key]!==undefined).map(key=>[key,canonical(value[key],next)]));
+  }
+  return canonical(Object.fromEntries(Object.entries(methodology).filter(([key])=>!monetary.has(key))));
+}
 
 function scenarioStudyText(value, limit = 2000) {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null;
@@ -2334,7 +2487,7 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
     const explicitType = scenarioStudyText(record?.type || change.interventionType);
     const classification = exploratory ? 'EXPLORATORY_SENSITIVITY' : explicitType ||
       (change.path?.startsWith('noiseProfile.reliability.') ? 'INTERVENTION_UNSPECIFIED' :
-        change.path?.includes('geometry.') ? 'PHYSICAL_CHANGE_UNSPECIFIED' : 'OPERATING_PARAMETER_ADJUSTMENT');
+        change.path==='processData.geometry.lactMm' ? 'LINE_REDESIGN' : 'OPERATING_PARAMETER_ADJUSTMENT');
     const key = change.equipmentId + ':' + classification + ':' + (record?.id || '');
     if (!groups.has(key)) {
       const equipment = (Array.isArray(simulation?.equipment) ? simulation.equipment : []).find(item => item?.id === change.equipmentId);
@@ -2342,9 +2495,14 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
         id: key, equipmentId: change.equipmentId, equipmentName: scenarioStudyText(equipment?.name), classification,
         classificationBasis: exploratory ? 'EXPLORATORY_TARGET' : explicitType ? 'REPORTED_INTERVENTION' : 'PARAMETER_TYPE_ONLY',
         costClass: ({ OPERATIONAL: 'NONE', MAINTENANCE: 'OPEX', RETROFIT: 'CAPEX', REPLACEMENT: 'CAPEX' })[classification] || 'UNASSIGNED',
+        capexClassification: {tier:({OPERATIONAL:'ZERO',MAINTENANCE:'ZERO',RETROFIT:'MEDIUM',REPLACEMENT:'HIGH',LINE_REDESIGN:'HIGH',OPERATING_PARAMETER_ADJUSTMENT:'ZERO'})[classification]||'UNASSIGNED',
+          basis:'INTERVENTION_SCOPE',budgetUsed:false},
+        stopDataCoverage:scenarioStopDataCoverage(simulation,equipment),
+        modeledStopEffect:{reliabilityParametersChanged:false,microStopParametersChanged:false,flowEffectsRequireSimulation:true},
         description: scenarioStudyText(record?.description || change.justification),
         diagnosticEvidence: (Array.isArray(evaluation?.lossDiagnosis?.equipment) ? evaluation.lossDiagnosis.equipment : []).filter(item => item?.equipmentId === change.equipmentId).slice(0, 1).map(item =>
-          scenarioStudyPick(item, ['equipmentId', 'failureSeconds', 'microStopSeconds', 'starvedSeconds', 'blockedSeconds', 'dominantLoss', 'ownStopPercent'])),
+          scenarioStudyPick(item, ['equipmentId', 'failureSeconds', 'microStopSeconds', 'minorFailureSeconds', 'majorFailureSeconds', 'generalFailureSeconds',
+            'failureCategories', 'stopDataCoverage', 'starvedSeconds', 'blockedSeconds', 'dominantLoss', 'ownStopPercent'])),
         capacityEvidence: (Array.isArray(evaluation?.capacityDiagnosis?.limitingEquipment) ? evaluation.capacityDiagnosis.limitingEquipment : []).filter(item => item?.id === change.equipmentId).slice(0, 1).map(item =>
           scenarioStudyPick(item, ['id', 'name', 'bpm', 'maximumBpm'])),
         targetSource: { status: record?.targetSource || record?.sourceReference || change.targetSource || change.justification ? 'REPORTED_NOT_VERIFIED' : 'NOT_PROVIDED',
@@ -2354,7 +2512,15 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
         reportedPilot: record?.pilot === undefined ? null : { status: 'REPORTED_NOT_VERIFIED', reported: scenarioStudyCopy(record.pilot) }
       });
     }
-    groups.get(key).changes.push(scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'replacementMaximumBpm']));
+    const hypothesis=groups.get(key);
+    if(change.path.startsWith('noiseProfile.reliability.')){
+      hypothesis.modeledStopEffect.reliabilityParametersChanged=true;
+      hypothesis.modeledStopEffect.reliabilityScope=hypothesis.stopDataCoverage.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED';
+      hypothesis.modeledStopEffect.interpretation='Aggregate MTBF/MTTR edits scale all configured reliability stop classes proportionally; the separate MICRO_STOP process is unchanged.';
+    }else if(!hypothesis.modeledStopEffect.reliabilityParametersChanged){
+      hypothesis.modeledStopEffect.interpretation='Operating or geometry changes affect line flow and recovery; they do not directly reduce the frequency or duration of configured reliability or MICRO_STOP events.';
+    }
+    hypothesis.changes.push(scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'replacementMaximumBpm']));
   });
   return [...groups.values()];
 }
@@ -2375,6 +2541,7 @@ function buildScenarioStudy(simulation, evaluation) {
     actualCandidate.oee >= actualBase.oee - 1e-9;
   const stats = scenarioStudyPick(check?.statisticalEvidence, ['available', 'n', 'seedIds', 'confidenceLevel', 'metrics', 'reason']);
   const confirmationPlan = scenarioStudyConfirmationPlan(evaluation?.confirmationPlan);
+  const rankingPlan=evaluation?.rankingPlan,finalistScreen=evaluation?.phaseAudit?.finalistScreening,ranking=evaluation?.phaseAudit?.ranking;
   const doe = evaluation?.doe;
   const fixedChanges = (Array.isArray(doe?.fixedChanges) ? doe.fixedChanges : []).slice(0, 64).map(change =>
     scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'interventionType', 'replacementMaximumBpm']));
@@ -2392,12 +2559,15 @@ function buildScenarioStudy(simulation, evaluation) {
     'Observed equipment downtime and propagated starvation/blocking are not additive causal line losses.',
     'A simulated target does not establish the physical intervention, attainable reliability or supplier performance.',
     'DOE and independent confirmation support this model and evaluated package; they do not prove a global optimum or plant outcome.',
-    'Reported financial inputs and source references are not independently verified.'
+    'Minor/major stop classes require supplied data; general stops are not split by duration, and stop class does not establish root cause.',
+    'CAPEX classification uses intervention type and scope; budget amounts and financial evaluation are outside the current technical study.',
+    'Reported source references are not independently verified.'
   ];
   const confirmationStatus = !check ? 'NOT_EVALUATED' : !traceable ? 'UNTRACEABLE_EVIDENCE' : check.passed !== true ? 'NOT_REPRODUCED' :
     validConfirmation ? 'MODEL_REPRODUCED' : 'INVALID_OR_INCOMPLETE_CONFIRMATION';
   return {
     version: 1,
+    analysisScope:{objective:'TECHNICAL_LINE_EFFICIENCY',capexClassificationBasis:'INTERVENTION_SCOPE',budgetAmountsUsed:false},
     source: {
       simulationId: scenarioStudyText(simulation?.id), sourceSimulationId: scenarioStudyText(evaluation?.sourceSimulationId),
       sourceSignature: scenarioStudyText(evaluation?.sourceSignature), status: traceable ? 'RECORDED' : 'INCOMPLETE_OR_MISMATCHED',
@@ -2414,13 +2584,23 @@ function buildScenarioStudy(simulation, evaluation) {
     diagnosis: {
       causalStatus: 'HYPOTHESES_ONLY',
       observedLosses: scenarioStudyPick(evaluation?.lossDiagnosis, ['status', 'reason', 'sourceStatus', 'provenance', 'referenceId', 'durationSeconds', 'durationBasis',
-        'rounds', 'equipment', 'rankings', 'opportunities', 'attribution', 'interpretation']),
+        'rounds', 'equipment', 'rankings', 'opportunities', 'stopDataQuality', 'attribution', 'interpretation']),
       capacity: scenarioStudyPick(evaluation?.capacityDiagnosis, ['reason', 'sourceStatus', 'referenceId', 'referenceBpm', 'minimumBpm', 'capacityCeilingPercent', 'limitingEquipment', 'achievedPercent', 'capacityGapPp', 'residualLossPp', 'accountingAvailable', 'interpretation']),
       reliabilitySensitivity: scenarioStudyPick(evaluation?.reliabilityTargetSearch, ['status', 'analysisOnly', 'classification', 'conditionalReliabilityGain', 'coverage', 'ranking', 'interpretation'])
     },
     hypotheses,
     evidence: {
       screening: { baseline: scenarioStudyMetrics(evaluation?.baseline), candidate: scenarioStudyMetrics(evaluation?.candidate), role: 'EXPLORATION_ONLY' },
+      finalistSelection:{status:rankingPlan?'RECORDED':'NOT_RECORDED',role:'EXPLORATORY_SELECTION_NOT_CONFIRMATION',
+        policy:scenarioStudyText(rankingPlan?.policy),staged:rankingPlan?.staged===true,reason:scenarioStudyText(rankingPlan?.reason),
+        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId']),
+        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId']),
+        candidatesScreened:Array.isArray(finalistScreen?.observations)?finalistScreen.observations.length:null,
+        selected:scenarioStudyNumber(finalistScreen?.selected),omitted:scenarioStudyNumber(finalistScreen?.omitted),
+        protectedReliabilityCandidates:scenarioStudyNumber(finalistScreen?.protectedReliabilityCandidates),
+        fullHorizonFinalists:scenarioStudyNumber(ranking?.finalists)??scenarioStudyNumber(rankingPlan?.fullHorizonFinalists),
+        shortScreenMayMissLateBenefits:rankingPlan?.staged===true,
+        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the full-horizon independent confirmation supports a reproduced improvement.'},
       experiment: {
         status: doe ? doe.analysis?.complete === true ? 'COMPLETE_DESIGN' : 'INCOMPLETE_DESIGN' : 'NOT_PERFORMED',
         type: scenarioStudyText(doe?.type || doe?.design?.type),
@@ -2455,11 +2635,13 @@ function buildScenarioStudy(simulation, evaluation) {
       warnings: scenarioStudyCopy(evaluation?.warnings || []),
       reportedAcknowledgement: evaluation?.engineeringReviewAcknowledged === true,
       interpretation: 'Parameter checks or reported acknowledgement do not establish engineering feasibility, installation scope or target achievability.' },
-    economics: evaluateScenarioEconomics(simulation, evaluation),
+    economics: {status:'NOT_EVALUATED',reason:'OUT_OF_SCOPE',scope:'TECHNICAL_SCENARIO_ANALYSIS',monetaryInputsRequired:false,
+      usedForClassification:false,usedForRanking:false,missingInputs:[],invalidInputs:[],plantValidated:false,
+      interpretation:'This study compares technical line performance and classifies the intervention scope. No budget amount is requested or used. Financial estimates require a separate explicit API call.'},
     plantValidation: { status: pilots.length ? 'REPORTED_NOT_VERIFIED' : 'NOT_EVALUATED', verified: false, reports: pilots },
     limitations: constraints
   };
 }
 
-return {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary};
+return {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary};
 })();

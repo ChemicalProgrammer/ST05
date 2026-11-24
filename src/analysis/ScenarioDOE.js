@@ -1,5 +1,18 @@
 import {scenarioFDistributionSurvival,scenarioMeanSummary,scenarioStudentTPValue,scenarioHolmAdjust} from './ScenarioStatistics.js';
 
+// The same confidence setting drives intervals and the complementary test
+// threshold. Do not silently ignore an explicitly supplied alpha or choose the
+// more favorable of two conflicting settings.
+function scenarioDOEInferenceSettings(options={}) {
+  if(!options||typeof options!=='object'||Array.isArray(options))return {reason:'INVALID_INFERENCE_SETTINGS'};
+  const levels=[options.confidenceLevel,options.confidence].filter(value=>value!==undefined);
+  if(levels.some(value=>!Number.isFinite(value)||value<=0||value>=1))return {reason:'INVALID_CONFIDENCE_LEVEL'};
+  if(options.alpha!==undefined&&(!Number.isFinite(options.alpha)||options.alpha<=0||options.alpha>=1))return {reason:'INVALID_ALPHA'};
+  const confidenceLevel=levels[0]??(options.alpha!==undefined?Number((1-options.alpha).toPrecision(15)):.95);
+  if(levels.some(value=>Math.abs(value-confidenceLevel)>1e-12)||options.alpha!==undefined&&Math.abs(options.alpha+confidenceLevel-1)>1e-12)return {reason:'INCONSISTENT_INFERENCE_SETTINGS'};
+  return {confidenceLevel,alpha:Number((1-confidenceLevel).toPrecision(15))};
+}
+
 // Two-level pilot: at most four factors, with explicit feasible bounds.
 export function createScenarioDOE(factors) {
   if(!Array.isArray(factors)||factors.length<1||factors.length>4)throw Error('DOE_SELECT_ONE_TO_FOUR_FACTORS');
@@ -45,10 +58,11 @@ function scenarioDOEResidualDiagnostics(residuals,mse,seedCount) {
 }
 
 function scenarioDOEInferentialAnalysis(design,observations,options={}) {
+  const settings=scenarioDOEInferenceSettings(options);
+  if(settings.reason)return {complete:false,reason:settings.reason};
   const ordered=scenarioDOEOrderedObservations(design,observations);
   if(!ordered)return {complete:false,reason:'INCOMPLETE_OR_INFEASIBLE_DESIGN'};
-  const confidenceLevel=options.confidenceLevel??options.confidence??.95,alpha=Number((1-confidenceLevel).toPrecision(15));
-  if(!Number.isFinite(confidenceLevel)||confidenceLevel<=0||confidenceLevel>=1)return {complete:false,reason:'INVALID_CONFIDENCE_LEVEL'};
+  const {confidenceLevel,alpha}=settings;
   const n=ordered.length,r=ordered[0].roundMetrics?.length;
   if(!(r>=3)||ordered.some(row=>!Array.isArray(row.roundMetrics)||row.roundMetrics.length!==r||row.roundMetrics.some(value=>!Number.isFinite(value?.seed)||!Number.isFinite(value.oee)||!Number.isFinite(value.throughput))||new Set(row.roundMetrics.map(value=>value.seed)).size!==r))return {complete:false,reason:'MATCHED_REPLICATIONS_REQUIRED'};
   const seedIds=ordered[0].roundMetrics.map(row=>row.seed),rowsBySeed=ordered.map(row=>new Map(row.roundMetrics.map(value=>[value.seed,value])));
@@ -91,12 +105,14 @@ function scenarioDOEInferentialAnalysis(design,observations,options={}) {
 }
 
 export function analyzeScenarioDOE(design,observations,options={}) {
+  const settings=scenarioDOEInferenceSettings(options);
+  if(settings.reason)return {complete:false,effects:[],reason:settings.reason};
   const ordered=scenarioDOEOrderedObservations(design,observations);
   if(!ordered)return {complete:false,effects:[],reason:'INCOMPLETE_OR_INFEASIBLE_DESIGN'};
   const expected=ordered.length,terms=design.factors.map((_,i)=>[i]),inference=scenarioDOEInferentialAnalysis(design,observations,options);
   const inferenceAvailable=inference.complete&&Object.values(inference.metrics).some(metric=>metric.effects.some(effect=>effect.paired.inferenceAvailable));
   for(let i=0;i<design.factors.length;i++)for(let j=i+1;j<design.factors.length;j++)terms.push([i,j]);
-  return {complete:true,interpretation:'High-minus-low effects describe this tested design. When matched replications are available, effects and statistics use per-seed contrasts and a joint Holm family across both metrics; intervals are marginal. This is not a global optimum or plant validation.',inference:{available:inferenceAvailable,reason:inference.complete?(inferenceAvailable?null:'NO_ESTIMABLE_CONTRAST_VARIANCE'):inference.reason,multiplicity:inference.multiplicity??null},effects:terms.map(indices=>{
+  return {complete:true,confidenceLevel:settings.confidenceLevel,alpha:settings.alpha,interpretation:'High-minus-low effects describe this tested design. When matched replications are available, effects and statistics use per-seed contrasts and a joint Holm family across both metrics; intervals are marginal. Observation order does not establish independent random streams. This is not a global optimum or plant validation.',inference:{available:inferenceAvailable,reason:inference.complete?(inferenceAvailable?null:'NO_ESTIMABLE_CONTRAST_VARIANCE'):inference.reason,multiplicity:inference.multiplicity??null},effects:terms.map(indices=>{
     const effect={factors:indices,type:indices.length===1?'MAIN':'TWO_FACTOR_INTERACTION',statistics:{oee:null,throughput:null}};
     for(const metric of ['oee','throughput']) {
       effect[metric]=ordered.reduce((sum,row,i)=>sum+row[metric]*indices.reduce((sign,j)=>sign*design.designPoints[i].levels[j],1),0)/(expected/2);

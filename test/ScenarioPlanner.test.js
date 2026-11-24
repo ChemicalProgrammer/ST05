@@ -46,7 +46,7 @@ test('scenario fingerprint survives server equipment normalization and JSON key 
 
 test('external reliability changes require evidence and physically beneficial directions',()=>{
  const sim=fixture(),e=sim.equipment[0];e.noiseProfile.reliability={mtbfMinutes:8,mttrMinutes:2};
- const change={equipmentId:e.id,path:'noiseProfile.reliability.mtbfMinutes',before:8,after:12,external:true,justification:'Bearing replacement supported by vendor reliability target'};
+ const change={equipmentId:e.id,path:'noiseProfile.reliability.mtbfMinutes',before:8,after:12,external:true,interventionType:'MAINTENANCE',justification:'Bearing replacement supported by vendor reliability target'};
  const updated=applyScenarioChanges(sim,[change]);assert.equal(updated.equipment[0].noiseProfile.reliability.mtbfMinutes,12);assert.equal(sim.equipment[0].noiseProfile.reliability.mtbfMinutes,8);
  assert.throws(()=>applyScenarioChanges(sim,[{...change,after:4}]),/SCENARIO_RELIABILITY_DIRECTION/);
  assert.throws(()=>applyScenarioChanges(sim,[{...change,external:false}]),/SCENARIO_EXTERNAL_EVIDENCE_REQUIRED/);

@@ -643,6 +643,10 @@ function advanceDiscreteConveyor(runtime,zone,stopped){
 
 function advanceAccumulationZones(runtime) {
   runtime.zones.forEach((zone) => {
+    // Internal handoffs have no travel, moving packets or photoeyes. Their
+    // inventory is transferred directly by processEquipmentFlow/addFlowToZone;
+    // running the belt transport pass for them performs no physical work.
+    if(!zone.physicalModelEnabled)return;
     const owner = getEquipment(runtime, zone.ownerEquipmentId);
     const conveyorStopped = zone.physicalModelEnabled && owner && (!isAvailable(owner) || isStartDelayed(owner));
     if(runtime.run.discretePackages&&zone.physicalModelEnabled){advanceDiscreteConveyor(runtime,zone,conveyorStopped);return;}

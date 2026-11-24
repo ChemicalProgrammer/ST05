@@ -107,18 +107,19 @@ test('the actual spatial SimPy engine records both categories and its normalized
 test('results render a grouped stop breakdown for new runs and show unknown values for saved runs without category data',async()=>{
  const {JSDOM}=await import('jsdom'),{window:w}=new JSDOM('<section id="operation"></section>',{runScripts:'outside-only'});
  const code=fs.readFileSync('apps-script/Results.html','utf8');
- w.number=(value)=>Number.isFinite(value)?String(value):'—';w.unitLabel=value=>value||'bottles';
+ w.number=(value)=>Number.isFinite(value)?String(value):'—';w.unitLabel=value=>value||'bottles';w.rateLabel=value=>(value||'bottles')+'/min';
+ w.eval(fs.readFileSync('apps-script/EquipmentEfficiency.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1]);
  w.eval(code.slice(code.indexOf('  function renderEquipmentOperatingResults('),code.indexOf('  function render(result,activeCase,simulation)')));
  const value=input(),result=run(value),target=w.document.getElementById('operation');
  w.renderEquipmentOperatingResults(target,result,result,value.case.equipment);
- const table=target.querySelectorAll('table')[1];
+ const table=target.querySelector('th[scope="colgroup"]').closest('table');
  assert.deepEqual([...table.querySelectorAll('th[scope="colgroup"]')].map(cell=>cell.textContent),['Minor stops','Major stops','General / unclassified']);
  assert.equal(table.tBodies[0].rows.length,2);
  const first=table.tBodies[0].rows[0];
  assert.equal(first.cells[1].textContent,String(result.equipmentMetrics[value.case.equipment[0].id].minorFailureCount));
  for(const metrics of Object.values(result.equipmentMetrics))for(const field of ['minorFailureCount','minorFailureSeconds','majorFailureCount','majorFailureSeconds','generalFailureCount','generalFailureSeconds'])delete metrics[field];
  w.renderEquipmentOperatingResults(target,result,result,value.case.equipment);
- assert.equal(target.querySelectorAll('table')[1].tBodies[0].rows[0].cells[1].textContent,'—');
+ assert.equal(target.querySelector('th[scope="colgroup"]').closest('table').tBodies[0].rows[0].cells[1].textContent,'—');
  w.close();
 });
 

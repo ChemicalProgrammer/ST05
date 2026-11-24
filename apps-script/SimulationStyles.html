@@ -6,7 +6,7 @@
   .control-event button { margin: 0; }
   .metrics-grid { display: grid; gap: var(--size-12); grid-template-columns: repeat(auto-fit, minmax(var(--size-150), 1fr)); }
   .metrics-grid article { background: var(--surface); border: var(--size-1) solid var(--line); border-radius: var(--size-10); padding: var(--size-14); }
-  .metrics-grid span { color: var(--muted); display: block; font-size: var(--text-12); }
+  .metrics-grid article > span { color: var(--muted); display: block; font-size: var(--text-12); }
   .metrics-grid strong { color: var(--ink); display: block; font-size: var(--text-20); margin-top: var(--size-6); }
   #simulation-chart { background: var(--surface); border: var(--size-1) solid var(--line); border-radius: var(--size-10); display: block; margin-top: var(--size-14); width: 100%; }
   .live-equipment { display: grid; gap: var(--size-8); margin-top: var(--size-14); }
@@ -142,6 +142,21 @@
   #simulation-playback-metrics .playback-count-pair[hidden] {display:none;}
   #simulation-playback-metrics .playback-count-pair > b {font:inherit;font-size:inherit;line-height:inherit;font-weight:var(--weight-semibold);}
   #simulation-playback-efficiencies > #basic-efficiencies { margin:0 0 var(--space-3); }
+  /* The background batch has its own persistent progress surface, outside
+     the collapsible playback content. It stays available after round one. */
+  #batch-dialog:not(.hidden) {
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
+    gap:var(--space-2) var(--space-3);padding:var(--space-3) var(--subsection-padding);
+    border-top:var(--border-width) solid var(--line);min-width:0;
+  }
+  #batch-title {grid-column:1;grid-row:1;color:var(--ink);}
+  #batch-progress {grid-column:1;grid-row:2;width:100%;height:5px;display:block;
+    appearance:none;-webkit-appearance:none;accent-color:var(--secondary);border:0;border-radius:var(--radius-pill);overflow:hidden;background:var(--surface-hover);}
+  #batch-progress::-webkit-progress-bar {background:var(--surface-hover);}
+  #batch-progress::-webkit-progress-value {background:var(--secondary);}
+  #batch-progress::-moz-progress-bar {background:var(--secondary);}
+  #batch-status {grid-column:1;grid-row:3;color:var(--muted);font-size:var(--font-secondary);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+  #batch-cancel {grid-column:2;grid-row:1 / span 3;align-self:center;}
   /* Muestra el avance inicial sin exponer datos de una reproducción anterior. */
   /* Playback remains visible before the first run; only equipment results are gated. */
   .result-kpi small { display:block; color:var(--muted); margin-top:var(--size-6); }

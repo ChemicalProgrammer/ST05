@@ -184,7 +184,8 @@ window.STBasicMode=(function(){
       }
     });
     var simulatedEfficiency=state.run.result?.provisional?null:state.run.result?.summary?.lineOeePercent;
-    efficiencies.replaceChildren();metric(efficiencies,'Theoretical equipment efficiency',number(availability*100,1),Number.isFinite(availability)?'%':'');metric(efficiencies,'Simulated efficiency',number(simulatedEfficiency,1),Number.isFinite(simulatedEfficiency)?'%':'');
+    efficiencies.replaceChildren();metric(efficiencies,'Theoretical equipment efficiency',number(availability*100,1),Number.isFinite(availability)?'%':'');
+    efficiencies.lastElementChild.title='Product of modeled machine availabilities (MTBF / (MTBF + MTTR)); no modeled own failures = 100%.\n'+machines.map(e=>e.name+': '+number(theoreticalAvailability(e)*100,2)+'%').join('\n');metric(efficiencies,'Simulated efficiency',number(simulatedEfficiency,1),Number.isFinite(simulatedEfficiency)?'%':'');
     if(!splitMounted)return;
     var chosen=list.querySelector('.equipment-selected'),id=chosen?.dataset.equipmentId,audit=audits.find(function(x){return x.equipmentId===id;});
     if(chosen)title.textContent=chosen.querySelector('.equipment-header strong').textContent;

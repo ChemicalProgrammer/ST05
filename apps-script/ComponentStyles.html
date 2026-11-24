@@ -42,7 +42,10 @@ button { --on-accent:#fff; }
   display:flex;align-items:baseline;gap:var(--time-unit-gap);white-space:nowrap;
 }
 .metric-value > .metric-number,
-#simulation-playback-metrics .playback-metric-value > b {font:inherit;font-weight:var(--weight-semibold);}
+#simulation-playback-metrics .playback-metric-value > b {font:inherit;font-weight:var(--weight-semibold);color:var(--ink);}
+#simulation-playback-metrics .playback-count-pair > b {color:var(--ink);}
+#simulation-playback-metrics .playback-count-pair > .playback-metric-unit,
+#simulation-playback-metrics .playback-metric-value > .playback-metric-unit {display:inline;color:var(--unit-color);font:inherit;}
 /* A single input contract owns both selectable and fixed units. Typography
    belongs to the control, rather than the label or the surrounding section. */
 .time-value-control {

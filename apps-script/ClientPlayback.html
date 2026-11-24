@@ -619,7 +619,9 @@
       STTimeControls.setOutput(document.getElementById('metric-backup-stop'),
         sum(sample.equipment.map(function(unit){return unit.backupStopSeconds||0;})),
         {unit:'min',label:'Change Back-up Stop unit'});
-      document.getElementById('metric-line-oee').textContent=formatLineOeeAtSample(sample);
+      var oeeText=formatLineOeeAtSample(sample),hasOee=oeeText.endsWith('%');
+      document.getElementById('metric-line-oee').textContent=hasOee?oeeText.slice(0,-1):oeeText;
+      setPlaybackMetricUnit('metric-line-oee',hasOee?'%':'');
       if(state.uiView==='simulation')updateLiveEquipmentStateBadges(clockSecond);
       // Fast and Summary open on their terminal sample: these are completed
       // calculations, not paused playbacks. Provisional Live chunks are not final.

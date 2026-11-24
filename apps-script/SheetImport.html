@@ -13,12 +13,11 @@ window.STSheetImport=function(state,actions){
   function mountSpreadsheetSection(){
     if(el('sheet-import-spreadsheet-section'))return;
     var body=el('sheet-import-dialog').querySelector('.dialog-body');
-    var intro=body.querySelector(':scope > .subsection-description'),form=el('sheet-import-form'),
-      error=el('sheet-import-error'),meta=node('div','');
+    var form=el('sheet-import-form'),error=el('sheet-import-error'),meta=node('div','');
     meta.id='sheet-import-case-meta';
     var control=subsection({id:'sheet-import-spreadsheet-section',title:'Spreadsheet',
       description:'Select the Google Sheets source and preview before applying changes.',open:true,
-      content:[intro,form,error,meta]});
+      content:[form,error,meta]});
     body.insertBefore(control.section,el('sheet-import-preview'));
   }
   function el(id){return document.getElementById(id);}

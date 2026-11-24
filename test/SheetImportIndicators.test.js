@@ -5,7 +5,7 @@ import {JSDOM} from 'jsdom';
 import {normalizeFormatCatalog,productVolumeUnits} from '../src/simulation/FormatCatalog.js';
 
 function setup({importVersion='sheet-import-20261123-8',informational=false,rememberedTab=null,uiMode='basic'}={}){
- const dom=new JSDOM(`<button id="open-sheet-import"></button><dialog id="sheet-import-dialog"><div class="dialog-body"><p class="subsection-description">Spreadsheet source</p><form id="sheet-import-form"><input id="sheet-import-url"><input id="sheet-import-tab"><button id="sheet-import-read"></button></form><p id="sheet-import-error"></p><div id="sheet-import-preview"></div></div><footer class="dialog-actions"><input type="checkbox" id="sheet-import-ack"><button id="sheet-import-apply"></button><button id="sheet-import-close"></button><button id="sheet-import-cancel"></button></footer></dialog>`,{runScripts:'outside-only'}),w=dom.window;
+ const dom=new JSDOM(`<button id="open-sheet-import"></button><dialog id="sheet-import-dialog"><div class="dialog-body"><form id="sheet-import-form"><input id="sheet-import-url"><input id="sheet-import-tab"><button id="sheet-import-read"></button></form><p id="sheet-import-error"></p><div id="sheet-import-preview"></div></div><footer class="dialog-actions"><input type="checkbox" id="sheet-import-ack"><button id="sheet-import-apply"></button><button id="sheet-import-close"></button><button id="sheet-import-cancel"></button></footer></dialog>`,{runScripts:'outside-only'}),w=dom.window;
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  w.eval(fs.readFileSync('apps-script/TextResources.gs','utf8'));w.__ST_TEXT__=key=>w.ST_TEXT_RESOURCES[key]||key;
  for(const file of ['Icons.html','Subsection.html','SheetImportMerge.html','SheetImport.html'])w.eval(fs.readFileSync('apps-script/'+file,'utf8').replace(/<\/?script>/g,''));
@@ -31,6 +31,10 @@ test('import dialog groups spreadsheet, equipment, formats and details with the 
     ['Spreadsheet','Equipment','Format','Import details']);
   for(const id of names)assert(h.d.getElementById(id)?.classList.contains('st-subsection'),id);
   assert(h.d.getElementById('sheet-import-spreadsheet-section').contains(h.d.getElementById('sheet-import-form')));
+  assert.equal(h.d.querySelectorAll('#sheet-import-spreadsheet-section > summary .subsection-description').length,1,
+    'Spreadsheet heading must contain exactly one descriptive note');
+  assert.equal(h.d.querySelectorAll('#sheet-import-spreadsheet-section > .fold-content > .subsection-description').length,0,
+    'The source instruction must not be duplicated inside the section body');
   assert(h.d.getElementById('sheet-import-equipment-section').contains(h.d.querySelector('.sheet-equipment-choice')));
   assert(h.d.getElementById('sheet-import-details-section').contains(h.d.getElementById('sheet-import-model-review')));
   assert.equal(h.d.getElementById('sheet-import-summary'),null,'No long status note in the footer');
@@ -40,6 +44,10 @@ test('import dialog groups spreadsheet, equipment, formats and details with the 
   const css=fs.readFileSync('apps-script/SheetImportStyles.html','utf8');
   assert.match(css,/width:30px; height:30px/);
   assert.match(css,/stroke-width:2\.9/);
+  assert.match(css,/\.sheet-equipment-choice > summary\s*\{[^}]*display:flex;align-items:center;/);
+  assert.match(css,/\.sheet-equipment-summary-text\s*\{[^}]*align-items:center;align-self:center;/);
+  assert.match(css,/\.sheet-import-row-status\s*\{[^}]*position:static;/);
+  assert.match(css,/\.sheet-equipment-choice\[open\] > summary::before/);
  }finally{h.dom.window.close();}
 });
 

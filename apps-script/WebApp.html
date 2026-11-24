@@ -562,7 +562,6 @@
     <dialog id="sheet-import-dialog" aria-labelledby="sheet-import-title">
       <header class="dialog-heading"><h2 id="sheet-import-title"><?= __ST_TEXT__('view.import_equipment_from_google_sheets') ?></h2><button id="sheet-import-close" class="ghost icon-button" data-icon="x" aria-label="<?= __ST_TEXT__('view.close_import') ?>" title="<?= __ST_TEXT__('view.close_import') ?>"></button></header>
       <div class="dialog-body">
-        <p class="subsection-description"><?= __ST_TEXT__('view.read_c1_c7_and_equipment_rows_a10_w_na_and_n_a_mean_not_applicable_import_u') ?></p>
         <form id="sheet-import-form"><label><?= __ST_TEXT__('view.google_sheets_url_or_id') ?><input id="sheet-import-url" required autocomplete="off" placeholder="<?= __ST_TEXT__('view.https_docs_google_com_spreadsheets_d') ?>"></label><label><?= __ST_TEXT__('view.worksheet_name_optional') ?><input id="sheet-import-tab" autocomplete="off" placeholder="<?= __ST_TEXT__('view.uses_the_url_tab_or_the_first_worksheet') ?>"></label><button id="sheet-import-read" data-icon="refresh" type="submit"><?= __ST_TEXT__('view.preview_import') ?></button></form>
         <p id="sheet-import-error" data-error-notice="message" data-error-title="Sheet import error" role="alert"></p><div id="sheet-import-preview" aria-live="polite"></div>
       </div>

@@ -36,8 +36,20 @@
 .sheet-correction { margin-top:var(--space-3); padding:var(--space-3); border:var(--border-width) solid var(--line); border-left:var(--state-border-width) solid var(--warning); border-radius:var(--radius-md); }
 .sheet-correction h4 { margin:0; font-size:var(--font-body); }
 .sheet-correction p { margin:var(--space-2) 0; }
-#sheet-import-preview .sheet-equipment-choice > summary { position:relative; min-height:30px; padding-inline-end:calc(var(--control-height) + var(--space-3)); }
-.sheet-import-row-status { position:absolute; inset-inline-end:0; top:50%; transform:translateY(-50%); display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; box-sizing:border-box; border:var(--border-width) solid currentColor; border-radius:var(--radius-md); background:var(--surface-soft); }
+/* Reusable row header: center the title, disclosure marker, and audit badge
+   on one visual baseline, including long names that wrap onto another line. */
+#sheet-import-preview .sheet-equipment-choice > summary {
+  position:relative;display:flex;align-items:center;gap:var(--space-2);
+  min-height:30px;padding-inline-end:0;list-style:none;cursor:pointer;
+}
+#sheet-import-preview .sheet-equipment-choice > summary::-webkit-details-marker { display:none; }
+#sheet-import-preview .sheet-equipment-choice > summary::before {
+  content:"";flex:0 0 auto;width:7px;height:7px;box-sizing:border-box;
+  border-inline-end:2px solid currentColor;border-block-end:2px solid currentColor;
+  transform:rotate(-45deg);margin-inline:var(--space-1) var(--space-2);
+}
+#sheet-import-preview .sheet-equipment-choice[open] > summary::before { transform:rotate(45deg); }
+.sheet-import-row-status { position:static; transform:none; margin-inline-start:auto; flex:0 0 30px; display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; box-sizing:border-box; border:var(--border-width) solid currentColor; border-radius:var(--radius-md); background:var(--surface-soft); }
 .sheet-import-row-status[data-status=info] { color:var(--info); background:var(--info-soft); }
 .sheet-import-row-status[data-status=ok] { color:var(--success); background:var(--success-soft); }
 .sheet-import-row-status[data-status=warning] { color:var(--warning); background:var(--warning-soft); }
@@ -105,7 +117,8 @@
   width:18px;height:18px;stroke-width:2.9;stroke-linecap:round;
 }
 #sheet-import-preview .sheet-equipment-choice > summary .sheet-equipment-summary-text {
-  min-width:0;overflow-wrap:anywhere;
+  display:flex;flex:1 1 auto;align-items:center;align-self:center;
+  min-width:0;min-height:30px;line-height:var(--leading-body);overflow-wrap:anywhere;
 }
 #sheet-import-dialog .sheet-import-readiness { padding:var(--space-2);border-radius:var(--radius-sm);background:var(--surface); }
 #sheet-import-dialog .sheet-import-readiness[data-status=error] { background:var(--danger-soft); }

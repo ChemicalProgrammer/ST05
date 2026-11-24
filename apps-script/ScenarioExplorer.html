@@ -10,6 +10,14 @@
 .scenario-trace-row{padding-block:var(--space-2);border-bottom:1px solid var(--border)}
 .scenario-trace-meta{white-space:nowrap;font-variant-numeric:tabular-nums}
 .scenario-trace-panel .chart-note{overflow-wrap:anywhere}
+.scenario-trace-stats{display:grid;gap:var(--space-1)}
+.scenario-trace-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,105px),1fr));gap:var(--space-1) var(--space-2);margin-top:var(--space-1);font-size:var(--font-secondary)}
+.scenario-trace-counter{display:flex;flex-direction:column;min-width:0}
+.scenario-trace-counter>span{color:var(--muted);overflow-wrap:anywhere}
+.scenario-trace-counter>strong{font-variant-numeric:tabular-nums;font-weight:600}
+.scenario-trace-mini-progress{height:4px;border-radius:4px;overflow:hidden;background:var(--accent-soft);margin-top:var(--space-2)}
+.scenario-trace-mini-progress>span{display:block;height:100%;background:var(--accent);transition:width .18s ease}
+@media(prefers-reduced-motion:reduce){.scenario-trace-mini-progress>span{transition:none}}
 </style>
 <script>
 // Optional exploration budget overrides; confirmation uses a separate matched run.
@@ -68,7 +76,7 @@ window.STScenarioExplorer=(function(){
       var matching=records.find(s=>s.results?.inputSignature===key&&s.results.replicationStatus?.state==='COMPLETE'&&s.results.summary&&s.results.durationSeconds===input.run.durationSeconds);
       if(matching){var savedMetric=metric(matching.results);if(validMetrics(savedMetric,rounds,input.run.durationSeconds,input.case.unitOfFlow)){cached=savedMetric;cacheSource='SAVED_SIMULATION';}}
     }
-    if(cached){rememberMetrics(key,cached);onProgress?.(1);return Object.assign({},cached,{cacheSource:cacheSource,warnings:evaluationWarnings(candidate,cached)});}
+    if(cached){rememberMetrics(key,cached);onProgress?.(1,rounds,rounds);return Object.assign({},cached,{cacheSource:cacheSource,warnings:evaluationWarnings(candidate,cached)});}
     var response=await SimulatorEngine.simulateBatch(input,{cancelled:cancelled,summaryOnly:true,progress:onProgress});
     if(!response.ok)throw Error(response.error?.message||JSON.stringify(response.errors||response));
     if(cancelled?.())throw Error('BATCH_CANCELLED');
@@ -114,7 +122,7 @@ window.STScenarioExplorer=(function(){
       entry.methodologyInputs=STScenarios.methodologyInputs(source.whatIf?.methodology||{});entry.methodologySignature=JSON.stringify(entry.methodologyInputs);
       if(STScenarios.study&&Array.isArray(entry.evaluatedChanges))entry.study=STScenarios.study(source,entry);
       entry.controls=rows.map(r=>({equipmentId:r.change.equipmentId,path:r.change.path,checked:r.check.checked,limit:r.limit.value,target:r.change.after,doe:r.doe?{selected:r.doe.use.checked,low:r.doe.low.value,high:r.doe.high.value}:null}));
-      entry.message=status?.textContent||'';entry.progress=progress?.textContent||'';if(progressTrace?.length)entry.progressTrace={steps:progressTrace.map(p=>Object.assign({},p)),percent:tracePercent,outcome:traceOutcome};
+      entry.message=status?.textContent||'';entry.progress=progress?.textContent||'';if(progressTrace?.length)entry.progressTrace={steps:progressTrace.map(p=>Object.assign({},p)),percent:tracePercent,outcome:traceOutcome,summary:Object.assign({},traceSummary)};
       if(!entry.candidate&&state!=='NO_DEMONSTRATED_IMPROVEMENT'){var previous=latest?.baseline&&latest?.candidate?latest:latest?.lastResult;if(previous)entry.lastResult=resultSnapshot(previous);}
       latest=JSON.parse(JSON.stringify(entry));if(clearResultButton)clearResultButton.disabled=false;if(clearNotice)clearNotice.replaceChildren();simulation.whatIf=simulation.whatIf||{};
       simulation.whatIf.evaluations=savedEntries(simulation).filter(r=>!sameCard(r)).concat([latest]);changed(simulation);
@@ -310,17 +318,30 @@ window.STScenarioExplorer=(function(){
     }
     var status=el('p','Hypothesis — improvement has not been demonstrated.','scenario-preview-status');status.setAttribute('role','status');status.dataset.errorNotice='scenario';var resultBox=el('div','','scenario-result-box'),metrics=el('div','','scenario-metrics');resultBox.append(metrics);host.append(resultBox,status);STErrors.register(status,'Scenario error');
     var warningSlot=el('div','','scenario-warning-slot');host.append(warningSlot);
-    var progressTrace=[],tracePercent=0,traceOutcome='',lastTracePaint=0;
+    var progressTrace=[],tracePercent=0,traceOutcome='',traceSummary={},lastTracePaint=0;
     var tracePanel=el('section','','scenario-trace-panel');tracePanel.hidden=true;
-    var traceHead=el('div','','scenario-trace-header'),traceBack=button('← Back',function(){showTrace(false);}),traceTitle=el('strong','Analysis progress'),traceTotal=el('p','','chart-note'),traceList=el('ol','','scenario-trace-list'),traceMessage=el('p','','chart-note');
+    var traceHead=el('div','','scenario-trace-header'),traceBack=button('← Back',function(){showTrace(false);}),traceTitle=el('strong','Analysis progress'),traceTotal=el('p','','chart-note'),traceList=el('ol','','scenario-trace-list'),traceStats=el('div','','scenario-trace-stats chart-note'),traceMessage=el('p','','chart-note');
     traceBack.className='ghost scenario-trace-back';traceBack.dataset.scenarioTraceControl='true';
-    traceHead.append(traceTitle,traceBack);tracePanel.append(traceHead,traceTotal,traceList,traceMessage);
-    function traceText(value){var es={'Analysis progress':'Avance del análisis','Back':'Regresar','Elapsed':'Tiempo transcurrido','View analysis progress':'Ver avance del análisis','Preparing':'Preparación','Exploratory reliability targets':'Exploración de confiabilidad','Conditional flow DOE screening':'Selección de factores DOE','Baseline':'Escenario base','Searching category':'Búsqueda de candidatos','Evaluating selection':'Evaluación de selección','Refining candidates':'Refinamiento de candidatos','Design of experiments (DOE)':'Diseño de experimentos (DOE)','Statistical analysis (ANOVA)':'Análisis estadístico (ANOVA)','Screening finalists':'Selección de finalistas','Comparing finalists':'Comparación de finalistas','Full-horizon reliability diagnostic':'Diagnóstico de confiabilidad a horizonte completo','Independent confirmation':'Confirmación independiente','Matched failure-free diagnostic':'Diagnóstico sin fallas con condiciones equivalentes','Confirmation analysis':'Análisis de confirmación','Running':'En proceso','Completed':'Completado','Cancelled':'Cancelado','Failed':'Error','Interrupted':'Interrumpido'};return document.documentElement.lang==='es'&&es[value]?es[value]:window.STLanguage?.translate(value)||value;}
+    traceHead.append(traceTitle,traceBack);tracePanel.append(traceHead,traceTotal,traceStats,traceList,traceMessage);
+    function traceText(value){var es={'Analysis progress':'Avance del análisis','Back':'Regresar','Elapsed':'Tiempo transcurrido','View analysis progress':'Ver avance del análisis','Preparing':'Preparación','Exploratory reliability targets':'Exploración de confiabilidad','Conditional flow DOE screening':'Selección de factores DOE','Baseline':'Escenario base','Searching category':'Búsqueda de candidatos','Evaluating selection':'Evaluación de selección','Refining candidates':'Refinamiento de candidatos','Design of experiments (DOE)':'Diseño de experimentos (DOE)','Statistical analysis (ANOVA)':'Análisis estadístico (ANOVA)','Screening finalists':'Selección de finalistas','Comparing finalists':'Comparación de finalistas','Full-horizon reliability diagnostic':'Diagnóstico de confiabilidad a horizonte completo','Independent confirmation':'Confirmación independiente','Matched failure-free diagnostic':'Diagnóstico sin fallas con condiciones equivalentes','Confirmation analysis':'Análisis de confirmación','Running':'En proceso','Completed':'Completado','Cancelled':'Cancelado','Failed':'Error','Interrupted':'Interrumpido','Factors screened':'Factores evaluados','Pairs screened':'Pares evaluados','Machines screened':'Equipos evaluados','Targets tested':'Objetivos evaluados','Packages tested':'Paquetes evaluados','Candidates checked':'Candidatos evaluados','Candidate budget':'Presupuesto de candidatos','Passes':'Pasadas','Coordinates':'Variables','Combinations':'Combinaciones','Finalists':'Finalistas','Baseline batches':'Lotes base','Batches':'Lotes','Rounds':'Rondas','Active batches':'Lotes activos','Reused batches':'Lotes reutilizados','Invalid candidates':'Candidatos no factibles','Factors':'Factores','Responses':'Respuestas','Contrasts':'Contrastes','Analyses':'Análisis','Avg. calculated candidate batch':'Tiempo medio por lote de candidato calculado','Since last meaningful gain':'Desde última mejora significativa','No meaningful gain yet':'Sin mejora significativa aún','Candidates without meaningful gain':'Candidatos sin mejora significativa','Budget':'Presupuesto','Finished early':'Finalizado anticipadamente','Input and search configuration':'Datos de entrada y configuración de búsqueda','Baseline and candidate':'Base y candidato','Estimated progress':'Avance estimado'};return document.documentElement.lang==='es'&&es[value]?es[value]:window.STLanguage?.translate(value)||value;}
     function elapsedLabel(ms){var seconds=Math.max(0,Math.floor(ms/1000));return Math.floor(seconds/60)+'m '+String(seconds%60).padStart(2,'0')+'s';}
     function paintTrace(force){if(tracePanel.hidden)return;var now=Date.now();if(!force&&now-lastTracePaint<200)return;lastTracePaint=now;
       traceTitle.textContent=traceText('Analysis progress');traceBack.textContent='← '+traceText('Back');
       traceTotal.textContent=tracePercent.toFixed(1)+'% · '+traceText('Elapsed')+' '+elapsedLabel(progressTrace.reduce((sum,p)=>sum+p.elapsedMs,0));
-      traceList.replaceChildren();progressTrace.forEach(p=>{var row=el('li','','scenario-trace-row'),head=el('div','','scenario-trace-row-head'),label=el('span',traceText(p.name)),meta=el('span',((p.percent==null?'—':p.percent.toFixed(1)+'%')+' · '+elapsedLabel(p.elapsedMs)),'scenario-trace-meta'),note=el('div',traceText(p.state)+(p.detail?' · '+traceText(p.detail):''),'chart-note');head.append(label,meta);row.append(head,note);traceList.append(row);});
+      traceStats.replaceChildren();
+      if(traceSummary.candidateBatches>0)traceStats.append(el('div',traceText('Avg. calculated candidate batch')+': '+elapsedLabel(traceSummary.candidateMs/traceSummary.candidateBatches)+' ('+traceSummary.candidateBatches+')'));
+      if(traceSummary.searchElapsedMs!=null)traceStats.append(el('div',traceSummary.sinceGainMs==null?traceText('No meaningful gain yet')+' · '+elapsedLabel(traceSummary.searchElapsedMs):traceText('Since last meaningful gain')+': '+elapsedLabel(traceSummary.sinceGainMs)));
+      if(traceSummary.stagnant!=null)traceStats.append(el('div',traceText('Candidates without meaningful gain')+': '+traceSummary.stagnant));
+      traceList.replaceChildren();progressTrace.forEach(p=>{
+        var row=el('li','','scenario-trace-row'),head=el('div','','scenario-trace-row-head'),label=el('span',traceText(p.name)),meta=el('span',((p.percent==null?'—':p.percent.toFixed(1)+'%')+' · '+elapsedLabel(p.elapsedMs)),'scenario-trace-meta'),note=el('div',traceText(p.state)+(p.detail?' · '+traceText(p.detail):''),'chart-note');
+        row.dataset.traceState=p.state;head.append(label,meta);row.append(head,note);
+        var work=Object.values(p.work||{});if(p.batchStarted>0)work.push({label:'Batches',done:p.batchCompleted||0,total:p.batchStarted},{label:'Rounds',done:p.roundsCompleted||0,total:p.roundsStarted||0});
+        if(p.activeBatches>0)work.push({label:'Active batches',done:p.activeBatches});
+        if(p.reusedBatches>0)work.push({label:'Reused batches',done:p.reusedBatches});
+        if(work.length){var counters=el('div','','scenario-trace-counters');work.forEach(c=>{var counter=el('div','','scenario-trace-counter'),value=String(c.done)+(c.total==null?'':' / '+c.total)+(c.budget?' ('+traceText('Budget')+')':'');counter.append(el('span',traceText(c.label)),el('strong',value));counters.append(counter);});row.append(counters);}
+        if(p.state==='Running'&&p.percent!=null){var bar=el('div','','scenario-trace-mini-progress');bar.append(el('span'));bar.firstChild.style.width=Math.max(0,Math.min(100,p.percent))+'%';row.append(bar);}
+        traceList.append(row);
+      });
       traceMessage.textContent=[traceOutcome?traceText(traceOutcome):'',status.textContent,progress.textContent].filter(Boolean).join(' · ');
     }
     function showTrace(open){if(open&&!progressTrace.length)return;tracePanel.hidden=!open;host.classList.toggle('scenario-trace-open',open);if(open){paintTrace(true);traceBack.focus();}else{activity.focus();}var target=open?tracePanel:activity;if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)target.animate?.([{opacity:.2,transform:'translateX('+ (open?'8':'-8')+'px)'},{opacity:1,transform:'translateX(0)'}],{duration:180,easing:'ease-out'});}
@@ -339,14 +360,14 @@ window.STScenarioExplorer=(function(){
       Object.assign(settings,{cardId:cardId,sourceSimulationId:source.id,sourceSignature:sourceSignature,depth:depth,status:'NOT_EVALUATED',message:'Result removed. Run Find best scenario to evaluate.',updatedAt:new Date().toISOString()});
       simulation.whatIf=simulation.whatIf||{};simulation.whatIf.cardConfigurations=simulation.whatIf.cardConfigurations||{};simulation.whatIf.cardConfigurations[cardId]=settings;
       simulation.whatIf.evaluations=savedEntries(simulation).filter(function(entry){return !sameCard(entry);});
-      latest=null;last=null;baseline=null;baselineRun=null;progressTrace=[];tracePercent=0;traceOutcome='';showTrace(false);activity.hidden=true;progressLabel.hidden=true;generation++;clearTimeout(timer);metrics.replaceChildren();warningSlot.replaceChildren();resultsBody.replaceChildren();if(resultsDialog.open)resultsDialog.close();save.disabled=true;clearResultButton.disabled=true;progress.textContent='';status.textContent=settings.message;status.dataset.state='pending';
+      latest=null;last=null;baseline=null;baselineRun=null;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};showTrace(false);activity.hidden=true;progressLabel.hidden=true;generation++;clearTimeout(timer);metrics.replaceChildren();warningSlot.replaceChildren();resultsBody.replaceChildren();if(resultsDialog.open)resultsDialog.close();save.disabled=true;clearResultButton.disabled=true;progress.textContent='';status.textContent=settings.message;status.dataset.state='pending';
       var undo=button('Undo',function(){
         if(activeHost||latest)return;
         simulation.whatIf.evaluations=savedEntries(simulation).filter(function(entry){return !sameCard(entry);}).concat(removed);
         if(previousConfig)simulation.whatIf.cardConfigurations[cardId]=previousConfig;else delete simulation.whatIf.cardConfigurations[cardId];
         latest=previousLatest;last=previousLast;baseline=previousBaseline;baselineRun=previousBaselineRun;status.textContent=previousStatus;status.dataset.state=previousState;save.disabled=previousSaveDisabled;clearResultButton.disabled=false;
         var value=latest?.baseline&&latest?.candidate?latest:latest?.lastResult;if(value)renderMetrics(value);
-        if(latest?.progressTrace?.steps?.length){progressTrace=latest.progressTrace.steps;tracePercent=latest.progressTrace.percent;traceOutcome=latest.progressTrace.outcome;activity.hidden=false;progressLabel.hidden=false;progressPercent.textContent=tracePercent.toFixed(1)+'%';activity.firstChild.style.width=tracePercent+'%';activity.setAttribute('aria-valuenow',String(tracePercent));}if(latest)renderWarnings(latest.warnings||[],!previousSaveDisabled,latest.evaluatedChanges,latest);clearNotice.replaceChildren();changed(simulation);
+        if(latest?.progressTrace?.steps?.length){progressTrace=latest.progressTrace.steps;tracePercent=latest.progressTrace.percent;traceOutcome=latest.progressTrace.outcome;traceSummary=Object.assign({},latest.progressTrace.summary);activity.hidden=false;progressLabel.hidden=false;progressPercent.textContent=tracePercent.toFixed(1)+'%';activity.firstChild.style.width=tracePercent+'%';activity.setAttribute('aria-valuenow',String(tracePercent));}if(latest)renderWarnings(latest.warnings||[],!previousSaveDisabled,latest.evaluatedChanges,latest);clearNotice.replaceChildren();changed(simulation);
       });undo.className='ghost';clearNotice.replaceChildren(el('span','Result deleted.'),undo);changed(simulation);
     });clearResultButton.classList.add('scenario-clear-result');actions.append(clearResultButton);
     function showResults(){
@@ -405,24 +426,35 @@ window.STScenarioExplorer=(function(){
     }
     function improves(base,next){return Number.isFinite(next.throughput)&&Number.isFinite(next.oee)&&next.throughput>base.throughput+Math.max(.001,Math.abs(base.throughput)*.001)&&next.oee>=base.oee-1e-9;}
     async function preview(all){
-      if(activeHost||!requireCompletedSource())return;searchSettingsChanged();activity.hidden=false;progressLabel.hidden=false;progressTrace=[];tracePercent=0;traceOutcome='';activity.firstChild.style.width='0%';progressPercent.textContent='0%';host.setAttribute('aria-busy','true');activeHost=host;activeRecordKey=recordKey;searchCanFinish=!!all;finishRequested=false;window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
+      if(activeHost||!requireCompletedSource())return;searchSettingsChanged();activity.hidden=false;progressLabel.hidden=false;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};activity.firstChild.style.width='0%';progressPercent.textContent='0%';host.setAttribute('aria-busy','true');activeHost=host;activeRecordKey=recordKey;searchCanFinish=!!all;finishRequested=false;window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
       var locked=Array.from(document.querySelectorAll('.analysis-recommendation input, .analysis-recommendation select, .analysis-recommendation button, .scenario-explorer input, .scenario-explorer select, .scenario-explorer textarea, .scenario-explorer button')).filter(e=>e!==run&&!e.dataset.scenarioTraceControl).map(e=>({element:e,disabled:e.disabled}));locked.forEach(x=>x.element.disabled=true);
       setIcon(run,all?'Finish search and validate best found':'Cancel evaluation','stop');run.setAttribute('aria-pressed','true');dialog.close();
       var started=Date.now(),stage='Preparing',completed=0,maximum=0,batchFraction=0,activeFractions=new Map(),nextBatch=0,ended=false,failed=false,abortPending=false,rankingProgress=null;
-      var traceStarted=started,traceBase=0,traceStep=null,traceDetail='';
+      var traceStarted=started,traceBase=0,traceStep=null,traceDetail='',searchStartedAt=null;
+      function setCounter(key,label,done,total,budget){if(!traceStep||!Number.isFinite(done))return;traceStep.work[key]={label:label,done:Math.max(0,done),total:Number.isFinite(total)?Math.max(0,total):null,budget:!!budget};}
+      function screeningProgress(info){traceDetail=info.label;if(info.counter)setCounter(info.counter,info.counter,info.completed,info.total);status.textContent=info.label;captureTrace();paintTrace(false);}
+      function refreshTraceStats(now){if(searchStartedAt!=null){traceSummary.searchElapsedMs=now-searchStartedAt;traceSummary.sinceGainMs=bestAtTrial>0?Math.max(0,now-lastGainAt):null;traceSummary.stagnant=stagnant;}}
+      function finishTraceStep(state,now){if(!traceStep)return;traceStep.elapsedMs=now-traceStarted;traceStep.state=state;
+        if(state==='Completed'){
+          var fixed=traceStep.work.primary;
+          if(fixed&&fixed.total>0&&fixed.done<fixed.total&&!fixed.budget){traceStep.state='Finished early';traceStep.percent=100*fixed.done/fixed.total;}
+          else traceStep.percent=100;
+        }
+      }
       function captureTrace(terminal){var now=Date.now(),name=stage.startsWith('DOE ·')?'Design of experiments (DOE)':stage.startsWith('Refining ·')?'Refining candidates':stage;
-        if(terminal){if(traceStep){traceStep.elapsedMs=now-traceStarted;traceStep.state=terminal; if(terminal==='Completed')traceStep.percent=100;}traceOutcome=terminal;return;}
-        if(!traceStep||traceStep.name!==name){if(traceStep){traceStep.elapsedMs=now-traceStarted;traceStep.state='Completed';traceStep.percent=100;}traceStarted=now;traceBase=completed;traceDetail='';traceStep={name:name,state:'Running',percent:null,elapsedMs:0,detail:''};progressTrace.push(traceStep);}
-        traceStep.elapsedMs=now-traceStarted;var total=null,amount=Math.max(0,completed-traceBase)+batchFraction;
+        refreshTraceStats(now);
+        if(terminal){finishTraceStep(terminal,now);traceOutcome=terminal;return;}
+        if(!traceStep||traceStep.name!==name){finishTraceStep('Completed',now);traceStarted=now;traceBase=completed;traceDetail='';traceStep={name:name,state:'Running',percent:null,elapsedMs:0,detail:'',work:{},batchStarted:0,batchCompleted:0,roundsStarted:0,roundsCompleted:0,activeBatches:0,reusedBatches:0};progressTrace.push(traceStep);}
+        traceStep.elapsedMs=now-traceStarted;var total=null,amount=Math.max(0,completed-traceBase)+batchFraction,primary=traceStep.work.primary;
         if(name==='Baseline'||name==='Matched failure-free diagnostic')total=1;
-        else if(name==='Independent confirmation'||name==='Full-horizon reliability diagnostic')total=2;
+        else if(name==='Independent confirmation'||name==='Full-horizon reliability diagnostic'){total=2;if(name==='Independent confirmation')setCounter('primary','Baseline and candidate',Math.max(0,completed-traceBase),2);}
         else if(name==='Comparing finalists'||name==='Screening finalists')total=rankingProgress?rankingProgress.total+1:null;
-        else if(name==='Design of experiments (DOE)'){var match=stage.match(/(\d+) \/ (\d+)$/);if(match){total=Number(match[2]);amount=Math.max(0,Number(match[1])-1)+(activeFractions.size?Math.min(1,batchFraction):0);}}
+        else if(name==='Design of experiments (DOE)'){if(primary&&primary.total>0){total=primary.total;amount=primary.done+(activeFractions.size?Math.min(1,batchFraction):0);}}
         else if(name==='Evaluating selection')total=1;
-        else if(name==='Searching category'||name==='Refining candidates'){if(Number.isFinite(done)&&limits){var budget=Math.max(1,limits.maxCandidates),used=Math.min(100,100*done/budget);traceDetail=done+' / '+budget+(document.documentElement.lang==='es'?' candidatos (':' candidates (')+used.toFixed(1)+'% '+(document.documentElement.lang==='es'?'del presupuesto)':'of budget)');}}
+        else if(name==='Searching category'||name==='Refining candidates'){if(Number.isFinite(done)&&limits){setCounter('budget','Candidate budget',done,limits.maxCandidates,true);setCounter('invalid','Invalid candidates',invalid);}}
         traceStep.percent=total>0?Math.min(99.9,100*amount/total):null;traceStep.detail=traceDetail||((name!==stage)?stage:'');
       }
-      function setStage(value){stage=value;captureTrace();paintTrace(true);}
+      function setStage(value){captureTrace();stage=value;captureTrace();paintTrace(true);}
       captureTrace();
       function progressText(label){return window.STLanguage?.translate(label)||label;}
       function updateProgress(){var percent=ended?100:Math.min(99.9,Math.floor(1000*(completed+batchFraction)/Math.max(1,maximum))/10),percentText=percent.toFixed(1)+'%';tracePercent=percent;progressStage.textContent='';progressPercent.textContent=percentText;activity.firstChild.style.width=percent+'%';activity.setAttribute('aria-valuenow',String(percent));activity.setAttribute('aria-valuetext',progressText(stage)+' · '+percentText);var seconds=Math.floor((Date.now()-started)/1000);progress.textContent=stage+' · '+completed+' / up to '+maximum+' simulation batches (including baseline and confirmation) · '+previewRun.rounds+' round(s) each · Elapsed '+Math.floor(seconds/60)+'m '+seconds%60+'s.'+(stage==='Finished'||stage==='Stopped'?'':(searchCanFinish?(finishRequested?' Finishing the current batch; Stop now cancels.':' Use Stop to finish searching and validate the best found.'):' Use Stop to cancel validation.')+' Create becomes available after confirmation.'+(all?' Last meaningful gain: '+Math.floor((Date.now()-lastGainAt)/1000)+'s ago.':''));
@@ -430,7 +462,17 @@ window.STScenarioExplorer=(function(){
         if((stage==='Comparing finalists'||stage==='Screening finalists')&&rankingProgress&&!cancelled?.()){var currentFraction=activeFractions.size?Math.min(1,batchFraction/activeFractions.size):1;status.textContent=(rankingProgress.index?progressText('Candidate')+' '+rankingProgress.index+' / '+rankingProgress.total:progressText('Baseline'))+' · '+Number((previewRun.durationSeconds/60).toFixed(2))+' min × '+previewRun.rounds+' '+progressText('Rounds')+' · '+progressText('Current batch')+': '+(100*currentFraction).toFixed(1)+'%';}
       }
       var clock=setInterval(updateProgress,1000);
-      async function measured(changes,offset,model=source,measurementRun=previewRun){validateReliabilityChanges(changes);var id=++nextBatch;activeFractions.set(id,0);function refresh(){batchFraction=Array.from(activeFractions.values()).reduce(function(sum,f){return sum+f;},0);updateProgress();}refresh();try{var result=await evaluate(model,changes,function(){return cancelled()||abortPending;},offset,measurementRun,function(fraction){activeFractions.set(id,Math.max(activeFractions.get(id)||0,Math.min(1,Number(fraction)||0)));refresh();});completed++;var reuse=result.cacheSource||'CALCULATED';if(evidence)evidence.reuseCounts[reuse]=(evidence.reuseCounts[reuse]||0)+1;return result;}catch(error){if(!String(error.message).startsWith('SCENARIO_'))abortPending=true;throw error;}finally{activeFractions.delete(id);refresh();}}
+      async function measured(changes,offset,model=source,measurementRun=previewRun){
+        validateReliabilityChanges(changes);var id=++nextBatch,owner=traceStep,startedAt=Date.now(),rounds=measurementRun.rounds||1,roundsDone=0;activeFractions.set(id,0);owner.batchStarted++;owner.roundsStarted+=rounds;owner.activeBatches++;
+        function countRounds(value){if(!Number.isFinite(value))return;var next=Math.min(rounds,Math.max(roundsDone,Math.floor(value)));owner.roundsCompleted+=next-roundsDone;roundsDone=next;}
+        function refresh(){batchFraction=Array.from(activeFractions.values()).reduce(function(sum,f){return sum+f;},0);updateProgress();}refresh();
+        try{var result=await evaluate(model,changes,function(){return cancelled()||abortPending;},offset,measurementRun,function(fraction,completedRounds){countRounds(completedRounds);activeFractions.set(id,Math.max(activeFractions.get(id)||0,Math.min(1,Number(fraction)||0)));refresh();});
+          completed++;owner.batchCompleted++;countRounds(rounds);activeFractions.set(id,0);
+          var reuse=result.cacheSource||'CALCULATED';if(reuse!=='CALCULATED')owner.reusedBatches++;
+          else if(changes.length){traceSummary.candidateBatches=(traceSummary.candidateBatches||0)+1;traceSummary.candidateMs=(traceSummary.candidateMs||0)+Date.now()-startedAt;}
+          if(evidence)evidence.reuseCounts[reuse]=(evidence.reuseCounts[reuse]||0)+1;return result;
+        }catch(error){if(!String(error.message).startsWith('SCENARIO_'))abortPending=true;throw error;}finally{owner.activeBatches--;activeFractions.delete(id);refresh();}
+      }
       var ticket=++generation;clearTimeout(timer);save.disabled=true;setIcon(save,'Create selected scenario','copy');last=null;status.textContent='Starting a new evaluation — creation is unavailable until confirmation finishes.';metrics.replaceChildren();host.querySelector('.scenario-audit-warnings')?.remove();host.querySelector('.scenario-doe-results')?.remove();status.dataset.state='pending';
       var cancelled=function(){return ticket!==generation||!host.isConnected;};
       var previousEvaluation=window.ST_SCENARIO_SEARCH_LIMITS.reusePreviousWinner?(latest?.candidate?resultSnapshot(latest):latest?.lastResult):null;
@@ -439,7 +481,7 @@ window.STScenarioExplorer=(function(){
       if(baselineRun!==JSON.stringify(previewRun)){baseline=null;baselineRun=JSON.stringify(previewRun);}
       // A fresh evaluation replaces the previous estimate, including its fallback.
       latest=null;
-      record('RUNNING',{method:method});
+      setCounter('preparation','Input and search configuration',1,1);record('RUNNING',{method:method});
       var limits=searchLimits(),searchPhaseDone=false,coverageComplete=false,inDOE=false,doeStarted=0,stopReason=null,lastGainAt=Date.now(),bestAtTrial=0,stagnant=0;
       var evidence={searchSettings:Object.assign({},searchSettings),searchSettingsSignature:searchSettingsSignature,phaseAudit:{},searchPolicyVersion:'MATCHED_CAPEX_V11',method:method,depth:depth,proposalNeeds:STScenarios.plan(source).proposalNeeds,lossDiagnosis:STScenarios.plan(source).diagnosis,capacityDiagnosis:STScenarios.plan(source).capacityDiagnosis,sensitivityScreening:sensitivityEvidence,reuseCounts:{},explorationRun:Object.assign({},previewRun),searchLimits:limits},evaluatedVariables=new Map();
       function keyOf(changes){return JSON.stringify(changes.slice().sort(function(a,b){return (a.equipmentId+':'+a.path)<(b.equipmentId+':'+b.path)?-1:(a.equipmentId+':'+a.path)>(b.equipmentId+':'+b.path)?1:0;}));}
@@ -450,8 +492,8 @@ window.STScenarioExplorer=(function(){
         if(all&&depth!=='LIGHT'&&exploreReliability.checked&&STScenarioSearch.reliabilityTargets){
           maximum=Math.max(maximum,limits.maxCandidates+80+limits.finalists+16);setStage('Exploratory reliability targets');searchCanFinish=false;setIcon(run,'Cancel reliability exploration','stop');
           var discoveryRun=searchRun(false,3);
-          reliabilityTargets=await reliabilityContext(async(model,changes,r)=>measured(changes,0,model,r),cancelled,info=>{traceDetail=info.label;status.textContent=info.label+' · targets are exploratory';});
-          if(cancelled())return;evidence.reliabilityTargetSearch=reliabilityTargets;evidence.phaseAudit.reliabilityTargets={calculations:reliabilityTargets.calculations,screenedMachines:reliabilityTargets.coverage?.screened,selectedTargets:reliabilityTargets.selectedChanges?.length||0};
+          reliabilityTargets=await reliabilityContext(async(model,changes,r)=>measured(changes,0,model,r),cancelled,screeningProgress);
+          if(cancelled())return;if(reliabilityTargets){setCounter('machines','Machines screened',reliabilityTargets.ranking?.length||0,reliabilityTargets.coverage?.screened);setCounter('targets','Targets tested',reliabilityTargets.targetTests?.length||0);setCounter('packages','Packages tested',reliabilityTargets.candidateSets?.length||0);}evidence.reliabilityTargetSearch=reliabilityTargets;evidence.phaseAudit.reliabilityTargets={calculations:reliabilityTargets.calculations,screenedMachines:reliabilityTargets.coverage?.screened,selectedTargets:reliabilityTargets.selectedChanges?.length||0};
           searchCanFinish=true;setIcon(run,'Finish search and validate best found','stop');
         }
         var priorities=new Map();(STScenarios.plan(source).candidates||[]).filter(p=>p.canApply).forEach(p=>p.changes.forEach(c=>{var key=c.equipmentId+':'+c.path;priorities.set(key,Math.max(priorities.get(key)||0,p.priority||0));}));var changes=selected().sort((a,b)=>(priorities.get(b.equipmentId+':'+b.path)||0)-(priorities.get(a.equipmentId+':'+a.path)||0)),factors=includeDOE?doeFactors():[],design=factors.length?STScenarioDOE.design(factors):null;if(all&&!limits.hardCandidateLimit&&window.ST_SCENARIO_SEARCH_LIMITS.maxCandidates===undefined)limits.maxCandidates=Math.max(limits.maxCandidates,4+new Set(changes.map(c=>c.equipmentId)).size+(depth==='HIGH'?5:3)*changes.length);var suppliedTargets=new Map(changes.map(c=>[c.equipmentId+':'+c.path,c]));if(reliabilityTargets?.selectedChanges?.length){var supplied=new Set(suppliedTargets.keys());changes=changes.concat(reliabilityTargets.selectedChanges.filter(c=>!supplied.has(c.equipmentId+':'+c.path)));}if(all&&!limits.hardCandidateLimit&&window.ST_SCENARIO_SEARCH_LIMITS.maxCandidates===undefined)limits.maxCandidates=Math.max(limits.maxCandidates,4+new Set(changes.map(c=>c.equipmentId)).size+(depth==='HIGH'?5:3)*changes.length);maximum=(all?1+new Set(changes.map(c=>c.equipmentId)).size+9*changes.length:1)+(design?design.designPoints.length:0)+(baseline?0:1)+2;if(all)maximum=limits.maxCandidates+(design?design.designPoints.length:0)+(baseline?0:1)+2+limits.finalists+1;maximum+=reliabilityTargets?.calculations||0;evidence.maximumConfigurations=maximum;evidence.experimentConfiguration=experimentConfiguration();evidence.requestedChanges=changes;evidence.reproducibility={policy:limits.wallClockBudget?'WALL_CLOCK':'CANDIDATE_BUDGET',warmStart:!!previousEvaluation,sourceSignature:sourceSignature,inputSignature:SimulatorEngine.inputSignature?.({case:{id:source.id,unitOfFlow:source.unitOfFlow,equipment:source.equipment},run:previewRun}),depth:depth,targets:changes,factors:factors,categoryInclusions:Object.assign({},inclusions),limits:limits};if(includeDOE&&!design)evidence.doeSkippedReason='No eligible DOE factors selected; ordinary search only.';status.textContent='Simulating baseline with matching seeds and duration…';
@@ -463,7 +505,8 @@ window.STScenarioExplorer=(function(){
         if(all&&includeDOE&&!design&&!finishRequested){
           setStage('Conditional flow DOE screening');searchCanFinish=false;
           var retainedReliability=contextReliability(reliabilityTargets);
-          automaticFlowDOE=await conditionalScreen(retainedReliability,async(model,changes,r)=>measured(changes,0,model,r),cancelled,info=>{traceDetail=info.label;status.textContent=info.label;});if(cancelled())return;
+          automaticFlowDOE=await conditionalScreen(retainedReliability,async(model,changes,r)=>measured(changes,0,model,r),cancelled,screeningProgress);if(cancelled())return;
+          setCounter('Factors screened','Factors screened',automaticFlowDOE.observations.length,automaticFlowDOE.screened);setCounter('Pairs screened','Pairs screened',automaticFlowDOE.pairs.length,automaticFlowDOE.pairs.length);
           evidence.conditionalFlowDOE=automaticFlowDOE;evidence.phaseAudit.flowScreen={calculations:automaticFlowDOE.calculations,screened:automaticFlowDOE.screened,pairs:automaticFlowDOE.pairs.length,omitted:automaticFlowDOE.omitted};
           factors=automaticFlowDOE.selectedFactors;selectScreenFactors(automaticFlowDOE);
           if(factors.length){design=STScenarioDOE.design(factors);delete evidence.doeSkippedReason;changes=retainedReliability.concat(factors.map(f=>{var c=Object.assign({},f,{after:f.high===f.before?f.low:f.high});delete c.low;delete c.high;return c;}));}
@@ -471,7 +514,7 @@ window.STScenarioExplorer=(function(){
           limits.maxCandidates=Math.min(limits.maxCandidates,48);limits.passes=1;evidence.searchLimits=Object.assign({},limits);evidence.requestedChanges=changes;evidence.reproducibility.targets=changes;evidence.reproducibility.factors=factors;evidence.reproducibility.limits=Object.assign({},limits);
           maximum+=automaticFlowDOE.calculations+(design?design.designPoints.length:0);evidence.experimentConfiguration=experimentConfiguration();searchCanFinish=true;
         }
-        setStage('Baseline');if(!baseline)baseline=await measured([],0);if(cancelled())return;evidence.baseline=baseline;evidence.phaseAudit.baseline={run:Object.assign({},previewRun),metrics:baseline,source:baseline.cacheSource};
+        setStage('Baseline');if(!baseline)baseline=await measured([],0);else{traceDetail='Reused baseline';setCounter('reused','Reused batches',1,1);}if(cancelled())return;evidence.baseline=baseline;evidence.phaseAudit.baseline={run:Object.assign({},previewRun),metrics:baseline,source:baseline.cacheSource};
         var trialHistory=[];evidence.trialHistory=trialHistory;
         var finalistPool=new Map(),best=baseline,bestChanges=[],done=0,invalid=0,cache=new Map(),reviewBest=null,reviewChanges=[];
         function conditionalProposal(proposal){if(!automaticFlowDOE)return proposal;return automaticFlowDOE.fixedReliabilityChanges.concat(proposal.filter(c=>!c.path.startsWith('noiseProfile.reliability.')));}
@@ -491,7 +534,7 @@ window.STScenarioExplorer=(function(){
           if(result&&(result.warnings||[]).length&&improves(baseline,result)&&(!reviewBest||result.throughput>reviewBest.throughput)){reviewBest=result;reviewChanges=proposal;}
           if(result&&!(result.warnings||[]).length&&improves(baseline,result)&&(result.throughput>best.throughput+1e-9||(result.throughput===best.throughput&&result.oee>best.oee))){best=result;bestChanges=proposal;}
           if(best.throughput>previousThroughput+Math.max(.001,Math.abs(previousThroughput)*.001)){stagnant=0;bestAtTrial=done;lastGainAt=Date.now();}else stagnant++;evidence.bestAtTrial=bestAtTrial;evidence.candidatesSinceMeaningfulGain=stagnant;exhausted();
-          if(!cancelled()){status.textContent=done+' candidates checked · '+invalid+' infeasible · '+show(baseline,best);record('RUNNING',Object.assign({},evidence,{baseline:baseline,candidate:best,evaluatedChanges:bestChanges,trials:done,infeasibleTrials:invalid}));}
+          if(!cancelled()){captureTrace();paintTrace(false);status.textContent=done+' candidates checked · '+invalid+' infeasible · '+show(baseline,best);record('RUNNING',Object.assign({},evidence,{baseline:baseline,candidate:best,evaluatedChanges:bestChanges,trials:done,infeasibleTrials:invalid}));}
           await new Promise(function(resolve){setTimeout(resolve,0);});return result;
         }
         async function trialsInOrder(proposals){
@@ -508,7 +551,7 @@ window.STScenarioExplorer=(function(){
             for(var i=0;i<group.length;i++){await trial(group[i],prepared[i]);if(cancelled())return;}
           }
         }
-        setStage(all?'Searching category':'Evaluating selection');
+        setStage(all?'Searching category':'Evaluating selection');searchStartedAt=Date.now();
         if(!all){best=await trial(changes);bestChanges=changes;if(cancelled())return;}
         else searchPhase:{
           if(finishRequested||searchPhaseDone)break searchPhase;
@@ -526,7 +569,7 @@ window.STScenarioExplorer=(function(){
           // Bounded coordinate search across the entire selected category.
           // Revisit coordinates to capture interactions; never claim a global optimum.
           for(var pass=0;pass<limits.passes;pass++){
-            setStage('Refining · pass '+(pass+1)+' / '+limits.passes);
+            setStage('Refining · pass '+(pass+1)+' / '+limits.passes);setCounter('passes','Passes',pass,limits.passes);var coordinateTotal=changes.filter(c=>!automaticFlowDOE||!c.path.startsWith('noiseProfile.reliability.')).length,coordinatesDone=0;setCounter('coordinates','Coordinates',0,coordinateTotal);
             var previous=keyOf(bestChanges);
             for(var c of changes){
               if(automaticFlowDOE&&c.path.startsWith('noiseProfile.reliability.'))continue;
@@ -535,9 +578,9 @@ window.STScenarioExplorer=(function(){
               // evaluate together, then select in the original serial order.
               var fixedCoordinate=bestChanges.filter(x=>!(x.equipmentId===c.equipmentId&&x.path===c.path));
               var proposals=alternatives.map(value=>value===c.before?fixedCoordinate:fixedCoordinate.concat([Object.assign({},c,{after:value})]));
-              await trialsInOrder(proposals);if(cancelled())return;if(finishRequested||searchPhaseDone)break searchPhase;
+              await trialsInOrder(proposals);if(cancelled())return;if(finishRequested||searchPhaseDone)break searchPhase;coordinatesDone++;setCounter('coordinates','Coordinates',coordinatesDone,coordinateTotal);captureTrace();paintTrace(false);
             }
-            coverageComplete=true;stagnant=0;if(pass>0&&previous===keyOf(bestChanges))break;
+            setCounter('passes','Passes',pass+1,limits.passes);coverageComplete=true;stagnant=0;if(pass>0&&previous===keyOf(bestChanges))break;
           }
         }
         if(all){searchVariables=Array.from(evaluatedVariables.values());evidence.searchVariables=searchVariables;rows.forEach(r=>{var found=searchVariables.find(v=>v.equipmentId===r.change.equipmentId&&v.path===r.change.path);if(found&&r.doe&&!r.doe.use.checked){r.doe.low.value=Number((found.low*r.scale).toPrecision(8));r.doe.high.value=Number((found.high*r.scale).toPrecision(8));}});}
@@ -549,13 +592,13 @@ window.STScenarioExplorer=(function(){
           if(automaticFlowDOE)fixed=fixed.filter(c=>!c.path.startsWith('noiseProfile.reliability.')).concat(evidence.conditionalFlowDOE.fixedReliabilityChanges);
           evidence.doe={type:design.type,factors:design.factors,fixedChanges:fixed,combinations:design.designPoints.length,roundsPerCombination:previewRun.rounds,observations:observations};
           for(var point of design.designPoints){
-            setStage('DOE · combination '+(observations.length+1)+' / '+design.designPoints.length);
+            setStage('DOE · combination '+(observations.length+1)+' / '+design.designPoints.length);setCounter('primary','Combinations',observations.length,design.designPoints.length);
             var response=await trial(fixed.concat(point.changes));if(cancelled())return;
-            observations.push({roundMetrics:response?.roundMetrics,index:point.index,levels:point.levels,changes:point.changes,oee:response?.oee??null,throughput:response?.throughput??null,warnings:response?.warnings||[],feasible:!!response});
+            observations.push({roundMetrics:response?.roundMetrics,index:point.index,levels:point.levels,changes:point.changes,oee:response?.oee??null,throughput:response?.throughput??null,warnings:response?.warnings||[],feasible:!!response});setCounter('primary','Combinations',observations.length,design.designPoints.length);captureTrace();paintTrace(false);
             if(finishRequested||limits.wallClockBudget&&Date.now()-doeStarted>=limits.maxSearchMs){evidence.doe.stopReason=finishRequested?'Finished by user':'DOE time budget reached';break;}
             status.textContent='DOE '+observations.length+' / '+design.designPoints.length+' combinations · '+show(baseline,best);
           }
-          inDOE=false;setStage('Statistical analysis (ANOVA)');var inferenceOptions={confidenceLevel:source.whatIf?.methodology?.replications?.confidenceLevel??.95};evidence.doe.analysis=STScenarioDOE.analyze(design,observations,inferenceOptions);evidence.doe.anova=STScenarioDOE.anova(design,observations,inferenceOptions);evidence.phaseAudit.doe={factors:design.factors.length,plannedCombinations:design.designPoints.length,evaluatedCombinations:observations.length,complete:evidence.doe.analysis.complete};
+          inDOE=false;setStage('Statistical analysis (ANOVA)');setCounter('factors','Factors',design.factors.length);setCounter('analyses','Analyses',0,2);var inferenceOptions={confidenceLevel:source.whatIf?.methodology?.replications?.confidenceLevel??.95};evidence.doe.analysis=STScenarioDOE.analyze(design,observations,inferenceOptions);setCounter('analyses','Analyses',1,2);evidence.doe.anova=STScenarioDOE.anova(design,observations,inferenceOptions);setCounter('analyses','Analyses',2,2);var metricResults=Object.values(evidence.doe.anova.metrics||{});setCounter('responses','Responses',metricResults.length,2);setCounter('contrasts','Contrasts',metricResults.reduce((sum,m)=>sum+(m.effects?.length||0),0),2*(design.designPoints.length-1));if(!evidence.doe.anova.complete)traceDetail=evidence.doe.anova.reason||'Incomplete ANOVA evidence';evidence.phaseAudit.doe={factors:design.factors.length,plannedCombinations:design.designPoints.length,evaluatedCombinations:observations.length,complete:evidence.doe.analysis.complete};
 
         }
         if(cancelled())return;
@@ -580,15 +623,15 @@ window.STScenarioExplorer=(function(){
           if(rankingPlan.staged){
             // Short comparisons only allocate the expensive full-horizon work.
             // Neither an intermediate rank nor a p-value certifies improvement.
-            previewRun=rankingPlan.screenRun;setStage('Screening finalists');rankingProgress={index:0,total:finalists.length};maximum=completed+1+finalists.length+1+Math.max(rankingPlan.fullHorizonFinalists,protectedCount+1)+2;
-            var finalistScreenBase=await measured([],rankingPlan.screeningSeedOffset),screened=[];
-            for(var screenedItem of finalists){rankingProgress.index++;var screenedResult=await measured(screenedItem.changes,rankingPlan.screeningSeedOffset);if(cancelled())return;screened.push({changes:screenedItem.changes,result:screenedResult});}
+            previewRun=rankingPlan.screenRun;setStage('Screening finalists');rankingProgress={index:0,total:finalists.length};setCounter('primary','Finalists',0,finalists.length);setCounter('base','Baseline batches',0,1);maximum=completed+1+finalists.length+1+Math.max(rankingPlan.fullHorizonFinalists,protectedCount+1)+2;
+            var finalistScreenBase=await measured([],rankingPlan.screeningSeedOffset),screened=[];setCounter('base','Baseline batches',1,1);
+            for(var screenedItem of finalists){rankingProgress.index++;var screenedResult=await measured(screenedItem.changes,rankingPlan.screeningSeedOffset);if(cancelled())return;screened.push({changes:screenedItem.changes,result:screenedResult});setCounter('primary','Finalists',screened.length,rankingProgress.total);}
             finalists=STScenarioSearch.selectFinalists(screened,finalistScreenBase,rankingPlan.fullHorizonFinalists);
             evidence.phaseAudit.finalistScreening={policy:rankingPlan.policy,run:Object.assign({},previewRun),baseline:finalistScreenBase,observations:screened,selected:finalists.length,omitted:screened.length-finalists.length,protectedReliabilityCandidates:protectedCount,interpretation:rankingPlan.interpretation};
           }
           previewRun=rankingPlan.fullRun;evidence.rankingRun=Object.assign({},previewRun);evidence.phaseAudit.ranking={finalists:finalists.length,run:Object.assign({},previewRun),selectionBasis:rankingPlan.staged?'INTERMEDIATE_SCREEN':'ALL_FINALISTS'};baselineRun=null;
-          setStage('Comparing finalists');maximum=completed+1+finalists.length+2+(reliabilityTargets?.baseline?1:0);rankingProgress={index:0,total:finalists.length};baseline=await measured([],100003);best=baseline;bestChanges=[];reviewBest=null;reviewChanges=[];
-          for(var item of finalists){rankingProgress.index++;var ranked=await measured(item.changes,100003);if(cancelled())return;if(!improves(baseline,ranked))continue;if(ranked.warnings?.length){if(!reviewBest||ranked.throughput>reviewBest.throughput){reviewBest=ranked;reviewChanges=item.changes;}}else if(ranked.throughput>best.throughput||(ranked.throughput===best.throughput&&ranked.oee>best.oee)){best=ranked;bestChanges=item.changes;}}
+          setStage('Comparing finalists');maximum=completed+1+finalists.length+2+(reliabilityTargets?.baseline?1:0);rankingProgress={index:0,total:finalists.length};setCounter('primary','Finalists',0,finalists.length);setCounter('base','Baseline batches',0,1);baseline=await measured([],100003);setCounter('base','Baseline batches',1,1);best=baseline;bestChanges=[];reviewBest=null;reviewChanges=[];
+          for(var item of finalists){rankingProgress.index++;var ranked=await measured(item.changes,100003);if(cancelled())return;setCounter('primary','Finalists',rankingProgress.index,rankingProgress.total);if(!improves(baseline,ranked))continue;if(ranked.warnings?.length){if(!reviewBest||ranked.throughput>reviewBest.throughput){reviewBest=ranked;reviewChanges=item.changes;}}else if(ranked.throughput>best.throughput||(ranked.throughput===best.throughput&&ranked.oee>best.oee)){best=ranked;bestChanges=item.changes;}}
           if(reviewBest&&(!bestChanges.length||exploreReliability.checked&&reviewBest.throughput>best.throughput)){if(bestChanges.length)evidence.safeAlternative={candidate:best,changes:bestChanges};best=reviewBest;bestChanges=reviewChanges;}
         }
         evidence.baseline=baseline;evidence.evaluatedChanges=bestChanges;evidence.candidate=best;
@@ -604,15 +647,15 @@ window.STScenarioExplorer=(function(){
         var confirmationPlan=STScenarioSearch.planConfirmation(baseline,best,source.whatIf?.methodology||{});
         if(!Number.isInteger(confirmationPlan.rounds)||confirmationPlan.rounds<3)throw Error('SCENARIO_CONFIRMATION_PLAN: '+confirmationPlan.status);
         evidence.confirmationPlan=Object.assign({},confirmationPlan,{pilotRun:Object.assign({},previewRun),comparisonBasis:'FIXED_CALENDAR_HORIZON',sourceEffectiveRuntimeTargetSeconds:config(source).effectiveRuntimeTargetSeconds??null});
-        previewRun=searchRun('validation',confirmationPlan.rounds);baselineRun=null;maximum=completed+2+(reliabilityTargets?.baseline?1:0);setStage('Independent confirmation');updateProgress();record('VALIDATING',evidence);status.textContent=text+' · Checking independent seeds…';
+        previewRun=searchRun('validation',confirmationPlan.rounds);baselineRun=null;maximum=completed+2+(reliabilityTargets?.baseline?1:0);setStage('Independent confirmation');setCounter('primary','Baseline and candidate',0,2);updateProgress();record('VALIDATING',evidence);status.textContent=text+' · Checking independent seeds…';
         var offset=Math.max(1000003,Number(previewRun.rounds)+1),confirmed=await Promise.allSettled([measured([],offset),measured(bestChanges,offset)]);
         var rejectedConfirmation=confirmed.find(function(item){return item.status==='rejected';});if(rejectedConfirmation)throw rejectedConfirmation.reason;
         if(cancelled())return;
-        var validationBase=confirmed[0].value,validation=confirmed[1].value;
+        var validationBase=confirmed[0].value,validation=confirmed[1].value;setCounter('primary','Baseline and candidate',2,2);
         if(reliabilityTargets?.baseline){setStage('Matched failure-free diagnostic');status.textContent='Comparing the unchanged baseline without MTBF / MTTR failures, using the validation seeds and full horizon…';var matchedFailureFree=await measured([],offset,source,Object.assign({},previewRun,{reliabilityEnabled:false}));if(cancelled())return;evidence.reliabilityCounterfactual={run:Object.assign({},previewRun,{seed:(Number(previewRun.seed)+offset)%2147483647}),baseline:validationBase,failureFree:matchedFailureFree,deltaOeePp:matchedFailureFree.oee-validationBase.oee,deltaThroughput:matchedFailureFree.throughput-validationBase.throughput,interpretation:'Same full horizon and seeds. Difference includes all propagated flow consequences of disabling MTBF / MTTR failures; it is conditional on the unchanged baseline geometry and speeds.'};}
         evidence.analysisOnly=bestChanges.some(c=>c.analysisOnly);
-        setStage('Confirmation analysis');var confirmation=STScenarioSearch.confirm(validationBase,validation,confirmationPlan,source.whatIf?.methodology||{});
-        var warnings=Array.from(new Map([...(best.warnings||[]),...(validation.warnings||[])].map(w=>[w.equipmentId+':'+w.rule,w])).values()),validated=improves(validationBase,validation)&&confirmation.passed;
+        setStage('Confirmation analysis');setCounter('analyses','Analyses',0,1);var confirmation=STScenarioSearch.confirm(validationBase,validation,confirmationPlan,source.whatIf?.methodology||{});
+        setCounter('analyses','Analyses',1,1);var warnings=Array.from(new Map([...(best.warnings||[]),...(validation.warnings||[])].map(w=>[w.equipmentId+':'+w.rule,w])).values()),validated=improves(validationBase,validation)&&confirmation.passed;
         evidence.independentCheck={seed:(Number(previewRun.seed)+offset)%2147483647,rounds:previewRun.rounds,durationSeconds:previewRun.durationSeconds,unitOfFlow:source.unitOfFlow||'units',baseline:validationBase,candidate:validation,passed:validated,confirmationKind:confirmation.kind,reason:confirmation.reason,statisticalEvidence:confirmation.statisticalEvidence,precision:confirmation.precision,oeeGuard:confirmation.oeeGuard,practicalThreshold:confirmation.threshold,interpretation:confirmation.interpretation,delta:{oeePercentagePoints:validation.oee-validationBase.oee,throughputPerMinute:validation.throughput-validationBase.throughput}};
         evidence.finalCapacityDiagnosis=STScenarios.plan(STScenarios.apply(source,bestChanges)).capacityDiagnosis;
         evidence.phaseAudit.confirmation={seed:evidence.independentCheck.seed,rounds:previewRun.rounds,durationSeconds:previewRun.durationSeconds,passed:validated};evidence.warnings=warnings;record(!validated?'NOT_REPRODUCED':warnings.length?'ENGINEERING_REVIEW_REQUIRED':'IMPROVEMENT_REPRODUCED',evidence);
@@ -625,7 +668,7 @@ window.STScenarioExplorer=(function(){
         last={changes:bestChanges,reviewRequired:!!warnings.length,validationRequired:!validated};
 
       }catch(error){failed=true;if(!cancelled()){record('ERROR',Object.assign({},evidence,{error:error.message}));status.textContent='Cannot evaluate: '+error.message;status.dataset.state='rejected';STErrors.capture(status,error);}}
-      finally{host.removeAttribute('aria-busy');window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:false}}));searchCanFinish=false;clearInterval(clock);setIcon(run,'Find best scenario','refresh');run.setAttribute('aria-pressed','false');ended=!cancelled()&&!failed;captureTrace(cancelled()?'Cancelled':failed?'Failed':'Completed');stage=cancelled()?'Stopped':failed?'Failed':'Finished';updateProgress();progressLabel.hidden=false;paintTrace(true);locked.forEach(x=>{if(x.element!==save)x.element.disabled=x.disabled;});activeHost=null;activeRecordKey=null;refreshDOE();refreshFactors();if(latest)record(latest.status,latest);searchSettingsChanged();}
+      finally{host.removeAttribute('aria-busy');window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:false}}));searchCanFinish=false;clearInterval(clock);setIcon(run,'Find best scenario','refresh');run.setAttribute('aria-pressed','false');ended=!cancelled()&&!failed;captureTrace();captureTrace(cancelled()?'Cancelled':failed?'Failed':'Completed');stage=cancelled()?'Stopped':failed?'Failed':'Finished';updateProgress();progressLabel.hidden=false;paintTrace(true);locked.forEach(x=>{if(x.element!==save)x.element.disabled=x.disabled;});activeHost=null;activeRecordKey=null;refreshDOE();refreshFactors();if(latest)record(latest.status,latest);searchSettingsChanged();}
     }
     if(restored){
       latest=restored;previewRun=restoredCurrent?restored.run||config(source):config(source);contextText();
@@ -645,7 +688,7 @@ window.STScenarioExplorer=(function(){
       if(restoredCurrent&&restored.status==='PREPARED_DEMO'){status.dataset.state='saved';setIcon(save,'This demo scenario already exists','copy');save.disabled=true;}
       if(ready&&!requiresValidation&&restored.analysisOnly)setIcon(save,'Create exploratory simulation','copy');
       if(ready&&!requiresValidation)status.textContent='';progress.textContent='';progressLabel.hidden=true;
-      if(restoredCurrent&&Array.isArray(restored.progressTrace?.steps)&&restored.progressTrace.steps.length){progressTrace=restored.progressTrace.steps.map(p=>Object.assign({},p,interrupted&&p.state==='Running'?{state:'Interrupted'}:{}));tracePercent=Math.max(0,Math.min(100,Number(restored.progressTrace.percent)||0));traceOutcome=interrupted?'Interrupted':restored.progressTrace.outcome||'';activity.hidden=false;progressLabel.hidden=false;progressPercent.textContent=tracePercent.toFixed(1)+'%';activity.firstChild.style.width=tracePercent+'%';activity.setAttribute('aria-valuenow',String(tracePercent));}
+      if(restoredCurrent&&Array.isArray(restored.progressTrace?.steps)&&restored.progressTrace.steps.length){progressTrace=restored.progressTrace.steps.map(p=>Object.assign({},p,interrupted&&p.state==='Running'?{state:'Interrupted'}:{}));tracePercent=Math.max(0,Math.min(100,Number(restored.progressTrace.percent)||0));traceOutcome=interrupted?'Interrupted':restored.progressTrace.outcome||'';traceSummary=Object.assign({},restored.progressTrace.summary);activity.hidden=false;progressLabel.hidden=false;progressPercent.textContent=tracePercent.toFixed(1)+'%';activity.firstChild.style.width=tracePercent+'%';activity.setAttribute('aria-valuenow',String(tracePercent));}
       if(ready)last={changes:restored.evaluatedChanges,reviewRequired:!!warnings.length,validationRequired:requiresValidation};
 
     }else{

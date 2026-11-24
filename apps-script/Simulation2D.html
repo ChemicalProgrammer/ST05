@@ -622,7 +622,7 @@ window.STSimulation2D=(function(){
       conveyorDimensions.set(item.id,dimensionRows(window.STConveyorAnalysis.calculate(worksheet).geometry));
       conveyorWorksheets.set(item.id,worksheet);
       const presentation=format?geometry.productPresentation(format,unit):{};
-      return {id:item.id,name:item.name||item.id,kind:'belt',unit,bottlesPerUnit:unit==='BOTTLES'?1:packSize,
+      return {id:item.id,name:item.name||item.id,kind:'belt',unit,bottlesPerUnit:unit==='BOTTLES'?1:packSize,transportFlowIssue:data.transportFlowIssue,
         zoneId:zone.id,length:zone.usableLengthMm,speed:zone.conveyorSpeedMmPerSecond,beltWidth:data.accumulation?.conveyorWidthMm??null,
         packageLength:zone.productLengthMm??presentation.lengthMm,
         packageWidth:presentation.widthMm??data.upstream?.packageWidthMm??null,
@@ -647,6 +647,7 @@ window.STSimulation2D=(function(){
           return item.name+': check nominal speed and the bottle equivalent of the active format.';
         continue;
       }
+      if(item.transportFlowIssue)return item.transportFlowIssue;
       const missing=[['conveyor length',item.length],['belt speed',item.speed],['product length',item.packageLength],['moving pitch',item.pitch]]
         .filter(([,value])=>!Number.isFinite(value)||value<=0).map(([label])=>label);
       if(missing.length)return item.name+': '+missing.join(', ')+' required in the case. Check Equipment and Formats.';

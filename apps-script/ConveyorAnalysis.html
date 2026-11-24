@@ -75,7 +75,14 @@ window.STConveyorAnalysis=(function(){
   function resolveProfiles(equipment,format,formats=[]){
     const engine=window.SimulatorEngine;
     function resolve(profile){
-      const models=profile?engine.applyProductProfile(equipment,profile):equipment;
+      const lineFlow=engine.resolveLineFlowUnits?.(equipment,profile||{})||[];
+      const models=profile?engine.applyProductProfile(equipment,profile):equipment.map((item,index)=>{
+        const flow=lineFlow[index];
+        if(item.type!=='CONVEYOR'||!flow)return item;
+        if(flow.source==='CONFLICT')return {...item,processData:{...item.processData,transportFlowIssue:flow.reason}};
+        if(flow.source==='INFERRED')return {...item,unitOfFlow:flow.output.toLowerCase(),processData:{...item.processData,transportFlowIssue:undefined,flowUnits:{input:flow.input,output:flow.output}}};
+        return item;
+      });
       const zones=models.map((item,index)=>item.type==='CONVEYOR'?engine.resolveProductConveyor(models,index):null);
       return {models,zones,format:profile};
     }
@@ -198,10 +205,11 @@ window.STConveyorAnalysis=(function(){
     recovery.partial ||= overflow.partial;
     const margin=recovery.value;
     const minimumLength=Number.isFinite(margin)?lact-margin:undefined;
-    const status=margin<-.000001?'FAIL':!Number.isFinite(margin)||recovery.partial?'NOT EVALUATED':margin>.000001?'PASS':'AT LIMIT';
+    const transportIssue=data.transportFlowIssue||designProfiles.find(({models})=>models[index]?.processData?.productApplies!==false&&models[index]?.processData?.transportFlowIssue)?.models[index].processData.transportFlowIssue;
+    const status=transportIssue?'NOT EVALUATED':margin<-.000001?'FAIL':!Number.isFinite(margin)||recovery.partial?'NOT EVALUATED':margin>.000001?'PASS':'AT LIMIT';
     const point=margin>=0&&lba>=margin?prime-margin:NaN;
     const geometry={lact,lp,prime,discharge,coding,runout,overflow,lbu,lba,recovery,point,minimumLength,status};
-    geometry.statusReason=explainVerdict(status,recovery,profiles,geometry);
+    geometry.statusReason=transportIssue||explainVerdict(status,recovery,profiles,geometry);
     return {profiles,geometry,common:[
       ['D8','Discharge','mm',discharge,'Input'],
       ['E8','Coding','mm',coding,'Input'],

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {diagnoseLineEfficiency} from '../src/analysis/LinePerformanceAnalysis.js';
 import {simulateLine,simulateLineAsync} from '../src/simulation/LineSimulationEngine.js';
 import {simulateBatch} from '../src/simulation/SimulationBatch.js';
-import {applyProductProfile} from '../src/simulation/ProductProfiles.js';
+import {applyProductProfile,resolveLineFlowUnits} from '../src/simulation/ProductProfiles.js';
 import {resolveAccumulationZoneDefinition} from '../src/simulation/FormatGeometryAdapter.js';
 function input(){
  const machine=(id,type,rate,input='BOTTLES',output=input)=>({id,name:id,type,nominalRatePerSecond:rate,initialMode:'AUTO',processData:{flowUnits:{input,output}}});
@@ -38,7 +38,7 @@ test('async and worker-style batch runs preserve catalog and reproduce sync tota
  const b=await simulateBatch({...i,run:{...i.run,rounds:2}},{runRound:simulateLineAsync,workerFirstRound:true,laterSummaryOnly:true,concurrency:2});assert.equal(b.ok,true);assert.equal(b.result.batch.statistics.outputCount.mean,r.summary.outputCount);assert.equal(b.result.products.rows[0].bottlesPerCase,12);
 });
 test('invalid unit boundaries, pack sizes, destination and unsupported engine are rejected',()=>{
- for(const mutate of [i=>i.case.equipment[3].processData.flowUnits.input='BOTTLES',i=>i.run.productCatalog[0].bottlesPerCase=0,i=>i.run.initialProductId='missing',i=>i.run.plannedStops=[{category:'changeoverMinutes',startSeconds:10,endSeconds:20,targetProductId:'missing'}],i=>i.run.engineId='DES_SIMPY_EXPERIMENTAL',i=>{delete i.run.productCatalog;delete i.run.initialProductId;i.run.plannedStops=[{category:'changeoverMinutes',startSeconds:10,endSeconds:20,targetProductId:'a'}];}]){const i=input();mutate(i);assert.equal(simulateLine(i).ok,false);}
+ for(const mutate of [i=>i.case.equipment[4].processData.flowUnits.input='BOTTLES',i=>i.run.productCatalog[0].bottlesPerCase=0,i=>i.run.initialProductId='missing',i=>i.run.plannedStops=[{category:'changeoverMinutes',startSeconds:10,endSeconds:20,targetProductId:'missing'}],i=>i.run.engineId='DES_SIMPY_EXPERIMENTAL',i=>{delete i.run.productCatalog;delete i.run.initialProductId;i.run.plannedStops=[{category:'changeoverMinutes',startSeconds:10,endSeconds:20,targetProductId:'a'}];}]){const i=input();mutate(i);assert.equal(simulateLine(i).ok,false);}
 });
 test('disabled events do not change product, and a stop without destination retains WIP',()=>{
  const i=input();i.run.plannedStops=[{category:'changeoverMinutes',startSeconds:40,endSeconds:50}];const r=run(i);conserved(r);assert.equal(r.products.clearoutBottleEquivalents,0);assert.equal(r.products.rows.length,1);
@@ -65,7 +65,7 @@ test('unused partial product applicability is retained in the catalog; using it 
  i.run.initialProductId='a';i.run.plannedStops=[{category:'changeoverMinutes',startSeconds:30,endSeconds:40,targetProductId:'boxed'}];result=simulateLine(i);assert.equal(result.ok,false);
 });
 test('presentation continuity and supported machine conversions are validated for each active product',()=>{
- for(const mutate of [p=>{p.equipment.boxes.inputUnit='BOTTLES';p.equipment.boxes.outputUnit='CASES';},p=>{p.equipment.packer={inputUnit:'CASES',outputUnit:'BOTTLES'};},p=>{p.equipment.sink={inputUnit:'BOTTLES',outputUnit:'BOTTLES'};}]){const i=input();mutate(i.run.productCatalog[0]);assert.equal(simulateLine(i).ok,false);}
+ for(const mutate of [p=>{p.equipment.packer={inputUnit:'BOTTLES',outputUnit:'BOTTLES'};},p=>{p.equipment.packer={inputUnit:'CASES',outputUnit:'BOTTLES'};},p=>{p.equipment.sink={inputUnit:'BOTTLES',outputUnit:'BOTTLES'};}]){const i=input();mutate(i.run.productCatalog[0]);assert.equal(simulateLine(i).ok,false);}
 });
 
 test('missing product dimensions inherit conveyor defaults; missing both sources is rejected',()=>{
@@ -146,4 +146,28 @@ test('internal capacity counts incoming cases at palletizers and incoming bottle
  conserved(run(i));
  i.case.equipment[2].processData.equipment.internalCapacityBottles=11;
  assert.equal(simulateLine(i).ok,false);
+});
+
+test('conveyors inherit bottle or case flow without declarations, overriding stale redundant units',()=>{
+ const i=input(),baseline=run(i);
+ delete i.case.equipment[1].processData.flowUnits;
+ delete i.case.equipment[3].processData.flowUnits;
+ i.run.productCatalog[0].equipment.boxes={movingGapMm:10,inputUnit:'BOTTLES',outputUnit:'BOTTLES'};
+ const before=structuredClone(i),effective=applyProductProfile(i.case.equipment,i.run.productCatalog[0]);
+ assert.deepEqual(effective[1].processData.flowUnits,{input:'BOTTLES',output:'BOTTLES'});
+ assert.deepEqual(effective[3].processData.flowUnits,{input:'CASES',output:'CASES'});
+ const result=run(i);conserved(result);assert.equal(result.summary.outputCount,baseline.summary.outputCount);
+ assert.equal(result.accumulationZoneMetrics['boxes--physical-zone'].capacityUnits,10);
+ assert.deepEqual(i,before);
+});
+test('consecutive conveyors inherit the same flow and incompatible connected machines report the real conflict',()=>{
+ const i=input(),line=i.case.equipment,p=i.run.productCatalog[0];
+ line.splice(2,0,{id:'extra',name:'extra',type:'CONVEYOR',processData:{}});
+ assert.equal(resolveLineFlowUnits(line,p)[1].output,'BOTTLES');
+ assert.equal(resolveLineFlowUnits(line,p)[2].output,'BOTTLES');
+ line[3].processData.flowUnits={input:'CASES',output:'CASES'};
+ const resolved=resolveLineFlowUnits(line,p);
+ assert.equal(resolved[1].source,'CONFLICT');assert.equal(resolved[2].source,'CONFLICT');
+ assert.match(resolved[1].reason,/source outputs BOTTLES.*packer receives CASES/);
+ const result=simulateLine(i);assert.equal(result.ok,false);assert.match(JSON.stringify(result.error),/incompatible machine flow/);
 });

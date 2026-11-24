@@ -75,15 +75,59 @@ function productProfileUnits(equipment,product){
   const profile=product.equipment?.[equipment.id]||{},base=equipment.processData?.flowUnits||{};
   return {input:profile.inputUnit||base.input||'BOTTLES',output:profile.outputUnit||base.output||'BOTTLES'};
 }
+// Physical transport is a consequence of the machine flow on either side.
+// Resolve contiguous conveyor segments together. Legacy conveyor unit fields
+// are only a fallback when no adjacent machine declares a usable unit.
+function isProductConveyor(e){return e?.type==='CONVEYOR'||e?.processData?.role==='CONVEYOR';}
+function declaredProductFlow(e,product){
+  const profile=product?.equipment?.[e.id]||{},base=e.processData?.flowUnits||{};
+  return {input:profile.inputUnit||base.input||null,output:profile.outputUnit||base.output||null};
+}
+function resolveLineFlowUnits(equipment=[],product={}){
+  const valid=v=>PRODUCT_FLOW_UNITS.includes(v);
+  const rows=equipment.map(e=>({...declaredProductFlow(e,product),source:isProductConveyor(e)?'UNRESOLVED':'MACHINE'}));
+  for(let start=0;start<equipment.length;){
+    if(!isProductConveyor(equipment[start])){start++;continue;}
+    let end=start+1;while(end<equipment.length&&isProductConveyor(equipment[end]))end++;
+    const upstream=start>0?equipment[start-1]:null,downstream=end<equipment.length?equipment[end]:null;
+    const left=upstream&&valid(rows[start-1].output)?rows[start-1].output:null;
+    const right=downstream&&valid(rows[end].input)?rows[end].input:null;
+    for(let i=start;i<end;i++){
+      const belt=equipment[i],name=belt.name||belt.id;
+      if(left&&right&&left!==right){
+        rows[i]={input:null,output:null,source:'CONFLICT',
+          reason:name+': incompatible machine flow: '+(upstream.name||upstream.id)+' outputs '+left+
+          ', but '+(downstream.name||downstream.id)+' receives '+right+'. Correct the machines’ Material flow; a conveyor cannot convert bottles to cases.'};
+      }else if(left||right){
+        const unit=left||right;rows[i]={input:unit,output:unit,source:'INFERRED'};
+      }else{
+        const explicit=rows[i];
+        if(valid(explicit.input)&&explicit.input===explicit.output)rows[i]={input:explicit.input,output:explicit.output,source:'LEGACY'};
+        else rows[i]={input:null,output:null,source:'UNRESOLVED',
+          reason:name+': transport unit cannot be inferred. Define Material flow on the connected machines.'};
+      }
+    }
+    start=end;
+  }
+  return rows;
+}
+
 function productUnitFactor(equipment, product, side='output') {
   return productFlowUnit(equipment, side)==='CASES' ? productPackSize(product) : 1;
 }
 function applyProductProfile(equipment, product) {
-  return equipment.map(original=>{
+  const lineFlow=resolveLineFlowUnits(equipment,product);
+  return equipment.map((original,index)=>{
     const item=JSON.parse(JSON.stringify(original)),profile=product.equipment?.[item.id]||{};
     item.processData=item.processData||{};
     if(profile.applies===false){item.processData.productApplies=false;return item;}
-    item.processData.flowUnits=productProfileUnits(item,product);
+    const resolved=lineFlow[index];
+    // Drafts can be inspected before all flows agree. Runtime validation
+    // rejects conflicts before simulation; the preview carries their reason.
+    if(isProductConveyor(item)&&(resolved.source==='CONFLICT'||resolved.source==='UNRESOLVED'))item.processData.transportFlowIssue=resolved.reason;
+    else delete item.processData.transportFlowIssue;
+    item.processData.flowUnits=PRODUCT_FLOW_UNITS.includes(resolved.input)&&PRODUCT_FLOW_UNITS.includes(resolved.output)
+      ?{input:resolved.input,output:resolved.output}:productProfileUnits(item,product);
     item.unitOfFlow=item.processData.flowUnits.output.toLowerCase();
     if(profile.ratePerMinute!==undefined)item.nominalRatePerSecond=profile.ratePerMinute/60;
     if(profile.startupSeconds!==undefined)item.startupDelaySeconds=profile.startupSeconds;
@@ -117,9 +161,10 @@ function validateProductDefinitions(products,equipment=[],options={}){
     if(!p||typeof p.id!=='string'||!p.id||ids.has(p.id)||typeof p.name!=='string'||!p.name.trim())throw Error('Products require unique IDs and a name.');ids.add(p.id);
     const pack=productPackSize(p);if(!Number.isInteger(pack)||pack<1||pack>10000)throw Error(p.name+': bottles per case must be an integer from 1 to 10,000.');
     if(p.volumeMl!==undefined&&!nonnegative(p.volumeMl))throw Error(p.name+': volume must be nonnegative.');
+    const lineFlow=resolveLineFlowUnits(equipment,p);
     for(const unit of PRODUCT_FLOW_UNITS){
-      const presentation=productPresentation(p,unit),used=equipment.some(e=>p.equipment?.[e.id]?.applies!==false&&Object.values(productProfileUnits(e,p)).includes(unit));
-      if(options.requireDimensions!==false&&used&&presentation.lengthMm===undefined){const belts=equipment.filter(e=>(e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')&&productProfileUnits(e,p).output===unit&&p.equipment?.[e.id]?.applies!==false);if(belts.some(e=>!positive(e.processData?.upstream?.packageLengthMm??e.processData?.accumulation?.productLengthMm)))throw Error(p.name+': enter the '+(unit==='CASES'?'case':'bottle')+' length along the conveyor, or set a default on each conveyor.');}
+      const presentation=productPresentation(p,unit),used=equipment.some((e,i)=>p.equipment?.[e.id]?.applies!==false&&(lineFlow[i].input===unit||lineFlow[i].output===unit));
+      if(options.requireDimensions!==false&&used&&presentation.lengthMm===undefined){const belts=equipment.filter((e,i)=>isProductConveyor(e)&&lineFlow[i].output===unit&&p.equipment?.[e.id]?.applies!==false);if(belts.some(e=>!positive(e.processData?.upstream?.packageLengthMm??e.processData?.accumulation?.productLengthMm)))throw Error(p.name+': enter the '+(unit==='CASES'?'case':'bottle')+' length along the conveyor, or set a default on each conveyor.');}
       for(const key of ['lengthMm','widthMm','heightMm'])if(presentation[key]!==undefined&&!positive(presentation[key]))throw Error(p.name+': '+unit.toLowerCase()+' '+key+' must be positive.');
     }
     for(const [id,profile] of Object.entries(p.equipment||{})){
@@ -143,20 +188,22 @@ function validateProductSetup(input) {
   if(!ids.has(initialId))throw Error('Select an initial product.');
   for(const event of input.run.eventsEnabled===false?[]:(input.run.plannedStops||[])){const destination=event.targetFormatId??event.targetProductId;if(!destination)continue;if(event.targetFormatId&&event.targetProductId&&event.targetFormatId!==event.targetProductId)throw Error('Changeover format references disagree.');if(event.category!=='changeoverMinutes'||!ids.has(destination))throw Error('A changeover must reference an existing destination packing format.');used.add(destination);}
   const scheduled=products.filter(p=>used.has(p.id)),initial=scheduled.find(p=>p.id===initialId);
-  for(const product of scheduled)for(const e of equipment){const a=productProfileUnits(e,initial),b=productProfileUnits(e,product);if(a.input!==b.input||a.output!==b.output)throw Error(e.name+': changing bottle/case presentation at the same installed step during a run is not supported; use separate simulations.');}
+  const initialFlow=resolveLineFlowUnits(equipment,initial);
   return scheduled.map(product=>{
-    validateProductDefinitions([product],equipment);
+    const lineFlow=resolveLineFlowUnits(equipment,product);
+    // Applicability is checked before flow, preserving the existing no-bypass contract.
+    for(const e of equipment)if(product.equipment?.[e.id]?.applies===false)throw Error(product.name+' does not apply to '+e.name+'. This serial line has no bypass; select a compatible product or include this equipment.');
     for(let i=0;i<equipment.length;i++){
-      const e=equipment[i],profile=product.equipment?.[e.id]||{},isBelt=e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR',units=productProfileUnits(e,product);
-      if(profile.applies===false)throw Error(product.name+' does not apply to '+e.name+'. This serial line has no bypass; select a compatible product or include this equipment.');
-      // Legacy equipment must explicitly declare units unless the product supplies them.
-      if(!e.processData?.flowUnits&&!profile.inputUnit&&!profile.outputUnit)throw Error(e.name+': select input and output units.');
-      if(!PRODUCT_FLOW_UNITS.includes(units.input)||!PRODUCT_FLOW_UNITS.includes(units.output))throw Error(e.name+': select input and output units.');
-      if(isBelt&&units.input!==units.output)throw Error(e.name+': a conveyor cannot convert bottles to cases.');
+      const e=equipment[i],isBelt=isProductConveyor(e),units=lineFlow[i];
+      if(units.source==='CONFLICT'||units.source==='UNRESOLVED')throw Error(units.reason);
+      if(!PRODUCT_FLOW_UNITS.includes(units.input)||!PRODUCT_FLOW_UNITS.includes(units.output))throw Error(e.name+': select input and output units in Material flow.');
       if(!isBelt&&units.input!==units.output&&!(e.type==='CASE_PACKER'&&units.input==='BOTTLES'&&units.output==='CASES'))throw Error(e.name+': bottle-to-case conversion belongs on a Case Packer.');
       if(i===0&&units.input!=='BOTTLES')throw Error('The first machine must receive bottles.');
-      if(i&&productProfileUnits(equipment[i-1],product).output!==units.input)throw Error(e.name+': input unit does not match the preceding output.');
+      if(i&&lineFlow[i-1].output!==units.input)throw Error(e.name+': input unit does not match the preceding output.');
+      const a=initialFlow[i];
+      if(a.input!==units.input||a.output!==units.output)throw Error(e.name+': changing bottle/case presentation at the same installed step during a run is not supported; use separate simulations.');
     }
+    validateProductDefinitions([product],equipment);
     return {product,equipment:applyProductProfile(equipment,product)};
   });
 }
@@ -234,16 +281,24 @@ function normalizeFormatCatalog(metadata={},equipment){
   if(previous.products.length||previous.boxes.length||previous.formats.length)catalog.legacyCatalog=JSON.parse(JSON.stringify(previous));
   return catalog;
 }
-function resolvePackingFormats(catalog){
+function resolvePackingFormats(catalog,equipment){
   if((catalog.version||1)<3)return resolveLegacyPackingFormats(catalog);
   const active=profile=>{const p=JSON.parse(JSON.stringify(profile||{}));if(p.enabled===false||p.applies===false)for(const key of Object.keys(p))if(!['inputUnit','outputUnit'].includes(key))delete p[key];delete p.enabled;return p;};
   return catalog.formats.map(format=>{
     const product=catalog.products.find(p=>p.id===format.productId);if(!product)throw Error((format.name||'Format')+': select an existing product.');
     const box=format.case||{},profiles={};
-    for(const id of new Set([...Object.keys(product.equipment||{}),...Object.keys(format.equipment||{})])){
-      const local=format.equipment?.[id]||{},input=local.inputUnit||'BOTTLES',output=local.outputUnit||input;
+    // Effective transport also selects the right material owner for behavior
+    // overrides. Do not allow stale conveyor unit fields to select bottle
+    // settings on a case conveyor (or vice versa).
+    const line=Array.isArray(equipment)?resolveLineFlowUnits(equipment,{equipment:format.equipment||{}}):[];
+    const flows=new Map((equipment||[]).map((e,i)=>[e.id,line[i]]));
+    for(const id of new Set([...Object.keys(product.equipment||{}),...Object.keys(format.equipment||{}),...flows.keys()])){
+      const local=format.equipment?.[id]||{},resolved=flows.get(id);
+      const input=resolved?.input||local.inputUnit||'BOTTLES',output=resolved?.output||local.outputUnit||input;
       const shared=input==='BOTTLES'&&output==='BOTTLES'?product.equipment?.[id]||{}:{};
-      profiles[id]={...active(shared),...active(local)};
+      const profile={...active(shared),...active(local)};
+      if(resolved?.source==='INFERRED'){profile.inputUnit=resolved.input;profile.outputUnit=resolved.output;}
+      if(Object.keys(profile).length)profiles[id]=profile;
     }
     return {id:format.id,formatId:format.id,name:format.name,productId:product.id,productName:product.name,boxId:format.legacyBoxId||format.id,boxName:format.legacyBoxName||format.name,volumeMl:product.volumeMl,bottleLengthMm:product.bottle?.lengthMm,caseLengthMm:box.lengthMm,bottlesPerCase:format.bottlesPerCase,packPattern:format.packPattern||'',presentations:{bottle:JSON.parse(JSON.stringify(product.bottle||{})),case:{lengthMm:box.lengthMm,widthMm:box.widthMm,heightMm:box.heightMm,bottlesPerCase:format.bottlesPerCase}},equipment:profiles};
   });
@@ -6277,6 +6332,7 @@ window.SimulatorEngine = {
   materialConfiguration:materialConfiguration,
   readMaterialConfiguration:readMaterialConfiguration,
   applyProductProfile:applyProductProfile,
+  resolveLineFlowUnits:resolveLineFlowUnits,
   validateProductSetup:validateProductSetup,
   validateProductDefinitions:validateProductDefinitions,
   productPresentation:productPresentation,

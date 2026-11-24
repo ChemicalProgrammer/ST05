@@ -161,6 +161,7 @@ window.SimulatorEngine = {
   materialConfiguration:materialConfiguration,
   readMaterialConfiguration:readMaterialConfiguration,
   applyProductProfile:applyProductProfile,
+  resolveLineFlowUnits:resolveLineFlowUnits,
   validateProductSetup:validateProductSetup,
   validateProductDefinitions:validateProductDefinitions,
   productPresentation:productPresentation,

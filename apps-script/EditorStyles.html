@@ -7,6 +7,9 @@
   .editor-subheading h3 { margin: 0 0 var(--size-4); }
   .editor-subheading p { margin-bottom: 0; }
   .equipment-fields:has(.equipment-type option[value=CONVEYOR]:checked) .machine-design-field { display:none; }
+  .equipment-material-flow[hidden],.equipment-transport-unit[hidden] {display:none!important;}
+  .equipment-transport-unit {display:flex;align-items:center;min-height:var(--control-height);padding:0 var(--space-2);border:var(--border-width) solid var(--line);border-radius:var(--radius-sm);box-sizing:border-box;color:var(--ink);font-size:var(--font-input);background:var(--surface);}
+  .equipment-transport-unit[aria-invalid="true"] {color:var(--danger);border-color:var(--danger);}
   .equipment-list { display: grid; gap: var(--size-14); margin-top: var(--size-14); }
   .equipment-card { background: var(--surface); border: var(--border-width) solid var(--line); border-top:4px solid var(--accent); border-radius: var(--radius-md); padding: var(--size-16); }
   .equipment-card:not(.equipment-card-expanded) .equipment-grid,

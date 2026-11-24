@@ -1,3 +1,4 @@
+import { resolveLineFlowUnits } from './ProductProfiles.js';
 export const productVolumeUnits = Object.freeze({mL:1,L:1000,'fl oz (US)':29.5735295625,'fl oz (UK)':28.4130625});
 
 // Relational authoring catalog; simulation receives immutable resolved format snapshots.
@@ -70,16 +71,24 @@ export function normalizeFormatCatalog(metadata={},equipment){
   if(previous.products.length||previous.boxes.length||previous.formats.length)catalog.legacyCatalog=JSON.parse(JSON.stringify(previous));
   return catalog;
 }
-export function resolvePackingFormats(catalog){
+export function resolvePackingFormats(catalog,equipment){
   if((catalog.version||1)<3)return resolveLegacyPackingFormats(catalog);
   const active=profile=>{const p=JSON.parse(JSON.stringify(profile||{}));if(p.enabled===false||p.applies===false)for(const key of Object.keys(p))if(!['inputUnit','outputUnit'].includes(key))delete p[key];delete p.enabled;return p;};
   return catalog.formats.map(format=>{
     const product=catalog.products.find(p=>p.id===format.productId);if(!product)throw Error((format.name||'Format')+': select an existing product.');
     const box=format.case||{},profiles={};
-    for(const id of new Set([...Object.keys(product.equipment||{}),...Object.keys(format.equipment||{})])){
-      const local=format.equipment?.[id]||{},input=local.inputUnit||'BOTTLES',output=local.outputUnit||input;
+    // Effective transport also selects the right material owner for behavior
+    // overrides. Do not allow stale conveyor unit fields to select bottle
+    // settings on a case conveyor (or vice versa).
+    const line=Array.isArray(equipment)?resolveLineFlowUnits(equipment,{equipment:format.equipment||{}}):[];
+    const flows=new Map((equipment||[]).map((e,i)=>[e.id,line[i]]));
+    for(const id of new Set([...Object.keys(product.equipment||{}),...Object.keys(format.equipment||{}),...flows.keys()])){
+      const local=format.equipment?.[id]||{},resolved=flows.get(id);
+      const input=resolved?.input||local.inputUnit||'BOTTLES',output=resolved?.output||local.outputUnit||input;
       const shared=input==='BOTTLES'&&output==='BOTTLES'?product.equipment?.[id]||{}:{};
-      profiles[id]={...active(shared),...active(local)};
+      const profile={...active(shared),...active(local)};
+      if(resolved?.source==='INFERRED'){profile.inputUnit=resolved.input;profile.outputUnit=resolved.output;}
+      if(Object.keys(profile).length)profiles[id]=profile;
     }
     return {id:format.id,formatId:format.id,name:format.name,productId:product.id,productName:product.name,boxId:format.legacyBoxId||format.id,boxName:format.legacyBoxName||format.name,volumeMl:product.volumeMl,bottleLengthMm:product.bottle?.lengthMm,caseLengthMm:box.lengthMm,bottlesPerCase:format.bottlesPerCase,packPattern:format.packPattern||'',presentations:{bottle:JSON.parse(JSON.stringify(product.bottle||{})),case:{lengthMm:box.lengthMm,widthMm:box.widthMm,heightMm:box.heightMm,bottlesPerCase:format.bottlesPerCase}},equipment:profiles};
   });

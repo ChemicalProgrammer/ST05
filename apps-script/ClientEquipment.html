@@ -76,23 +76,26 @@
       var unitInput=document.createElement('input'),inputUnit=document.createElement('input');unitInput.type=inputUnit.type='hidden';unitInput.className='equipment-unit';inputUnit.className='equipment-input-unit';
       unitInput.value=selectedProfile.outputUnit||equipment.processData?.flowUnits?.output||'';inputUnit.value=selectedProfile.inputUnit||equipment.processData?.flowUnits?.input||'';
       unitInput.dataset.originalValue=unitInput.value;inputUnit.dataset.originalValue=inputUnit.value;
-      var label=document.createElement('label'),flow=document.createElement('select');label.append(document.createTextNode(''));flow.className='equipment-material-flow';
+      var label=document.createElement('label'),flow=document.createElement('select'),transportOutput=document.createElement('output');
+      label.append(document.createTextNode(''));flow.className='equipment-material-flow';
+      transportOutput.className='equipment-transport-unit';transportOutput.setAttribute('aria-label','Inferred transport unit');
       function configureMaterialFlow(type,initial){
         var conveyor=type==='CONVEYOR';
         label.firstChild.nodeValue=conveyor?'Transport unit':'Material flow';
         var choices=conveyor?[['BOTTLES/BOTTLES','Bottle'],['CASES/CASES','Case']]:[['BOTTLES/BOTTLES','Bottle → Bottle'],['BOTTLES/CASES','Bottle → Case'],['CASES/CASES','Case → Case']];
         var original=inputUnit.value&&unitInput.value?inputUnit.value+'/'+unitInput.value:'';
         if(initial&&original&&!choices.some(v=>v[0]===original))choices.push([original,'Existing: '+original.replace('/',' → ')]);
-        if(!initial&&conveyor&&original&&!choices.some(v=>v[0]===original)){
-          var transport=unitInput.value==='CASES'?'CASES':'BOTTLES';
-          inputUnit.value=unitInput.value=transport;original=transport+'/'+transport;
-        }
         flow.replaceChildren();
+        if(!conveyor&&!original)choices.unshift(['','Select material flow']);
         choices.forEach(function(v){var o=document.createElement('option');o.value=v[0];o.textContent=v[1];flow.append(o);});
-        flow.value=choices.some(v=>v[0]===original)?original:'BOTTLES/BOTTLES';
+        flow.value=choices.some(v=>v[0]===original)?original:'';
+        // Conveyors display a calculated value; machines own the editable
+        // material flow. Keep the original selector for shared worksheet layout.
+        flow.hidden=conveyor;flow.disabled=conveyor;transportOutput.hidden=!conveyor;
+        transportOutput.textContent=unitInput.value==='CASES'?'Case':unitInput.value==='BOTTLES'?'Bottle':'—';
       }
       configureMaterialFlow(equipment.type,true);
-      flow.onchange=function(){var pair=flow.value.split('/');inputUnit.value=pair[0]||'';unitInput.value=pair[1]||'';unitInput.dispatchEvent(new Event('change',{bubbles:true}));};label.append(flow);equipmentField(card,'.equipment-grid').append(label,unitInput,inputUnit);
+      flow.onchange=function(){var pair=flow.value.split('/');inputUnit.value=pair[0]||'';unitInput.value=pair[1]||'';unitInput.dispatchEvent(new Event('change',{bubbles:true}));};label.append(flow,transportOutput);equipmentField(card,'.equipment-grid').append(label,unitInput,inputUnit);
       equipmentField(card, 'strong').textContent = (equipment.type || 'CUSTOM') + ' · ' + (equipment.name || equipment.id || 'Unnamed') + ' · ' + formatNumber(Number(equipment.nominalRatePerSecond || 0) * 60) + __ST_TEXT__('client.bpm');
       var typeControl=equipmentField(card, '.equipment-type'),initialType=STEquipmentRoles.machineType(equipment);
       if(!Array.from(typeControl.options).some(o=>o.value===initialType)){
@@ -102,7 +105,7 @@
       typeControl.value=initialType;
       equipmentField(card, '.equipment-name').value = equipment.name || '';
       unitInput.dataset.legacyLabel=equipment.unitOfFlow||'';
-      function updateRateUnit(){var owner=fields?._owner||card,rate=equipmentField(owner,'.equipment-rate');rate.closest('label').firstChild.nodeValue='Nominal rate ('+STFlowUnits.labels(unitInput.value).rate+')';if(unitInput.value&&!inputUnit.value)inputUnit.value=equipmentField(owner,'.equipment-type').value==='CONVEYOR'?unitInput.value:(state.activeCase.equipment[Number(owner.dataset.index)-1]?.processData?.flowUnits?.output||'BOTTLES');}
+      function updateRateUnit(){var owner=fields?._owner||card,rate=equipmentField(owner,'.equipment-rate');rate.closest('label').firstChild.nodeValue='Nominal rate ('+STFlowUnits.labels(unitInput.value).rate+')';if(unitInput.value&&!inputUnit.value&&equipmentField(owner,'.equipment-type').value==='CONVEYOR')inputUnit.value=unitInput.value;}
       unitInput.addEventListener('change',updateRateUnit);updateRateUnit();
       var rateInput=equipmentField(card,'.equipment-rate');
       var displayedRate=selectedProfile.ratePerMinute===undefined?equipment.nominalRatePerSecond:selectedProfile.ratePerMinute/60;
@@ -643,11 +646,39 @@ function numericInputValue(input) {
       };
     }
 
+    function refreshEditorTransportUnits(cards){
+      var api=window.SimulatorEngine?.resolveLineFlowUnits;
+      if(!api)return;
+      cards=cards||Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
+      if(!cards.length||cards.length!==(state.activeCase?.equipment||[]).length)return;
+      var line=cards.map(function(card){
+        var base=state.activeCase.equipment.find(item=>item.id===card.dataset.equipmentId)||{};
+        var type=equipmentField(card,'.equipment-type')?.value||base.type,input=equipmentField(card,'.equipment-input-unit')?.value??base.processData?.flowUnits?.input,output=equipmentField(card,'.equipment-unit')?.value??base.processData?.flowUnits?.output;
+        return {id:card.dataset.equipmentId,name:equipmentField(card,'.equipment-name')?.value||base.name||card.dataset.equipmentId,type,
+          processData:{flowUnits:{input,output}}};
+      });
+      var inferred=api(line),es=document.documentElement.lang==='es';
+      cards.forEach(function(card,index){
+        var model=line[index],row=inferred[index],display=equipmentField(card,'.equipment-transport-unit');
+        if(!display||model.type!=='CONVEYOR')return;
+        var unit=row.output;
+        equipmentField(card,'.equipment-input-unit').value=unit||'';
+        equipmentField(card,'.equipment-unit').value=unit||'';
+        var valid=unit==='BOTTLES'||unit==='CASES';
+        display.textContent=unit==='BOTTLES'?(es?'Botella':'Bottle'):unit==='CASES'?(es?'Caja':'Case'):
+          row.source==='CONFLICT'?(es?'Flujo incompatible':'Flow conflict'):(es?'Pendiente':'Pending');
+        display.title=row.reason||(es?'Unidad heredada del flujo de las máquinas conectadas.':'Unit inherited from connected machine flow.');
+        display.dataset.flowStatus=row.source;
+        if(row.source==='CONFLICT')display.setAttribute('aria-invalid','true');else display.removeAttribute('aria-invalid');
+        card._transportFlowIssue=row.source==='CONFLICT'?row.reason:null;
+      });
+    }
     function basicEquipmentPreview(){
       var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
       // El editor puede estar desmontado mientras se simula: usar el modelo,
       // sin interpretar la ausencia visual como una línea sin equipos.
       if(!cards.length&&state.activeCase?.equipment?.length)return cloneJson(state.activeCase.equipment);
+      refreshEditorTransportUnits(cards);
       var preview=cards.map(function(card){
         var type=equipmentField(card,'.equipment-type').value,data=parseJsonForPreview(equipmentField(card,'.equipment-process-data').value);
         var characteristics=parseJsonForPreview(equipmentField(card,'.equipment-characteristics').value),noise=parseJsonForPreview(equipmentField(card,'.equipment-noise-profile').value);
@@ -666,7 +697,9 @@ function numericInputValue(input) {
         }
         if(type!=='CONVEYOR')STEquipmentRoles.readCapacity(card._fields,data);
         if(type==='CONVEYOR')data=mergeFormatZoneData(data,readFormatZoneInputs(card));
-        var previewInput=equipmentField(card,'.equipment-input-unit').value,previewOutput=equipmentField(card,'.equipment-unit').value;if(previewInput&&previewOutput)data.flowUnits={input:type==='CONVEYOR'?previewOutput:previewInput,output:previewOutput};
+        var previewInput=equipmentField(card,'.equipment-input-unit').value,previewOutput=equipmentField(card,'.equipment-unit').value;
+        if(previewInput&&previewOutput)data.flowUnits={input:type==='CONVEYOR'?previewOutput:previewInput,output:previewOutput};
+        if(type==='CONVEYOR'&&card._transportFlowIssue)data.transportFlowIssue=card._transportFlowIssue;else delete data.transportFlowIssue;
         return {id:card.dataset.equipmentId,type:type,name:equipmentField(card,'.equipment-name').value,
           nominalRatePerSecond:readEquipmentRate(card),characteristics:characteristics,processData:data,noiseProfile:noise};
       });
@@ -697,8 +730,8 @@ function numericInputValue(input) {
           var rate=equipmentField(card,'.equipment-rate'),output=equipmentField(card,'.equipment-unit'),input=equipmentField(card,'.equipment-input-unit');
           var profile=active.equipment[model.id]||{};
           if(rate?.dataset.profileRate==='true'&&rate.value!=='')profile.ratePerMinute=Number(rate.value);
-          if(output&&input&&(output.value!==output.dataset.originalValue||input.value!==input.dataset.originalValue)){
-            if(output.value)profile.outputUnit=output.value;if(input.value)profile.inputUnit=model.type==='CONVEYOR'?output.value:input.value;
+          if(model.type!=='CONVEYOR'&&output&&input&&(output.value!==output.dataset.originalValue||input.value!==input.dataset.originalValue)){
+            if(output.value)profile.outputUnit=output.value;if(input.value)profile.inputUnit=input.value;
           }
           active.equipment[model.id]=profile;
         });
@@ -757,6 +790,7 @@ function numericInputValue(input) {
           message:'Equipment editor is incomplete. The saved line was preserved. Open Equipment to reload the full line before editing it.'});
         return false;
       }
+      refreshEditorTransportUnits(cards);
       var equipment = [];
       for (var index = 0; index < cards.length; index += 1) {
         var card = cards[index];
@@ -796,16 +830,21 @@ function numericInputValue(input) {
         var outputUnit=equipmentField(card,'.equipment-unit').value,inputUnit=equipmentField(card,'.equipment-input-unit').value;
         var baseEquipment=state.activeCase.equipment.find(function(e){return e.id===card.dataset.equipmentId;}),profileProduct=card.dataset.productProfileId?STProducts.currentFormat?.():null;
         var unitsEdited=outputUnit!==equipmentField(card,'.equipment-unit').dataset.originalValue||inputUnit!==equipmentField(card,'.equipment-input-unit').dataset.originalValue;
-        if(profileProduct&&!unitsEdited){if(baseEquipment.processData?.flowUnits)processData.flowUnits=cloneJson(baseEquipment.processData.flowUnits);else delete processData.flowUnits;}
-        else if(outputUnit&&inputUnit){processData.flowUnits={input:type==='CONVEYOR'?outputUnit:inputUnit,output:outputUnit};if(unitsEdited)STProducts.setPhysicalUnits?.(baseEquipment.id,type==='CONVEYOR'?outputUnit:inputUnit,outputUnit);}
+        if(type==='CONVEYOR'){
+          // Active-format transport is derived and must not overwrite the
+          // installation or unrelated format definitions.
+          if(baseEquipment.processData?.flowUnits)processData.flowUnits=cloneJson(baseEquipment.processData.flowUnits);else delete processData.flowUnits;
+        }else if(profileProduct&&!unitsEdited){if(baseEquipment.processData?.flowUnits)processData.flowUnits=cloneJson(baseEquipment.processData.flowUnits);else delete processData.flowUnits;}
+        else if(outputUnit&&inputUnit){processData.flowUnits={input:inputUnit,output:outputUnit};if(unitsEdited)STProducts.setPhysicalUnits?.(baseEquipment.id,inputUnit,outputUnit);}
         else delete processData.flowUnits;
+        delete processData.transportFlowIssue;
         var rate=readEquipmentRate(card),hasRateOverride=profileProduct&&equipmentField(card,'.equipment-rate').dataset.profileRate==='true';
         if(hasRateOverride)STProducts.setCurrentRate(baseEquipment.id,rate*60);
         equipment.push({
           id: card.dataset.equipmentId,
           type: type,
           name: equipmentField(card, '.equipment-name').value.trim(),
-          unitOfFlow: profileProduct&&!unitsEdited?baseEquipment.unitOfFlow:outputUnit?outputUnit.toLowerCase():equipmentField(card,'.equipment-unit').dataset.legacyLabel||undefined,
+          unitOfFlow: type==='CONVEYOR'||profileProduct&&!unitsEdited?baseEquipment.unitOfFlow:outputUnit?outputUnit.toLowerCase():equipmentField(card,'.equipment-unit').dataset.legacyLabel||undefined,
           nominalRatePerSecond: hasRateOverride?baseEquipment.nominalRatePerSecond:rate,
           initialMode: 'AUTO',
           characteristics: characteristics,
@@ -814,6 +853,16 @@ function numericInputValue(input) {
         });
       }
       if(equipment.filter(function(e){return e.characteristics.isPacemaker;}).length>1){showError({message:__ST_TEXT__('equipment.one_pacemaker')});return false;}
+      // Normalize the installation's redundant belt fields only when
+      // machine flow establishes the unit. Format-specific flow is resolved
+      // independently at runtime, without copying one format to another.
+      var lineFlow=window.SimulatorEngine?.resolveLineFlowUnits?.(equipment)||[];
+      equipment.forEach(function(item,index){
+        var row=lineFlow[index];
+        if(item.type==='CONVEYOR'&&row?.source==='INFERRED'){
+          item.processData.flowUnits={input:row.input,output:row.output};item.unitOfFlow=row.output.toLowerCase();
+        }
+      });
       state.activeCase.equipment = equipment;
       STProducts.reconcile();
       renderRawJson();
@@ -835,15 +884,16 @@ function parseJsonObject(rawValue, label, step) {
 
 
 function createBlankEquipment() {
+      var type=window.STBasicMode?.newType()||'CUSTOM';
       return {
         id: 'equipment-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
-        type: window.STBasicMode?.newType() || 'CUSTOM',
+        type: type,
         name: __ST_TEXT__('simulation.new_equipment'),
         nominalRatePerSecond: 1,
         initialMode: 'AUTO',
         characteristics: {},
         noiseProfile: {},
-        processData: {}
+        processData: type==='CONVEYOR'?{}:{flowUnits:{input:'BOTTLES',output:'BOTTLES'}}
       };
     }
 

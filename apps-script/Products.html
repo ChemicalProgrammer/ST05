@@ -2,11 +2,11 @@
 window.STProducts=(function(){
   var state,hooks,currentTab='products',selectedFormatId,selection={products:null,formats:null};
   function copy(value){return JSON.parse(JSON.stringify(value));}
-  function activeEquipment(){const list=hooks?.simulation?.()?.equipment;return list?.length?list:(state?.activeCase?.equipment||[]);}
+  function activeEquipment(){const draft=state?.activeCase?.equipment;return Array.isArray(draft)?draft:(hooks?.simulation?.()?.equipment||[]);}
   function data(){return SimulatorEngine.normalizeFormatCatalog(state?.activeCase?.metadata||{},activeEquipment());}
   function mode(){const setting=state?.activeCase?.metadata?.productFormatMode;if(setting==='single'||setting==='multiple')return setting;
     const c=data();return c.products.length>1||c.formats.length>1?'multiple':'single';}
-  function catalog(){return SimulatorEngine.resolvePackingFormats(data());}
+  function catalog(){return SimulatorEngine.resolvePackingFormats(data(),activeEquipment());}
   function initialId(sim){return sim?.dynamicConfig?.initialFormatId??sim?.dynamicConfig?.initialProductId??'';}
   // Single usa exclusivamente el formato visible y los ajustes instalados:
   // los overrides guardados para Multiple nunca se pierden ni se aplican ocultos.
@@ -30,12 +30,27 @@ window.STProducts=(function(){
   }
   function packSize(format){return format?.bottlesPerCase??format?.presentations?.case?.bottlesPerCase;}
   function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);}
-  function unit(e,side,format){side=side||'output';var base=e.processData?.flowUnits?.[side]||'BOTTLES';if(format)return format.equipment?.[e.id]?.[side+'Unit']||base;var metadata=state.activeCase.metadata||{},formats=metadata.formatCatalog?.formats||metadata.products||[],values=formats.map(f=>f.equipment?.[e.id]?.[side+'Unit']||base);return values.length&&values.every(value=>value===values[0])?values[0]:base;}
+  function unit(e,side,format){
+    side=side||'output';var base=e.processData?.flowUnits?.[side]||'BOTTLES';
+    var metadata=state.activeCase.metadata||{},formats=metadata.formatCatalog?.formats||metadata.products||[];
+    if(e.type==='CONVEYOR'&&SimulatorEngine.resolveLineFlowUnits){
+      var all=activeEquipment(),index=all.findIndex(item=>item.id===e.id);
+      var read=f=>SimulatorEngine.resolveLineFlowUnits(all,f||{})[index];
+      if(index>=0){
+        if(format)return read(format)?.[side]||'—';
+        var values=formats.map(f=>read(f)?.[side]);
+        return values.length&&values[0]&&values.every(value=>value===values[0])?values[0]:read(null)?.[side]||'—';
+      }
+    }
+    if(format)return format.equipment?.[e.id]?.[side+'Unit']||base;
+    var values=formats.map(f=>f.equipment?.[e.id]?.[side+'Unit']||base);
+    return values.length&&values.every(value=>value===values[0])?values[0]:base;
+  }
   function alignCatalog(c){
     var all=activeEquipment(),keep=new Set(all.map(e=>e.id)),activeId=hooks.simulation()?.id||state.activeSimulationId;
     (state.activeCase.simulations||[]).filter(s=>s.id!==activeId).forEach(s=>(s.equipment||[]).forEach(e=>keep.add(e.id)));
     [...c.products,...c.formats].forEach(record=>{record.equipment=record.equipment||{};Object.keys(record.equipment).forEach(key=>{if(!keep.has(key))delete record.equipment[key];});});
-    c.formats.forEach(function(f){f.equipment=f.equipment||{};all.forEach(function(e,i){var input=unit(e,'input'),output=unit(e,'output'),p=f.equipment[e.id];if(!p)f.equipment[e.id]={inputUnit:input,outputUnit:output,enabled:false};});Object.keys(f.equipment).forEach(key=>{if(!keep.has(key))delete f.equipment[key];});});
+    c.formats.forEach(function(f){f.equipment=f.equipment||{};all.forEach(function(e,i){var input=unit(e,'input'),output=unit(e,'output'),p=f.equipment[e.id];if(!p)f.equipment[e.id]=e.type==='CONVEYOR'?{enabled:false}:{inputUnit:input,outputUnit:output,enabled:false};});Object.keys(f.equipment).forEach(key=>{if(!keep.has(key))delete f.equipment[key];});});
     all.forEach(function(e){[...c.products,...c.formats].forEach(function(record){if(!record.equipment[e.id])record.equipment[e.id]={enabled:false};});});return c;
   }
   function reconcile(){if(!state?.activeCase)return false;var before=JSON.stringify(state.activeCase.metadata||{}),c=alignCatalog(data());if(!c.formats.length&&!c.products.length)return false;state.activeCase.metadata={...state.activeCase.metadata,formatCatalog:c};delete state.activeCase.metadata.products;return before!==JSON.stringify(state.activeCase.metadata);}
@@ -252,7 +267,7 @@ window.STProducts=(function(){
       note(machineInputs,kind==='formats'?'For case-processing machines, select Bottle → Case or Case → Case in Equipment. Unchecked rows inherit installed defaults.':'Unchecked rows inherit installed defaults. MTBF / MTTR remains in Equipment.');
       table(machineInputs,'Machines',['Equipment','Use settings','Output unit','Rate (output/min)','Startup (s)','Ramp up (s)',''],machines,function(row,e){name(row,e);applies(row,e);textCell(row,usage(e));var p=profile(e);inputCell(row,e,p,'ratePerMinute','Rate ('+STFlowUnits.labels(unit(e,'output',kind==='formats'?record:null)).rate+')',{min:'0.001'});inputCell(row,e,p,'startupSeconds','Startup (s)');inputCell(row,e,p,'rampSeconds','Ramp up (s)');defaults(row,e);disable(row,e);});
       var conveyorInputs=section('Conveyors').content;
-      note(conveyorInputs,kind==='formats'?'Select Case in Transport unit for case conveyors. Unchecked rows inherit installed defaults.':'Unchecked rows inherit installed defaults. Geometry and sensors remain in Conveyors.');
+      note(conveyorInputs,kind==='formats'?'Conveyor transport units follow the connected machines’ Material flow. Unchecked rows inherit installed defaults.':'Unchecked rows inherit installed defaults. Geometry and sensors remain in Conveyors.');
       table(conveyorInputs,'Conveyors',['Conveyor','Use settings','Transported unit','Moving gap (mm)','Accumulated gap (mm)','Discharge gap (mm)','Infeed gap (mm)','Manual speed (m/min)',''],belts,function(row,e){name(row,e);applies(row,e);textCell(row,usage(e));var p=profile(e);[['movingGapMm','Moving gap (mm)'],['accumulatedGapMm','Accumulated gap (mm)'],['dischargeGapMm','Discharge gap (mm)'],['infeedGapMm','Infeed gap (mm)'],['speedMmPerSecond','Manual speed (m/min)',{min:'0.001',scale:.06}]].forEach(spec=>inputCell(row,e,p,spec[0],spec[1],spec[2]));defaults(row,e);disable(row,e);});
     }
 

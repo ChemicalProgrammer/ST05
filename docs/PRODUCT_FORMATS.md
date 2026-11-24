@@ -17,7 +17,7 @@ Fields appear immediately below the toolbar in the shared compact grid. Equipmen
 
 ## Configure the line
 
-1. Set physical Material flow on machines: Bottle → Bottle, Bottle → Case, or Case → Case. Set Transport unit on conveyors: Bottle or Case. A Case Packer must use Bottle → Case for conversion; downstream conveyors and the Palletizer use Case / Case → Case.
+1. Set physical Material flow on machines: Bottle → Bottle, Bottle → Case, or Case → Case. Conveyor transport is inferred from the preceding machine's output and following machine's input; the editor displays it as a calculated, read-only value. A Case Packer must use Bottle → Case for conversion; downstream conveyors inherit Case from the machines, and the Palletizer uses Case → Case.
 2. Add a Product, its bottle dimensions and optional behavior settings.
 3. Add a Format, select the Product, enter bottles per case, and enter case dimensions. Confirm the suggested count of 12.
 4. Under the format's Equipment behavior, set the Case Packer's output rate and any case-machine/conveyor overrides. Rates use output units per minute: 300 bottles/min is equivalent to 25 cases/min for a 12-bottle format. A converter configured with bottle flow still appears with a prompt to configure Bottle → Case; its case fields are disabled until the physical flow is correct.
@@ -88,3 +88,7 @@ admite dos modos de edición. La elección se conserva como
 
 Los nombres de equipos y productos definidos por los usuarios no se traducen. Los
 rótulos de los campos, tooltips y tablas sí usan la preferencia de idioma.
+
+### Automatic conveyor transport
+
+For formatted runs, machine Material flow is the authoritative physical contract. Each conveyor inherits the shared unit at its connected machine boundaries. A stale bottle/case value on a conveyor cannot override that flow. Incompatible upstream and downstream machine units stop validation with the names of the conflicting machines. An unconfigured adjacent machine still requires a Material flow selection; missing data is not guessed. Consecutive conveyors share the same inferred unit, subject to the engine's topology constraints. Transport is calculated separately for each active format and does not change stored production rates, package dimensions, or geometry inputs. The legacy base-settings path remains supported.

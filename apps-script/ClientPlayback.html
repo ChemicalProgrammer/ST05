@@ -1006,17 +1006,23 @@
       var headerKpis=document.createElement('div');headerKpis.className='numeric-equipment-header-kpis';
       var oeeLabel=document.createElement('span');oeeLabel.className='numeric-equipment-header-oee';
       oeeLabel.append('OEE ',card.querySelector('.live-oee'));
-      headerKpis.append(oeeLabel);visualHeader.append(headerDetails,headerKpis);
+      headerKpis.append(oeeLabel);
+      // A shared footer keeps OEE and equipment actions on the same line
+      // whenever the identity panel has enough room; it wraps as needed.
+      var headerFooter=document.createElement('div');
+      headerFooter.className='numeric-equipment-header-footer';
+      headerFooter.append(headerKpis);
+      visualHeader.append(headerDetails,headerFooter);
       var layout=document.createElement('div');layout.className='numeric-equipment-layout';
       var chartAside=document.createElement('aside');chartAside.className='numeric-equipment-chart-side';
       var chartHeading=document.createElement('strong');chartHeading.className='numeric-equipment-chart-title';
       chartHeading.textContent='Speed trend';chartAside.append(chartHeading);
       chartAside.append(card.querySelector('.live-speed-cell'));
-      // Los controles comparten el recuadro de identidad, en una fila propia
-      // a todo ancho. El estado nunca comparte su columna con los botones.
+      // OEE y acciones comparten la última fila del encabezado.
+      // La fila se adapta sola cuando el panel de identidad se estrecha.
       var controlDock=card.querySelector('.live-equipment-controls');
       controlDock.classList.add('numeric-equipment-control-dock');
-      visualHeader.append(controlDock);
+      headerFooter.append(controlDock);
       // Los contadores originales siguen en la fila heredada oculta; States
       // es su origen visible.
       card.querySelector('.live-equipment-card__row').append(card.querySelector('.live-equipment-stats'));

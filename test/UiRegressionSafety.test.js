@@ -158,8 +158,9 @@ test('Equipment-performance status badge is right aligned for machines and conve
   assert.match(css,/\.numeric-equipment-header > \.live-state \{[\s\S]*?grid-column:2;grid-row:1;justify-self:end/);
   assert.match(css,/\.numeric-equipment-header-details \{grid-column:1;grid-row:1/);
   assert.match(playback,/overviewSide\.append\(visualHeader,chartAside\)/);
-  assert.match(playback,/visualHeader\.append\(controlDock\)/);
-  assert.match(css,/\.numeric-equipment-header > \.numeric-equipment-control-dock \{[\s\S]*?flex-flow:row wrap!important/);
+  assert.match(playback,/headerFooter\.append\(controlDock\)/);
+  assert.match(playback,/headerFooter\.append\(headerKpis\)/);
+  assert.match(css,/\.numeric-equipment-header-footer > \.numeric-equipment-control-dock \{[\s\S]*?flex-flow:row nowrap!important/);
   assert.match(css,/#results-body > #results-history-group \{[\s\S]*?margin-block-start:var\(--subsection-gap\)!important/);
 });
 
@@ -169,4 +170,14 @@ test('Elegant combobox highlights selected text and checkmark in white on the so
   assert.match(css,/option:checked:not\(:disabled\)::checkmark\s*\{\s*color:#fff!important;/);
   assert.match(css,/option:not\(:disabled\):not\(:checked\):is\(:hover,:focus\)/,
     'Unselected hover items retain their separate style');
+});
+
+test('manual equipment controls share OEE footer without reserving a third grid row',()=>{
+  const css=read('apps-script/UiStandards.html');
+  const playback=read('apps-script/ClientPlayback.html');
+  assert.match(css,/\.numeric-equipment-header-footer \{[\s\S]*?grid-column:1 \/ -1;grid-row:2;[\s\S]*?flex-wrap:wrap;/);
+  assert.match(css,/\.numeric-equipment-header \{[\s\S]*?grid-template-rows:auto auto;/);
+  assert.match(css,/\.numeric-equipment-header-footer > \.numeric-equipment-control-dock \{[\s\S]*?flex-flow:row nowrap!important;/);
+  assert.match(playback,/headerFooter\.append\(headerKpis\)/);
+  assert.match(playback,/headerFooter\.append\(controlDock\)/);
 });

@@ -107,9 +107,11 @@ test('individual controls retain the clicked action including reset and emergenc
     });
     const card=w.createLiveEquipmentCard('machine');
     const dock=card.querySelector('.numeric-equipment-control-dock');
-    assert.equal(dock.parentElement,card.querySelector('.numeric-equipment-header'));
-    assert.ok(dock.parentElement.contains(card.querySelector('.live-state')));
-    assert.ok(dock.parentElement.contains(card.querySelector('.live-oee')));
+    const footer=card.querySelector('.numeric-equipment-header-footer');
+    assert.equal(dock.parentElement,footer);
+    assert.equal(footer.parentElement,card.querySelector('.numeric-equipment-header'));
+    assert.ok(footer.contains(card.querySelector('.live-oee')));
+    assert.ok(footer.parentElement.contains(card.querySelector('.live-state')));
     w.document.body.append(card);
     const calls=[];w.applyLiveScenarioControl=(id,action)=>calls.push([id,action]);
     const buttons=[...dock.querySelectorAll('button[data-scenario-action]')];
@@ -128,11 +130,17 @@ test('individual controls retain the clicked action including reset and emergenc
     }
     card.querySelector('.numeric-card-name-toggle').click();
     assert.equal(card.dataset.cardCollapsed,'true');
-    assert.equal(dock.parentElement,card.querySelector('.numeric-equipment-header'));
+    assert.equal(dock.parentElement,footer);
     buttons.at(-1).disabled=true;
     assert.ok(selectedRules.some(rule=>buttons.at(-1).matches(rule.selector)),'Disabled active controls retain their selected style');
     buttons[0].disabled=true;buttons[0].click();
     assert.equal(calls.length,5);
     assert.equal(w.state.run.equipmentControlActions.machine,'RESET_AND_RUN');
   }finally{h.close();}
+});
+
+test('OEE and manual controls remain peers in the compact flex header',()=>{
+  const css=source('UiStandards');
+  assert.match(css,/\.numeric-equipment-header-footer > \.numeric-equipment-header-kpis \{[\s\S]*?width:auto!important;/);
+  assert.match(css,/\.numeric-equipment-header-footer > \.numeric-equipment-control-dock \{[\s\S]*?flex-flow:row nowrap!important;/);
 });

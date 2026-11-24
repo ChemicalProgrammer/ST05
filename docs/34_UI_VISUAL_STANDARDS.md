@@ -539,3 +539,9 @@ un navegador real.
 - **General (Caso):** dos columnas uniformes. Primera fila: nombre del caso y exportación JSON. Segunda fila: configuración de productos/formatos y vista de equipos/transportadores. En anchuras menores de 600 px ambas filas se apilan.
 - **Registro y gráficas:** el checkbox «Mostrar conteo por turnos» pertenece a la misma cuadrícula que el intervalo, los FPS y la ventana de gráfica; ocupa la segunda columna de la segunda fila. Se conserva el mismo control e identificador `run-track-shifts`.
 - **Importación de equipos:** se conserva una fila para el destino y tipo de máquina. No muestres la nota repetida «Equipo nuevo — agregado al final de la línea» cuando se elige agregar, ni al cambiar temporalmente ese destino; los diagnósticos y advertencias accionables sí permanecen.
+
+## Tarjetas numéricas de equipos: fila compacta de acciones
+
+El encabezado de identidad numérica tiene dos zonas: nombre/estado arriba, y una fila flexible abajo que contiene **OEE a la izquierda** y los controles manuales (Play, Pausa, Stop, Emergencia, Reset) **a la derecha**. Esta fila reutiliza `.numeric-equipment-header-footer` y hace `flex-wrap` automáticamente cuando el panel no es suficientemente ancho; evita una tercera fila reservada exclusivamente para botones. Se conserva la ubicación de los controles dentro del recuadro, el estado seleccionado y el comportamiento de Basic/Advance, expandido/colapsado y eventos deshabilitados.
+
+**Propuesta pendiente de aprobación:** un degradado muy sutil en la cabecera reutilizable `STSubsection`, desde un matiz claro de `--secondary` arriba hasta `--surface` abajo. No se aplica globalmente hasta evaluar el contraste en ambos temas.

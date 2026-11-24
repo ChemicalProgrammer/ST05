@@ -899,13 +899,13 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
 #run-panel > .section-heading { display:none!important; }
 
 
-/* The identity frame contains name, status, OEE and its own action row.
-   The full-width dock cannot inherit the changing status column or the
-   old Basic grid placement, including when the card is collapsed. */
+/* Two rows only: equipment name/status, then OEE with action buttons.
+   The flexible footer wraps by available identity width, including when
+   the card is collapsed; the state remains separate on the top right. */
 .live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header {
   display:grid!important;
   grid-template-columns:minmax(0,1fr) max-content!important;
-  grid-template-rows:auto auto auto;
+  grid-template-rows:auto auto;
   align-items:start;column-gap:var(--space-2);
 }
 .live-equipment-card .numeric-equipment-header-details {grid-column:1;grid-row:1;min-width:0;}
@@ -913,14 +913,21 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
   grid-column:2;grid-row:1;justify-self:end;align-self:start;
   margin:0;max-width:100%;
 }
-.live-equipment-card .numeric-equipment-header-kpis {grid-column:1;grid-row:2;align-self:end;}
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header-footer {
+  grid-column:1 / -1;grid-row:2;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:var(--space-2);flex-wrap:wrap;width:100%;min-width:0;
+}
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header-footer > .numeric-equipment-header-kpis {
+  width:auto!important;min-width:0;flex:0 1 auto;align-self:center;
+}
 .live-equipment-card .numeric-equipment-header-kpis[hidden] {display:none!important;}
-.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header > .numeric-equipment-control-dock {
-  grid-column:1 / -1!important;grid-row:3!important;
-  display:flex!important;flex-flow:row wrap!important;
+.live-equipment-card .numeric-equipment-overview-side .numeric-equipment-header-footer > .numeric-equipment-control-dock {
+  grid-column:auto!important;grid-row:auto!important;
+  display:flex!important;flex-flow:row nowrap!important;
   align-items:center;justify-content:flex-end!important;
-  align-self:stretch;gap:var(--space-1)!important;
-  width:100%!important;min-width:0;max-width:100%;height:auto;box-sizing:border-box;
+  align-self:center;gap:var(--space-1)!important;flex:0 0 auto;
+  width:max-content!important;min-width:0;max-width:100%;height:auto;box-sizing:border-box;
   margin:0!important;padding:0!important;background:transparent;border:0!important;
 }
 .live-equipment-card .numeric-equipment-control-dock > button {
@@ -944,7 +951,7 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
   color:#fff!important;stroke:#fff!important;opacity:1!important;
 }
 html[data-events-enabled=false] .live-equipment-card .numeric-equipment-overview-side
- .numeric-equipment-header > .numeric-equipment-control-dock {display:none!important;}
+ .numeric-equipment-header-footer > .numeric-equipment-control-dock {display:none!important;}
 .live-equipment-card .numeric-equipment-chart-side {gap:var(--space-1);}
 .live-equipment-card .numeric-equipment-chart-side .equipment-speed-sparkline {margin-bottom:0;}
 /* States is the sole visible source of the legacy counters. */

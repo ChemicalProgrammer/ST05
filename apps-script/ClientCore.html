@@ -243,8 +243,7 @@
         syncRunControls();
       });
       document.getElementById('play-simulation').addEventListener('click',function(){
-        markNumericalPlaybackAction('play');
-        if(!state.run.result){runSimulation();return;}
+        if(!state.run.result||numericalRestartRequiresCalculation()){runSimulation();return;}
         startPlayback();
       });
       document.getElementById('pause-simulation').addEventListener('click', pausePlayback);

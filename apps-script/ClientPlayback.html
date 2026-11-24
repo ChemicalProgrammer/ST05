@@ -215,6 +215,12 @@
 
     function startPlayback() {
       if (!state.run.result || state.run.playing) return;
+      // Pause resumes the exact cursor; Stop/Completed start a new playback
+      // from zero, using the existing valid archive without recalculating it.
+      if(state.run.playbackAction==='stop'||(playbackVisualSample()?.virtualSecond??0)>=state.run.result.durationSeconds-1e-8){
+        stopPlaybackTimer();state.run.sampleIndex=0;state.run._resumeVirtualSecond=0;state.run._displayedVirtualSecond=0;
+        playbackRoundPositions()[state.run.roundIndex]=0;
+      }
       markNumericalPlaybackAction('play');
       state.run.active=true;
       state.run.playing = true;
@@ -239,41 +245,67 @@
       if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
     }
 
+    // Stop terminates computation as well as playback. Keep the exact last
+    // physical frame and never certify an interrupted batch as complete.
+    function terminateNumericalExecution(){
+      var session=roundSession,frame=playbackVisualSample();
+      var pending=Boolean(session&&(session.pending||session.firstUpdating||session.dirty));
+      if(session?.firstUpdating)session.resumeAfterEdit=false;
+      stopPlaybackTimer();
+      if(pending&&state.run.result){
+        if(session.first&&!state.run.result.provisional){
+          state.run.result=session.first;state.run.representative=session.first;state.run.roundIndex=0;
+          delete state.run.result.batch;
+        }
+        state.run.result.replicationStatus={state:'CANCELLED',rounds:session.run.rounds,baseSeed:session.run.seed};
+      }
+      cancelRoundSession();
+      var result=state.run.result;
+      if(frame&&result?.samples?.length){
+        var index=result.samples.findIndex(s=>Math.abs(s.virtualSecond-frame.virtualSecond)<1e-8);
+        if(index<0){result.samples=result.samples.concat([cloneJson(frame)]).sort((a,b)=>a.virtualSecond-b.virtualSecond);index=result.samples.findIndex(s=>s.virtualSecond===frame.virtualSecond);}
+        state.run.sampleIndex=index;state.run._displayedVirtualSecond=frame.virtualSecond;state.run._resumeVirtualSecond=frame.virtualSecond;
+      }
+      state.run.active=false;
+      if(pending&&result&&!result.provisional){
+        var tab=activePersistentSimulation();
+        if(tab){tab.dynamicConfig=cloneJson(session.run);tab.run=cloneJson(session.run);tab.results=createStoredSimulationResult(result,session.run);}
+      }
+      if(pending)syncPlaybackRounds();
+      syncRunControls();
+      return pending;
+    }
+
     function stopSimulationPlayback() {
       markNumericalPlaybackAction('stop');
-      // Stop the visualization without cancelling or modifying simulation results.
-      if(roundSession?.firstUpdating)roundSession.resumeAfterEdit=false;
-      stopPlaybackTimer();
-      state.run.sampleIndex=0;
-      state.run._displayedVirtualSecond=0;
-      state.run._resumeVirtualSecond=0;
+      terminateNumericalExecution();
       renderPlaybackFrame();
       setPlaybackStatus('Stopped');
-      if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
+      if(state.run.result&&!state.run.result.provisional){captureSimulationView();autosave.change();}
+      renderSimulationAnalysis();
     }
 
     function resetPlayback() {
       markNumericalPlaybackAction('reset');
-      stopPlaybackTimer();
-      var session=roundSession;
-      if(state.run.result?.provisional){
-        state.run.result=null;state.run.representative=null;
-        toggle('simulation-results',false);
-      }else if(session&&(session.pending||session.firstUpdating||session.dirty)&&session.first){
-        delete session.first.batch;
-        persistRoundResult(session,session.first,'CANCELLED');
-      }
-      cancelRoundSession();
+      terminateNumericalExecution();
+      // A partial first round has no valid replay archive. Reset clears it;
+      // a completed archive (including a completed first round of a cancelled
+      // batch) is retained, but only COMPLETE results can support CAPEX.
+      if(state.run.result?.provisional)invalidateActiveResult();
       state.run.roundIndex=0;
       if(state.run.representative)state.run.result=state.run.representative;
-      state.run.sampleIndex = 0;
+      state.run.sampleIndex=0;
       state.run._displayedVirtualSecond=0;
       state.run._resumeVirtualSecond=0;
-      syncPlaybackRounds();
+      state.run.liveTelemetry=[];
+      state.run.equipmentControlActions={};
+      state.run.playbackPositions={result:state.run.representative,times:{0:0}};
+      markNumericalPlaybackAction('reset');
+      syncPlaybackRounds();syncRunControls();
       renderPlaybackFrame();
-      setPlaybackStatus(__ST_TEXT__('client.reset'));
-      captureSimulationView();
-      autosave.change();
+      setPlaybackStatus('Ready');
+      if(activePersistentSimulation()?.results){captureSimulationView();autosave.change();}
+      renderSimulationAnalysis();
     }
 
     function schedulePlaybackStep() {
@@ -626,7 +658,7 @@
       // Fast and Summary open on their terminal sample: these are completed
       // calculations, not paused playbacks. Provisional Live chunks are not final.
       var finished=!state.run.result.provisional&&Number.isFinite(duration)&&sample.virtualSecond>=duration-1e-8;
-      setPlaybackStatus(state.run.playing?'Playing':(finished?'Completed':(sample.virtualSecond>0?'Paused':'Ready')));
+      setPlaybackStatus(state.run.playing?'Playing':state.run.playbackAction==='stop'?'Stopped':state.run.playbackAction==='reset'?'Ready':state.run.playbackAction==='pause'?'Paused':(finished?'Completed':(sample.virtualSecond>0?'Paused':'Ready')));
     }
 
     // The Equipment Performance heading is independent of recorded replay.

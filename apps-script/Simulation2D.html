@@ -1733,7 +1733,7 @@ window.STSimulation2D=(function(){
     const output=line.at(-1);
     el('output').textContent=num((output?.produced??0)*(output?.bottlesPerUnit??1));
     el('inventory').textContent=num(line.reduce((sum,item)=>sum+(item.items?.length||0),0));
-    const running=runState==='Running'?line.filter(item=>item.kind==='machine'&&['Running','Discharging','Ramp up','Ramp down'].includes(item.state)).length:0;
+    const running=line.filter(item=>item.kind==='machine'&&['Running','Discharging','Ramp up','Ramp down'].includes(item.state)).length;
     el('running').textContent=num(running)+'/'+num(definitions.filter(item=>item.kind==='machine').length);
     el('backup').textContent=num(line.filter(item=>item.backupBlocked).length);
   }
@@ -1748,9 +1748,9 @@ window.STSimulation2D=(function(){
     el('play').disabled=!!validation||running||numericalBusy;
     el('pause').disabled=runState!=='Running';
     el('stop').disabled=runState!=='Running'&&runState!=='Paused';
-    el('reset').disabled=!!validation||running||numericalBusy;
-    el('play').title=validation||'Start';
-    el('reset').title=validation||'Reset';
+    el('reset').disabled=!!validation||numericalBusy;
+    el('play').title=validation||localize2D('Start or resume');
+    el('reset').title=validation||localize2D('Reset to the initial state');
     // Only playback speed, dimensions, viewports and appearance/view options
     // remain editable while the 2D simulation is running.
     el('limit').disabled=running;
@@ -1795,7 +1795,7 @@ window.STSimulation2D=(function(){
     cancelFrame();runState='Paused';syncControls();draw();checkpoint();
   }
   function reset(){
-    cancelFrame();lag=0;lastMetrics=-Infinity;shiftOutput=[];validation=validate();
+    cancelFrame();lag=0;lastMetrics=-Infinity;shiftOutput=[];lastMachineActions.clear();palletAnimation=null;palletFlow=null;validation=validate();
     model=validation?null:STSimulation2DEngine.create(definitions,defaultRun?representative.seed:seed,undefined,schedule);
     configureModel();
     runState='Ready';syncControls();

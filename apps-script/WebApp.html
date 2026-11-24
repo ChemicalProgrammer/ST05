@@ -199,7 +199,7 @@
             <div class="fold-tools button-row" role="group" aria-label="Simulation controls">
               <button id="simulation2d-play" type="button" class="secondary icon-button" data-icon="play" aria-label="Start" title="Start"></button>
               <button id="simulation2d-pause" type="button" class="secondary icon-button" data-icon="pause" aria-label="Pause" title="Pause"></button>
-              <button id="simulation2d-stop" type="button" class="secondary icon-button" data-icon="stop" aria-label="Stop" title="Stop"></button>
+              <button id="simulation2d-stop" type="button" class="secondary icon-button" data-icon="stop" aria-label="Stop" title="Stop and retain the current results"></button>
               <button id="simulation2d-reset" type="button" class="secondary icon-button" data-icon="refresh" aria-label="Reset" title="Reset"></button>
               <select id="simulation2d-speed" aria-label="Simulation speed" title="Simulation speed"><?!= include_('PlaybackSpeedOptions'); ?></select>
               <select id="simulation2d-viewports" aria-label="Number of viewports" title="Number of viewports"><option value="1">1 view</option><option value="2">2 views</option><option value="3">3 views</option><option value="4">4 views</option></select>
@@ -288,8 +288,8 @@
             <div id="playback-round-control" class="hidden"><select id="playback-round" aria-label="Playback round"></select></div>
             <button id="play-simulation" class="secondary icon-button" type="button" data-icon="play" aria-label="<?= __ST_TEXT__('view.play') ?>" title="<?= __ST_TEXT__('view.play') ?>"></button>
             <button id="pause-simulation" class="secondary icon-button" type="button" data-icon="pause" aria-label="<?= __ST_TEXT__('client.pause') ?>" title="<?= __ST_TEXT__('client.pause') ?>"></button>
-            <button id="stop-simulation" class="secondary icon-button" type="button" data-icon="stop" aria-label="Stop playback" title="Stop playback and return to the beginning"></button>
-            <button id="reset-playback" class="secondary icon-button" type="button" data-icon="refresh" aria-label="<?= __ST_TEXT__('client.reset') ?>" title="<?= __ST_TEXT__('client.reset') ?>"></button>
+            <button id="stop-simulation" class="secondary icon-button" type="button" data-icon="stop" aria-label="Stop" title="Stop and retain the current results"></button>
+            <button id="reset-playback" class="secondary icon-button" type="button" data-icon="refresh" aria-label="<?= __ST_TEXT__('client.reset') ?>" title="Reset to the initial state"></button>
             <details class="export-menu">
               <summary class="secondary icon-button" data-icon="upload" aria-label="Export charts" title="Export charts for the selected round"></summary>
               <div>

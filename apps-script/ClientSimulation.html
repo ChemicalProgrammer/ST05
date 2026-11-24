@@ -352,6 +352,10 @@
       ['run-shift-hours'].forEach(function(id){document.getElementById(id).closest('label').classList.toggle('hidden',!shifts);});
       syncRunControls();
     }
+    function numericalRestartRequiresCalculation(){
+      var status=state.run.result?.replicationStatus?.state;
+      return Boolean(state.run.result&&(status==='CANCELLED'||state.run.result.provisional&&!roundSession?.pending));
+    }
     function runControlsLocked(){return Boolean(state.run.active||state.run.playing||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty);}
     var last2DLockState=null;
     function syncRunControls(){
@@ -370,11 +374,15 @@
       document.querySelectorAll('[data-control]').forEach(function(button){button.disabled=document.getElementById(button.dataset.control).disabled;});
       var playButton=document.getElementById('play-simulation');
       var hasResult=Boolean(state.run.result);
-      playButton.disabled=twoDRunning||(hasResult
-        ? state.run.playing||state.run.result?.detailCoverage?.recordingMode==='SUMMARY'
-        : locked||!isRunReady());
-      playButton.setAttribute('aria-label',hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation'));
-      playButton.title=hasResult?__ST_TEXT__('view.play'):__ST_TEXT__('view.run_simulation');
+      var needsCalculation=!hasResult||numericalRestartRequiresCalculation();
+      playButton.disabled=twoDRunning||(needsCalculation
+        ?locked||!isRunReady()
+        :state.run.playing||state.run.result?.detailCoverage?.recordingMode==='SUMMARY');
+      playButton.setAttribute('aria-label',needsCalculation?__ST_TEXT__('view.run_simulation'):__ST_TEXT__('view.play'));
+      playButton.title=needsCalculation?__ST_TEXT__('view.run_simulation'):__ST_TEXT__('view.play');
+      document.getElementById('pause-simulation').disabled=!state.run.playing;
+      document.getElementById('stop-simulation').disabled=!(state.run.playing||state.run.active||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty);
+      document.getElementById('reset-playback').disabled=twoDRunning||(!hasResult&&!numericalLocked);
       markNumericalPlaybackAction(state.run.playbackAction);
       document.querySelectorAll('#products-workspace input,#products-workspace select,#products-workspace button,#planned-line-events input,#planned-line-events select,#planned-line-events button,#add-product-changeover').forEach(function(control){control.disabled=locked||control.dataset.formatDisabled==='true';});
       STRunOptions.sync(locked);syncEventSelection();

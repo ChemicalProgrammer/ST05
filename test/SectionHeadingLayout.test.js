@@ -224,6 +224,28 @@ test('canonical Subsection headers use the same subtle secondary gradient in eve
   }
 });
 
+test('gradient touches every subsection card edge while inner title/tool insets remain unchanged',()=>{
+  assert.equal(value(root,'--subsection-header-inset'),'var(--subsection-padding)');
+  const headers=[...document.querySelectorAll('.st-subsection > .st-subsection-header')];
+  assert(headers.length>=20);
+  for(const width of [360,760,1440])for(const header of headers){
+    const card=header.closest('.st-subsection');
+    assert(card,'Canonical subsection header must live inside its own card');
+    assert.equal(value(header,'margin',width),
+      'calc(-1 * var(--subsection-header-inset)) calc(-1 * var(--subsection-header-inset)) 0',
+      (card.id||card.className)+' / '+width);
+    assert.equal(value(header,'padding',width),
+      'var(--subsection-header-inset) var(--subsection-header-inset) var(--space-3)');
+    assert.equal(value(header,'background-image',width),'var(--subsection-header-gradient)');
+    assert.equal(value(header,'box-sizing',width),'border-box');
+    assert.equal(value(header,'border-radius',width),
+      'calc(var(--radius-md) - var(--border-width)) calc(var(--radius-md) - var(--border-width)) 0 0');
+  }
+  const sheetImport=fs.readFileSync('apps-script/SheetImportStyles.html','utf8');
+  assert.match(sheetImport,/#sheet-import-dialog \.sheet-import-section\s*\{[^}]*--subsection-header-inset:var\(--space-3\)/,
+    'Sheet import subsections use their smaller 12px inset, not 16px');
+});
+
 test('canonical grids center wrapped tools beside the entire title and description column',()=>{
   for(const header of document.querySelectorAll('.st-subsection-header')){
     const copy=header.querySelector(':scope > .subsection-heading-copy');

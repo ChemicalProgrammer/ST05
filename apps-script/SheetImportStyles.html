@@ -95,6 +95,8 @@
 /* Four shared subsections in the Sheet import dialog. Keep their headers,
    margins and text spacing aligned with the rest of the application. */
 #sheet-import-dialog .sheet-import-section {
+  /* This dialog uses a 12px card inset instead of the shared 16px one. */
+  --subsection-header-inset:var(--space-3);
   margin:0;min-width:0;padding:var(--space-3);
   border:var(--border-width) solid var(--line);border-radius:var(--radius-md);
   background:var(--surface-soft);overflow:visible;

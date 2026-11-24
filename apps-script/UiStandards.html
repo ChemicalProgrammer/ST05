@@ -1319,16 +1319,19 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
 #live-equipment > .live-equipment-card[hidden] {display:none!important;}
 
 
-/* Título y descripción forman una columna compacta. La barra se centra
-   verticalmente respecto al bloque completo, también si no hay descripción.
-   Keep the gradient on the shared header (not on its content or toolbar). */
+/* The shared header gradient is full bleed to the card's inner border.
+   Negative margins cancel only the parent's content inset; equal padding
+   keeps text, descriptions and tools exactly where they were. */
 .st-subsection > .st-subsection-header {
   display:grid;grid-template-columns:minmax(0,1fr) max-content;
   column-gap:var(--space-3);row-gap:var(--subsection-description-gap);
   align-items:center;
+  box-sizing:border-box;
+  margin:calc(-1 * var(--subsection-header-inset)) calc(-1 * var(--subsection-header-inset)) 0;
+  padding:var(--subsection-header-inset) var(--subsection-header-inset) var(--space-3);
   background-color:var(--surface);
   background-image:var(--subsection-header-gradient);
-  border-radius:var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius:calc(var(--radius-md) - var(--border-width)) calc(var(--radius-md) - var(--border-width)) 0 0;
 }
 .st-subsection > .st-subsection-header > .subsection-heading-copy {
   display:flex;flex-direction:column;align-items:stretch;align-self:center;

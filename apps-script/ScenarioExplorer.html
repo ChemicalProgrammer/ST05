@@ -70,7 +70,11 @@
 .scenario-config-dialog[data-scenario-scope] .scenario-limit{gap:var(--space-1)}
 .scenario-config-dialog[data-scenario-scope] .scenario-limit input[type=number]{width:5.7rem}
 .scenario-config-dialog[data-scenario-scope] .scenario-parameter-table :is(tr,th,td)[hidden]{display:none!important}
-.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters{min-width:61rem}
+.scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters{min-width:100%}
+.scenario-config-dialog[data-scenario-scope][data-doe-active=true] .scenario-conveyor-parameters{min-width:61rem}
+.scenario-config-dialog .scenario-limit-error,.scenario-config-dialog .scenario-config-validation{font-size:var(--font-caption);color:var(--danger);margin:var(--space-1) 0 0;white-space:normal;overflow-wrap:anywhere;text-align:start}
+.scenario-config-dialog input[aria-invalid=true]{border-color:var(--danger);outline:1px solid var(--danger)}
+.scenario-config-dialog :is(.scenario-limit-error,.scenario-config-validation,.scenario-doe-suggest)[hidden]{display:none!important}
 .scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters :is(th,td):is(:nth-child(2),:nth-child(3)){text-align:left;white-space:normal;overflow-wrap:anywhere}
 .scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters :is(th,td):nth-child(2){min-width:8rem}
 .scenario-config-dialog[data-scenario-scope] .scenario-conveyor-parameters :is(th,td):nth-child(3){min-width:9rem}
@@ -146,6 +150,19 @@ window.STScenarioExplorer=(function(){
     if(key){rememberMetrics(key,value);saveMeasurement(sim,key,value);}
     return Object.assign({},value,{cacheSource:'CALCULATED',warnings:evaluationWarnings(candidate,value)});
   }
+  // Shared limit policy for ordinary coordinate search and DOE.
+  function boundedTarget(change,raw,scale){
+    if(!Number.isFinite(change.after))return {error:'TARGET_INVALID'};
+    if(raw==='')return {after:change.after};
+    var value=Number(raw),bound=value/scale,baseline=change.before,up=change.after>=baseline;
+    if(!Number.isFinite(bound)||bound<0)return {error:'LIMIT_INVALID'};
+    if(Number.isFinite(baseline)){
+      // The displayed baseline is rounded to eight significant digits.
+      if(value===Number((baseline*scale).toPrecision(8)))bound=baseline;
+      if(up?bound<baseline:bound>baseline)return {error:up?'LIMIT_MAX_BELOW_BASE':'LIMIT_MIN_ABOVE_BASE'};
+    }
+    return {after:up?Math.min(change.after,bound):Math.max(change.after,bound)};
+  }
   function attach(host,project,create,simulation){
     var source=JSON.parse(JSON.stringify({id:simulation.id,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,unitOfFlow:simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||simulation.unitOfFlow})),rows=[],generation=0,timer,baseline,baselineRun,last=null,searchCanFinish=false,finishRequested=false;
     var searchSettings=currentSearchSettings(),searchSettingsSignature=STScenarioSearch.settingsSignature(searchSettings),pendingSearchSettingsChange=false;
@@ -175,7 +192,7 @@ window.STScenarioExplorer=(function(){
       try{var key=JSON.parse(entry.baseRecordKey||entry.recordKey);if(typeof key[0]==='string'&&key[0][0]==='[')key=JSON.parse(key[0]);return key[2]===(project.id||project.kind)&&!!key[5]===!!project.explore;}catch(ignore){return entry.kind===project.kind&&!!project.explore;}
     }
     var cardEntries=savedEntries(simulation).map((entry,index)=>({entry:entry,index:index})).filter(item=>sameCard(item.entry)).sort((a,b)=>(Date.parse(b.entry.updatedAt)||0)-(Date.parse(a.entry.updatedAt)||0)||b.index-a.index);
-    function resultSnapshot(entry){return JSON.parse(JSON.stringify({searchSettings:entry.searchSettings,searchSettingsSignature:entry.searchSettingsSignature,study:entry.study,methodologySignature:entry.methodologySignature,methodologyInputs:entry.methodologyInputs,confirmationPlan:entry.confirmationPlan,rankingPlan:entry.rankingPlan,phaseAudit:entry.phaseAudit,searchPolicyVersion:entry.searchPolicyVersion,sourceSimulationId:entry.sourceSimulationId,analysisOnly:entry.analysisOnly,doe:entry.doe,doeSkippedReason:entry.doeSkippedReason,conditionalFlowDOE:entry.conditionalFlowDOE,method:entry.method,reliabilityTargetSearch:entry.reliabilityTargetSearch,reliabilityCounterfactual:entry.reliabilityCounterfactual,baseline:entry.baseline,candidate:entry.candidate,independentCheck:entry.independentCheck,screening:entry.screening,run:entry.run,depth:entry.depth,status:entry.status,warnings:entry.warnings,finalCapacityDiagnosis:entry.finalCapacityDiagnosis,evaluatedChanges:entry.evaluatedChanges,sourceSignature:entry.sourceSignature,updatedAt:entry.updatedAt}));}
+    function resultSnapshot(entry){return JSON.parse(JSON.stringify({message:entry.message,searchSettings:entry.searchSettings,searchSettingsSignature:entry.searchSettingsSignature,study:entry.study,methodologySignature:entry.methodologySignature,methodologyInputs:entry.methodologyInputs,confirmationPlan:entry.confirmationPlan,rankingPlan:entry.rankingPlan,phaseAudit:entry.phaseAudit,searchPolicyVersion:entry.searchPolicyVersion,sourceSimulationId:entry.sourceSimulationId,analysisOnly:entry.analysisOnly,doe:entry.doe,doeSkippedReason:entry.doeSkippedReason,conditionalFlowDOE:entry.conditionalFlowDOE,method:entry.method,reliabilityTargetSearch:entry.reliabilityTargetSearch,reliabilityCounterfactual:entry.reliabilityCounterfactual,baseline:entry.baseline,candidate:entry.candidate,independentCheck:entry.independentCheck,screening:entry.screening,run:entry.run,depth:entry.depth,status:entry.status,warnings:entry.warnings,finalCapacityDiagnosis:entry.finalCapacityDiagnosis,evaluatedChanges:entry.evaluatedChanges,sourceSignature:entry.sourceSignature,updatedAt:entry.updatedAt}));}
     var restored=cardEntries[0]?.entry||simulation.whatIf?.cardConfigurations?.[cardId];
     if(restored?.sourceSignature===sourceSignature&&restored.categoryInclusions)scopeOptions.forEach(t=>inclusions[t]=restored.categoryInclusions[t]===true);
     if(restored&&restored.status!=='NO_DEMONSTRATED_IMPROVEMENT'&&!restored.candidate&&!restored.lastResult){var previous=cardEntries.find(item=>item.entry.baseline&&item.entry.candidate)?.entry;if(previous)restored=Object.assign({},restored,{lastResult:resultSnapshot(previous)});}
@@ -190,16 +207,16 @@ window.STScenarioExplorer=(function(){
       if(STScenarios.study&&Array.isArray(entry.evaluatedChanges))entry.study=STScenarios.study(source,entry);
       entry.controls=rows.map(r=>({equipmentId:r.change.equipmentId,path:r.change.path,checked:r.check.checked,limit:r.limit.value,target:r.change.after,doe:r.doe?{selected:r.doe.use.checked,low:r.doe.low.value,high:r.doe.high.value}:null}));
       entry.message=status?.textContent||'';entry.progress=progress?.textContent||'';if(progressTrace?.length)entry.progressTrace={steps:progressTrace.map(p=>Object.assign({},p)),percent:tracePercent,outcome:traceOutcome,summary:Object.assign({},traceSummary)};
-      if(!entry.candidate&&state!=='NO_DEMONSTRATED_IMPROVEMENT'){var previous=latest?.baseline&&latest?.candidate?latest:latest?.lastResult;if(previous)entry.lastResult=resultSnapshot(previous);}
+      if(!entry.candidate&&state!=='NO_DEMONSTRATED_IMPROVEMENT'){var previous=latest?.baseline&&(latest?.candidate||latest?.status==='NO_DEMONSTRATED_IMPROVEMENT')?latest:latest?.lastResult;if(previous)entry.lastResult=resultSnapshot(previous);}
       latest=JSON.parse(JSON.stringify(entry));if(clearResultButton)clearResultButton.disabled=false;if(clearNotice)clearNotice.replaceChildren();simulation.whatIf=simulation.whatIf||{};
       simulation.whatIf.evaluations=savedEntries(simulation).filter(r=>!sameCard(r)).concat([latest]);changed(simulation);
-      if(entry.baseline&&entry.candidate)renderMetrics(entry);else if(entry.lastResult)renderMetrics(entry.lastResult);else if(metrics)metrics.replaceChildren();
+      if(entry.baseline&&entry.candidate)renderMetrics(entry);else if(entry.lastResult)renderMetrics(entry.lastResult);else if(metrics)metrics.replaceChildren();if(state==='NOT_EVALUATED'&&entry.lastResult?.status==='NO_DEMONSTRATED_IMPROVEMENT'){traceHistorical=true;resultNotice.textContent=configText('Previous analysis')+': '+(entry.lastResult.message||'No demonstrated improvement.');resultNotice.hidden=false;}
     }
     var depth=restored?.depth||simulation.whatIf?.searchDepth||'MEDIUM';if(!STScenarioSearch.profiles[depth])depth='MEDIUM';
     var previewRun=searchRun(),context=el('p','','scenario-preview-context');host.append(context);function contextText(){var profile=searchProfile();context.textContent=searchSettings.speedProfile+' · '+depth+' · exploration '+profile.explorationSeconds/60+' min × 3 rounds · finalist ranking '+searchRun('validation').durationSeconds/60+' min (long runs first screen finalists for '+profile.confirmationSeconds/60+' min) · final confirmation '+searchRun('validation').durationSeconds/60+' min · confirmation rounds planned from pilot precision'+(depth==='LIGHT'?' · DOE omitted':'')+' · seed '+previewRun.seed;}contextText();
     var dialog=el('dialog','','scenario-config-dialog'),heading=el('div','','dialog-heading'),body=el('div','','dialog-body'),footer=el('div','','dialog-actions');
-    dialog.setAttribute('aria-label','Scenario changes and DOE');dialog.dataset.scenarioScope=primaryTier;var close=iconButton('Close scenario configuration','x',function(){dialog.close();});close.className='ghost icon-button';var done=button('Done',function(){dialog.close();});done.className='';heading.append(el('h2','Scenario configuration · '+(primaryTier==='ALL'?'All CAPEX':primaryTier.charAt(0)+primaryTier.slice(1).toLowerCase()+' CAPEX')),close);footer.append(done);dialog.append(heading,body,footer);host.append(dialog);
-    var configure=iconButton('Configure changes & DOE','settings',function(){if(!activeHost){refreshDOE();refreshFactors();dialog.showModal();}});configure.classList.add('scenario-configure');
+    dialog.setAttribute('aria-label','Scenario changes and DOE');dialog.dataset.scenarioScope=primaryTier;var close=iconButton('Close scenario configuration','x',function(){dialog.close();});close.className='ghost icon-button';var done=button('Done',function(){if(validateConfiguration(true,false))dialog.close();});done.className='';heading.append(el('h2','Scenario configuration · '+(primaryTier==='ALL'?'All CAPEX':primaryTier.charAt(0)+primaryTier.slice(1).toLowerCase()+' CAPEX')),close);footer.append(done);dialog.append(heading,body,footer);host.append(dialog);
+    var configure=iconButton('Configure changes & DOE','settings',function(){if(!activeHost){refreshDOE();refreshFactors();if(!dialog.open)dialog.showModal();validateRows();}});configure.classList.add('scenario-configure');
     function parameterTable(parent,headers,cls,title){var wrap=el('div','',cls+' scenario-table-wrap'),table=el('table','','scenario-parameter-table'),head=el('thead'),row=el('tr'),body=el('tbody');table.setAttribute('aria-label',title);headers.forEach(text=>{var cell=el('th',text);cell.scope='col';row.append(cell);});head.append(row);table.append(head,body);wrap.append(table);parent.append(wrap);return body;}
     var scopeBox=el('div','','scenario-category-options');
     if(scopeOptions.length){scopeOptions.forEach(function(tier){var check=document.createElement('input');check.type='checkbox';check.className='scenario-include-category';check.dataset.tier=tier;check.checked=inclusions[tier];var label=el('label','','scenario-scope st-checkbox-card');label.append(check,document.createTextNode(tier==='ZERO'?'Include Zero CAPEX optimizations':'Include Medium CAPEX optimizations'));scopeBox.append(label);check.onchange=function(){if(activeHost){check.checked=inclusions[tier];return;}inclusions[tier]=check.checked;simulation.whatIf=simulation.whatIf||{};simulation.whatIf.capexInclusions=simulation.whatIf.capexInclusions||{};simulation.whatIf.capexInclusions[primaryTier]=Object.assign({},inclusions);applyScope(true);sensitivityEvidence=null;refreshFactors();refreshDOE();invalidateDOE();};});body.append(scopeBox);}
@@ -234,7 +251,7 @@ window.STScenarioExplorer=(function(){
       var scale=change.path==='nominalRatePerSecond'?60:change.path==='processData.geometry.lactMm'||change.path==='processData.geometry.lpPrimeMm'?.001:change.path.endsWith('conveyorSpeedMmPerSecond')?.06:1;
       var unit=scale===60?(source.unitOfFlow==='bottles'?'bpm':STFlowUnits.labels(source.unitOfFlow||'units').rate):scale===.001?'m':scale===.06?'m/min':change.unit||STScenarios.fields[change.path]?.[2]||'';
       check.setAttribute('aria-label','Use '+info.equipment+' · '+info.parameter);var choice=el('td'),parameter=el('td',info.parameter.replace(/\s*\([^)]*\)\s*$/,''));choice.append(check);row.append(choice,el('td',info.equipment),parameter,el('td',change.before==null?'—':String(Number((change.before*scale).toPrecision(8))),'scenario-number'),el('td',String(Number((change.after*scale).toPrecision(8))),'scenario-number'),el('td',unit));
-      var limitLabel=el('label',change.after>=change.before?'Max':'Min'),limit=document.createElement('input');limit.type='number';limit.step='any';limit.min='0';limit.disabled=!!change.disabledReason;limit.setAttribute('aria-label',info.equipment+' · '+info.parameter+' · '+limitLabel.textContent+' ('+unit+')');limitLabel.className='scenario-limit';limitLabel.append(limit);var limitCell=el('td');limitCell.append(limitLabel);row.append(limitCell);
+      var limitLabel=el('label',change.after>=change.before?'Max':'Min'),limit=document.createElement('input');limit.type='number';limit.step='any';limit.min='0';limit.disabled=!!change.disabledReason;limit.setAttribute('aria-label',info.equipment+' · '+info.parameter+' · '+limitLabel.textContent+' ('+unit+')');limitLabel.className='scenario-limit';limitLabel.append(limit);var limitCell=el('td'),limitError=el('p','','scenario-limit-error');limitError.hidden=true;limitCell.append(limitLabel,limitError);row.append(limitCell);
       if(change.disabledReason)parameter.append(el('p',change.disabledReason,'scenario-unavailable'));
       if(project.catalog){
         var target=document.createElement('input');target.type='number';target.step='any';target.className='scenario-target';target.value=Number.isFinite(change.after)?Number((change.after*scale).toPrecision(8)):'';target.disabled=!!change.disabledReason;
@@ -248,9 +265,9 @@ window.STScenarioExplorer=(function(){
           if(Number.isFinite(maximum))target.max=maximum*scale;
         }
         target.setAttribute('aria-label',info.equipment+' · '+info.parameter+' · Target ('+unit+')');row.children[4].replaceChildren(target);
-        target.oninput=function(){change.after=target.value===''?null:Number(target.value)/scale;limitLabel.firstChild.textContent=change.after>=change.before?'Max':'Min';check.checked=!change.disabledReason;check.onchange();};
+        target.oninput=function(){change.after=target.value===''?null:Number(target.value)/scale;updateLimitDirection(rows.find(r=>r.change===change));check.checked=!change.disabledReason;check.onchange();};
       }
-      list.append(row);rows.push({change:change,check:check,limit:limit,scale:scale,row:row});check.onchange=limit.oninput=function(){if(activeHost)return;searchVariables=[];rows.forEach(r=>{if(r.doe)r.doe.use.checked=false;});last=null;generation++;clearTimeout(timer);status.textContent='Changes updated. Run Find best scenario to evaluate.';save.disabled=true;host.querySelector('.scenario-audit-warnings')?.remove();record('NOT_EVALUATED',{reason:'Selections or limits changed; previous estimate invalidated.'});refreshFactors();};
+      list.append(row);rows.push({change:change,check:check,limit:limit,limitLabel:limitLabel,limitError:limitError,scale:scale,row:row,unit:unit,info:info,defaultTarget:original.after});check.onchange=limit.oninput=configurationEdited;
     });
     var doePanel=el('section','','scenario-doe');
     var doeToggle=document.createElement('input');doeToggle.type='checkbox';doeToggle.className='scenario-doe-enabled';var doeChoice=el('label','','scenario-scope st-checkbox-card');doeChoice.append(doeToggle,document.createTextNode(' Include DOE in this search'));
@@ -281,7 +298,74 @@ window.STScenarioExplorer=(function(){
     var searchSection=el('section','','scenario-config-section scenario-config-search-page'),inputSection=el('section','','scenario-config-section'),conveyorSection=el('section','','scenario-config-section'),reliabilityPage=el('section','','scenario-config-section');
     var configLabels={'Search':'Búsqueda','Equipment':'Equipos','Conveyors':'Transportadores','Reliability':'Confiabilidad','Search settings':'Configuración de búsqueda','Search scope':'Alcance de búsqueda','Design of experiments (DOE)':'Diseño de experimentos (DOE)','Equipment variables':'Variables de equipos','Conveyor variables':'Variables de transportadores','Reliability exploration':'Exploración de confiabilidad','Reliability equipment and limits':'Equipos y límites de confiabilidad','Select search depth.':'Selecciona la profundidad de búsqueda.','Light: no DOE. Medium: balanced. High: deeper refinement.':'Ligera: sin DOE. Media: equilibrada. Alta: mayor refinamiento.','Reliability targets are exploratory; blank limits use automatic targets.':'Los objetivos de confiabilidad son exploratorios; los límites vacíos permiten objetivos automáticos.','Scenario configuration':'Configuración de escenarios','Search depth':'Profundidad de búsqueda','Light':'Ligera','Medium':'Media','High':'Alta','Automatic priority':'Prioridad automática','Choose equipment':'Elegir equipos','All eligible equipment':'Todos los equipos elegibles','Use':'Usar','Target':'Objetivo','Proposed':'Propuesto','Feasible limit':'Límite factible','Low':'Bajo','Current MTBF / MTTR (min)':'MTBF / MTTR actual (min)','MTBF maximum (min)':'MTBF máximo (min)','MTTR minimum (min)':'MTTR mínimo (min)','Evaluate':'Evaluar','Select the categories to include.':'Selecciona las categorías que deseas incluir.','Select factors or request an automatic screening.':'Selecciona factores o solicita una evaluación automática.','Select variables, targets and feasible limits.':'Selecciona variables, objetivos y límites factibles.','Explore reliability targets as hypotheses, not verified investments.':'Explora objetivos de confiabilidad como hipótesis, no como inversiones verificadas.','Choose equipment and optional MTBF / MTTR limits.':'Selecciona equipos y límites opcionales de MTBF / MTTR.','Equipment scope':'Alcance de equipos','Include Zero CAPEX optimizations':'Incluir optimizaciones Zero CAPEX','Include Medium CAPEX optimizations':'Incluir optimizaciones Medium CAPEX','Include DOE in this search':'Incluir DOE en esta búsqueda','Explore MTBF / MTTR targets before High CAPEX search':'Explorar objetivos MTBF / MTTR antes de la búsqueda High CAPEX','Maximum equipment (automatic)':'Máximo de equipos (automático)','Select all equipment inputs':'Seleccionar todas las variables de equipos','Select equipment DOE factors':'Seleccionar factores DOE de equipos','Suggest factor combination':'Sugerir combinación de factores','Cancel screening':'Cancelar evaluación','No applicable variables':'Sin variables aplicables'};
     Object.assign(configLabels,{'DOE unavailable at Light depth.':'DOE no está disponible en profundidad Ligera.','Choose Medium or High depth to use DOE.':'Selecciona profundidad Media o Alta para usar DOE.','No eligible numeric inputs.':'No hay variables numéricas elegibles.','Enable DOE to choose factors and edit Low / High levels.':'Activa DOE para elegir factores y editar los niveles Bajo / Alto.'});
+    Object.assign(configLabels,{'Max':'Máx.','Min':'Mín.','Previous analysis':'Análisis anterior','Restore default targets and limits':'Restablecer objetivos y límites predeterminados','Enter a valid physical limit.':'Introduce un límite físico válido.','Enter a valid target.':'Introduce un objetivo válido.'});
     function configText(value){return document.documentElement.lang==='es'&&configLabels[value]?configLabels[value]:window.STLanguage?.translate(value)||value;}
+    function updateLimitDirection(r){
+      if(!r)return;var direction=r.change.after>=r.change.before?'Max':'Min';
+      r.limitLabel.firstChild.textContent=configText(direction);
+      r.limit.setAttribute('aria-label',r.info.equipment+' · '+r.info.parameter+' · '+configText(direction)+' ('+r.unit+')');
+    }
+    function activeRow(r){return r.check.checked&&scopeAllowed(r.change)&&reliabilityAllowed(r.change)&&!r.change.disabledReason;}
+    function formatInput(value){return Number.isFinite(value)?String(Number(value.toPrecision(8))):'—';}
+    function rowError(r,code){
+      var spanish=document.documentElement.lang==='es',base=formatInput(r.change.before*r.scale),target=formatInput(r.change.after*r.scale),limit=r.limit.value;
+      if(code==='LIMIT_MAX_BELOW_BASE'||code==='LIMIT_MIN_ABOVE_BASE'){
+        var up=code==='LIMIT_MAX_BELOW_BASE';
+        return spanish?(up?'El máximo no puede ser menor que el valor actual ':'El mínimo no puede superar el valor actual ')+base+' '+r.unit+'. Objetivo: '+target+'; límite: '+limit+'.':
+          (up?'Maximum cannot be below the current value ':'Minimum cannot exceed the current value ')+base+' '+r.unit+'. Target: '+target+'; limit: '+limit+'.';
+      }
+      return configText(code==='TARGET_INVALID'?'Enter a valid target.':'Enter a valid physical limit.');
+    }
+    function validateRows(){
+      var issues=[];
+      rows.forEach(r=>{
+        updateLimitDirection(r);
+        var target=r.row.querySelector('.scenario-target'),active=activeRow(r),value=active?boundedTarget(r.change,r.limit.value,r.scale):{};
+        if(active&&r.limit.validity?.badInput)value={error:'LIMIT_INVALID'};
+        if(active&&target&&(target.validity?.badInput||target.value===''))value={error:'TARGET_INVALID'};
+        var input=value.error==='TARGET_INVALID'&&target?target:r.limit,message=value.error?rowError(r,value.error):'';
+        [r.limit,target].filter(Boolean).forEach(field=>{
+          var invalid=field===input&&!!message;field.setCustomValidity(invalid?message:'');field.setAttribute('aria-invalid',String(invalid));
+        });
+        r.limitError.hidden=!message;r.limitError.textContent=message;
+        if(message)issues.push({row:r,input:input,message:r.info.equipment+' · '+r.info.parameter+': '+message});
+      });
+      return issues;
+    }
+    function presentIssue(issue){
+      if(issue.row){
+        var group=issue.row.isConveyor?conveyorGroup:equipmentGroup;
+        selectConfigTab(issue.row.isConveyor?2:1);
+        if(!dialog.open)dialog.showModal();
+        if(group.body.hidden){var toggle=group.title.querySelector('[data-subsection-toggle]');if(window.STSubsection?.setExpanded)STSubsection.setExpanded(toggle,true,false);else{group.body.hidden=false;toggle.setAttribute('aria-expanded','true');}}
+        issue.input?.focus();issue.input?.scrollIntoView?.({block:'nearest'});
+      }else if(!dialog.open)dialog.showModal();
+      validationNotice.textContent=issue.message;validationNotice.hidden=false;
+    }
+    function validateConfiguration(reveal,checkDOE){
+      var issue=validateRows()[0];
+      if(!issue&&checkDOE&&doeEnabled()&&depth!=='LIGHT')try{doeFactors();}catch(error){issue={row:error.row,input:error.input,message:error.message};}
+      if(issue){if(reveal)presentIssue(issue);else if(!validationNotice.hidden)validationNotice.textContent=issue.message;return false;}
+      validationNotice.hidden=true;validationNotice.textContent='';return true;
+    }
+    function configurationEdited(){
+      if(activeHost)return;
+      searchVariables=[];sensitivityEvidence=null;last=null;generation++;clearTimeout(timer);
+      status.textContent='Changes updated. Run Find best scenario to evaluate.';save.disabled=true;
+      host.querySelector('.scenario-audit-warnings')?.remove();
+      refreshFactors();validateConfiguration(false,false);
+      record('NOT_EVALUATED',{reason:'Selections or limits changed; previous estimate invalidated.'});
+    }
+    function resetTargets(isConveyor){
+      if(activeHost)return;
+      rows.filter(r=>r.isConveyor===isConveyor&&scopeAllowed(r.change)&&!r.change.disabledReason).forEach(r=>{
+        r.change.after=r.defaultTarget;r.limit.value='';
+        var target=r.row.querySelector('.scenario-target');
+        if(target)target.value=Number.isFinite(r.defaultTarget)?formatInput(r.defaultTarget*r.scale):'';
+        if(r.doe){r.doe.use.checked=false;r.doe.low.value=formatInput(Math.min(r.change.before,r.defaultTarget)*r.scale);r.doe.high.value=formatInput(Math.max(r.change.before,r.defaultTarget)*r.scale);}
+      });
+      configurationEdited();
+    }
     function configGroup(page,title,description,tools,content){
       var group=STSubsection.create({title:configText(title),description:configText(description),variant:'B',native:false,persistKey:'scenario-config:'+cardId+':'+title,className:'scenario-config-group',tools:tools||[],content:content});
       page.append(group.section);return group;
@@ -312,8 +396,8 @@ window.STScenarioExplorer=(function(){
     equipmentUseAll.onchange=()=>bulkUse(false,equipmentUseAll);conveyorUseAll.onchange=()=>bulkUse(true,conveyorUseAll);
     function bulkDOE(isConveyor,check){if(activeHost||!doeEnabled()||depth==='LIGHT')return;var available=rows.filter(r=>r.isConveyor===isConveyor&&r.doe&&eligibleForDOE(r));if(!check.checked)available.forEach(r=>r.doe.use.checked=false);else{var count=rows.filter(r=>r.doe?.use.checked).length;available.forEach(r=>{if(!r.doe.use.checked&&count<searchProfile().maxFactors){r.doe.use.checked=true;count++;}if(r.doe.use.checked)r.check.checked=true;});}refreshFactors();invalidateDOE();}
     doeAll.onchange=()=>bulkDOE(false,doeAll);conveyorDoeAll.onchange=()=>bulkDOE(true,conveyorDoeAll);
-    var equipmentGroup=configGroup(inputSection,'Equipment variables','Select variables, targets and feasible limits.',[],list.closest('.scenario-table-wrap'));
-    var conveyorGroup=configGroup(conveyorSection,'Conveyor variables','Select variables, targets and feasible limits.',[],conveyorList.closest('.scenario-table-wrap'));
+    var equipmentGroup=configGroup(inputSection,'Equipment variables','Select variables, targets and feasible limits.',[iconButton(configText('Restore default targets and limits'),'refresh',()=>resetTargets(false))],list.closest('.scenario-table-wrap'));
+    var conveyorGroup=configGroup(conveyorSection,'Conveyor variables','Select variables, targets and feasible limits.',[iconButton(configText('Restore default targets and limits'),'refresh',()=>resetTargets(true))],conveyorList.closest('.scenario-table-wrap'));
     var reliabilityGroup=null;
     if(reliabilitySection){
       var reliabilityTools=el('div','','button-row scenario-config-toolbar');reliabilityTools.append(exploratoryLabel);
@@ -330,7 +414,7 @@ window.STScenarioExplorer=(function(){
       suggestFactors.textContent=configText('Suggest factor combination');
     }
     context.remove();
-    body.replaceChildren(searchSection,inputSection,conveyorSection,reliabilityPage);
+    var validationNotice=el('p','','scenario-config-validation chart-note');validationNotice.setAttribute('role','alert');validationNotice.hidden=true;body.replaceChildren(validationNotice,searchSection,inputSection,conveyorSection,reliabilityPage);
     var configTabs=el('nav','','settings-tabs scenario-config-tabs');configTabs.setAttribute('role','tablist');configTabs.setAttribute('aria-label','Scenario configuration sections');
     var configId='scenario-config-'+(++configurationSerial),pages=[searchSection,inputSection,conveyorSection,reliabilityPage],tabButtons=[],selectedConfig=0;
     function configAvailability(){
@@ -350,7 +434,7 @@ window.STScenarioExplorer=(function(){
       var hasConveyors=rows.some(r=>r.isConveyor&&scopeAllowed(r.change)),group=hasConveyors?conveyorGroup:doeGroup;
       if(doeChoice.parentElement!==group.tools)group.tools.append(doeChoice);
       if(doeContent.parentElement!==group.body)group.body.prepend(doeContent);
-      doeGroup.section.hidden=hasConveyors||!rows.some(r=>eligibleForDOE(r));
+      var doeAvailable=depth!=='LIGHT'&&rows.some(r=>eligibleForDOE(r));doeChoice.hidden=!doeAvailable;doeContent.hidden=!doeAvailable||!doeEnabled();doeGroup.section.hidden=hasConveyors||!doeAvailable;
       if(reliabilityGroup){var manual=rows.some(r=>scopeAllowed(r.change)&&!r.change.disabledReason&&r.change.path.startsWith('noiseProfile.reliability.'));exploratoryLabel.hidden=depth==='LIGHT';reliabilitySection.hidden=!(manual||exploreReliability.checked&&depth!=='LIGHT');}
     }
     function syncBulk(check,available,selected){var count=available.filter(selected).length;check.checked=available.length>0&&count===available.length;check.indeterminate=count>0&&count<available.length;check.disabled=!available.length;}
@@ -366,11 +450,11 @@ window.STScenarioExplorer=(function(){
     function applyScope(changedScope){rows.forEach(function(r){var allowed=scopeAllowed(r.change),wasAllowed=r.row.dataset.scopeAllowed!=='false';r.row.dataset.scopeAllowed=String(allowed);r.row.hidden=!allowed;r.check.disabled=!!r.change.disabledReason||!allowed;var target=r.row.querySelector('.scenario-target');if(target)target.disabled=r.check.disabled;if(!allowed){r.check.checked=false;if(r.doe)r.doe.use.checked=false;}else if(changedScope&&!wasAllowed&&!r.change.disabledReason)r.check.checked=true;});syncConfigTabs();}
     applyScope(false);refreshFactors();
     function refreshDOE(){
-      var eligible=rows.some(r=>eligibleForDOE(r)),enabled=doeEnabled()&&depth!=='LIGHT';
-      exploreReliability.disabled=primaryTier!=='HIGH'||source.dynamicConfig?.reliabilityEnabled===false||depth==='LIGHT';doeToggle.checked=doeEnabled();doeToggle.disabled=depth==='LIGHT'||!eligible;doeContent.hidden=false;syncConfigTabs();
-      dialog.querySelectorAll('[data-doe-column]').forEach(function(cell){cell.hidden=!cell.closest('.scenario-conveyor-parameters')&&!enabled;});
-      refreshFactors();suggestFactors.hidden=false;suggestFactors.disabled=!enabled||!eligible||!sourceReadiness().ready;
-      var note=depth==='LIGHT'?'Choose Medium or High depth to use DOE.':!eligible?'No eligible numeric inputs.':!enabled?'Enable DOE to choose factors and edit Low / High levels.':'';
+      var eligible=rows.some(r=>eligibleForDOE(r)),enabled=doeEnabled()&&depth!=='LIGHT'&&eligible;
+      exploreReliability.disabled=primaryTier!=='HIGH'||source.dynamicConfig?.reliabilityEnabled===false||depth==='LIGHT';doeToggle.checked=doeEnabled();doeToggle.disabled=depth==='LIGHT'||!eligible;syncConfigTabs();
+      dialog.dataset.doeActive=String(enabled);dialog.querySelectorAll('[data-doe-column]').forEach(function(cell){cell.hidden=!enabled;});
+      refreshFactors();suggestFactors.hidden=!enabled;suggestFactors.disabled=!enabled||!eligible||!sourceReadiness().ready;
+      var note='';
       doeState.textContent=configText(note);doeState.hidden=!note;
     }
     var screeningActivity=el('div','','request-progress dialog-request-progress scenario-screening-activity');screeningActivity.hidden=true;screeningActivity.setAttribute('role','progressbar');screeningActivity.setAttribute('aria-label','DOE suggestion simulation progress');screeningActivity.setAttribute('aria-valuemin','0');screeningActivity.setAttribute('aria-valuemax','100');screeningActivity.append(el('span'));heading.append(screeningActivity);
@@ -396,7 +480,7 @@ window.STScenarioExplorer=(function(){
         // A user-entered target wins. Otherwise refresh the engineering target
         // against the retained reliability context, including V-Graph speeds.
         if(planned&&original&&after===original.after)after=planned.change.after;
-        if(r.limit.value!==''){var limit=Number(r.limit.value)/r.scale;after=after>=r.change.before?Math.min(after,limit):Math.max(after,limit);}
+        if(r.limit.value!==''&&((after>=r.change.before)!==(r.change.after>=r.change.before)))after=r.change.after;var bounded=boundedTarget(Object.assign({},r.change,{after:after}),r.limit.value,r.scale);if(bounded.error)throw Error(r.info.equipment+' · '+r.info.parameter+': '+rowError(r,bounded.error));after=bounded.after;
         var change=Object.assign({},r.change,{after:after});return {change:change,priority:planned?.priority||0};
       }).filter(t=>Number.isFinite(t.change.after)&&t.change.after!==t.change.before);
     }
@@ -411,7 +495,7 @@ window.STScenarioExplorer=(function(){
     function selectScreenFactors(report){rows.forEach(r=>{if(r.doe)r.doe.use.checked=false;});report.selectedFactors.forEach(f=>{var r=rows.find(r=>r.change.equipmentId===f.equipmentId&&r.change.path===f.path);if(r?.doe){r.check.checked=true;r.doe.use.checked=true;r.doe.low.value=f.low*r.scale;r.doe.high.value=f.high*r.scale;}});}
     async function suggestDOE(){
       if(screening){screeningCancelled=true;return;}if(activeHost||!doeEnabled()||depth==='LIGHT'||!requireCompletedSource())return;
-      searchSettingsChanged();
+      searchSettingsChanged();if(!validateConfiguration(true,false))return;
       screening=true;screeningCancelled=false;activeHost=host;screeningActivity.hidden=false;host.setAttribute('aria-busy','true');window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));var ticket=generation,locked=Array.from(dialog.querySelectorAll('input,select,button')).filter(e=>e!==suggestFactors&&e!==close&&e!==done).map(e=>({element:e,disabled:e.disabled}));locked.forEach(x=>x.element.disabled=true);suggestFactors.textContent=configText('Cancel screening');suggestFactors.disabled=false;
       function stopped(){return screeningCancelled||ticket!==generation||!host.isConnected||STScenarios.signature(simulation)!==sourceSignature;}
       var screeningLabel='Preparing DOE screening',screeningPercent=0,completedScreening=0;var machineCount=reliabilitySettings.scope==='MANUAL'?reliabilityMachines.filter(m=>reliabilitySettings.equipmentIds.includes(m.id)).length:reliabilitySettings.scope==='ALL'?reliabilityMachines.length:Math.min(12,reliabilityMachines.length),targetCount=reliabilitySettings.scope==='AUTO'?Math.min(machineCount,reliabilitySettings.maximumTargets):machineCount,reliabilityWork=primaryTier==='HIGH'&&depth!=='LIGHT'&&exploreReliability.checked&&machineCount>0&&STScenarioSearch.reliabilityTargets?2+machineCount+12*targetCount+Math.max(0,targetCount-1)+(targetCount>1?2:0):0,totalScreeningWork=reliabilityWork+58,activeScreening=new Map(),screeningJob=0;
@@ -440,9 +524,9 @@ window.STScenarioExplorer=(function(){
     function doeFactors(){
       var chosen=rows.filter(r=>r.check.checked&&r.doe?.use.checked&&eligibleForDOE(r));if(chosen.length>searchProfile().maxFactors)throw Error(depth+' permits at most '+searchProfile().maxFactors+' DOE factors. Uncheck factors or increase depth.');return chosen.map(function(r){
         var low=Number(r.doe.low.value)/r.scale,high=Number(r.doe.high.value)/r.scale,rule=STScenarios.fields[r.change.path];
-        if(r.doe.low.value===''||r.doe.high.value===''||!Number.isFinite(low)||!Number.isFinite(high)||low<rule[0]||high>rule[1])throw Error('DOE: supply finite levels within the allowed field range.');
-        if(r.limit.value!==''){var limit=Number(r.limit.value)/r.scale;if(r.change.after>=r.change.before)high=Math.min(high,limit);else low=Math.max(low,limit);}
-        if(!(low<high))throw Error('DOE: low must be below high after physical limits.');
+        if(r.doe.low.value===''||r.doe.high.value===''||!Number.isFinite(low)||!Number.isFinite(high)||low<rule[0]||high>rule[1])throw Object.assign(Error(r.info.equipment+' · '+r.info.parameter+': '+configText('DOE: supply finite levels within the allowed field range.')),{row:r,input:r.doe.low});
+        if(r.limit.value!==''){var limit=Number(r.limit.value)/r.scale;if(Number.isFinite(r.change.before)&&Number(r.limit.value)===Number((r.change.before*r.scale).toPrecision(8)))limit=r.change.before;if(r.change.after>=r.change.before)high=Math.min(high,limit);else low=Math.max(low,limit);}
+        if(!(low<high))throw Object.assign(Error(r.info.equipment+' · '+r.info.parameter+': '+configText('DOE: low must be below high after physical limits.')),{row:r,input:r.doe.low});
         return Object.assign({},r.change,{low:low,high:high});
       });
     }
@@ -612,7 +696,7 @@ window.STScenarioExplorer=(function(){
       resultsDialog.showModal();
     }
     function formatTarget(value){return Number.isFinite(value)?String(Number(value.toPrecision(6))):'—';}
-    function selected(){return rows.filter(r=>r.check.checked&&scopeAllowed(r.change)&&reliabilityAllowed(r.change)&&!r.change.disabledReason).map(function(r){var c=Object.assign({},r.change);if(r.limit.value!==''){var bound=Number(r.limit.value)/r.scale;if(!Number.isFinite(bound)||bound<0)throw Error('Enter a valid physical limit.');c.after=c.after>=c.before?Math.min(c.after,bound):Math.max(c.after,bound);if(c.before!==null&&((r.change.after>=c.before&&c.after<c.before)||(r.change.after<c.before&&c.after>c.before)))throw Error('The limit contradicts the existing baseline.');}return c;}).filter(c=>c.before!==c.after);}
+    function selected(){return rows.filter(activeRow).map(function(r){var c=Object.assign({},r.change),value=boundedTarget(c,r.limit.value,r.scale);if(value.error)throw Error(r.info.equipment+' · '+r.info.parameter+': '+rowError(r,value.error));c.after=value.after;return c;}).filter(c=>c.before!==c.after);}
     function canonicalExperiment(value){if(Array.isArray(value))return value.map(canonicalExperiment);if(value&&typeof value==='object')return Object.keys(value).sort().reduce((o,k)=>{if(value[k]!==undefined)o[k]=canonicalExperiment(value[k]);return o;},{});return value;}
     function experimentConfiguration(){
       var targets=selected().sort((a,b)=>(a.equipmentId+':'+a.path)<(b.equipmentId+':'+b.path)?-1:1),plan=STScenarios.plan(source),limits=searchLimits();
@@ -644,7 +728,7 @@ window.STScenarioExplorer=(function(){
     }
     function improves(base,next){return Number.isFinite(next.throughput)&&Number.isFinite(next.oee)&&next.throughput>base.throughput+Math.max(.001,Math.abs(base.throughput)*.001)&&next.oee>=base.oee-1e-9;}
     async function preview(all){
-      if(activeHost||!requireCompletedSource())return;searchSettingsChanged();activity.hidden=false;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;resultNotice.hidden=true;resultNotice.textContent='';paintOverallProgress();host.setAttribute('aria-busy','true');activeHost=host;activeRecordKey=recordKey;searchCanFinish=!!all;finishRequested=false;window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
+      if(activeHost||!requireCompletedSource())return;searchSettingsChanged();if(!validateConfiguration(true,!!all))return;activity.hidden=false;progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;resultNotice.hidden=true;resultNotice.textContent='';paintOverallProgress();host.setAttribute('aria-busy','true');activeHost=host;activeRecordKey=recordKey;searchCanFinish=!!all;finishRequested=false;window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
       var locked=Array.from(document.querySelectorAll('.analysis-recommendation input, .analysis-recommendation select, .analysis-recommendation button, .scenario-explorer input, .scenario-explorer select, .scenario-explorer textarea, .scenario-explorer button')).filter(e=>e!==run&&!e.dataset.scenarioTraceControl).map(e=>({element:e,disabled:e.disabled}));locked.forEach(x=>x.element.disabled=true);
       setIcon(run,all?'Finish search and validate best found':'Cancel evaluation','stop');run.setAttribute('aria-pressed','true');dialog.close();
       var started=Date.now(),stage='Preparing',completed=0,maximum=0,batchFraction=0,activeFractions=new Map(),nextBatch=0,ended=false,failed=false,abortPending=false,rankingProgress=null;
@@ -901,8 +985,7 @@ window.STScenarioExplorer=(function(){
           var refreshDefault=priorDefault&&c.target===priorDefault.after&&Number.isFinite(r.change.after)&&r.change.after!==c.target&&(c.limit==null||c.limit==='');
           if(refreshDefault)restoredDefaultsUpdated=true;else r.change.after=c.target;
           var target=r.row.querySelector('.scenario-target');if(target)target.value=Number((r.change.after*r.scale).toPrecision(8));
-          var direction=r.change.after>=r.change.before?'Max':'Min';r.limit.parentElement.firstChild.textContent=direction;
-          r.limit.setAttribute('aria-label',r.limit.getAttribute('aria-label').replace(/ · (?:Max|Min) (?=\()/,' · '+direction+' '));
+          updateLimitDirection(r);
         }
         if(r.doe&&c.doe){r.doe.use.checked=c.doe.selected;r.doe.low.value=c.doe.low;r.doe.high.value=c.doe.high;}
       });applyScope(false);refreshFactors();
@@ -918,6 +1001,7 @@ window.STScenarioExplorer=(function(){
       setIcon(save,requiresValidation?'Create scenario for validation':warnings.length?'Create scenario for review':'Create selected scenario','copy');save.disabled=!ready;
       if(!restoredCurrent||invalidRestored||restored.origin!=='DEMO_PREPARED'&&restored.searchSettingsSignature!==searchSettingsSignature){var savedNotice=traceText('Saved result from previous inputs or search settings. Recalculate before creating a scenario.');if(!preserveSavedOutcome(savedNotice))status.textContent=savedNotice;status.dataset.state='stale';save.disabled=true;}
       else if(restored.lastResult&&!restored.candidate){status.textContent='Last calculated result shown. Configuration changed; recalculate before creating a scenario.';status.dataset.state='stale';}
+      if(restored.lastResult?.status==='NO_DEMONSTRATED_IMPROVEMENT'){resultNotice.textContent=configText('Previous analysis')+': '+(restored.lastResult.message||'No demonstrated improvement.');resultNotice.hidden=false;traceHistorical=true;}
       if(restoredDefaultsUpdated)preserveSavedOutcome(traceText('Search targets updated. Run a new search to evaluate them. Previous analysis retained.'));
       if(restoredCurrent&&restored.status==='PREPARED_DEMO'){status.dataset.state='saved';setIcon(save,'This demo scenario already exists','copy');save.disabled=true;}
       if(ready&&!requiresValidation&&restored.analysisOnly)setIcon(save,'Create exploratory simulation','copy');
@@ -935,7 +1019,7 @@ window.STScenarioExplorer=(function(){
       }
     }
     clearResultButton.disabled=!savedEntries(simulation).some(sameCard)&&!metrics.textContent.trim();
-    requireCompletedSource();
+    validateRows();requireCompletedSource();
   }
 
   function tools(target,simulation,plan,create){

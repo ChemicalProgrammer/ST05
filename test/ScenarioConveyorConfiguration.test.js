@@ -15,7 +15,7 @@ function browser({doe=false,depth='MEDIUM',lang='en'}={}){
   const dom=new JSDOM('<!doctype html><html lang="en" data-ui-mode="basic"><body><article class="analysis-recommendation"></article></body></html>',{runScripts:'outside-only'}),w=dom.window;
   w.document.documentElement.lang=lang;
   w.__ST_TEXT__=key=>key;
-  w.STPreferences={read:()=>null,write:()=>true};w.STIcons={svg:()=>'<svg></svg>'};
+  w.STPreferences={read:()=>null,write:()=>true};w.STIcons={svg:()=>'<svg></svg>',button:(el)=>{if(!el.querySelector('svg'))el.insertAdjacentHTML('afterbegin','<svg></svg>');}};
   w.STErrors={register(){},capture(){}};w.STReports={bindWhatIf(){}};
   w.matchMedia=()=>({matches:true,addEventListener(){},removeEventListener(){}});
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
@@ -48,7 +48,7 @@ function change(h,input,value){
 
 function conveyorRow(h){return h.table.querySelector('tbody tr');}
 
-function assertCompleteTable(h){
+function assertCompleteTable(h,showDOE=h.record.metadata.includeDOE&&h.dialog.querySelector('.scenario-search-depth').value!=='LIGHT'){
   h.tabs[2].click();
   assert.equal(h.pages[2].hidden,false);
   assert.equal(h.table.closest('[hidden]'),null);
@@ -62,10 +62,10 @@ function assertCompleteTable(h){
     assert.equal(row.querySelector('.scenario-target').disabled,false,'Ordinary targets remain editable when DOE is unavailable.');
     assert(row.querySelector('.scenario-limit input'));
   }
-  for(const cell of h.table.querySelectorAll('th,td'))assert.equal(cell.hidden,false,'All ten conveyor columns remain disclosed.');
+  for(const cell of h.table.querySelectorAll('th,td'))assert.equal(cell.hidden,cell.hasAttribute('data-doe-column')&&!showDOE,'Only applicable columns are visible.');
 }
 
-test('conveyors retain ten visible columns while DOE is off or omitted at Light depth',()=>{
+test('conveyors hide only DOE columns when DOE is off or omitted at Light depth',()=>{
   for(const settings of [{doe:false,depth:'MEDIUM'},{doe:true,depth:'LIGHT'}]){
     const h=browser(settings);
     try{
@@ -75,11 +75,11 @@ test('conveyors retain ten visible columns while DOE is off or omitted at Light 
       const toggle=h.dialog.querySelector('.scenario-doe-enabled'),suggest=h.dialog.querySelector('.scenario-doe-suggest');
       assert.equal(toggle.checked,settings.doe);
       assert.equal(toggle.disabled,settings.depth==='LIGHT');
-      assert.equal(suggest.hidden,false);
+      assert.equal(suggest.hidden,true);
+      assert.equal(toggle.closest('label').hidden,settings.depth==='LIGHT');
       assert.equal(suggest.disabled,true);
       const note=h.pages[2].querySelector('.scenario-doe-state');
-      assert.equal(note.hidden,false);
-      assert.match(note.textContent,settings.depth==='LIGHT'?/Choose Medium or High depth/:/Enable DOE/);
+      assert.equal(note.hidden,true);
     }finally{h.close();}
   }
 });
@@ -182,8 +182,8 @@ test('Spanish conveyor DOE levels use Bajo/Alto while search depth and guidance 
     assert.equal(depth.querySelector('option[value="HIGH"]').textContent,'Alta');
     assert.equal(depth.querySelector('option[value="LIGHT"]').textContent,'Ligera');
     assert.match(count.textContent,/0 \/ \d+ factores seleccionados · 3 variables elegibles/);
-    assert.equal(note.hidden,false);
-    assert.equal(note.textContent,'Activa DOE para elegir factores y editar los niveles Bajo / Alto.');
+    assert.equal(note.hidden,true);
+    assert(headings.every(cell=>cell.hidden),'Inactive DOE columns are hidden.');
     h.dialog.querySelector('.scenario-doe-enabled').click();
     conveyorRow(h).querySelector('.scenario-doe-select').click();
     assert.match(count.textContent,/1 \/ \d+ factores seleccionados · 3 variables elegibles/);
@@ -193,8 +193,33 @@ test('Spanish conveyor DOE levels use Bajo/Alto while search depth and guidance 
     change(h,depth,'LIGHT');
     assert.equal(depth.selectedOptions[0].textContent,'Ligera');
     assert.equal(count.textContent,'DOE no está disponible en profundidad Ligera.');
-    assert.equal(note.hidden,false);
-    assert.equal(note.textContent,'Selecciona profundidad Media o Alta para usar DOE.');
-    assert(headings.every(cell=>!cell.hidden),'Translated DOE columns remain visible at Light depth.');
+    assert.equal(note.hidden,true);
+    assert(headings.every(cell=>cell.hidden),'DOE columns are hidden at Light depth.');
+  }finally{h.close();}
+});
+
+test('Light still enforces physical limits, focuses the invalid conveyor, and does not start a new search',()=>{
+  const h=browser({depth:'LIGHT',doe:true});
+  try{
+    h.tabs[2].click();
+    const row=conveyorRow(h),limit=row.querySelector('.scenario-limit input'),target=row.querySelector('.scenario-target');
+    // Current speed is 18 m/min; the target increases it to 21.6 m/min.
+    limit.value='17';limit.dispatchEvent(new h.w.Event('input',{bubbles:true}));
+    assert.equal(limit.getAttribute('aria-invalid'),'true');
+    assert.match(row.querySelector('.scenario-limit-error').textContent,/Maximum cannot be below the current value 18 m\/min/);
+    const oldEntry=JSON.stringify(h.sim.whatIf.evaluations.at(-1));
+    h.dialog.close();h.host.querySelector('.scenario-search').click();
+    assert.equal(h.dialog.open,true);assert.equal(h.pages[2].hidden,false);
+    assert.equal(h.w.document.activeElement,limit);
+    assert.match(h.dialog.querySelector('.scenario-config-validation').textContent,/18 m\/min/);
+    assert.notEqual(h.host.getAttribute('aria-busy'),'true');
+    assert.equal(JSON.stringify(h.sim.whatIf.evaluations.at(-1)),oldEntry);
+    // A blank limit imposes no additional bound; the reset also restores
+    // the planner target and DOE defaults in this group.
+    target.value='23';target.dispatchEvent(new h.w.Event('input',{bubbles:true}));
+    const reset=[...h.pages[2].querySelectorAll('button')].find(b=>b.title==='Restore default targets and limits');
+    assert(reset);reset.click();
+    assert.equal(limit.value,'');assert.equal(target.value,'21.6');assert.equal(limit.getAttribute('aria-invalid'),'false');
+    assert.equal(h.dialog.querySelector('.scenario-config-validation').hidden,true);
   }finally{h.close();}
 });

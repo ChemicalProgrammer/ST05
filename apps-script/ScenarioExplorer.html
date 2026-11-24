@@ -5,20 +5,42 @@
 .analysis-recommendation .scenario-activity:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .analysis-recommendation.scenario-trace-open > :not(.scenario-trace-panel):not(.scenario-actions):not(dialog){display:none!important}
 .scenario-trace-panel[hidden]{display:none!important}
-.scenario-trace-header,.scenario-trace-row-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2)}
-.scenario-trace-list{margin:0;padding-inline-start:1.5em}
-.scenario-trace-row{padding-block:var(--space-2);border-bottom:1px solid var(--border)}
-.scenario-trace-meta{white-space:nowrap;font-variant-numeric:tabular-nums}
+.scenario-trace-panel{min-width:0;display:grid;gap:var(--space-2)}
+.scenario-trace-header{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2)}
+.scenario-trace-header>strong{font-size:var(--font-card,var(--font-body))}
+.scenario-trace-panel .scenario-trace-total{display:block;margin:0;font-size:var(--font-caption);font-variant-numeric:tabular-nums}
 .scenario-trace-panel .chart-note{overflow-wrap:anywhere}
-.scenario-trace-stats{display:grid;gap:var(--space-1)}
-.scenario-trace-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,105px),1fr));gap:var(--space-1) var(--space-2);margin-top:var(--space-1);font-size:var(--font-secondary)}
-.scenario-trace-counter{display:flex;flex-direction:column;min-width:0}
-.scenario-trace-counter>span{color:var(--muted);overflow-wrap:anywhere}
-.scenario-trace-counter>strong{font-variant-numeric:tabular-nums;font-weight:600}
+.scenario-trace-stats{display:grid;gap:var(--space-1);font-size:var(--font-caption);margin:0}
+.scenario-trace-stats:empty{display:none}
+.scenario-trace-panel .scenario-trace-list{display:grid;gap:var(--space-1);list-style:none;margin:0;padding:0;min-width:0}
+.scenario-trace-list>.scenario-trace-row{list-style:none;min-width:0;margin:0;padding:0;border:0}
+.scenario-trace-row>.scenario-trace-step{display:block;min-width:0;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);overflow:hidden}
+.scenario-trace-step>.scenario-trace-step-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(7.8rem,42%);align-items:center;gap:var(--space-2);list-style:none;cursor:pointer;margin:0;padding:var(--space-2);min-width:0;font-size:var(--font-secondary);font-weight:var(--weight-semibold,600);line-height:var(--leading-tight,1.25)}
+.scenario-trace-step-summary::-webkit-details-marker{display:none}
+.scenario-trace-step-summary::marker{content:''}
+.scenario-trace-step-summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:var(--radius-sm)}
+.scenario-trace-step-title{display:flex;align-items:center;gap:var(--space-1);min-width:0}
+.scenario-trace-step-title::before{content:'';flex:none;width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform var(--duration-normal,180ms) ease;margin-inline-end:2px;color:var(--muted)}
+.scenario-trace-step[open]>.scenario-trace-step-summary .scenario-trace-step-title::before{transform:rotate(45deg)}
+.scenario-trace-step-index{flex:none;color:var(--muted);font-variant-numeric:tabular-nums}
+.scenario-trace-step-name{min-width:0;overflow-wrap:anywhere;color:var(--ink)}
+.scenario-trace-step-bar{position:relative;isolation:isolate;height:1.45rem;min-width:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:#e9ecef;overflow:hidden}
+.scenario-trace-step-fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--trace-fill,#ee8585);transition:width var(--duration-normal,180ms) ease,background-color var(--duration-normal,180ms) ease}
+.scenario-trace-step-bar[data-indeterminate=true] .scenario-trace-step-fill{width:100%!important;background:repeating-linear-gradient(120deg,#d6dce2 0,#d6dce2 6px,#e9ecef 6px,#e9ecef 12px);background-size:28px 28px;animation:scenario-trace-indeterminate 1.2s linear infinite}
+@keyframes scenario-trace-indeterminate{to{background-position:28px 0}}
+.scenario-trace-step-meta{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#17212b;font-size:var(--font-caption);font-weight:var(--weight-semibold,600);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1}
+.scenario-trace-step-details{padding:var(--space-1) var(--space-2) var(--space-2);border-top:1px solid var(--line);font-size:var(--font-caption);line-height:var(--leading-body,1.4)}
+.scenario-trace-step[open]>.scenario-trace-step-details{animation:scenario-trace-expand var(--duration-normal,180ms) ease-out}
+@keyframes scenario-trace-expand{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.scenario-trace-step-note{color:var(--muted);margin:0 0 var(--space-1);overflow-wrap:anywhere}
+.scenario-trace-step-list{display:grid;gap:1px;list-style:none;margin:0;padding:0}
+.scenario-trace-step-list>li{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-2);min-width:0;margin:0;padding:0;color:var(--muted)}
+.scenario-trace-step-list>li>span{min-width:0;overflow-wrap:anywhere}
+.scenario-trace-step-list>li>strong{flex:none;color:var(--ink);font-size:inherit;font-variant-numeric:tabular-nums;font-weight:var(--weight-semibold,600)}
 .scenario-trace-mini-progress{height:4px;border-radius:4px;overflow:hidden;background:var(--accent-soft);margin-top:var(--space-2)}
 .scenario-trace-overall{height:6px;margin-top:0}
 .scenario-trace-mini-progress>span{display:block;height:100%;background:var(--accent);transition:width .18s ease}
-@media(prefers-reduced-motion:reduce){.scenario-trace-mini-progress>span{transition:none}}
+@media(prefers-reduced-motion:reduce){.scenario-trace-mini-progress>span,.scenario-trace-step-fill,.scenario-trace-step-title::before{transition:none}.scenario-trace-step[open]>.scenario-trace-step-details,.scenario-trace-step-bar[data-indeterminate=true] .scenario-trace-step-fill{animation:none}}
 .scenario-config-dialog[data-scenario-scope]>.dialog-heading{padding:var(--space-3) var(--space-4)}
 .scenario-config-dialog[data-scenario-scope]>.dialog-body{padding:var(--space-4)}
 .scenario-config-dialog[data-scenario-scope] .scenario-config-section{display:grid;gap:var(--subsection-gap);padding:0;border:0;min-width:0;align-content:start}
@@ -397,12 +419,50 @@ window.STScenarioExplorer=(function(){
     var warningSlot=el('div','','scenario-warning-slot');host.append(warningSlot);
     var progressTrace=[],tracePercent=0,traceOutcome='',traceSummary={},lastTracePaint=0;
     var tracePanel=el('section','','scenario-trace-panel');tracePanel.hidden=true;
-    var traceHead=el('div','','scenario-trace-header'),traceBack=button('← Back',function(){showTrace(false);}),traceTitle=el('strong','Analysis progress'),traceTotal=el('p','','chart-note'),traceOverallBar=el('div','','scenario-trace-mini-progress scenario-trace-overall'),traceList=el('ol','','scenario-trace-list'),traceStats=el('div','','scenario-trace-stats chart-note'),traceMessage=el('p','','chart-note');
+    var traceHead=el('div','','scenario-trace-header'),traceBack=button('← Back',function(){showTrace(false);}),traceTitle=el('strong','Analysis progress'),traceTotal=el('p','','chart-note scenario-trace-total'),traceOverallBar=el('div','','scenario-trace-mini-progress scenario-trace-overall'),traceList=el('ol','','scenario-trace-list'),traceStats=el('div','','scenario-trace-stats chart-note'),traceMessage=el('p','','chart-note');
     traceBack.className='ghost scenario-trace-back';traceBack.dataset.scenarioTraceControl='true';
     traceHead.append(traceTitle,traceBack);traceOverallBar.append(el('span'));tracePanel.append(traceHead,traceTotal,traceOverallBar,traceStats,traceList,traceMessage);
     function traceText(value){var es={'Analysis progress':'Avance del análisis','Back':'Regresar','Elapsed':'Tiempo transcurrido','View analysis progress':'Ver avance del análisis','Preparing':'Preparación','Exploratory reliability targets':'Exploración de confiabilidad','Conditional flow DOE screening':'Selección de factores DOE','Baseline':'Escenario base','Searching category':'Búsqueda de candidatos','Evaluating selection':'Evaluación de selección','Refining candidates':'Refinamiento de candidatos','Design of experiments (DOE)':'Diseño de experimentos (DOE)','Statistical analysis (ANOVA)':'Análisis estadístico (ANOVA)','Screening finalists':'Selección de finalistas','Comparing finalists':'Comparación de finalistas','Full-horizon reliability diagnostic':'Diagnóstico de confiabilidad a horizonte completo','Independent confirmation':'Confirmación independiente','Matched failure-free diagnostic':'Diagnóstico sin fallas con condiciones equivalentes','Confirmation analysis':'Análisis de confirmación','Running':'En proceso','Completed':'Completado','Cancelled':'Cancelado','Failed':'Error','Interrupted':'Interrumpido','Factors screened':'Factores evaluados','Pairs screened':'Pares evaluados','Machines screened':'Equipos evaluados','Targets tested':'Objetivos evaluados','Packages tested':'Paquetes evaluados','Candidates checked':'Candidatos evaluados','Candidate budget':'Presupuesto de candidatos','Passes':'Pasadas','Coordinates':'Variables','Combinations':'Combinaciones','Finalists':'Finalistas','Baseline batches':'Lotes base','Batches':'Lotes','Rounds':'Rondas','Rounds resolved':'Rondas resueltas','During exploration':'Durante la exploración','Reused baseline':'Escenario base reutilizado','Overall progress':'Avance general','Active batches':'Lotes activos','Reused batches':'Lotes reutilizados','Invalid candidates':'Candidatos no factibles','Factors':'Factores','Responses':'Respuestas','Contrasts':'Contrastes','Analyses':'Análisis','Avg. calculated candidate batch':'Tiempo medio por lote de candidato calculado','Since last meaningful gain':'Desde última mejora significativa','No meaningful gain yet':'Sin mejora significativa aún','Candidates without meaningful gain':'Candidatos sin mejora significativa','Budget':'Presupuesto','Finished early':'Finalizado anticipadamente','Input and search configuration':'Datos de entrada y configuración de búsqueda','Baseline and candidate':'Base y candidato','Estimated progress':'Avance estimado'};return document.documentElement.lang==='es'&&es[value]?es[value]:window.STLanguage?.translate(value)||value;}
     function elapsedLabel(ms){var seconds=Math.max(0,Math.floor(ms/1000));return Math.floor(seconds/60)+'m '+String(seconds%60).padStart(2,'0')+'s';}
     function averageTimeLabel(ms){return ms<60000?(ms/1000).toFixed(2)+'s':elapsedLabel(ms);}
+    // An adaptive step without a known denominator stays indeterminate.
+    function traceBarState(step){
+      var percent=Number.isFinite(step.percent)?Math.max(0,Math.min(100,step.percent)):null;
+      var complete=step.state==='Completed'&&percent===100;
+      var stopped=['Cancelled','Failed','Interrupted'].includes(step.state);
+      var hue=complete?128:percent==null||stopped?0:percent<=50?percent*.9:45+(percent-50)*.82;
+      return {percent:percent,indeterminate:percent===null&&step.state==='Running',color:complete?'#83c99b':stopped?'#e79797':percent===null?'#d6dce2':'hsl('+hue.toFixed(1)+' 76% 72%)'};
+    }
+    var traceRows=[],traceRowsSource=null;
+    function createTraceRow(step,index){
+      var row=el('li','','scenario-trace-row'),details=el('details','','scenario-trace-step'),head=el('summary','','scenario-trace-step-summary'),title=el('div','','scenario-trace-step-title'),number=el('span',String(index+1)+'.','scenario-trace-step-index'),name=el('span','','scenario-trace-step-name'),bar=el('div','','scenario-trace-step-bar'),fill=el('span','','scenario-trace-step-fill'),meta=el('span','','scenario-trace-step-meta'),content=el('div','','scenario-trace-step-details'),note=el('p','','scenario-trace-step-note'),list=el('ul','','scenario-trace-step-list');
+      title.append(number,name);bar.append(fill,meta);head.append(title,bar);content.append(note,list);details.append(head,content);row.append(details);
+      bar.setAttribute('role','progressbar');bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','100');
+      var view={row,details,head,name,bar,fill,meta,note,list,manual:false,state:null,detailKey:null,stepName:step.name};
+      head.addEventListener('click',()=>{view.manual=true;});
+      return view;
+    }
+    function updateTraceRow(view,step){
+      var state=traceBarState(step),translatedName=traceText(step.name),percentText=state.percent===null?'—':state.percent.toFixed(1)+'%',time=elapsedLabel(step.elapsedMs);
+      view.row.dataset.traceState=step.state;
+      // Preserve native details nodes and focus across live updates.
+      if(view.state!==step.state&&!view.manual)view.details.open=step.state==='Running';
+      view.state=step.state;view.name.textContent=translatedName;
+      view.meta.textContent=percentText+' · '+time;
+      view.bar.dataset.indeterminate=String(state.indeterminate);
+      view.fill.style.width=(state.percent??0)+'%';view.fill.style.setProperty('--trace-fill',state.color);
+      view.bar.setAttribute('aria-label',translatedName);
+      view.bar.setAttribute('aria-valuetext',percentText+' · '+time+' · '+traceText(step.state));
+      if(state.percent===null)view.bar.removeAttribute('aria-valuenow');else view.bar.setAttribute('aria-valuenow',String(state.percent));
+      var note=traceText(step.state)+(step.detail?' · '+traceText(step.detail):'');
+      if(view.note.textContent!==note)view.note.textContent=note;
+      var work=Object.values(step.work||{});if(step.batchStarted>0)work.push({label:'Batches',done:step.batchCompleted||0,total:step.batchStarted},{label:'Rounds resolved',done:step.roundsCompleted||0,total:step.roundsStarted||0});
+      if(step.activeBatches>0)work.push({label:'Active batches',done:step.activeBatches});
+      if(step.reusedBatches>0)work.push({label:'Reused batches',done:step.reusedBatches});
+      var values=work.map(c=>[traceText(c.label)+(c.budget?' ('+traceText('Budget')+')':''),String(c.done)+(c.total==null?'':' / '+c.total)]);
+      if(step.calculatedCandidates>0)values.push([traceText('Avg. calculated candidate batch'),averageTimeLabel(step.candidateMs/step.calculatedCandidates)]);
+      var key=JSON.stringify(values);if(view.detailKey!==key){view.detailKey=key;view.list.replaceChildren();values.forEach(pair=>{var item=el('li');item.append(el('span',pair[0]),el('strong',pair[1]));view.list.append(item);});}
+    }
     function paintTrace(force){if(tracePanel.hidden)return;var now=Date.now();if(!force&&now-lastTracePaint<200)return;lastTracePaint=now;
       traceTitle.textContent=traceText('Analysis progress');traceBack.textContent='← '+traceText('Back');
       traceTotal.textContent=traceText(tracePercent===100?'Overall progress':'Estimated progress')+': '+tracePercent.toFixed(1)+'% · '+traceText('Elapsed')+' '+elapsedLabel(progressTrace.reduce((sum,p)=>sum+p.elapsedMs,0));traceOverallBar.firstChild.style.width=Math.max(0,Math.min(100,tracePercent))+'%';
@@ -410,17 +470,13 @@ window.STScenarioExplorer=(function(){
       if(traceSummary.candidateBatches>0)traceStats.append(el('div',traceText('Avg. calculated candidate batch')+': '+averageTimeLabel(traceSummary.candidateMs/traceSummary.candidateBatches)+' ('+traceSummary.candidateBatches+')'));
       if(traceSummary.searchElapsedMs!=null)traceStats.append(el('div',(traceSummary.sinceGainMs==null?traceText('No meaningful gain yet')+' · '+elapsedLabel(traceSummary.searchElapsedMs):traceText('Since last meaningful gain')+': '+elapsedLabel(traceSummary.sinceGainMs))+' · '+traceText('During exploration')));
       if(traceSummary.stagnant!=null)traceStats.append(el('div',traceText('Candidates without meaningful gain')+': '+traceSummary.stagnant));
-      traceList.replaceChildren();progressTrace.forEach(p=>{
-        var row=el('li','','scenario-trace-row'),head=el('div','','scenario-trace-row-head'),label=el('span',traceText(p.name)),meta=el('span',((p.percent==null?'—':p.percent.toFixed(1)+'%')+' · '+elapsedLabel(p.elapsedMs)),'scenario-trace-meta'),note=el('div',traceText(p.state)+(p.detail?' · '+traceText(p.detail):''),'chart-note');
-        row.dataset.traceState=p.state;head.append(label,meta);row.append(head,note);
-        var work=Object.values(p.work||{});if(p.batchStarted>0)work.push({label:'Batches',done:p.batchCompleted||0,total:p.batchStarted},{label:'Rounds resolved',done:p.roundsCompleted||0,total:p.roundsStarted||0});
-        if(p.activeBatches>0)work.push({label:'Active batches',done:p.activeBatches});
-        if(p.reusedBatches>0)work.push({label:'Reused batches',done:p.reusedBatches});
-        if(work.length){var counters=el('div','','scenario-trace-counters');work.forEach(c=>{var counter=el('div','','scenario-trace-counter'),value=String(c.done)+(c.total==null?'':' / '+c.total)+(c.budget?' ('+traceText('Budget')+')':'');counter.append(el('span',traceText(c.label)),el('strong',value));counters.append(counter);});row.append(counters);}
-        if(p.calculatedCandidates>0)row.append(el('div',traceText('Avg. calculated candidate batch')+': '+averageTimeLabel(p.candidateMs/p.calculatedCandidates),'chart-note'));
-        if(p.state==='Running'&&p.percent!=null){var bar=el('div','','scenario-trace-mini-progress');bar.append(el('span'));bar.firstChild.style.width=Math.max(0,Math.min(100,p.percent))+'%';row.append(bar);}
-        traceList.append(row);
+      if(traceRowsSource!==progressTrace){traceRowsSource=progressTrace;traceRows=[];traceList.replaceChildren();}
+      progressTrace.forEach((step,index)=>{
+        var view=traceRows[index];
+        if(!view||view.stepName!==step.name){var next=createTraceRow(step,index);if(view)view.row.replaceWith(next.row);else traceList.append(next.row);traceRows[index]=view=next;}
+        updateTraceRow(view,step);
       });
+      while(traceRows.length>progressTrace.length)traceRows.pop().row.remove();
       traceMessage.textContent=[traceOutcome?traceText(traceOutcome):'',status.textContent,progress.textContent].filter(Boolean).join(' · ');
     }
     function showTrace(open){if(open&&!progressTrace.length)return;tracePanel.hidden=!open;host.classList.toggle('scenario-trace-open',open);if(open){paintTrace(true);traceBack.focus();}else{activity.focus();}var target=open?tracePanel:activity;if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)target.animate?.([{opacity:.2,transform:'translateX('+ (open?'8':'-8')+'px)'},{opacity:1,transform:'translateX(0)'}],{duration:180,easing:'ease-out'});}

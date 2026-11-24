@@ -9,7 +9,8 @@
 #conveyor-analysis-dialog { --dialog-width:min(72rem,calc(100vw - 24px)); width:min(72rem,calc(100vw - 24px)); max-height:calc(100dvh - 24px); box-sizing:border-box; }
 #conveyor-analysis-dialog[open] { overflow:hidden; }
 #conveyor-analysis-body { min-width:0; max-width:100%; overflow-y:auto; overflow-x:hidden; }
-#conveyor-analysis-body > section { min-width:0; max-width:100%; }
+#conveyor-analysis-body > .st-subsection { min-width:0; max-width:100%; margin:0; padding:var(--subsection-padding); }
+#conveyor-analysis-body .st-subsection > .fold-content { display:grid; gap:var(--space-3); min-width:0; }
 #conveyor-analysis-body .table-scroll { min-width:0;max-width:100%;width:100%;overflow-x:auto;overflow-y:visible; }
 /* Columnas autoajustables: Parameter takes the leftover room, while
    every value/format/unit column occupies only its intrinsic content width.
@@ -43,10 +44,9 @@
   #conveyor-analysis-body :is(td,th) {padding:var(--space-2);}
   #conveyor-analysis-body thead th:not(:first-child) {min-width:3rem;}
 }
-#conveyor-analysis-body { display:grid; gap:var(--space-4); }
-#conveyor-analysis-body h3 { margin:0 0 var(--space-2); }
+#conveyor-analysis-body { display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:var(--subsection-gap,var(--space-4)); }
 #conveyor-analysis-body .chart-note { margin:0; }
-#conveyor-analysis-body .conveyor-analysis-verdict { display:inline-block; margin-inline-start:var(--space-2); padding:2px 8px; border-radius:999px; color:#fff; font-size:var(--font-secondary); white-space:nowrap; vertical-align:middle; }
+#conveyor-analysis-body .conveyor-analysis-verdict { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; color:#fff; font-size:var(--font-secondary); white-space:nowrap; }
 </style>
 <script>
 window.STConveyorAnalysis=(function(){
@@ -311,22 +311,24 @@ window.STConveyorAnalysis=(function(){
     // Encabezados breves: la descripción completa de cada formato se muestra
     // fuera de la tabla, para no forzar anchuras de columnas innecesarias.
     function table(title,headers,verdict,profiles){
-      const section=make(body,'section');
-      const heading=make(section,'h3',title);
-      heading.id='conveyor-analysis-section-'+body.children.length;
+      const tools=[];
       if(verdict){
-        const badge=make(heading,'span',verdict.status);
-        badge.className='conveyor-analysis-verdict';
+        const badge=document.createElement('span');
+        badge.textContent=verdict.status;
+        badge.className='conveyor-analysis-verdict st-status-pill';
         badge.style.backgroundColor=verdictColors[verdict.status];
         badge.title=verdict.statusReason;
+        tools.push(badge);
       }
-      if(profiles?.length){
-        const note=make(section,'p',profiles.length===1
-          ?'Format: '+profiles[0].name
-          :profiles.map((profile,index)=>'Value '+(index+1)+': '+profile.name).join(' · '));
-        note.className='conveyor-analysis-format-note chart-note';
-      }
-      const wrapper=make(section,'div');
+      const description=profiles?.length?(profiles.length===1
+        ?'Format: '+profiles[0].name
+        :profiles.map((profile,index)=>'Value '+(index+1)+': '+profile.name).join(' · ')):
+        'Installed geometry and recovery margin across applicable formats.';
+      const group=window.STSubsection.create({title,description,variant:'B',native:true,open:true,tools});
+      body.append(group.section);
+      const heading=group.title;
+      heading.id='conveyor-analysis-section-'+body.children.length;
+      const wrapper=make(group.body,'div');
       wrapper.className='table-scroll';
       const element=make(wrapper,'table');
       element.setAttribute('aria-labelledby',heading.id);
@@ -376,9 +378,11 @@ window.STConveyorAnalysis=(function(){
         make(element,'td',unit).className='metric-unit';
       }
     }
-    make(body,'p','Time to First Package After Restart is configured on the conveyor card. Positions are measured from the conveyor entry.').className='chart-note';
-    make(body,'p','Upstream Discharge Velocity (AF) overrides the conveyor speed used as the default discharge reference. Overflow requires conveyor population below 100%.').className='chart-note';
-    make(body,'p','Accumulation Zone uses Lact − Lp − Lbu. Queue reduction and antistarve use the worksheet assumptions. L (min needed) is the installed length required for zero recovery margin, at the current worksheet settings.').className='chart-note';
+    const notes=window.STSubsection.create({title:'Calculation notes',description:'Input definitions and engineering assumptions.',variant:'B',native:true,open:true});
+    body.append(notes.section);
+    make(notes.body,'p','Time to First Package After Restart is configured on the conveyor card. Positions are measured from the conveyor entry.').className='chart-note';
+    make(notes.body,'p','Upstream Discharge Velocity (AF) overrides the conveyor speed used as the default discharge reference. Overflow requires conveyor population below 100%.').className='chart-note';
+    make(notes.body,'p','Accumulation Zone uses Lact − Lp − Lbu. Queue reduction and antistarve use the worksheet assumptions. L (min needed) is the installed length required for zero recovery margin, at the current worksheet settings.').className='chart-note';
     body.scrollTop=0;
     dialog.showModal();
   }

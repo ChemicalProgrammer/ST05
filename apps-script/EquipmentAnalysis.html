@@ -8,10 +8,28 @@
 <style>
 #equipment-analysis-dialog { --dialog-width:min(64rem,calc(100vw - 24px)); width:var(--dialog-width); max-height:calc(100dvh - 24px); box-sizing:border-box; }
 #equipment-analysis-dialog[open] { overflow:hidden; }
-#equipment-analysis-body { min-width:0; overflow:auto; display:grid; gap:var(--space-4); }
-#equipment-analysis-body > section { min-width:0; }
-#equipment-analysis-body h3 { margin:0 0 var(--space-2); }
+#equipment-analysis-body { min-width:0; overflow:auto; display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:var(--subsection-gap,var(--space-4)); }
+#equipment-analysis-body > .st-subsection { min-width:0; margin:0; padding:var(--subsection-padding); }
+#equipment-analysis-body .st-subsection > .fold-content { display:grid; gap:var(--space-3); min-width:0; }
 #equipment-analysis-body .chart-note { margin:0; }
+#equipment-analysis-body .table-scroll { min-width:0; max-width:100%; overflow-x:auto; }
+#equipment-analysis-body .intervention-chart-scroll { overflow-x:auto; min-width:0; }
+#equipment-analysis-body .intervention-chart { display:block; width:100%; min-width:480px; max-width:780px; height:auto; margin-inline:auto; font-family:inherit; color:var(--ink); }
+#equipment-analysis-body .intervention-chart text { fill:currentColor; }
+#equipment-analysis-body .intervention-chart .zone-title { font-size:14px; font-weight:600; }
+#equipment-analysis-body .intervention-chart .zone-detail { font-size:11px; }
+#equipment-analysis-body .intervention-chart .axis-text { font-size:11px; }
+#equipment-analysis-body .intervention-chart .axis-title { font-size:13px; font-weight:600; }
+#equipment-analysis-body .intervention-chart .chart-grid { stroke:var(--line); stroke-width:1; opacity:.75; }
+#equipment-analysis-body .intervention-chart .chart-boundary { stroke:var(--ink); stroke-width:1.3; opacity:.6; }
+#equipment-analysis-body .intervention-chart .availability-line { stroke:var(--secondary-text,var(--ink)); stroke-width:2; stroke-dasharray:6 5; }
+#equipment-analysis-body .intervention-chart .equipment-point { fill:var(--accent); stroke:var(--surface); stroke-width:2.5; }
+#equipment-analysis-body .intervention-chart .equipment-point-ring { fill:none; stroke:var(--ink); stroke-width:1.5; }
+#equipment-analysis-body .intervention-legend { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-4); font-size:var(--font-secondary); }
+#equipment-analysis-body .intervention-legend-item { display:inline-flex; align-items:center; gap:var(--space-2); }
+#equipment-analysis-body .intervention-dot { display:inline-block; width:10px; height:10px; background:var(--accent); border:1px solid var(--ink); border-radius:50%; flex:none; }
+#equipment-analysis-body .intervention-line { display:inline-block; width:24px; border-top:2px dashed var(--secondary-text,var(--ink)); flex:none; }
+#equipment-analysis-body .intervention-current { font-weight:var(--weight-semibold); }
 #equipment-analysis-body table { width:100%; table-layout:auto; }
 #equipment-analysis-body :is(td,th) { padding:var(--space-2) var(--space-3); overflow-wrap:anywhere; }
 #equipment-analysis-body thead th:not(:first-child) { text-align:center; }
@@ -85,10 +103,100 @@ window.STEquipmentAnalysis=(function(){
     const element=document.createElement(tag);if(text!==undefined)element.textContent=text;parent.append(element);return element;
   }
   function note(parent,text){make(parent,'p',text).className='chart-note';}
-  function section(title,status){
-    const host=make(body,'section'),heading=make(host,'h3',title);
-    if(status){const pill=make(heading,'span',statusText(status));pill.className='equipment-analysis-pill st-status-pill '+(status==='PASS'?'is-pass':status==='FAIL'?'is-fail':status==='REVIEW'?'is-review':'');}
-    return host;
+  let foldStates=new Map();
+  function section(key,title,description,status){
+    const tools=[];
+    if(status){
+      const pill=document.createElement('span');
+      pill.textContent=statusText(status);
+      pill.className='equipment-analysis-pill st-status-pill '+(status==='PASS'?'is-pass':status==='FAIL'?'is-fail':status==='REVIEW'?'is-review':'');
+      tools.push(pill);
+    }
+    const group=window.STSubsection.create({title,description,variant:'B',native:true,open:foldStates.get(key)??true,tools});
+    group.section.dataset.analysisGroup=key;
+    body.append(group.section);
+    return group.body;
+  }
+  // Use a true logarithmic scale, with the engineering references at the
+  // quadrant boundaries. Extend the scale when an entered value is outside
+  // the default decade, rather than clipping or moving the equipment point.
+  function matrixGeometry(report){
+    const p=report.thresholds;
+    const valid=Number.isFinite(report.mtbfMinutes)&&report.mtbfMinutes>0&&Number.isFinite(report.mttrMinutes)&&report.mttrMinutes>0;
+    const xSpan=valid?Math.max(1,Math.ceil(Math.abs(Math.log10(report.mtbfMinutes/p.mtbfTargetMinutes))+.2)):1;
+    const ySpan=valid?Math.max(1,Math.ceil(Math.abs(Math.log10(report.mttrMinutes/p.mttrTargetMinutes))+.2)):1;
+    const bounds={left:75,right:705,top:22,bottom:316};
+    const {left,right,top,bottom}=bounds,midX=(left+right)/2,midY=(top+bottom)/2;
+    const xMin=Math.log10(p.mtbfTargetMinutes)-xSpan,xMax=xMin+2*xSpan;
+    const yMin=Math.log10(p.mttrTargetMinutes)-ySpan,yMax=yMin+2*ySpan;
+    const x=log=>left+(log-xMin)/(xMax-xMin)*(right-left);
+    const y=log=>bottom-(log-yMin)/(yMax-yMin)*(bottom-top);
+    const logRatio=Math.log10((1-p.availabilityTarget)/p.availabilityTarget);
+    const a=Math.max(xMin,yMin-logRatio),b=Math.min(xMax,yMax-logRatio);
+    return {bounds,midX,midY,x,y,xMin,xMax,yMin,yMax,xSpan,ySpan,
+      target:a<=b?{x1:x(a),y1:y(a+logRatio),x2:x(b),y2:y(b+logRatio)}:null,
+      point:valid?{x:x(Math.log10(report.mtbfMinutes)),y:y(Math.log10(report.mttrMinutes))}:null};
+  }
+  function interventionMatrix(host,r){
+    const g=matrixGeometry(r),{left,right,top,bottom}=g.bounds,{midX,midY}=g;
+    const scroll=make(host,'div');scroll.className='intervention-chart-scroll';
+    const ns='http://www.w3.org/2000/svg';
+    function svgNode(parent,tag,attrs={},content){
+      const node=document.createElementNS(ns,tag);
+      for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));
+      if(content!==undefined)node.textContent=content;
+      parent.append(node);return node;
+    }
+    const svg=svgNode(scroll,'svg',{class:'intervention-chart',viewBox:'0 0 735 374',role:'img','aria-label':t('Intervention matrix: MTBF versus MTTR, logarithmic axes','Matriz de intervención: MTBF frente a MTTR, ejes logarítmicos')});
+    svgNode(svg,'title',{},t('Equipment reliability and intervention matrix','Matriz de confiabilidad e intervención del equipo'));
+    const zones=[
+      {key:'JOINT',x:left,y:top,w:midX-left,h:midY-top,color:'var(--failure-soft,rgba(190,70,70,.12))',title:t('Joint intervention','Intervención conjunta'),detail:[t('Frequent and long failures','Fallas frecuentes y prolongadas'),t('Review rebuild / replace if Ai is low','Evaluar reconstrucción / reemplazo si Ai es baja')]},
+      {key:'MTTR',x:midX,y:top,w:right-midX,h:midY-top,color:'var(--starved-soft,rgba(190,140,30,.13))',title:t('Maintainability','Mantenibilidad'),detail:[t('Long repairs','Reparaciones prolongadas'),t('Reduce MTTR','Reducir MTTR')]},
+      {key:'MTBF',x:left,y:midY,w:midX-left,h:bottom-midY,color:'var(--starved-soft,rgba(190,140,30,.13))',title:t('Reliability','Confiabilidad'),detail:[t('Frequent failures','Fallas frecuentes'),t('Increase MTBF','Aumentar MTBF')]},
+      {key:'KEEP',x:midX,y:midY,w:right-midX,h:bottom-midY,color:'var(--success-soft,rgba(40,140,90,.12))',title:t('Keep / monitor','Conservar / monitorear'),detail:[t('Infrequent and short failures','Fallas poco frecuentes y cortas'),t('If availability target is met','Si cumple la meta de disponibilidad')]}
+    ];
+    for(const z of zones)svgNode(svg,'rect',{x:z.x,y:z.y,width:z.w,height:z.h,fill:z.color,'data-intervention-zone':z.key});
+    const tickText=v=>v>=1e6||v<.01?v.toExponential(1):fmt(v,Math.min(6,Math.max(2,Math.ceil(-Math.log10(v))+1)));
+    function ticks(span){const step=Math.max(1,Math.ceil(span/3)),ks=new Set([-span,0,span]);for(let k=step;k<span;k+=step){ks.add(k);ks.add(-k);}return [...ks].sort((a,b)=>a-b);}
+    for(const k of ticks(g.xSpan)){
+      const value=r.thresholds.mtbfTargetMinutes*Math.pow(10,k),x=g.x(Math.log10(value));
+      svgNode(svg,'line',{x1:x,y1:top,x2:x,y2:bottom,class:k===0?'chart-boundary':'chart-grid'});
+      svgNode(svg,'text',{x,y:bottom+18,'text-anchor':'middle',class:'axis-text'},tickText(value));
+    }
+    for(const k of ticks(g.ySpan)){
+      const value=r.thresholds.mttrTargetMinutes*Math.pow(10,k),y=g.y(Math.log10(value));
+      svgNode(svg,'line',{x1:left,y1:y,x2:right,y2:y,class:k===0?'chart-boundary':'chart-grid'});
+      svgNode(svg,'text',{x:left-8,y:y+4,'text-anchor':'end',class:'axis-text'},tickText(value));
+    }
+    svgNode(svg,'rect',{x:left,y:top,width:right-left,height:bottom-top,fill:'none',class:'chart-boundary'});
+    if(g.target)svgNode(svg,'line',{...g.target,class:'availability-line','data-availability-target':r.thresholds.availabilityTarget});
+    for(const z of zones){
+      const x=z.x+z.w/2,y=z.y+34;
+      svgNode(svg,'text',{x,y,'text-anchor':'middle',class:'zone-title'},z.title);
+      z.detail.forEach((label,i)=>svgNode(svg,'text',{x,y:y+20+i*16,'text-anchor':'middle',class:'zone-detail'},label));
+    }
+    if(g.point){
+      const {x,y}=g.point;
+      svgNode(svg,'circle',{cx:x,cy:y,r:9,class:'equipment-point-ring'});
+      const dot=svgNode(svg,'circle',{cx:x,cy:y,r:6.5,class:'equipment-point','data-equipment-marker':'true','data-mtbf':r.mtbfMinutes,'data-mttr':r.mttrMinutes});
+      svgNode(dot,'title',{},current.name+' · MTBF '+fmt(r.mtbfMinutes)+' min · MTTR '+fmt(r.mttrMinutes)+' min · Ai '+fmt(pct(r.availability))+'%');
+    }
+    svgNode(svg,'text',{x:(left+right)/2,y:bottom+43,'text-anchor':'middle',class:'axis-title'},'MTBF (min) →');
+    svgNode(svg,'text',{x:18,y:midY,transform:'rotate(-90 18 '+midY+')','text-anchor':'middle',class:'axis-title'},'MTTR (min) →');
+    const legend=make(host,'div');legend.className='intervention-legend';
+    if(g.point){
+      const item=make(legend,'span');item.className='intervention-legend-item';
+      make(item,'span').className='intervention-dot';
+      make(item,'span',current.name+' · MTBF '+fmt(r.mtbfMinutes)+' min · MTTR '+fmt(r.mttrMinutes)+' min · Ai '+fmt(pct(r.availability))+'%');
+    }
+    const target=make(legend,'span');target.className='intervention-legend-item';
+    make(target,'span').className='intervention-line';
+    make(target,'span',t('Ai target','Meta de Ai')+' '+fmt(pct(r.thresholds.availabilityTarget))+'%');
+    note(host,t('Logarithmic axes (minutes). Below the dashed line the availability target is met; above it availability is below target. The quadrant limits are the configured screening references.','Ejes logarítmicos (minutos). Debajo de la línea discontinua se cumple la meta de disponibilidad; arriba de ella no se cumple. Los límites de cuadrantes son las referencias de evaluación.'));
+    if(g.point){
+      make(host,'p',t('Recommended investigation: ','Investigación recomendada: ')+actionText(r.action)).className='intervention-current';
+      if(r.longClass&&!r.long)note(host,t('An active failure class has a long MTTR even though the effective MTTR is below the threshold. The recommendation accounts for this.','Una categoría activa presenta un MTTR prolongado aunque el MTTR efectivo esté por debajo del límite. La recomendación lo considera.'));
+    }else note(host,t('No equipment marker: valid active MTBF and MTTR are required.','Sin marcador del equipo: se necesitan MTBF y MTTR activos y válidos.')+' '+reasonText(r.reason));
   }
   function table(host,rows){
     const wrapper=make(host,'div');wrapper.className='table-scroll';
@@ -108,7 +216,7 @@ window.STEquipmentAnalysis=(function(){
     const e=simulation?.equipment?.find(x=>x.id===equipmentId);
     if(!e||e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')return;
     const report=window.STScenarios.equipmentAnalysis(simulation,equipmentId,options);
-    current={report,name:e.name||e.id};render();
+    foldStates=new Map();body.replaceChildren();current={report,name:e.name||e.id};render();
     if(!dialog.open)dialog.showModal();
     body.scrollTop=0;
   }
@@ -118,8 +226,13 @@ window.STEquipmentAnalysis=(function(){
     document.getElementById('equipment-analysis-title').textContent=t('Equipment Analysis Tool','Análisis de equipo')+' · '+current.name;
     const closeButton=document.getElementById('equipment-analysis-close');
     closeButton.title=t('Close equipment analysis','Cerrar análisis de equipo');closeButton.setAttribute('aria-label',closeButton.title);
+    for(const group of body.querySelectorAll('[data-analysis-group]'))foldStates.set(group.dataset.analysisGroup,group.open);
     body.replaceChildren();
-    let host=section(t('Reliability evaluation','Evaluación de confiabilidad'),r.status);
+    let host=section('matrix',t('Intervention diagnosis','Diagnóstico de intervención'),
+      t('Locate the equipment from MTBF and MTTR; no simulation required.','Ubica el equipo mediante MTBF y MTTR; no requiere simulación.'),r.status);
+    interventionMatrix(host,r);
+    host=section('reliability',t('Reliability evaluation','Evaluación de confiabilidad'),
+      t('Configured inputs and theoretical availability.','Datos configurados y disponibilidad teórica.'));
     note(host,reasonText(r.reason));
     table(host,[
       [t('Recommended investigation','Investigación recomendada'),actionText(r.action)],
@@ -132,7 +245,7 @@ window.STEquipmentAnalysis=(function(){
       [t('Expected downtime per 24 h','Tiempo teórico de falla por 24 h'),r.downtimeMinutesPerDay,'min']
     ]);
     note(host,t('Configured reliability only; stable alternating operation, excluding calendar stops, flow losses and separate micro-stops. This is not measured plant availability.','Solo confiabilidad configurada; alternancia estable de operación y reparación, sin calendario, pérdidas de flujo ni microparos independientes. No es disponibilidad medida en planta.'));
-    host=section(t('Screening targets and improvement gap','Metas de evaluación y brecha de mejora'));
+    host=section('targets',t('Screening targets and improvement gap','Metas de evaluación y brecha de mejora'),t('Compare configured values with the engineering targets.','Compara los valores configurados con las metas de ingeniería.'));
     table(host,[
       [t('Availability target','Meta de disponibilidad'),pct(p.availabilityTarget),'%'],
       [t('Minimum MTBF reference','Referencia mínima MTBF'),p.mtbfTargetMinutes,'min'],
@@ -144,11 +257,11 @@ window.STEquipmentAnalysis=(function(){
     ]);
     note(host,t('Default engineering references: 95%, 60 min and 10 min. They are not manufacturer or replacement standards. Targets are not verified attainable values.','Referencias iniciales de ingeniería: 95%, 60 min y 10 min. No son normas de fabricante ni de reemplazo. Los objetivos no son valores cuya factibilidad esté validada.'));
     if(r.classes.length){
-      host=section(t('Enabled failure classes','Categorías de falla activas'));
+      host=section('classes',t('Enabled failure classes','Categorías de falla activas'),t('Review the active general, minor and major failure inputs.','Revisa los datos activos de fallas generales, menores y mayores.'));
       table(host,r.classes.flatMap(c=>[[classText(c.kind)+' · MTBF',c.mtbfMinutes,'min'],[classText(c.kind)+' · MTTR',c.mttrMinutes,'min'],[classText(c.kind)+' · '+t('Event share','Proporción de eventos'),pct(c.eventShare),'%']]));
       note(host,t('Effective MTBF uses the sum of class failure rates; effective MTTR is weighted by those rates. General stops are never reclassified by duration.','El MTBF efectivo utiliza la suma de tasas de falla; el MTTR efectivo se pondera por esas tasas. Las fallas generales no se reclasifican por duración.'));
     }
-    host=section(t('Buffer coverage — Failure Coverage Ratio','Cobertura de acumulación — Failure Coverage Ratio'));
+    host=section('buffer',t('Buffer coverage — Failure Coverage Ratio','Cobertura de acumulación — Failure Coverage Ratio'),t('Estimate how long the connected conveyors can absorb a repair.','Estima cuánto tiempo los conveyors conectados pueden absorber una reparación.'));
     if(!r.bufferCoverage.length)note(host,t('Not evaluated: active MTTR and connected conveyor geometry are required.','No evaluado: se necesitan MTTR activo y geometría de conveyors conectados.'));
     for(const c of r.bufferCoverage){
       const direction=c.direction==='UPSTREAM'?t('Upstream — anti-block','Aguas arriba — anti-block'):t('Downstream — anti-starve','Aguas abajo — anti-starve');
@@ -157,7 +270,7 @@ window.STEquipmentAnalysis=(function(){
         ...c.classCoverage.map(v=>['FCR · '+classText(v.kind),v.ratio,'×'])]);
     }
     note(host,t('FCR ≥ 1 covers the mean repair duration using design population/free-space estimates, not live inventory. Missing geometry or a line boundary stays not evaluated.','FCR ≥ 1 cubre el tiempo medio de reparación con estimaciones de población/espacio libre de diseño, no inventario en vivo. Geometría faltante o extremo de línea queda no evaluado.'));
-    host=section(t('Capacity and line balance','Capacidad y balanceo de línea'));
+    host=section('capacity',t('Capacity and line balance','Capacidad y balanceo de línea'),t('Compare installed speed and availability-adjusted capacity.','Compara la velocidad instalada y la capacidad ajustada por disponibilidad.'));
     if(r.capacity){
       const c=r.capacity,unit=c.unit==='BOTTLE_EQUIVALENTS'?t('bottle eq/min','bot eq/min'):c.unit.toLowerCase()+'/min';
       table(host,[[t('Configured output rate','Velocidad configurada'),c.configuredRatePerMinute,unit],
@@ -167,7 +280,7 @@ window.STEquipmentAnalysis=(function(){
         [t('Availability-only deficit vs reference','Déficit por disponibilidad vs referencia'),c.availabilityOnlyDeficit,unit]]);
     }else note(host,t('Not evaluated: compatible speed and flow inputs are required.','No evaluado: se requieren velocidades y unidades de flujo compatibles.'));
     note(host,t('Static capacity screen; not simulated throughput. The reference is the pacemaker or model reference.','Evaluación estática de capacidad; no es throughput simulado. La referencia es el pacemaker o referencia del modelo.'));
-    host=section(t('Observed simulation losses','Pérdidas observadas de simulación'));
+    host=section('observed',t('Observed simulation losses','Pérdidas observadas de simulación'),t('Requires a current or compatible completed simulation.','Requiere una simulación actual o terminada compatible.'));
     if(o){
       const basis=({REPLICATION_MEAN:t('Mean per replication','Media por réplica'),COMPLETED_RUN:t('Completed numerical run','Simulación numérica terminada'),NUMERICAL_FRAME:t('Displayed numerical frame / single run','Frame numérico mostrado / una corrida'),SPATIAL_RUN:t('2D run','Corrida 2D')})[o.basis]||o.basis;
       table(host,[[t('Evidence basis','Base de evidencia'),basis],[t('Observed horizon','Horizonte observado'),minutes(o.durationSeconds),'min'],
@@ -182,7 +295,7 @@ window.STEquipmentAnalysis=(function(){
         [t('Back-up stop','Paro Back-up'),minutes(o.backupStopSeconds),'min']]);
       note(host,t('Event counts and elapsed fault time can include incomplete repairs. These are local, non-additive losses, not causal line OEE contributions.','El conteo y tiempo transcurrido pueden incluir reparaciones incompletas. Son pérdidas locales no aditivas; no representan contribuciones causales al OEE de línea.'));
     }else note(host,t('Not evaluated: run the current model or load a compatible completed simulation.','No evaluado: ejecuta el modelo actual o carga una simulación terminada compatible.'));
-    host=section(t('Line impact and intervention feasibility','Impacto en línea y factibilidad de intervención'));
+    host=section('impact',t('Line impact and intervention feasibility','Impacto en línea y factibilidad de intervención'),t('Requires matched CAPEX experiments and technical validation.','Requiere experimentos CAPEX pareados y validación técnica.'));
     if(r.counterfactual){
       const c=r.counterfactual;
       table(host,[[t('Conditional OEE gain without own failures','Ganancia condicional de OEE sin fallas propias'),c.deltaOeePp,'pp'],

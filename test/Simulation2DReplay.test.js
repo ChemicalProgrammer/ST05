@@ -174,6 +174,7 @@ test('2D uses the representative seed to calculate new production and preserves 
       return rendered;
     };
     window.eval(script('EquipmentEfficiency'));
+    window.eval(script('Subsection'));
     window.eval(script('ConveyorAnalysis'));
     window.eval(script('Simulation2D'));
     const source={round:2,seed:78,durationSeconds:10,summary:{outputCount:99999}};
@@ -581,6 +582,13 @@ test('2D uses the representative seed to calculate new production and preserves 
       assert(help.includes('Lrec < 0'));
     }
     assert.equal(analysisEl('title').textContent,'Conveyor Analysis Tool · belt');
+    const groups=[...analysisEl('body').querySelectorAll(':scope > .st-subsection')];
+    assert(groups.length>1);
+    assert(groups.every(group=>group.dataset.subsectionVariant==='B'&&group.tagName==='DETAILS'&&group.open));
+    assert(groups[0].querySelector('.fold-tools .conveyor-analysis-verdict'));
+    groups[0].open=false;
+    assert.equal(groups[0].open,false);
+    groups[0].open=true;
     const tableValue=label=>{
       const item=[...analysisEl('body').querySelectorAll('tbody tr')].find(row=>row.dataset.cell===label||row.cells[0].textContent===label);
       assert(item,label);

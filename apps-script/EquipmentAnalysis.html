@@ -1,0 +1,200 @@
+<dialog id="equipment-analysis-dialog" aria-labelledby="equipment-analysis-title">
+  <header class="dialog-heading">
+    <h2 id="equipment-analysis-title">Equipment Analysis Tool</h2>
+    <button id="equipment-analysis-close" type="button" class="ghost icon-button" data-icon="x" aria-label="Close equipment analysis" title="Close equipment analysis"></button>
+  </header>
+  <div id="equipment-analysis-body" class="dialog-body"></div>
+</dialog>
+<style>
+#equipment-analysis-dialog { --dialog-width:min(64rem,calc(100vw - 24px)); width:var(--dialog-width); max-height:calc(100dvh - 24px); box-sizing:border-box; }
+#equipment-analysis-dialog[open] { overflow:hidden; }
+#equipment-analysis-body { min-width:0; overflow:auto; display:grid; gap:var(--space-4); }
+#equipment-analysis-body > section { min-width:0; }
+#equipment-analysis-body h3 { margin:0 0 var(--space-2); }
+#equipment-analysis-body .chart-note { margin:0; }
+#equipment-analysis-body table { width:100%; table-layout:auto; }
+#equipment-analysis-body :is(td,th) { padding:var(--space-2) var(--space-3); overflow-wrap:anywhere; }
+#equipment-analysis-body thead th:not(:first-child) { text-align:center; }
+#equipment-analysis-body td.numeric { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#equipment-analysis-body td.metric-unit { width:1%; white-space:nowrap; }
+.equipment-analysis-pill.st-status-pill { position:static; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); background:var(--stopped-soft); width:max-content; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.equipment-analysis-pill.st-status-pill.is-pass { background:var(--success-soft); color:var(--success); }
+.equipment-analysis-pill.st-status-pill.is-fail { background:var(--failure-soft); color:var(--danger); }
+.equipment-analysis-pill.st-status-pill.is-review { background:var(--starved-soft); color:var(--warning); }
+.equipment-analysis-pill[hidden] { display:none!important; }
+.equipment-analysis-pill:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+#equipment-analysis-body .equipment-analysis-pill { cursor:default; margin-inline-start:var(--space-2); vertical-align:middle; }
+.live-equipment-card .numeric-equipment-header .equipment-analysis-pill { align-self:flex-start; }
+.simulation2d-analysis-action.equipment-analysis-pill { position:absolute; max-width:72px; }
+</style>
+<script>
+window.STEquipmentAnalysis=(function(){
+  'use strict';
+  const dialog=document.getElementById('equipment-analysis-dialog'),body=document.getElementById('equipment-analysis-body');
+  const es=()=>window.STLanguage?.current()==='es'||document.documentElement.lang==='es';
+  const t=(en,spanish)=>es()?spanish:en;
+  const statusText=status=>({
+    'PASS':t('PASS','CUMPLE'),'FAIL':t('FAIL','NO CUMPLE'),'REVIEW':t('REVIEW','REVISAR'),
+    'NOT EVALUATED':t('NOT EVALUATED','NO EVALUADO')
+  })[status]||status;
+  const actionText=action=>({
+    KEEP_MONITOR:t('Keep / monitor','Conservar / monitorear'),
+    IMPROVE_MTBF:t('Improve MTBF — reduce failure frequency','Mejorar MTBF — reducir frecuencia de fallas'),
+    IMPROVE_MTTR:t('Improve MTTR — reduce repair duration','Mejorar MTTR — reducir tiempo de reparación'),
+    JOINT_RELIABILITY_REVIEW:t('Review both MTBF and MTTR','Revisar MTBF y MTTR conjuntamente'),
+    REBUILD_OR_REPLACE_REVIEW:t('Investigate rebuild or replacement','Investigar reconstrucción o reemplazo'),
+    NOT_EVALUATED:t('Insufficient active reliability inputs','Sin datos activos suficientes de confiabilidad')
+  })[action]||action;
+  const reasonText=reason=>({
+    NO_MODELED_FAILURES:t('No active MTBF/MTTR model is configured; this is not evidence of perfect reliability.','No hay un modelo MTBF/MTTR activo; esto no demuestra confiabilidad perfecta.'),
+    INVALID_INPUTS:t('MTBF and MTTR require valid positive values or an explicitly inactive 0/0 class.','MTBF y MTTR requieren valores positivos válidos o una clase explícitamente inactiva 0/0.'),
+    FAILURES_DISABLED:t('Reliability failures are disabled in this run.','Las fallas de confiabilidad están desactivadas en esta ejecución.'),
+    CATEGORIES_DISABLED:t('All configured failure categories are disabled.','Todas las categorías de falla configuradas están desactivadas.'),
+    NOT_APPLICABLE:t('Equipment does not apply to this format.','El equipo no aplica para este formato.'),
+    CONVEYOR:t('Use Conveyor Analysis Tool.','Utiliza el análisis de conveyor.'),
+    BELOW_TARGET:t('Inherent availability is below the screening target.','La disponibilidad inherente está por debajo de la meta de evaluación.'),
+    PATTERN_REVIEW:t('Availability meets target, but frequency or duration merits review.','La disponibilidad cumple la meta, pero la frecuencia o duración requiere revisión.'),
+    TARGET_MET:t('Configured reliability meets all screening targets.','La confiabilidad configurada cumple las metas de evaluación.')
+  })[reason]||'';
+  const severityText=severity=>({
+    EXCELLENT:t('Excellent','Excelente'),VERY_GOOD:t('Very good','Muy buena'),GOOD:t('Good','Buena'),
+    FAIR:t('Needs improvement','Mejorable'),POOR:t('Poor','Deficiente'),CRITICAL:t('Critical','Crítica'),SEVERE:t('Severe','Severa')
+  })[severity]||'—';
+  const classText=kind=>({GENERAL:t('General','General'),MINOR:t('Minor','Menor'),MAJOR:t('Major','Mayor')})[kind]||kind;
+  const fmt=(v,d=2)=>Number.isFinite(v)?new Intl.NumberFormat(es()?'es-MX':'en-US',{maximumFractionDigits:d}).format(v):'—';
+  const pct=v=>Number.isFinite(v)?v*100:null;
+  const minutes=v=>Number.isFinite(v)?v/60:null;
+  function paint(button,assessment){
+    const status=assessment?.status||'NOT EVALUATED',label=statusText(status);
+    const tip=t('Open equipment analysis','Abrir análisis de equipo')+' · '+label+' · '+actionText(assessment?.action||'NOT_EVALUATED')+(reasonText(assessment?.reason)?' · '+reasonText(assessment.reason):'');
+    if(button.textContent!==label)button.textContent=label;
+    if(button.title!==tip){button.title=tip;button.setAttribute('aria-label',tip);}
+    button.classList.toggle('is-pass',status==='PASS');
+    button.classList.toggle('is-fail',status==='FAIL');
+    button.classList.toggle('is-review',status==='REVIEW');
+    button.dataset.evaluation=status;
+  }
+  function createButton(open){
+    const button=document.createElement('button');button.type='button';button.className='equipment-analysis-pill st-status-pill';
+    button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-controls','equipment-analysis-dialog');
+    button.addEventListener('click',event=>{event.stopPropagation();open();});
+    paint(button,null);return button;
+  }
+  function assess(equipment,config){return window.STScenarios.equipmentReliability(equipment,config);}
+  function make(parent,tag,text){
+    const element=document.createElement(tag);if(text!==undefined)element.textContent=text;parent.append(element);return element;
+  }
+  function note(parent,text){make(parent,'p',text).className='chart-note';}
+  function section(title,status){
+    const host=make(body,'section'),heading=make(host,'h3',title);
+    if(status){const pill=make(heading,'span',statusText(status));pill.className='equipment-analysis-pill st-status-pill '+(status==='PASS'?'is-pass':status==='FAIL'?'is-fail':status==='REVIEW'?'is-review':'');}
+    return host;
+  }
+  function table(host,rows){
+    const wrapper=make(host,'div');wrapper.className='table-scroll';
+    const tbl=make(wrapper,'table'),headers=make(make(tbl,'thead'),'tr');
+    [t('Parameter','Parámetro'),t('Value','Valor'),t('Unit','Unidad')].forEach(label=>make(headers,'th',label).scope='col');
+    const tbody=make(tbl,'tbody');
+    for(const [label,value,unit='',help] of rows){
+      const row=make(tbody,'tr');if(help)row.title=help;
+      make(row,'th',label).scope='row';
+      const cell=make(row,'td',typeof value==='string'?value:fmt(value));if(typeof value!=='string')cell.className='numeric';
+      make(row,'td',unit).className='metric-unit';
+    }
+  }
+  let current=null;
+  function close(){if(dialog.open)dialog.close();}
+  function open(simulation,equipmentId,options={}){
+    const e=simulation?.equipment?.find(x=>x.id===equipmentId);
+    if(!e||e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')return;
+    const report=window.STScenarios.equipmentAnalysis(simulation,equipmentId,options);
+    current={report,name:e.name||e.id};render();
+    if(!dialog.open)dialog.showModal();
+    body.scrollTop=0;
+  }
+  function render(){
+    if(!current)return;
+    const r=current.report,p=r.thresholds,o=r.observed;
+    document.getElementById('equipment-analysis-title').textContent=t('Equipment Analysis Tool','Análisis de equipo')+' · '+current.name;
+    const closeButton=document.getElementById('equipment-analysis-close');
+    closeButton.title=t('Close equipment analysis','Cerrar análisis de equipo');closeButton.setAttribute('aria-label',closeButton.title);
+    body.replaceChildren();
+    let host=section(t('Reliability evaluation','Evaluación de confiabilidad'),r.status);
+    note(host,reasonText(r.reason));
+    table(host,[
+      [t('Recommended investigation','Investigación recomendada'),actionText(r.action)],
+      [t('Inherent availability','Disponibilidad inherente'),pct(r.availability),'%','Ai = MTBF / (MTBF + MTTR)'],
+      [t('Inherent unavailability','Indisponibilidad inherente'),pct(r.unavailability),'%'],
+      ['MTBF',r.mtbfMinutes,'min'],['MTTR',r.mttrMinutes,'min'],['MTBF / MTTR',r.ratio,'×'],
+      [t('Availability severity','Nivel de disponibilidad'),severityText(r.severity)],
+      [t('Failures per operating hour','Fallas por hora de operación'),r.failuresPerOperatingHour,'1/h'],
+      [t('Expected failures per 24 h','Fallas esperadas por 24 h'),r.failuresPerDay,'1/day'],
+      [t('Expected downtime per 24 h','Tiempo teórico de falla por 24 h'),r.downtimeMinutesPerDay,'min']
+    ]);
+    note(host,t('Configured reliability only; stable alternating operation, excluding calendar stops, flow losses and separate micro-stops. This is not measured plant availability.','Solo confiabilidad configurada; alternancia estable de operación y reparación, sin calendario, pérdidas de flujo ni microparos independientes. No es disponibilidad medida en planta.'));
+    host=section(t('Screening targets and improvement gap','Metas de evaluación y brecha de mejora'));
+    table(host,[
+      [t('Availability target','Meta de disponibilidad'),pct(p.availabilityTarget),'%'],
+      [t('Minimum MTBF reference','Referencia mínima MTBF'),p.mtbfTargetMinutes,'min'],
+      [t('Maximum MTTR reference','Referencia máxima MTTR'),p.mttrTargetMinutes,'min'],
+      [t('Required MTBF at current MTTR','MTBF requerido con MTTR actual'),r.requiredMtbfMinutes,'min'],
+      [t('Maximum MTTR at current MTBF','MTTR máximo con MTBF actual'),r.requiredMttrMinutes,'min'],
+      [t('Required MTBF improvement factor','Factor de incremento requerido de MTBF'),r.mtbfImprovementFactor,'×'],
+      [t('Required MTTR reduction','Reducción requerida de MTTR'),r.mttrReductionPercent,'%']
+    ]);
+    note(host,t('Default engineering references: 95%, 60 min and 10 min. They are not manufacturer or replacement standards. Targets are not verified attainable values.','Referencias iniciales de ingeniería: 95%, 60 min y 10 min. No son normas de fabricante ni de reemplazo. Los objetivos no son valores cuya factibilidad esté validada.'));
+    if(r.classes.length){
+      host=section(t('Enabled failure classes','Categorías de falla activas'));
+      table(host,r.classes.flatMap(c=>[[classText(c.kind)+' · MTBF',c.mtbfMinutes,'min'],[classText(c.kind)+' · MTTR',c.mttrMinutes,'min'],[classText(c.kind)+' · '+t('Event share','Proporción de eventos'),pct(c.eventShare),'%']]));
+      note(host,t('Effective MTBF uses the sum of class failure rates; effective MTTR is weighted by those rates. General stops are never reclassified by duration.','El MTBF efectivo utiliza la suma de tasas de falla; el MTTR efectivo se pondera por esas tasas. Las fallas generales no se reclasifican por duración.'));
+    }
+    host=section(t('Buffer coverage — Failure Coverage Ratio','Cobertura de acumulación — Failure Coverage Ratio'));
+    if(!r.bufferCoverage.length)note(host,t('Not evaluated: active MTTR and connected conveyor geometry are required.','No evaluado: se necesitan MTTR activo y geometría de conveyors conectados.'));
+    for(const c of r.bufferCoverage){
+      const direction=c.direction==='UPSTREAM'?t('Upstream — anti-block','Aguas arriba — anti-block'):t('Downstream — anti-starve','Aguas abajo — anti-starve');
+      table(host,[[direction,statusText(c.status)],[t('Connected conveyors','Conveyors conectados'),c.conveyorIds.join(', ')||'—'],
+        [t('Design coverage time','Tiempo de cobertura de diseño'),c.seconds,'s'],['FCR (Tbuffer / MTTR)',c.ratio,'×'],
+        ...c.classCoverage.map(v=>['FCR · '+classText(v.kind),v.ratio,'×'])]);
+    }
+    note(host,t('FCR ≥ 1 covers the mean repair duration using design population/free-space estimates, not live inventory. Missing geometry or a line boundary stays not evaluated.','FCR ≥ 1 cubre el tiempo medio de reparación con estimaciones de población/espacio libre de diseño, no inventario en vivo. Geometría faltante o extremo de línea queda no evaluado.'));
+    host=section(t('Capacity and line balance','Capacidad y balanceo de línea'));
+    if(r.capacity){
+      const c=r.capacity,unit=c.unit==='BOTTLE_EQUIVALENTS'?t('bottle eq/min','bot eq/min'):c.unit.toLowerCase()+'/min';
+      table(host,[[t('Configured output rate','Velocidad configurada'),c.configuredRatePerMinute,unit],
+        [t('Installed maximum rate','Velocidad máxima instalada'),c.maximumRatePerMinute,unit],
+        [t('Line reference rate','Velocidad de referencia de línea'),c.referenceRatePerMinute,unit],
+        [t('Availability-only output rate','Velocidad equivalente por disponibilidad'),c.availabilityOnlyRatePerMinute,unit],
+        [t('Availability-only deficit vs reference','Déficit por disponibilidad vs referencia'),c.availabilityOnlyDeficit,unit]]);
+    }else note(host,t('Not evaluated: compatible speed and flow inputs are required.','No evaluado: se requieren velocidades y unidades de flujo compatibles.'));
+    note(host,t('Static capacity screen; not simulated throughput. The reference is the pacemaker or model reference.','Evaluación estática de capacidad; no es throughput simulado. La referencia es el pacemaker o referencia del modelo.'));
+    host=section(t('Observed simulation losses','Pérdidas observadas de simulación'));
+    if(o){
+      const basis=({REPLICATION_MEAN:t('Mean per replication','Media por réplica'),COMPLETED_RUN:t('Completed numerical run','Simulación numérica terminada'),NUMERICAL_FRAME:t('Displayed numerical frame / single run','Frame numérico mostrado / una corrida'),SPATIAL_RUN:t('2D run','Corrida 2D')})[o.basis]||o.basis;
+      table(host,[[t('Evidence basis','Base de evidencia'),basis],[t('Observed horizon','Horizonte observado'),minutes(o.durationSeconds),'min'],
+        [t('Own failures','Fallas propias'),o.failureCount],[t('Own failure time','Tiempo en falla propia'),minutes(o.failureSeconds),'min'],
+        [t('Own failure share of horizon','Porcentaje del horizonte en falla propia'),o.failurePercent,'%'],
+        [t('Observed reliability exposure per failure','Exposición observada por falla'),o.observedExposurePerFailureMinutes,'min'],
+        [t('Observed fault time per failure','Tiempo observado en falla por evento'),o.observedFaultTimePerFailureMinutes,'min'],
+        [t('Micro-stop time','Tiempo de microparos'),minutes(o.microStopSeconds),'min'],
+        [t('Starved time','Tiempo Starved'),minutes(o.starvedSeconds),'min'],
+        [t('Blocked time','Tiempo Blocked'),minutes(o.blockedSeconds),'min'],
+        [t('Waiting for Prime','Espera de Prime'),minutes(o.waitingForPrimeSeconds),'min'],
+        [t('Back-up stop','Paro Back-up'),minutes(o.backupStopSeconds),'min']]);
+      note(host,t('Event counts and elapsed fault time can include incomplete repairs. These are local, non-additive losses, not causal line OEE contributions.','El conteo y tiempo transcurrido pueden incluir reparaciones incompletas. Son pérdidas locales no aditivas; no representan contribuciones causales al OEE de línea.'));
+    }else note(host,t('Not evaluated: run the current model or load a compatible completed simulation.','No evaluado: ejecuta el modelo actual o carga una simulación terminada compatible.'));
+    host=section(t('Line impact and intervention feasibility','Impacto en línea y factibilidad de intervención'));
+    if(r.counterfactual){
+      const c=r.counterfactual;
+      table(host,[[t('Conditional OEE gain without own failures','Ganancia condicional de OEE sin fallas propias'),c.deltaOeePp,'pp'],
+        [t('Conditional throughput gain','Ganancia condicional de throughput'),c.deltaThroughput,(c.throughputUnit||'units')+'/min'],
+        [t('Exploration duration','Duración de exploración'),minutes(c.run?.durationSeconds),'min'],[t('Replications','Réplicas'),c.run?.rounds]]);
+      note(host,t('Saved matched CAPEX reliability exploration. Not independent confirmation or plant-validated gain. Individual gains are not additive.','Exploración CAPEX pareada de confiabilidad guardada. No es confirmación independiente ni ganancia validada en planta. Los impactos individuales no son aditivos.'));
+    }else note(host,t('Line impact not evaluated: CAPEX reliability screening performs matched per-machine failure removal. This dialog launches no extra simulations.','Impacto en línea no evaluado: la exploración CAPEX de confiabilidad ejecuta experimentos pareados eliminando fallas de cada equipo. Este diálogo no inicia simulaciones adicionales.'));
+    note(host,t('Replacement is not established by MTBF/MTTR. Compare achievable maintenance/retrofit and replacement targets, line impact, failure-mode history, obsolescence and lifecycle cost before a decision.','MTBF/MTTR no determinan un reemplazo. Antes de decidir, comparar metas alcanzables de mantenimiento, retrofit y reemplazo, impacto de línea, historial de causas, obsolescencia y costo de ciclo de vida.'));
+  }
+  document.getElementById('equipment-analysis-close').addEventListener('click',close);
+  dialog.addEventListener('close',()=>{current=null;});
+  window.addEventListener('st-language-change',()=>{if(dialog.open)render();});
+  return {assess,paint,createButton,open,close,statusText};
+})();
+</script>

@@ -4558,8 +4558,9 @@ function reliabilitySensitivityCandidates(simulation,{mtbfMultiplier=2,mttrMulti
     const changes=['mtbfMinutes','mttrMinutes'].map((key,i)=>({...scenarioChange(e,'noiseProfile.reliability.'+key,Math.max(SCENARIO_FIELDS['noiseProfile.reliability.'+key][0],Math.min(SCENARIO_FIELDS['noiseProfile.reliability.'+key][1],e.noiseProfile.reliability[key]*(i?mttrMultiplier:mtbfMultiplier)))),external:true,analysisOnly:true,interventionType:'SENSITIVITY',justification:'Exploratory sensitivity level; not an achievable intervention target.'}));
     const observed=diagnosis.equipment.find(r=>r.equipmentId===e.id);
     const stopData= scenarioStopDataCoverage(simulation,e);
+    const assessment=equipmentReliabilityAssessment(e,simulation.dynamicConfig);
     return ['MTBF','MTTR','JOINT'].map((kind,i)=>({equipmentId:e.id,equipmentName:e.name,kind,changes:i===2?changes:[changes[i]],ownStopPercent:observed?.ownStopPercent??null,
-      failureSeconds:observed?.failureSeconds??null,stopDataCoverage:stopData,targetScope:stopData.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED',
+      failureSeconds:observed?.failureSeconds??null,reliabilityAssessment:assessment,stopDataCoverage:stopData,targetScope:stopData.mode==='SPLIT'?'ALL_CONFIGURED_STOP_CLASSES':'GENERAL_UNCLASSIFIED',
       availabilityBefore:e.noiseProfile.reliability.mtbfMinutes/(e.noiseProfile.reliability.mtbfMinutes+e.noiseProfile.reliability.mttrMinutes)}));
   }).sort((a,b)=>(b.failureSeconds??0)-(a.failureSeconds??0));
 }
@@ -4626,6 +4627,142 @@ function scenarioAudit(simulation){
     return [{equipmentId:e.id,equipmentName:e.name,engineering:zone?.engineering||null,upstreamId:zone?.upstreamControlEquipmentId,downstreamId:zone?.downstreamControlEquipmentId}];
   });
 }
+// Screening policy, not a manufacturer requirement or an automatic replacement rule.
+// All time inputs are in minutes, except explicitly named Seconds fields.
+const EQUIPMENT_RELIABILITY_POLICY=Object.freeze({availabilityTarget:.95,mtbfTargetMinutes:60,mttrTargetMinutes:10});
+function equipmentReliabilityAssessment(equipment,config={},policy=EQUIPMENT_RELIABILITY_POLICY){
+  const e=equipment||{},r=e.noiseProfile?.reliability,split=e.processData?.equipment?.stopInputs;
+  const target=Number.isFinite(policy.availabilityTarget)&&policy.availabilityTarget>0&&policy.availabilityTarget<1?policy.availabilityTarget:.95;
+  const bfTarget=Number.isFinite(policy.mtbfTargetMinutes)&&policy.mtbfTargetMinutes>0?policy.mtbfTargetMinutes:60;
+  const trTarget=Number.isFinite(policy.mttrTargetMinutes)&&policy.mttrTargetMinutes>0?policy.mttrTargetMinutes:10;
+  const thresholds={availabilityTarget:target,mtbfTargetMinutes:bfTarget,mttrTargetMinutes:trTarget};
+  const base={equipmentId:e.id,name:e.name,thresholds,status:'NOT EVALUATED',action:'NOT_EVALUATED',replacementRequired:null,
+    source:'CONFIGURED_MODEL',classes:[],mtbfMinutes:null,mttrMinutes:null,availability:null,unavailability:null,ratio:null};
+  const none=reason=>({...base,reason});
+  if(e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')return none('CONVEYOR');
+  if(e.processData?.productApplies===false)return none('NOT_APPLICABLE');
+  if(config.reliabilityEnabled===false)return none('FAILURES_DISABLED');
+  const positive=p=>Number.isFinite(p?.mtbfMinutes)&&p.mtbfMinutes>0&&Number.isFinite(p?.mttrMinutes)&&p.mttrMinutes>0;
+  const zero=p=>p?.mtbfMinutes===0&&p?.mttrMinutes===0;
+  const categories=config.reliabilityCategories||{};
+  let classes=[],mode;
+  if(split!==undefined){
+    if(!['minor','major'].every(k=>positive(split?.[k])||zero(split?.[k])))return none('INVALID_INPUTS');
+    const configured=['minor','major'].filter(k=>positive(split[k]));
+    if(!configured.length)return none('NO_MODELED_FAILURES');
+    if(!positive(r))return none('INVALID_INPUTS');
+    classes=configured.filter(k=>categories[k]!==false).map(k=>({kind:k.toUpperCase(),mtbfMinutes:split[k].mtbfMinutes,mttrMinutes:split[k].mttrMinutes}));
+    mode='SPLIT';
+  }else{
+    if(!r||zero(r))return none('NO_MODELED_FAILURES');
+    if(!positive(r))return none('INVALID_INPUTS');
+    if(categories.general!==false)classes=[{kind:'GENERAL',mtbfMinutes:r.mtbfMinutes,mttrMinutes:r.mttrMinutes}];
+    mode='GENERAL';
+  }
+  if(!classes.length)return none('CATEGORIES_DISABLED');
+  // Independent failure clocks share exposure; durations are frequency-weighted.
+  const totalRate=classes.reduce((s,p)=>s+1/p.mtbfMinutes,0);
+  const mtbfMinutes=1/totalRate,mttrMinutes=classes.reduce((s,p)=>s+(1/p.mtbfMinutes)*p.mttrMinutes,0)/totalRate;
+  const availability=mtbfMinutes/(mtbfMinutes+mttrMinutes),ratio=mtbfMinutes/mttrMinutes;
+  if(![mtbfMinutes,mttrMinutes,availability,ratio].every(Number.isFinite))return none('INVALID_INPUTS');
+  const frequent=mtbfMinutes<bfTarget,long=mttrMinutes>trTarget,belowTarget=availability+1e-12<target;
+  // A declared major class may be long even when its weighted mean is short.
+  const longClass=classes.some(p=>p.mttrMinutes>trTarget);
+  const action=frequent&&(long||longClass)&&belowTarget?'REBUILD_OR_REPLACE_REVIEW':
+    frequent&&(long||longClass)?'JOINT_RELIABILITY_REVIEW':frequent?'IMPROVE_MTBF':long||longClass?'IMPROVE_MTTR':
+    belowTarget?'JOINT_RELIABILITY_REVIEW':'KEEP_MONITOR';
+  const status=belowTarget?'FAIL':action==='KEEP_MONITOR'?'PASS':'REVIEW';
+  const requiredMtbfMinutes=target/(1-target)*mttrMinutes,requiredMttrMinutes=(1-target)/target*mtbfMinutes;
+  const severity=availability>=.99?'EXCELLENT':availability>=.98?'VERY_GOOD':availability>=.95?'GOOD':
+    availability>=.9?'FAIR':availability>=.8?'POOR':availability>=.5?'CRITICAL':'SEVERE';
+  return {...base,status,action,reason:belowTarget?'BELOW_TARGET':status==='REVIEW'?'PATTERN_REVIEW':'TARGET_MET',mode,
+    classes:classes.map(p=>({...p,eventShare:(1/p.mtbfMinutes)/totalRate,failuresPerOperatingHour:60/p.mtbfMinutes})),
+    mtbfMinutes,mttrMinutes,availability,unavailability:1-availability,ratio,severity,frequent,long,longClass,
+    failuresPerOperatingHour:60/mtbfMinutes,failuresPerDay:1440/(mtbfMinutes+mttrMinutes),
+    downtimeMinutesPerDay:1440*(1-availability),requiredMtbfMinutes,requiredMttrMinutes,
+    mtbfImprovementFactor:Math.max(1,requiredMtbfMinutes/mtbfMinutes),
+    mttrReductionPercent:Math.max(0,100*(1-requiredMttrMinutes/mttrMinutes))};
+}
+function analyzeEquipmentReliability(simulation,equipmentId,{observed,audits,policy,includeSavedEvidence=true}={}){
+  const equipment=simulation?.equipment||[],config=simulation?.dynamicConfig||simulation?.run||{},e=equipment.find(x=>x.id===equipmentId);
+  const assessment=equipmentReliabilityAssessment(e,config,policy);
+  const report={...assessment,observed:null,bufferCoverage:[],capacity:null,counterfactual:null,
+    feasibility:'NOT_ESTABLISHED',replacementRequired:null};
+  if(!e||e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')return report;
+  // A completed compatible result uses replication means; a UI may supply a
+  // current single-run observation explicitly, separately from the design inputs.
+  if(observed===undefined&&simulation.results){
+    try{
+      const diagnosis=diagnoseScenarioLosses(simulation);
+      const row=diagnosis.status==='OBSERVED'?diagnosis.equipment.find(x=>x.equipmentId===equipmentId):null;
+      if(row)observed={...row,durationSeconds:diagnosis.durationSeconds,basis:diagnosis.rounds>1?'REPLICATION_MEAN':'COMPLETED_RUN'};
+    }catch(_){}
+  }
+  const finite=v=>Number.isFinite(v)&&v>=0?v:null;
+  if(observed&&observed.durationSeconds>0){
+    const duration=observed.durationSeconds,failureSeconds=finite(observed.failureSeconds),count=finite(observed.failureCount),exposure=finite(observed.reliabilityExposureSeconds);
+    report.observed={basis:observed.basis||'RECORDED_RUN',durationSeconds:duration,failureSeconds,failureCount:count,
+      reliabilityExposureSeconds:exposure,failurePercent:failureSeconds===null?null:100*failureSeconds/duration,
+      microStopSeconds:finite(observed.microStopSeconds),starvedSeconds:finite(observed.starvedSeconds),blockedSeconds:finite(observed.blockedSeconds),
+      waitingForPrimeSeconds:finite(observed.waitingForPrimeSeconds),backupStopSeconds:finite(observed.backupStopSeconds),
+      observedExposurePerFailureMinutes:count>0&&exposure!==null?exposure/count/60:null,
+      observedFaultTimePerFailureMinutes:count>0&&failureSeconds!==null?failureSeconds/count/60:null,
+      interpretation:'Observed stop exposure; unfinished repairs and short runs may bias ratios. Local losses are not additive line losses.'};
+  }
+  // Use the engineering model's populated accumulation reserve / free-space
+  // estimate, not nominal conveyor length or an assumed full/empty buffer.
+  if(assessment.mttrMinutes>0){
+    let list=audits;
+    if(!list){try{list=scenarioAudit(simulation);}catch(_){list=[];}}
+    for(const [direction,idKey,timeKey] of [['UPSTREAM','downstreamId','antiBlockSeconds'],['DOWNSTREAM','upstreamId','antiStarveSeconds']]){
+      const connected=(list||[]).filter(a=>a[idKey]===equipmentId);
+      const estimates=connected.map(a=>finite(a.engineering?.calculated?.[timeKey]));
+      const seconds=connected.length&&estimates.every(v=>v!==null)?Math.min(...estimates):null;
+      report.bufferCoverage.push({direction,conveyorIds:connected.map(a=>a.equipmentId),seconds,
+        ratio:seconds===null?null:seconds/(assessment.mttrMinutes*60),
+        classCoverage:assessment.classes.map(p=>({kind:p.kind,ratio:seconds===null?null:seconds/(p.mttrMinutes*60)})),
+        basis:'ENGINEERING_DESIGN_POPULATION',status:seconds===null?'NOT EVALUATED':seconds+1e-9>=assessment.mttrMinutes*60?'PASS':'FAIL'});
+    }
+  }
+  // Capacity screening is compared only in a common material-flow unit.
+  try{
+    const models=scenarioEngineeringEquipment(simulation),product=scenarioActiveProduct(simulation);
+    const machine=models.find(x=>x.id===equipmentId),line=analyzeLinePerformance(models,null),point=line.points.find(x=>x.id===equipmentId),reference=line.points.find(x=>x.isPacemaker);
+    const ref=models.find(x=>x.id===reference?.id);
+    const flow=x=>String(x?.processData?.flowUnits?.output??x?.unitOfFlow??simulation.unitOfFlow??'units').toUpperCase();
+    const factor=x=>product?productUnitFactor(x,product):1;
+    const comparable=point&&reference&&ref&&machine&&(product||flow(machine)===flow(ref));
+    if(point){
+      const f=factor(machine),rate=point.configuredBpm*f,maximum=point.maximumBpm==null?null:point.maximumBpm*f;
+      const referenceRate=comparable?reference.configuredBpm*factor(ref):null;
+      const effective=assessment.availability===null?null:rate*assessment.availability;
+      report.capacity={configuredRatePerMinute:finite(rate),maximumRatePerMinute:finite(maximum),referenceRatePerMinute:finite(referenceRate),
+        availabilityOnlyRatePerMinute:finite(effective),maximumAvailabilityOnlyRatePerMinute:maximum!==null&&assessment.availability!==null?finite(maximum*assessment.availability):null,
+        unit:product?'BOTTLE_EQUIVALENTS':flow(machine),referenceId:reference?.id??null,
+        nominalDeficit:referenceRate>0&&Number.isFinite(rate)?Math.max(0,referenceRate-rate):null,
+        availabilityOnlyDeficit:referenceRate>0&&effective!==null?Math.max(0,referenceRate-effective):null,
+        basis:'STATIC_CAPACITY_SCREEN_NOT_THROUGHPUT'};
+    }
+  }catch(_){}
+  if(includeSavedEvidence&&simulation.id&&simulation.whatIf?.evaluations?.length){
+    try{
+      const signature=scenarioSignature(simulation);
+      const entries=simulation.whatIf.evaluations.filter(x=>x.sourceSimulationId===simulation.id&&x.sourceSignature===signature&&!['RUNNING','VALIDATING','INTERRUPTED'].includes(x.status))
+        .slice().sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+      for(const entry of entries){
+        const search=entry.reliabilityTargetSearch??entry.sensitivityScreening?.reliabilityTargetSearch;
+        const row=search?.ranking?.find(x=>x.equipmentId===equipmentId);
+        if(!row||!Number.isFinite(row.deltaThroughput)||!Number.isFinite(row.deltaOeePp))continue;
+        report.counterfactual={deltaThroughput:row.deltaThroughput,deltaOeePp:row.deltaOeePp,
+          throughputUnit:entry.unitOfFlow||simulation.unitOfFlow||'units',run:search.run||null,updatedAt:entry.updatedAt||null,
+          basis:'MATCHED_FAILURE_REMOVAL_EXPLORATORY',plantValidated:false};
+        break;
+      }
+    }catch(_){}
+  }
+  return report;
+}
+
 // Catalog lists model-supported inputs even when the planner has no proposal.
 // Targets start at the baseline: the user supplies bounds; no gains are invented.
 function scenarioVariableCatalog(simulation){
@@ -4730,6 +4867,7 @@ function diagnoseScenarioLosses(simulation){
     const causes=[['FAILURE',failureSeconds],['MICROSTOP',microStopSeconds],['STARVATION',starvedSeconds],['BLOCKING',blockedSeconds],['WAITING_PRIME',read('waitingForPrimeSeconds')],['BACKUP_STOP',read('backupStopSeconds')]].filter(x=>x[1]!==null).sort((a,b)=>b[1]-a[1]);
     return {equipmentId:e.id,name:e.name,isReference:e.id===referenceId,failureSeconds,microStopSeconds,ownStopSeconds,starvedSeconds,blockedSeconds,
       minorFailureSeconds,majorFailureSeconds,generalFailureSeconds,minorFailureCount,majorFailureCount,generalFailureCount,stopDataCoverage,
+      reliabilityAssessment:equipmentReliabilityAssessment(e,simulation.dynamicConfig),
       failureCount,microStopCount,countBasis:rounds>1?'MEAN_PER_REPLICATION':'RECORDED_RUN',
       failureCategories:['general','minor','major'].map(kind=>({kind:kind.toUpperCase(),count:read(kind+'FailureCount'),seconds:read(kind+'FailureSeconds')})),
       reliabilityExposureSeconds:read('reliabilityExposureSeconds'),
@@ -4817,6 +4955,8 @@ function planScenarios(simulation){
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
   const result=diagnosis.status==='OBSERVED'?simulation.results:null;
   const candidates=[],checks=[];
+  const equipmentReliability=(simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR').map(e=>equipmentReliabilityAssessment(e,simulation.dynamicConfig));
+  equipmentReliability.forEach(r=>checks.push({equipmentId:r.equipmentId,rule:'EQUIPMENT_RELIABILITY',status:r.status==='NOT EVALUATED'?'NOT_EVALUATED':r.status,assessment:r,interpretation:'Engineering screening thresholds; not a replacement mandate.'}));
   function add(kind,tier,equipment,changes,evidence,priority,basis){
     changes=changes.filter(c=>c.before!==c.after);if(!changes.length)return;
     let disabledReason=null;try{applyScenarioChanges(simulation,changes);}catch(error){disabledReason=error.message;}
@@ -4935,7 +5075,7 @@ function planScenarios(simulation){
     const choices=candidates.filter(p=>p.tier===tier).sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority);
     return choices[0]||{tier,canApply:false,titleKey:'scenario.no_proposal',basis:'STATIC',changes:[],evidence:{},disabledReason:'SCENARIO_INSUFFICIENT_EVIDENCE'};
   });
-  return {sourceReadiness:scenarioSourceReadiness(simulation),proposalNeeds:scenarioProposalNeeds(simulation),capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
+  return {sourceReadiness:scenarioSourceReadiness(simulation),proposalNeeds:scenarioProposalNeeds(simulation),equipmentReliability,capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
 }
 
 
@@ -5463,17 +5603,17 @@ async function searchReliabilityTargets(simulation,{measure,run,cancelled=()=>fa
   const referenceIndex=simulation.equipment.findIndex(e=>e.id===line.referenceId);
   const selectionEvidence=machines.map(e=>{
     const observed=lossDiagnosis.status==='OBSERVED'?lossDiagnosis.equipment.find(row=>row.equipmentId===e.id):null;
-    const point=line.points.find(row=>row.id===e.id),r=e.noiseProfile.reliability;
-    const availableBpm=comparableSpeeds&&point?.configuredBpm>0?point.configuredBpm*r.mtbfMinutes/(r.mtbfMinutes+r.mttrMinutes):null;
+    const point=line.points.find(row=>row.id===e.id),assessment=equipmentReliabilityAssessment(e,{...simulation.dynamicConfig,...run});
+    const availableBpm=comparableSpeeds&&point?.configuredBpm>0&&assessment.availability!==null?point.configuredBpm*assessment.availability:null;
     return {equipmentId:e.id,name:e.name,lineIndex:simulation.equipment.findIndex(unit=>unit.id===e.id),
       observedOwnStopSeconds:observed?.ownStopSeconds??null,observedFailureSeconds:observed?.failureSeconds??null,observedFailureCount:observed?.failureCount??null,
       observedMinorFailureSeconds:observed?.minorFailureSeconds??null,observedMajorFailureSeconds:observed?.majorFailureSeconds??null,observedGeneralFailureSeconds:observed?.generalFailureSeconds??null,
-      stopDataCoverage:scenarioStopDataCoverage(simulation,e),
+      stopDataCoverage:scenarioStopDataCoverage(simulation,e),reliabilityAssessment:assessment,
       nominalConstraint:comparableSpeeds&&Number.isFinite(minimumBpm)&&Math.abs(point?.configuredBpm-minimumBpm)<1e-7,
       availabilityOnlyBpm:availableBpm,availabilityOnlyDeficitBpm:availableBpm!==null&&reference?.configuredBpm>0?Math.max(0,reference.configuredBpm-availableBpm):null,
       nominalScreenAvailable:comparableSpeeds,causalStatus:'NOT_ESTABLISHED'};
   });
-  const priority=selectionEvidence.slice().sort((a,b)=>(b.observedFailureSeconds??0)-(a.observedFailureSeconds??0)||Number(b.nominalConstraint)-Number(a.nominalConstraint)||(b.availabilityOnlyDeficitBpm??0)-(a.availabilityOnlyDeficitBpm??0)||Math.abs(a.lineIndex-referenceIndex)-Math.abs(b.lineIndex-referenceIndex)||a.lineIndex-b.lineIndex);
+  const priority=selectionEvidence.slice().sort((a,b)=>(b.observedFailureSeconds??0)-(a.observedFailureSeconds??0)||Number(b.nominalConstraint)-Number(a.nominalConstraint)||(b.availabilityOnlyDeficitBpm??0)-(a.availabilityOnlyDeficitBpm??0)||(b.reliabilityAssessment.unavailability??0)-(a.reliabilityAssessment.unavailability??0)||Math.abs(a.lineIndex-referenceIndex)-Math.abs(b.lineIndex-referenceIndex)||a.lineIndex-b.lineIndex);
   const priorityMachines=priority.map(row=>machines.find(e=>e.id===row.equipmentId));
   const selected=scope==='MANUAL'?machines.filter(e=>equipmentIds.includes(e.id)):scope==='ALL'?machines:priorityMachines.slice(0,maximumMachines),observations=[],targetTests=[],candidateSets=[];
   const selectedIds=new Set(selected.map(e=>e.id));
@@ -6146,6 +6286,6 @@ window.SimulatorEngine = {
 };
 window.STScenarioDOE = {design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
 window.STScenarioSearch = {screenFlow:screenFlowFactors,reliabilityTargets:searchReliabilityTargets,settings:scenarioSearchSettings,settingsSignature:scenarioSearchSettingsSignature,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary,practicalGain:scenarioPracticalGain};
-window.STScenarios = {plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics};
+window.STScenarios = {equipmentReliability:equipmentReliabilityAssessment,equipmentAnalysis:analyzeEquipmentReliability,plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics};
 })(window);
 </script>

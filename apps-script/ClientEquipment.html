@@ -137,6 +137,16 @@
         input.addEventListener('change', function() { state.isDirty = true; renderFormatZonePreview(fields._owner); });
       });
       if(equipment.type==='CONVEYOR'){var defaultsNote=document.createElement('p');defaultsNote.className='chart-note';defaultsNote.textContent='Conveyor inputs are defaults. Blank product / box fields inherit these values. Installation geometry and sensors are configured here.';equipmentField(card,'.format-zone-grid').before(defaultsNote);}
+      var reliabilityVerdict=window.STEquipmentAnalysis.createButton(function(){
+        var simulation=equipmentAnalysisEditorContext();
+        window.STEquipmentAnalysis.open(simulation,card.dataset.equipmentId);
+      });
+      card.querySelector('.equipment-header .button-row').prepend(reliabilityVerdict);
+      card._equipmentReliabilityVerdict=reliabilityVerdict;
+      reliabilityVerdict.hidden=equipment.type==='CONVEYOR'||equipment.processData?.role==='CONVEYOR';
+      window.STEquipmentAnalysis.paint(reliabilityVerdict,window.STEquipmentAnalysis.assess(equipment,activePersistentSimulation()?.dynamicConfig||{}));
+      function refreshReliability(){queueMicrotask(function(){if(card.isConnected)refreshEquipmentReliabilityBadges();});}
+      fields.addEventListener('change',refreshReliability);
       return card;
     }
 
@@ -584,7 +594,30 @@ function numericInputValue(input) {
       if(preview.length<base.length)return base.map(e=>byId.get(e.id)||cloneJson(e)).concat(preview.filter(e=>!base.some(b=>b.id===e.id)));
       return preview;
     }
-    function refreshDesignGraph(){if(state.activeCase)STLinePerformance.render(null,basicEquipmentPreview());}
+    function equipmentAnalysisEditorContext(preview){
+      var tab=activePersistentSimulation(),base=state.activeCase?.equipment||[];
+      var models=(preview||basicEquipmentPreview()).map(e=>({...base.find(b=>b.id===e.id),...e}));
+      var config={...(tab?.dynamicConfig||state.run.configuration||{})},format=window.STProducts?.currentFormat?.();
+      if(format){
+        config.initialFormatId=format.id;
+        config.productCatalog=window.STProducts?.formats?.()||config.productCatalog;
+      }
+      return {...tab,equipment:models,unitOfFlow:state.activeCase?.unitOfFlow,dynamicConfig:config};
+    }
+    function refreshEquipmentReliabilityBadges(preview){
+      if(!state.activeCase||!window.STEquipmentAnalysis)return;
+      try{
+        var simulation=equipmentAnalysisEditorContext(preview);
+        document.querySelectorAll('#equipment-list .equipment-card').forEach(function(card){
+          var e=simulation.equipment.find(x=>x.id===card.dataset.equipmentId),button=card._equipmentReliabilityVerdict;
+          if(!e||!button)return;
+          button.hidden=e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR';
+          if(!button.hidden)window.STEquipmentAnalysis.paint(button,window.STEquipmentAnalysis.assess(e,simulation.dynamicConfig));
+        });
+      }catch(error){/* Incomplete editor inputs must not block editing. */}
+    }
+    function refreshDesignGraph(){if(state.activeCase){var preview=basicEquipmentPreview();STLinePerformance.render(null,preview);refreshEquipmentReliabilityBadges(preview);}}
+    window.addEventListener('st-language-change',function(){refreshEquipmentReliabilityBadges();});
     function readEquipmentRate(card){
       var input=equipmentField(card,'.equipment-rate');
       return input.value!==''&&Number(input.value)===Number(input.dataset.originalBpm)&&input.dataset.originalRate!==''?Number(input.dataset.originalRate):Number(input.value)/60;

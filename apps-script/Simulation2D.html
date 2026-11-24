@@ -501,7 +501,7 @@ window.STSimulation2D=(function(){
   const scheduleOptions={failures:el('failures'),events:el('use-events'),calendar:el('use-calendar')};
   const scheduleSettings=()=>Object.fromEntries(Object.entries(scheduleOptions).map(([key,input])=>[key,input.checked]));
   const machineControls=new Map(),analysisButtons=new Map(),lastMachineActions=new Map();
-  let conveyorWorksheets=new Map();
+  let conveyorWorksheets=new Map(),equipmentAnalysisContext=null;
   function resolveSchedule(config){
     const engine=window.SimulatorEngine;
     const calendar=config.plantCalendar;
@@ -520,6 +520,7 @@ window.STSimulation2D=(function(){
     const target=el('machine-controls');
     target.replaceChildren();machineControls.clear();analysisButtons.clear();
     window.STConveyorAnalysis.close();
+    window.STEquipmentAnalysis.close();
     const actions=[['RUN','play','Start / resume'],['PAUSE','pause','Pause'],['STOP','stop','Stop'],
       ['EMERGENCY_STOP','error','Emergency stop'],['RESET','refresh','Reset emergency stop']];
     for(const item of definitions){
@@ -537,6 +538,17 @@ window.STSimulation2D=(function(){
         target.append(button);analysisButtons.set(item.id,button);
         continue;
       }
+      const reliabilityButton=window.STEquipmentAnalysis.createButton(()=>{
+        if(!equipmentAnalysisContext)return;
+        const live=model?.line?.find(x=>x.id===item.id),duration=model?.time||0;
+        const observed=live&&duration>0?{basis:'SPATIAL_RUN',durationSeconds:duration,failureSeconds:live.durations?.failure,
+          failureCount:live.failureCount,starvedSeconds:live.durations?.starving,blockedSeconds:live.durations?.blocked,
+          backupStopSeconds:live.durations?.backupStop}:null;
+        const simulation={...equipmentAnalysisContext,dynamicConfig:{...equipmentAnalysisContext.dynamicConfig,reliabilityEnabled:scheduleOptions.failures.checked}};
+        window.STEquipmentAnalysis.open(simulation,item.id,{observed});
+      });
+      reliabilityButton.classList.add('simulation2d-analysis-action');
+      target.append(reliabilityButton);analysisButtons.set(item.id,reliabilityButton);
       const group=document.createElement('div');
       group.className='simulation2d-machine-actions';
       group.setAttribute('role','group');
@@ -577,6 +589,8 @@ window.STSimulation2D=(function(){
     const {models:configured,zones,designProfiles}=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
     conveyorDimensions=new Map();
     conveyorWorksheets=new Map();
+    equipmentAnalysisContext={equipment:equipment,dynamicConfig:{...config,
+      ...(format?{initialFormatId:format.id,productCatalog:formats?.some(f=>f.id===format.id)?formats:[format]}:{})}};
     return configured.map((item,index)=>{
       const data=item.processData||{};
       const unit=data.flowUnits?.output==='CASES'||String(item.unitOfFlow).toUpperCase()==='CASES'?'CASES':'BOTTLES';
@@ -1642,13 +1656,23 @@ window.STSimulation2D=(function(){
       if(renderingView!==activeViewport)continue;
       const analysisButton=analysisButtons.get(item.id);
       if(analysisButton){
+        const column=item.kind==='belt'?3:2;
+        if(item.kind!=='belt'&&equipmentAnalysisContext){
+          const source=equipmentAnalysisContext.equipment.find(x=>x.id===item.id);
+          const config={...equipmentAnalysisContext.dynamicConfig,reliabilityEnabled:scheduleOptions.failures.checked};
+          const evaluationKey=JSON.stringify([source?.noiseProfile?.reliability,source?.processData?.equipment?.stopInputs,config.reliabilityEnabled,config.reliabilityCategories,document.documentElement.lang]);
+          if(analysisButton._evaluationKey!==evaluationKey){
+            analysisButton._evaluationKey=evaluationKey;
+            window.STEquipmentAnalysis.paint(analysisButton,window.STEquipmentAnalysis.assess(source,config));
+          }
+        }
         const left=origin+items[index].center-items[index].telemetryWidth/2+telemetryPairWidth+telemetryGap;
-        const tableLeft=left*factor,tableWidth=telemetryWidths[3]*factor;
+        const tableLeft=left*factor,tableWidth=telemetryWidths[column]*factor;
         const cx=tableLeft+tableWidth-telemetryPadding*factor;
         const cy=(telemetryY+items[index].telemetryOffset+19*tableScale)*factor;
         // El botón comparte la escala de la tabla y permanece anclado al
         // extremo derecho de su encabezado al acercar o alejar la cámara.
-        analysisButton.style.maxWidth=Math.min(72,telemetryWidths[3]*.38/tableScale)+'px';
+        analysisButton.style.maxWidth=Math.min(72,telemetryWidths[column]*.38/tableScale)+'px';
         analysisButton.style.left=cx+'px';analysisButton.style.top=cy+'px';
         analysisButton.style.transform='translate(-100%,-50%) scale('+(tableScale*factor)+')';
         analysisButton.style.transformOrigin='right center';

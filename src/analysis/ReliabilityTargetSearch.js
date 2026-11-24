@@ -1,4 +1,4 @@
-import { diagnoseScenarioLosses, scenarioStopDataCoverage } from './ScenarioPlanner.js';
+import { diagnoseScenarioLosses, scenarioStopDataCoverage, equipmentReliabilityAssessment } from './ScenarioPlanner.js';
 import { analyzeLinePerformance } from './LinePerformanceAnalysis.js';
 import { productFlowUnit } from '../simulation/ProductProfiles.js';
 import { scenarioPairedSummary } from './ScenarioStatistics.js';
@@ -29,17 +29,17 @@ export async function searchReliabilityTargets(simulation,{measure,run,cancelled
   const referenceIndex=simulation.equipment.findIndex(e=>e.id===line.referenceId);
   const selectionEvidence=machines.map(e=>{
     const observed=lossDiagnosis.status==='OBSERVED'?lossDiagnosis.equipment.find(row=>row.equipmentId===e.id):null;
-    const point=line.points.find(row=>row.id===e.id),r=e.noiseProfile.reliability;
-    const availableBpm=comparableSpeeds&&point?.configuredBpm>0?point.configuredBpm*r.mtbfMinutes/(r.mtbfMinutes+r.mttrMinutes):null;
+    const point=line.points.find(row=>row.id===e.id),assessment=equipmentReliabilityAssessment(e,{...simulation.dynamicConfig,...run});
+    const availableBpm=comparableSpeeds&&point?.configuredBpm>0&&assessment.availability!==null?point.configuredBpm*assessment.availability:null;
     return {equipmentId:e.id,name:e.name,lineIndex:simulation.equipment.findIndex(unit=>unit.id===e.id),
       observedOwnStopSeconds:observed?.ownStopSeconds??null,observedFailureSeconds:observed?.failureSeconds??null,observedFailureCount:observed?.failureCount??null,
       observedMinorFailureSeconds:observed?.minorFailureSeconds??null,observedMajorFailureSeconds:observed?.majorFailureSeconds??null,observedGeneralFailureSeconds:observed?.generalFailureSeconds??null,
-      stopDataCoverage:scenarioStopDataCoverage(simulation,e),
+      stopDataCoverage:scenarioStopDataCoverage(simulation,e),reliabilityAssessment:assessment,
       nominalConstraint:comparableSpeeds&&Number.isFinite(minimumBpm)&&Math.abs(point?.configuredBpm-minimumBpm)<1e-7,
       availabilityOnlyBpm:availableBpm,availabilityOnlyDeficitBpm:availableBpm!==null&&reference?.configuredBpm>0?Math.max(0,reference.configuredBpm-availableBpm):null,
       nominalScreenAvailable:comparableSpeeds,causalStatus:'NOT_ESTABLISHED'};
   });
-  const priority=selectionEvidence.slice().sort((a,b)=>(b.observedFailureSeconds??0)-(a.observedFailureSeconds??0)||Number(b.nominalConstraint)-Number(a.nominalConstraint)||(b.availabilityOnlyDeficitBpm??0)-(a.availabilityOnlyDeficitBpm??0)||Math.abs(a.lineIndex-referenceIndex)-Math.abs(b.lineIndex-referenceIndex)||a.lineIndex-b.lineIndex);
+  const priority=selectionEvidence.slice().sort((a,b)=>(b.observedFailureSeconds??0)-(a.observedFailureSeconds??0)||Number(b.nominalConstraint)-Number(a.nominalConstraint)||(b.availabilityOnlyDeficitBpm??0)-(a.availabilityOnlyDeficitBpm??0)||(b.reliabilityAssessment.unavailability??0)-(a.reliabilityAssessment.unavailability??0)||Math.abs(a.lineIndex-referenceIndex)-Math.abs(b.lineIndex-referenceIndex)||a.lineIndex-b.lineIndex);
   const priorityMachines=priority.map(row=>machines.find(e=>e.id===row.equipmentId));
   const selected=scope==='MANUAL'?machines.filter(e=>equipmentIds.includes(e.id)):scope==='ALL'?machines:priorityMachines.slice(0,maximumMachines),observations=[],targetTests=[],candidateSets=[];
   const selectedIds=new Set(selected.map(e=>e.id));

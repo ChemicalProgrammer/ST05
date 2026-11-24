@@ -1087,6 +1087,16 @@
       // Geometry section and must not be assumed to exist in older cards.
       heading.after(geometryVerdict);
       card._numericConveyorVerdict=geometryVerdict;
+      var equipmentVerdict=window.STEquipmentAnalysis.createButton(function(){
+        var snapshot=card._equipmentAnalysisSnapshot;
+        if(!snapshot)return;
+        var tab=activePersistentSimulation(),simulation={...tab,equipment:state.activeCase?.equipment||[],
+          unitOfFlow:state.activeCase?.unitOfFlow,dynamicConfig:snapshot.config};
+        var evidence=snapshot.sample.virtualSecond>0?{...snapshot.unit,durationSeconds:snapshot.sample.virtualSecond,basis:'NUMERICAL_FRAME'}:null;
+        window.STEquipmentAnalysis.open(simulation,equipmentId,{observed:evidence});
+      });
+      geometryVerdict.after(equipmentVerdict);card._numericEquipmentVerdict=equipmentVerdict;
+      equipmentVerdict.hidden=true;
       // The equipment name itself is the accessible card disclosure control.
       cardToggle.setAttribute('aria-label','Collapse equipment details');
       cardToggle.setAttribute('aria-expanded','true');
@@ -1198,6 +1208,16 @@
       var conveyorVerdict=card._numericConveyorVerdict
         ||card.querySelector('.numeric-conveyor-verdict');
       if(conveyorVerdict)conveyorVerdict.hidden=!isConveyor;
+      var equipmentVerdict=card._numericEquipmentVerdict;
+      if(equipmentVerdict){
+        equipmentVerdict.hidden=isConveyor;
+        if(!isConveyor){
+          var config={...(activePersistentSimulation()?.dynamicConfig||{}),...(state.run.configuration||{}),reliabilityEnabled:enabledReliability};
+          // The displayed sample is a single run, never the future final aggregate.
+          card._equipmentAnalysisSnapshot={unit:unit,sample:sample,config:config};
+          window.STEquipmentAnalysis.paint(equipmentVerdict,window.STEquipmentAnalysis.assess(model,config));
+        }
+      }
       updateNumericalSummaryRows(card,unit,model,zone,belt,availabilityState);
       card._lastOverviewSample=sample;
       if(isConveyor)updateNumericalConveyorGeometry(card,model,zone);

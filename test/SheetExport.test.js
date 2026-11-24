@@ -36,6 +36,46 @@ function fixture(c) {
   return {caseId:'mine',caseName:'My case',simulationName:'Simulation B',equipment:JSON.parse(JSON.stringify(source.equipment)),metadata:JSON.parse(JSON.stringify(source.metadata)),theme:{primary:'#123456',secondary:'#778899'}};
 }
 
+test('Basic writes two tabs; Advance writes three',()=>{
+ const b=runtime(),request={...fixture(b.c),uiMode:'BASIC'};
+ assert.equal(b.c.exportEquipmentSheet(request).ok,true);
+ assert.deepEqual(b.calls.filter(call=>call[0]==='insertSheet').map(call=>call[1]),['Products & Formats']);
+ assert.equal(b.writes.length,2);
+ const a=runtime();
+ assert.equal(a.c.exportEquipmentSheet({...fixture(a.c),uiMode:'ADVANCE'}).ok,true);
+ assert.deepEqual(a.calls.filter(call=>call[0]==='insertSheet').map(call=>call[1]),['Products & Formats','Real Data']);
+ assert.equal(a.writes.length,3);
+});
+
+test('v3 groups multiple products and v2 linked product remains importable',()=>{
+ const {c,writes}=runtime(),request=fixture(c);
+ request.metadata.formatCatalog={version:3,products:[
+   {id:'alpha',name:'Alpha',volumeMl:355,bottle:{lengthMm:65}},
+   {id:'beta',name:'Beta',volumeMl:500,bottle:{lengthMm:80}}
+ ],formats:[
+   {id:'a12',name:'Alpha 12',productId:'alpha',bottlesPerCase:12,case:{lengthMm:340}},
+   {id:'b6',name:'Beta 6',productId:'beta',bottlesPerCase:6,case:{lengthMm:250}},
+   {id:'a24',name:'Alpha 24',productId:'alpha',bottlesPerCase:24,case:{lengthMm:440}}
+ ]};
+ assert(c.exportEquipmentSheet(request).ok);
+ const rows=writes[1].values;
+ assert.equal(rows[0][0],'st-material-sheet-v3');assert.equal(rows[2].length,8);
+ assert(!rows[2].includes('Linked product'));
+ assert.deepEqual(rows.slice(3).map(row=>row[1]),['Alpha','Alpha 12','Alpha 24','Beta','Beta 6']);
+ const read=c.readSheetCatalog_({getLastRow:()=>rows.length,getRange:()=>({getValues:()=>rows.slice(3)})},'st-material-sheet-v3');
+ assert.deepEqual(Array.from(read.errors),[]);
+ const owner=name=>read.catalog.products.find(p=>p.id===read.catalog.formats.find(f=>f.name===name).productId).name;
+ assert.equal(owner('Alpha 12'),'Alpha');assert.equal(owner('Alpha 24'),'Alpha');assert.equal(owner('Beta 6'),'Beta');
+ const legacy=[['Product','Alpha','',355,'mL',65,'','','N/A'],
+   ['Product','Beta','',500,'mL',80,'','','N/A'],
+   ['Format','Beta 6','Beta','','',250,'','',6]];
+ const old=c.readSheetCatalog_({getLastRow:()=>legacy.length+3,getRange:()=>({getValues:()=>legacy})},'st-material-sheet-v2');
+ assert.deepEqual(Array.from(old.errors),[]);
+ assert.equal(old.catalog.products.find(p=>p.id===old.catalog.formats[0].productId).name,'Beta');
+ const orphan=c.readSheetCatalog_({getLastRow:()=>4,getRange:()=>({getValues:()=>[['Format','Orphan','','',350,'','',12]]})},'st-material-sheet-v3');
+ assert.match(orphan.errors.join(' '),/below its linked Product/);
+});
+
 test('Sheets export uses every import column and current overrides, preserves zero and disabled reliability',()=>{
   const {c}=runtime(),request=fixture(c),unit=request.equipment[1];
   request.equipment[0].nominalRatePerSecond=3;
@@ -67,11 +107,16 @@ test('authenticated export creates one new themed Sheet in Exports with batched 
   assert.deepEqual(calls.filter(call=>call[0]==='insertSheet'),[['insertSheet','Products & Formats',1],['insertSheet','Real Data',2]]);
   const actuals=writes[2].values;assert.equal(actuals[0][9],'st-real-inputs-v5');assert.match(actuals[15][0],/Equipment.*MATCH/);assert.equal(actuals[15][9],values[7][29]);assert.equal(actuals[16][9],values[9][29]);assert.match(actuals[15][5],/E16\/\(D16\+E16\)/);
   const catalog=writes[1].values;
-  assert.equal(catalog[2][5],'Length\n[mm]');
+  assert.equal(catalog[2][4],'Length\n[mm]');
   assert.equal(values[6][10],'Conveyor Speed\n[m/min]');
   assert.equal(values[6][11],'Accumulation\n[s]');
   for(const heading of [...values[6],...catalog[2],...actuals[14]])assert(!heading.includes('\n('));
   assert(calls.some(call=>call[0]==='requireValueInList'&&call[1].includes('FILLER')&&call[2]));
+ assert(calls.some(call=>call[0]==='requireValueInList'&&call[1].join(',')==='Y,N'&&call[2]));
+ assert(calls.some(call=>call[0]==='setDataValidation'&&JSON.stringify(call[1])==='[8,3,100,1]'));
+ assert.equal(values[3][5],'','Equipment F4 must not display a note');
+ assert(!calls.some(call=>call[0]==='merge'&&JSON.stringify(call[1])==='[4,6,1,10]'));
+
   assert(calls.some(call=>call[0]==='setDataValidation'&&JSON.stringify(call[1])==='[8,1,100,1]'));
   assert.equal(actuals[18][9],values[10][29]);assert.match(actuals[18][0],/COUNTIFS/);
   assert.equal(values[0][1],"'=1+1");assert.equal(values[0][2],'');assert.equal(values[0][29],'st-equipment-metadata-b-v7');assert.equal(values[7][1],"'=HYPERLINK(\"https://example.test\")");
@@ -172,6 +217,9 @@ test('three-tab export previews equipment and filled observations via the same s
   assert(result.realData.fields.some(f=>f.cell==='Real Data!B2'));
  }
  values[0][29]='st-equipment-metadata-b-v6';values[6][31]='';values[6][32]='';values[6][33]='';values[7][31]='obsolete';
+ const basic=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id',uiMode:'BASIC'},{email:'owner@test'});
+ assert.equal(basic.realData,undefined,'Basic ignores Real Data in a three-tab source');
+ assert.equal(basic.materialCatalog.errors.length,0);
  const legacy=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id'},{email:'owner@test'});
  assert.equal(legacy.equipment[0].processData.equipment.internalCapacityBottles,31);
  assert.equal(legacy.equipment[0].processData.equipment.residenceTimeSeconds,undefined);
@@ -185,17 +233,18 @@ test('catalog uses product names and preserves internal IDs, format selection an
  const response=c.exportEquipmentSheet(request);
  assert.equal(response.ok,true,JSON.stringify(response));
  const equipment=writes[0].values,catalog=writes[1].values;
+ assert.equal(catalog[0][0],'st-material-sheet-v3');
  assert(equipment[4].every(value=>value===''));
  assert(equipment.slice(0,3).every(row=>row[3]===''&&row[4]===''));
- assert.equal(catalog[2][2],'Linked product');
+ assert.equal(catalog[2][2],'Volume');
  assert(calls.some(call=>call[0]==='requireValueInList'&&call[1].join(',')==='Product,Format'));
  assert.equal(calls.filter(call=>call[0]==='setBorder').length,22);
  assert(calls.some(call=>call[0]==='setHorizontalAlignment'&&String(call[1])==='7,1,1,34'&&call[2]==='center'));
- assert.deepEqual(catalog.slice(3).map(row=>row.slice(0,3)),[
-   ['Product','Drink',''],['Format','Six pack',''],['Format','Twelve pack','']
+ assert.deepEqual(catalog.slice(3).map(row=>row.slice(0,2)),[
+   ['Product','Drink'],['Format','Six pack'],['Format','Twelve pack']
  ]);
- assert.equal(catalog[3][4],'fl oz (US)');assert.equal(catalog[3][8],'N/A');assert.equal(catalog[2].length,9);
- const source=c.readSheetCatalog_({getLastRow:()=>catalog.length,getRange:()=>({getValues:()=>catalog.slice(3)})});
+ assert.equal(catalog[3][3],'fl oz (US)');assert.equal(catalog[3][7],'N/A');assert.equal(catalog[2].length,8);
+ const source=c.readSheetCatalog_({getLastRow:()=>catalog.length,getRange:()=>({getValues:()=>catalog.slice(3)})},'st-material-sheet-v3');
  assert.deepEqual(Array.from(source.errors),[]);
  assert.equal(source.catalog.products[0].volumeMl,355);
  assert.equal(source.initialFormatId,undefined);
@@ -212,8 +261,8 @@ test('catalog uses product names and preserves internal IDs, format selection an
  assert.equal(result.formatCatalog.formats[0].productId,'shared');
  assert.equal(result.initialFormatId,null);
  assert.equal(c.window.STSheetCatalogImport(base(),source,{...snapshot,metadata:{formatCatalog:result.formatCatalog},initialFormatId:null},plan,preview).hasChanges,undefined);
- catalog[3][4]='kg';
- const invalid=c.readSheetCatalog_({getLastRow:()=>catalog.length,getRange:()=>({getValues:()=>catalog.slice(3)})});
+ catalog[3][3]='kg';
+ const invalid=c.readSheetCatalog_({getLastRow:()=>catalog.length,getRange:()=>({getValues:()=>catalog.slice(3)})},'st-material-sheet-v3');
  assert.match(invalid.errors[0],/row 4.*volume unit/);
 });
 

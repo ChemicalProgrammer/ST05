@@ -1,36 +1,35 @@
-# Equipment Google Sheets export
+# Google Sheets equipment template
 
-Equipment → Export → Google Sheets creates a new native spreadsheet in the
-connected workspace's `SimulatorTemplate Exports` folder. The success dialog
-links to the spreadsheet. Export never overwrites the imported source.
+Equipment → Export → Spreadsheet creates a **new native Google Sheet** in the workspace's SimulatorTemplate Exports folder. It never overwrites a previously imported source. Current unsaved equipment edits are exported without running or saving the simulation.
 
-The export uses the active simulation's current Equipment editor values,
-including edits that have not yet been saved. It does not save or run the case.
-The server authenticates the user and checks case ownership before writing.
-Existing Drive and Sheets OAuth scopes suffice.
+## Tabs by interface mode
 
-The import contract is reused: metadata in C1:C7, headers in row 9, equipment
-in A10:W, in line order. Values are written in one batch. Column C marks the
-critical machine with Y/N; optional missing fields use NA; percentage fields
-use numeric percentage points, not fractional percentage cell formatting.
-Current conveyor settings take precedence over stale imported sensor data.
-Disabled reliability exports NA rather than historical MTBF/MTTR.
+| Mode | Export | Import |
+|---|---|---|
+| **Basic** | Equipment; Products & Formats | Equipment and Products & Formats only, even if a Real Data sheet or legacy actuals are present |
+| **Advance** | Equipment; Products & Formats; Real Data | All three tabs, when Real Data is available |
 
-Column F represents installed maximum BPM, falling back to configured BPM
-when no maximum exists. The current importer initializes running speed from F;
-therefore this format cannot preserve separate nominal and maximum speeds.
-Simulator-only settings (manual conveyor speed, backup location, noise other
-than MTBF/MTTR, run configuration, initial modes, etc.) are outside the plant
-worksheet contract. Use JSON for the complete simulation configuration.
+The browser passes its **current** Basic/Advance setting in both operations because the interface mode may have been changed locally. For backward compatibility, older clients that do not send a mode retain the previous three-tab behavior.
 
-The new sheet uses the selected primary and secondary colors, readable header
-contrast, filters, frozen headers and alternating rows. User strings starting
-with `=` are written as literal text. Export validates the importer contract
-before creating the file; a failed write attempts to trash only its own new file.
+## Equipment tab
 
-The row-8 note merges C:W so it does not cross the A:B frozen-column boundary.
-Service failures include the exporter version, operation stage and original
-Google error in the existing Error details dialog.
+- Compact metadata occupy B1, B2, E1, E2, E3, B3 and B4. The equipment group header is on row 6; headers are on row 7; equipment begins on row 8.
+- **Column C: Critical machine** accepts only **Y or N**, using a visible Google Sheets dropdown in each of the editable equipment rows.
+- **Cell F4 is empty**. The obsolete explanatory note and F4:O4 merge are removed.
+- Column A has the supported equipment-type dropdown; internal equipment IDs are hidden and preserved for safe reimport, including reordered rows.
+- The 34-column contract includes General/Minor/Major reliability, conveyor geometry and speed, sensors, internal capacity and machine timing. Real Data in Advance retains formulas that reference stable Equipment IDs.
+- Optional unavailable values use NA. Metadata and rows are validated before a new spreadsheet is created. User-entered strings beginning with '=' are escaped to avoid inadvertent formulas.
 
-Deploy: add `SheetExportService.gs`; update `Main.gs`, `WebApp.html`, `Client.html`,
-`Dialogs.html`, and `TextResources.gs`, then publish a new Apps Script version.
+## Products & Formats tab: eight-column version 3
+
+The Linked product column is removed. The new columns are **Type, Name, Volume, Volume Unit, Length [mm], Width [mm], Height [mm], Bottles per Case**.
+
+Each **Product** is immediately followed by all **Format** rows that belong to it. On import, a Format is linked to the nearest preceding Product. To keep that relationship correct, place a new Format directly below its parent Product and before the next Product. A Format without an earlier Product is rejected. This grouping supports several products and formats without an extra relationship column.
+
+The tab uses marker **st-material-sheet-v3**. Existing v1/v2 templates still import; v2's explicit Linked product value is interpreted unchanged. Individual format overrides and full simulation snapshots remain available in JSON.
+
+## Applying an import
+
+Preview imports first and checks the equipment and catalog values without modifying the case. The user reviews selections and confirms Apply. Basic does not expose or import Real Data from the source, even when a three-tab workbook was created in Advance. Advance also supports supported legacy inline Real Data formats.
+
+The import client/server handshake is **sheet-import-20261123-8**. Changes to SheetExportService.gs, SheetImportService.gs, ClientCases.html and SheetImport.html must be deployed together. After updating main, push the apps-script files with clasp; update the Apps Script deployment if appropriate.

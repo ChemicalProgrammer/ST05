@@ -1,4 +1,4 @@
-function sheetImportContractVersion_(){return 'sheet-import-20261112-7';}
+function sheetImportContractVersion_(){return 'sheet-import-20261123-8';}
 // Conservative name recognition for worksheets whose category is simply Machine.
 function inferSheetMachineType_(name) {
   var text=String(name||'').trim().toUpperCase().replace(/[^A-Z0-9]+/g,' ');
@@ -69,14 +69,15 @@ function sheetContainerUnit_(labels){
 
 function previewSheetImport_(request, user) {
   if (!request || typeof request !== 'object') throw createSimulatorError_('INVALID_SHEET_REQUEST','Enter a spreadsheet URL or spreadsheet ID.');
+  var mode=String(request.uiMode||'ADVANCE').trim().toUpperCase();
+  if(!['BASIC','ADVANCE','ADVANCED'].includes(mode))throw createSimulatorError_('INVALID_SHEET_REQUEST','Choose Basic or Advance for spreadsheet import.');
   if(request.caseSnapshot)browserCaseSnapshot_(request,user);else getCase_(request.caseId, user);
   var reference = parseSheetReference_(request.spreadsheet);
   var book = openImportSpreadsheet_(reference.id);
   var name = typeof request.sheetName === 'string' ? request.sheetName.trim() : '';
   var sheets = book.getSheets();
   var sheet = name ? book.getSheetByName(name) : reference.gid !== null ? sheets.filter(function(s){return String(s.getSheetId()) === reference.gid;})[0] : sheets[0];
-  if(sheet?.getName()==='Products & Formats')sheet=book.getSheetByName('Equipment');
-  if(sheet&&(['Real Data','Datos reales'].includes(sheet.getName()))&&(photoActualsTab_(sheet)||sheet.getMaxColumns()>=23&&['st-real-inputs-v2','st-real-inputs-v3'].includes(sheet.getRange(1,23).getValues()[0][0])))sheet=book.getSheetByName('Equipment');
+  if(sheet&&['Products & Formats','Real Data','Datos reales'].includes(sheet.getName()))sheet=book.getSheetByName('Equipment');
   if (!sheet) throw createSimulatorError_('SHEET_TAB_NOT_FOUND','The worksheet was not found. Enter its exact tab name.');
   var lastRow=sheet.getLastRow();
   var inlineMarker=sheet.getMaxColumns()>=30?sheet.getRange(1,30).getValues()[0][0]:'';
@@ -138,11 +139,13 @@ function previewSheetImport_(request, user) {
   if(inlineStops)result.source.inlineStops=true;
   var catalogTab=sheet.getName()==='Equipment'?sheets.find(function(tab){return tab.getName()==='Products & Formats';}):null;
   var catalogMarker=catalogTab?.getRange(1,1).getValues()[0][0];
-  if(['st-material-sheet-v1','st-material-sheet-v2'].includes(catalogMarker)){
+  if(['st-material-sheet-v1','st-material-sheet-v2','st-material-sheet-v3'].includes(catalogMarker)){
     result.materialCatalog=readSheetCatalog_(catalogTab,catalogMarker);
     var ids=count&&sheet.getMaxColumns()>=26?sheet.getRange(start,idColumn,count,1).getValues():[];
     result.sourceRows.forEach(function(row){row.equipmentId=String(ids[row.row-start]?.[0]||'');});
   }
+  // Basic reads only Equipment and Products & Formats, even for older sources with inline actuals.
+  if(mode==='BASIC')return result;
   var actuals=sheet.getName()==='Equipment'?sheets.find(function(tab){return ['Real Data','Datos reales'].includes(tab.getName());}):null;
   var photoActuals=photoActualsTab_(actuals);
   if(photoActuals||actuals&&actuals.getMaxColumns()>=23&&actuals.getRange(1,23).getValues()[0][0]==='st-real-inputs-v3'){
@@ -584,10 +587,11 @@ function sheetResponsibleName_(value){
 
 function readSheetCatalog_(sheet,marker){
   if(marker==='st-material-sheet-v1')return readLegacySheetCatalog_(sheet);
-  var catalog={version:3,products:[],formats:[]},errors=[],formats=[],productIds=new Map(),formatNames=new Set();
+  var grouped=marker==='st-material-sheet-v3';
+  var catalog={version:3,products:[],formats:[]},errors=[],formats=[],productIds=new Map(),formatNames=new Set(),lastProductId=null;
   var units=STScenarioEngine_.productVolumeUnits,count=sheet.getLastRow()-3;
   if(count>200)return {catalog:catalog,errors:['Products & Formats supports up to 200 rows.'],matchByName:true};
-  if(count>0)sheet.getRange(4,1,count,9).getValues().forEach(function(row,index){
+  if(count>0)sheet.getRange(4,1,count,grouped?8:9).getValues().forEach(function(row,index){
     var line=index+4;
     function text(col){return String(row[col]??'').trim();}
     function missing(col){return !text(col)||/^N\/?A$/i.test(text(col));}
@@ -604,20 +608,25 @@ function readSheetCatalog_(sheet,marker){
       if(!name)throw Error('Enter a name.');
       var names=product?productIds:formatNames;
       if(names.has(key))throw Error(type+' names must be unique.');
-      var shape={lengthMm:number(5,0,false),widthMm:number(6,0,false),heightMm:number(7,0,false)};
+      var shape={lengthMm:number(grouped?4:5,0,false),widthMm:number(grouped?5:6,0,false),heightMm:number(grouped?6:7,0,false)};
       var record={id:'sheet-'+type.toLowerCase()+'-'+line,name:name};
       if(product){
-        if(!missing(2)||!missing(8))throw Error('Product and Bottles per Case apply to Format rows.');
-        var unit=missing(4)?'mL':text(4),volume=number(3,0,true);
+        if(grouped?!missing(7):!missing(2)||!missing(8))throw Error('Bottles per Case applies to Format rows.');
+        var unit=missing(grouped?3:4)?'mL':text(grouped?3:4),volume=number(grouped?2:3,0,true);
         if(!Object.hasOwn(units,unit))throw Error('Select a valid volume unit.');
         if(volume!==undefined)record.volumeMl=volume*units[unit];
         if(unit!=='mL')record.volumeUnit=unit;
-        record.bottle=shape;catalog.products.push(record);productIds.set(key,record.id);
+        record.bottle=shape;catalog.products.push(record);productIds.set(key,record.id);lastProductId=record.id;
       }else{
-        if(!missing(3)||!missing(4))throw Error('Volume applies to Product rows.');
-        record.case=shape;record.bottlesPerCase=number(8,1,false);
+        if(grouped?(!missing(2)||!missing(3)):(!missing(3)||!missing(4)))throw Error('Volume applies to Product rows.');
+        record.case=shape;record.bottlesPerCase=number(grouped?7:8,1,false);
         if(!Number.isInteger(record.bottlesPerCase)||record.bottlesPerCase>10000)throw Error('Enter a whole number of bottles per case from 1 to 10,000.');
-        catalog.formats.push(record);formatNames.add(key);formats.push({record:record,product:missing(2)?'':text(2).toLowerCase(),line:line});
+        if(grouped){
+          if(!lastProductId)throw Error('Place this format below its linked Product row.');
+          record.productId=lastProductId;
+        }
+        catalog.formats.push(record);formatNames.add(key);
+        if(!grouped)formats.push({record:record,product:missing(2)?'':text(2).toLowerCase(),line:line});
       }
     }catch(error){errors.push('Products & Formats · row '+line+': '+error.message);}
   });

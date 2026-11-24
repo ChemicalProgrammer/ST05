@@ -1,6 +1,8 @@
 // Writes a new native Sheet; never changes the source used for import.
 function exportEquipmentSheet_(request, user) {
   if (!request || typeof request !== 'object') throw createSimulatorError_('INVALID_SHEET_REQUEST','Equipment export inputs are required.');
+  var mode=String(request.uiMode||'ADVANCE').trim().toUpperCase();
+  if(!['BASIC','ADVANCE','ADVANCED'].includes(mode))throw createSimulatorError_('INVALID_SHEET_REQUEST','Choose Basic or Advance for spreadsheet export.');
   if(request.caseSnapshot)browserCaseSnapshot_(request,user);else getOwnedCaseFile_(request.caseId, user, true);
   if (!Array.isArray(request.equipment) || request.equipment.length > 1000) {
     throw createSimulatorError_('INVALID_SHEET_REQUEST','Export at most 1,000 equipment rows.');
@@ -61,14 +63,14 @@ function exportEquipmentSheet_(request, user) {
       values[index+7]=visible.concat([equipment[index].id],row.slice(25),[equipment[index].type==='CONVEYOR'?equipment[index].processData?.upstream?.dischargeVelocityMPerMinute??'':'',equipment[index].type==='CONVEYOR'?equipment[index].processData?.accumulation?.restartToFirstPackageSeconds??'':'',equipment[index].type==='CONVEYOR'?'':equipment[index].processData?.equipment?.residenceTimeSeconds??'']).map(sheetExportLiteral_);
     });
     for(var i=equipment.length;i<slots;i++)values[i+7][29]='slot-'+book.getId()+'-'+(i+1);
-    values[3][5]='Own stops only. Enter the General pair in H:I, or fill Minor Stops and Major Stops. Use 0 and 0 for a category with no stops. Split inputs take precedence.';
     sheet.getRange(8,30,slots,1).setNumberFormat('@');
     sheet.getRange(1,1,values.length,width).setValues(values).setFontFamily('Arial').setFontSize(10).setFontColor('#000000').setVerticalAlignment('middle');
-    sheet.getRange(4,6,1,10).merge().setWrap(true);
     stage='WRITE_CATALOG';
     writeSheetCatalog_(book.insertSheet('Products & Formats',1),catalog,primary);
-    stage='WRITE_REAL_DATA';
-    writeSheetActuals_(book.insertSheet('Real Data',2),values.slice(7),primary,8);
+    if(mode!=='BASIC'){
+      stage='WRITE_REAL_DATA';
+      writeSheetActuals_(book.insertSheet('Real Data',2),values.slice(7),primary,8);
+    }
     book.setActiveSheet(sheet);
     stage='FORMAT_SHEET';
     cells.forEach(function(cell){
@@ -85,6 +87,8 @@ function exportEquipmentSheet_(request, user) {
     sheet.hideColumns(30);
     var types=SpreadsheetApp.newDataValidation().requireValueInList(supportedEquipmentTypes_(),true).setAllowInvalid(false).build();
     sheet.getRange(8,1,slots,1).setDataValidation(types);
+    var critical=SpreadsheetApp.newDataValidation().requireValueInList(['Y','N'],true).setAllowInvalid(false).build();
+    sheet.getRange(8,3,slots,1).setDataValidation(critical);
     sheet.getRange(7,1,1,width).setBackground(sheetExportTint_(primary)).setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setVerticalAlignment('middle');
     if(data.rows.length){
       sheet.getRange(8,1,data.rows.length,29).setWrap(true);
@@ -225,38 +229,45 @@ function sheetColumnHeading_(label){
 }
 
 function writeSheetCatalog_(sheet,catalog,primary){
-  var units=STScenarioEngine_.productVolumeUnits,width=9;
-  var rows=[['st-material-sheet-v2','','','','','','','',''],
-    ['Catalog','','','Volume','','Dimensions','','','Packing'],
-    ['Type','Name','Linked product','Volume','Volume Unit','Length\n[mm]','Width\n[mm]','Height\n[mm]','Bottles per Case']];
-  var products=new Map(catalog.products.map(function(product){return [product.id,product.name];}));
-  ['products','formats'].forEach(function(kind){
-    catalog[kind].forEach(function(record){
-      var product=kind==='products',unit=record.volumeUnit||'mL',shape=(product?record.bottle:record.case)||{};
-      rows.push([product?'Product':'Format',record.name,product||catalog.products.length===1?'':products.get(record.productId),
-        product&&record.volumeMl!==undefined?record.volumeMl/units[unit]:'',product?unit:'',
-        shape.lengthMm,shape.widthMm,shape.heightMm,product?'N/A':record.bottlesPerCase].map(function(value){return sheetExportLiteral_(value??'');}));
+  var units=STScenarioEngine_.productVolumeUnits,width=8;
+  // Each Product owns the Format rows immediately below it, without a link column.
+  var rows=[['st-material-sheet-v3','','','','','','',''],
+    ['Catalog','','Volume','','Dimensions','','','Packing'],
+    ['Type','Name','Volume','Volume Unit','Length\n[mm]','Width\n[mm]','Height\n[mm]','Bottles per Case']];
+  var grouped=new Map();
+  catalog.formats.forEach(function(format){
+    if(!grouped.has(format.productId))grouped.set(format.productId,[]);
+    grouped.get(format.productId).push(format);
+  });
+  catalog.products.forEach(function(product){
+    var unit=product.volumeUnit||'mL',shape=product.bottle||{};
+    rows.push(['Product',product.name,product.volumeMl===undefined?'':product.volumeMl/units[unit],unit,
+      shape.lengthMm,shape.widthMm,shape.heightMm,'N/A'].map(function(value){return sheetExportLiteral_(value??'');}));
+    (grouped.get(product.id)||[]).forEach(function(format){
+      var shape=format.case||{};
+      rows.push(['Format',format.name,'','',shape.lengthMm,shape.widthMm,shape.heightMm,format.bottlesPerCase]
+        .map(function(value){return sheetExportLiteral_(value??'');}));
     });
   });
   sheet.hideRows(1);
-  sheet.getRange(4,2,200,2).setNumberFormat('@');
+  sheet.getRange(4,2,200,1).setNumberFormat('@');
+  sheet.getRange(4,4,200,1).setNumberFormat('@');
   sheet.getRange(1,1,rows.length,width).setValues(rows);
   sheet.getRange(2,1,202,width).setFontFamily('Arial').setFontSize(10).setFontColor('#000000').setVerticalAlignment('middle');
-  [[1,3],[4,2],[6,3]].forEach(function(group){sheet.getRange(2,group[0],1,group[1]).merge();});
+  [[1,2],[3,2],[5,3]].forEach(function(group){sheet.getRange(2,group[0],1,group[1]).merge();});
   sheet.getRange(2,1,1,width).setBackground(sheetExportTint_(primary,.38)).setFontWeight('bold').setHorizontalAlignment('center');
-  [[4,2],[6,3],[9,1]].forEach(function(group){
+  [[3,2],[5,3],[8,1]].forEach(function(group){
     sheetExportGroupDivider_(sheet.getRange(2,group[0],1,group[1]),sheet.getRange(3,group[0],201,1),primary);
   });
   sheet.getRange(3,1,1,width).setBackground(sheetExportTint_(primary)).setFontWeight('bold').setHorizontalAlignment('center').setWrap(true);
-  [[1,['Product','Format']],[5,Object.keys(units)]].forEach(function(column){
+  [[1,['Product','Format']],[4,Object.keys(units)]].forEach(function(column){
     var validation=SpreadsheetApp.newDataValidation().requireValueInList(column[1],true).setAllowInvalid(false).build();
     sheet.getRange(4,column[0],200,1).setDataValidation(validation);
   });
-  sheet.setColumnWidths(1,width,120);sheet.setColumnWidths(2,2,200);
+  sheet.setColumnWidths(1,width,120);sheet.setColumnWidth(2,220);
   sheet.setRowHeight(3,50);sheet.setFrozenRows(3);
   sheet.getRange(3,1,201,width).createFilter();
 }
-
 function sheetExportGroupDivider_(band,columns,primary){
   var color=sheetExportTint_(primary,.65);
   [band,columns].forEach(function(range){

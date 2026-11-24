@@ -422,7 +422,8 @@ async function openCase(caseId, initialView) {
         .map(function(key){return [key,source[key]];}));
       var request={caseId:editor.id,caseName:editor.name,simulationName:simulation.name,equipment:cloneJson(editor.equipment),
         metadata:cloneJson(metadata),
-        theme:{primary:colors.getPropertyValue('--accent').trim(),secondary:colors.getPropertyValue('--secondary').trim()}};
+        theme:{primary:colors.getPropertyValue('--accent').trim(),secondary:colors.getPropertyValue('--secondary').trim()},
+        uiMode:document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC'};
       button.disabled=true;button.dataset.busy='true';
       callServer('exportEquipmentSheet',[request],function(response){
         if(!response?.ok||!response.data?.url){

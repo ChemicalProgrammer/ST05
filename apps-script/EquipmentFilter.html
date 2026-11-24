@@ -1,7 +1,8 @@
 <script>
 window.STEquipmentFilter=(function(){
   var current='all',split=false;
-  function canReorder(){return current==='all'||split;}
+  function canReorder(){return current!=='none';}
+  function reorderMode(){return current;}
   function enabled(group){return current==='all'||current===group;}
   function apply(){
     var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card')),visible=0,selectionHidden=false;
@@ -10,7 +11,7 @@ window.STEquipmentFilter=(function(){
       STEquipmentInspector.refreshTitle(card);
       var show=enabled(type==='CONVEYOR'?'conveyors':'equipment');
       card.classList.toggle('hidden',!show);if(show)visible++;
-      var handle=card.querySelector('.equipment-drag');handle.disabled=!canReorder();
+      var handle=card.querySelector('.equipment-drag');handle.disabled=!show||!canReorder();
       handle.title=(canReorder()?__ST_TEXT__('client.drag_to_reorder_use_arrow_up_or_down_on_this_handle'):__ST_TEXT__('filter.reorder'));
       if(!show&&card.classList.contains('equipment-selected')){
         STEquipmentInspector.release();STEquipmentInspector.hide();selectionHidden=true;
@@ -36,7 +37,7 @@ window.STEquipmentFilter=(function(){
     });
     document.addEventListener('change',function(event){if(event.target.matches('.equipment-type'))apply();});
   });
-  return {apply:apply,set:set,canReorder:canReorder};
+  return {apply:apply,set:set,canReorder:canReorder,reorderMode:reorderMode};
 })();
 </script>
 

@@ -9,12 +9,12 @@ function harness(){
   const list=d.getElementById('equipment-list');
   for(const unit of line){
     const card=d.createElement('article');card.className='equipment-card';card.dataset.equipmentId=unit.id;
-    card.innerHTML='<div class="equipment-header"><select class="equipment-line-position"></select><button class="equipment-drag"></button></div><div class="equipment-fields"><input class="equipment-name"><input class="reliability-mtbfMinutes"></div>';
-    card._fields=card.lastElementChild;card.querySelector('.equipment-name').value=unit.id;list.append(card);
+    card.innerHTML='<div class="equipment-header"><button class="equipment-drag"></button></div><div class="equipment-fields"><select class="equipment-type"><option>FILLER</option><option>CONVEYOR</option><option>CAPPER</option><option>CUSTOM</option></select><input class="equipment-name"><input class="reliability-mtbfMinutes"></div>';
+    card._fields=card.lastElementChild;card.querySelector('.equipment-name').value=unit.id;card.querySelector('.equipment-type').value=unit.type;list.append(card);
   }
   const calls={invalidated:0,save:0};
   Object.assign(w,{state:{activeCase:{equipment:line}},equipmentField:(card,selector)=>card.querySelector(selector)||card._fields.querySelector(selector),
-    STEquipmentFilter:{canReorder:()=>true},STEquipmentDrag:{positions:()=>new Map(),animate(){}},
+    STEquipmentFilter:{canReorder:()=>true,reorderMode:()=> 'all'},STEquipmentDrag:{positions:()=>new Map(),animate(){}},
     STBasicMode:{sync(){}},showError:err=>{throw Error(err.message)},
     syncEquipmentFromEditor(){throw Error('Structural edits must not validate incomplete draft inputs');},
     invalidateActiveResult(){calls.invalidated++;},autosave:{change(){calls.save++;}},
@@ -36,19 +36,60 @@ test('reorder keeps incomplete input nodes and the relative physical order of ot
     assert.equal(card.querySelector('.reliability-mtbfMinutes'),blank);
     assert.equal(h.list.firstElementChild.querySelector('.equipment-name'),edited);
     assert.equal(edited.value,'Unsaved filler name');
-    assert.equal(card.dataset.index,'2');assert.equal(card.querySelector('.equipment-line-position').value,'2');
-    h.w.moveEquipment(2,1,null,true);
+    assert.equal(card.dataset.index,'2');
+    h.w.moveEquipment(2,1);
     assert.deepEqual(h.ids(),['m1','new','c1','m2','c2']);
     assert.equal(h.calls.invalidated,2);assert.equal(h.calls.save,2);
   }finally{h.close();}
 });
-test('absolute position works even with a combined-view filter active',()=>{
+test('machine-only reorder interleaves machines and conveyors, preserving live draft fields',()=>{
+  const h=harness();
+  try{
+    h.w.STEquipmentFilter.reorderMode=()=> 'equipment';
+    const card=h.list.lastElementChild,blank=card.querySelector('.reliability-mtbfMinutes');
+    h.w.moveEquipment(4,0);
+    assert.deepEqual(h.ids(),['new','c1','m1','c2','m2']);
+    assert.deepEqual(h.line.map(e=>e.id),h.ids());
+    assert.equal(h.list.firstElementChild,card);
+    assert.equal(card.querySelector('.reliability-mtbfMinutes'),blank);
+    assert.equal(blank.value,'');
+    assert.equal(card.dataset.index,'0');
+    h.w.moveEquipment(0,4);
+    assert.deepEqual(h.ids(),['m1','c1','m2','c2','new']);
+  }finally{h.close();}
+});
+test('conveyor-only reorder preserves the relative order of machines',()=>{
+  const h=harness();
+  try{
+    h.w.STEquipmentFilter.reorderMode=()=> 'conveyors';
+    h.w.moveEquipment(3,1);
+    assert.deepEqual(h.ids(),['m1','c2','m2','c1','new']);
+    assert.deepEqual(h.line.map(e=>e.id),h.ids());
+    h.w.moveEquipment(1,2); // A destination in the other group is invalid.
+    assert.deepEqual(h.ids(),['m1','c2','m2','c1','new']);
+    assert.equal(h.calls.invalidated,1);
+  }finally{h.close();}
+});
+test('interleaving uses edited Type fields and retains surplus units',()=>{
+  const h=harness();
+  try{
+    h.w.STEquipmentFilter.reorderMode=()=> 'conveyors';
+    h.list.firstElementChild.querySelector('.equipment-type').value='CONVEYOR';
+    h.w.moveEquipment(3,0);
+    assert.deepEqual(h.ids(),['m2','c2','new','m1','c1']);
+    assert.deepEqual(h.line.map(e=>e.id),h.ids());
+    assert.equal(h.list.children[3].querySelector('.equipment-type').value,'CONVEYOR');
+  }finally{h.close();}
+});
+test('a hidden-all view cannot reorder and the position combobox is removed',()=>{
   const h=harness();
   try{
     h.w.STEquipmentFilter.canReorder=()=>false;
-    h.w.moveEquipment(4,0);assert.equal(h.ids().at(-1),'new');
-    h.w.moveEquipment(4,0,null,true);assert.equal(h.ids()[0],'new');
-    assert.deepEqual(h.line.map(e=>e.id),h.ids());
+    h.w.STEquipmentFilter.reorderMode=()=> 'none';
+    h.w.moveEquipment(4,0);
+    assert.deepEqual(h.ids(),['m1','c1','m2','c2','new']);
+    assert.doesNotMatch(read('ClientEquipment.html'),/equipment-line-position/);
+    assert.doesNotMatch(read('EditorStyles.html'),/equipment-line-position/);
   }finally{h.close();}
 });
 test('conveyor evaluation pills expose the worksheet verdict and reason',()=>{

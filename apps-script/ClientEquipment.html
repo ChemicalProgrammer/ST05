@@ -137,14 +137,6 @@
       STEquipmentDrag.bind(card,index,moveEquipment);
       var remove=equipmentField(card, '.remove-equipment');remove.innerHTML=STIcons.svg('trash');remove.classList.add('icon-button');remove.title=__ST_TEXT__('client.delete_equipment');remove.setAttribute('aria-label',__ST_TEXT__('client.delete_equipment'));
       equipmentField(card, '.remove-equipment').addEventListener('click', function() { removeEquipment(Number(card.dataset.index)); });
-      var positionControl=document.createElement('select');
-      positionControl.className='equipment-line-position';
-      positionControl.addEventListener('input',function(event){event.stopPropagation();});
-      positionControl.addEventListener('change',function(event){
-        event.stopPropagation();
-        moveEquipment(Number(card.dataset.index),Number(positionControl.value),null,true);
-      });
-      card.querySelector('.equipment-header .button-row').prepend(positionControl);
       card.tabIndex=0;
       card.setAttribute('aria-label',__ST_TEXT__('inspector.select')+' '+equipment.name);
       card.addEventListener('click',function(event){if(!event.target.closest('button,input,select,textarea,details'))STEquipmentInspector.select(card);});
@@ -559,35 +551,53 @@ function numericInputValue(input) {
       return cards;
     }
     function refreshEquipmentPositions(){
-      var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
-      var names=cards.map(c=>equipmentField(c,'.equipment-name')?.value||c.dataset.equipmentId);
-      var es=document.documentElement.lang==='es',label=es?'Posición en la línea (equipos y conveyors)':'Position in line (machines and conveyors)';
-      var signature=JSON.stringify([names,es]);
-      cards.forEach(function(card,index){
+      document.querySelectorAll('#equipment-list .equipment-card').forEach(function(card,index){
         card.dataset.index=String(index);
-        var control=card.querySelector('.equipment-line-position');
-        if(!control)return;
-        if(control._positionsSignature!==signature+':'+index){
-          control.replaceChildren();
-          names.forEach(function(name,i){
-            var option=document.createElement('option');option.value=String(i);option.textContent=i===index?'#'+(i+1):(i+1)+' · '+name;control.append(option);
-          });
-          control._positionsSignature=signature+':'+index;
-        }
-        control.value=String(index);control.disabled=cards.length<2;
-        control.title=label;control.setAttribute('aria-label',label+' · '+names[index]);
       });
     }
-    function moveEquipment(index, targetIndex, before, absolute){
-      if(!state.activeCase||(!absolute&&!STEquipmentFilter.canReorder())||index===targetIndex)return;
+    function moveEquipment(index, targetIndex, before){
+      if(!state.activeCase||!STEquipmentFilter.canReorder()||index===targetIndex)return;
       var line=state.activeCase.equipment,cards=equipmentDraftCards();
       if(!cards||!Number.isInteger(index)||!Number.isInteger(targetIndex)||!line[index]||!line[targetIndex])return;
-      var positions=before||STEquipmentDrag.positions(),moved=line[index],card=cards[index],destination=cards[targetIndex];
-      // Reorder only the requested item in the physical line, not a zip of
-      // the two filtered lists. Move live DOM nodes so incomplete inputs,
-      // expanded controls and inspector ownership survive unchanged.
-      line.splice(index,1);line.splice(targetIndex,0,moved);
-      if(index<targetIndex)destination.after(card);else destination.before(card);
+      var positions=before||STEquipmentDrag.positions(),moved=line[index];
+      // Classify using the live Type fields, which can differ from committed
+      // equipment while a partially completed imported line is being edited.
+      var entries=line.map(function(model,i){
+        var card=cards[i],type=equipmentField(card,'.equipment-type')?.value||model.type;
+        return {model:model,card:card,conveyor:type==='CONVEYOR'};
+      });
+      var mode=STEquipmentFilter.reorderMode(),ordered;
+      if(mode==='equipment'||mode==='conveyors'){
+        // In a single-group view only that group's relative order changes.
+        // Rebuild the physical line as M1, C1, M2, C2, ... starting with a
+        // machine. Retain any unmatched trailing items; never invent or drop
+        // a conveyor or machine merely to make the counts equal.
+        var conveyor=mode==='conveyors';
+        var group=entries.filter(function(entry){return entry.conveyor===conveyor;});
+        var from=group.indexOf(entries[index]),to=group.indexOf(entries[targetIndex]);
+        if(from<0||to<0)return;
+        group.splice(to,0,group.splice(from,1)[0]);
+        var machines=conveyor?entries.filter(function(entry){return !entry.conveyor;}):group;
+        var conveyors=conveyor?group:entries.filter(function(entry){return entry.conveyor;});
+        ordered=[];
+        for(var i=0;i<Math.max(machines.length,conveyors.length);i++){
+          if(machines[i])ordered.push(machines[i]);
+          if(conveyors[i])ordered.push(conveyors[i]);
+        }
+      }else if(mode==='all'){
+        // The combined view exposes physical topology explicitly, so use
+        // the actual destination instead of automatically interleaving it.
+        ordered=entries.slice();ordered.splice(targetIndex,0,ordered.splice(index,1)[0]);
+      }else return;
+      // Keep actual field/card instances and inspector ownership. Only move
+      // nodes when their order differs; incomplete parameters cannot block
+      // this structural edit. Saving/simulation retain normal validation.
+      line.splice(0,line.length,...ordered.map(function(entry){return entry.model;}));
+      var parent=cards[0].parentNode,anchor=cards[0];
+      ordered.forEach(function(entry){
+        if(entry.card===anchor)anchor=anchor.nextElementSibling;
+        else parent.insertBefore(entry.card,anchor);
+      });
       refreshEquipmentPositions();
       cards.forEach(function(item){item._refreshFormatPreview?.();});
       state.isDirty=true;
@@ -727,8 +737,8 @@ function numericInputValue(input) {
         });
       }catch(error){/* Incomplete editor inputs must not block editing. */}
     }
-    function refreshDesignGraph(){if(state.activeCase){var preview=basicEquipmentPreview();STLinePerformance.render(null,preview);refreshEquipmentPositions();refreshEquipmentReliabilityBadges(preview);}}
-    window.addEventListener('st-language-change',function(){refreshEquipmentPositions();refreshEquipmentReliabilityBadges();});
+    function refreshDesignGraph(){if(state.activeCase){var preview=basicEquipmentPreview();STLinePerformance.render(null,preview);refreshEquipmentReliabilityBadges(preview);}}
+    window.addEventListener('st-language-change',function(){refreshEquipmentReliabilityBadges();});
     function readEquipmentRate(card){
       var input=equipmentField(card,'.equipment-rate');
       return input.value!==''&&Number(input.value)===Number(input.dataset.originalBpm)&&input.dataset.originalRate!==''?Number(input.dataset.originalRate):Number(input.value)/60;

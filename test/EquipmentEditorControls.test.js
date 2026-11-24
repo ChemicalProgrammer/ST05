@@ -40,10 +40,16 @@ test('editor machine and conveyor icon filters toggle independently, including a
     assert.equal(machines.getAttribute('aria-pressed'),'true');assert.equal(conveyors.getAttribute('aria-pressed'),'true');
     assert.deepEqual(h.visible(),['a','b','c']);
     machines.click();assert.deepEqual(h.visible(),['b']);assert.equal(machines.title,'Show machines');
-    assert.equal(conveyors.getAttribute('aria-pressed'),'true');assert.equal(h.filter.canReorder(),false);
-    assert.ok(h.cards.every(card=>card.querySelector('.equipment-drag').disabled));
+    assert.equal(conveyors.getAttribute('aria-pressed'),'true');assert.equal(h.filter.canReorder(),true);
+    assert.equal(h.filter.reorderMode(),'conveyors');
+    assert.equal(h.cards[1].querySelector('.equipment-drag').disabled,false);
+    assert.ok([h.cards[0],h.cards[2]].every(card=>card.querySelector('.equipment-drag').disabled));
     conveyors.click();assert.deepEqual(h.visible(),[]);assert.ok(!h.get('equipment-filter-empty').classList.contains('hidden'));
+    assert.equal(h.filter.canReorder(),false);assert.equal(h.filter.reorderMode(),'none');
+    assert.ok(h.cards.every(card=>card.querySelector('.equipment-drag').disabled));
     machines.click();assert.deepEqual(h.visible(),['a','c']);assert.ok(h.get('equipment-filter-empty').classList.contains('hidden'));
+    assert.equal(h.filter.reorderMode(),'equipment');assert.equal(h.filter.canReorder(),true);
+    assert.ok([h.cards[0],h.cards[2]].every(card=>!card.querySelector('.equipment-drag').disabled));
     conveyors.click();assert.deepEqual(h.visible(),['a','b','c']);assert.equal(h.filter.canReorder(),true);
     assert.ok(h.cards.every(card=>!card.querySelector('.equipment-drag').disabled));
     assert.equal(machines.title,'Hide machines');assert.equal(conveyors.title,'Hide conveyors');

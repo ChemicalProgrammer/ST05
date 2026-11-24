@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import {JSDOM} from 'jsdom';
 import * as planner from '../src/analysis/ScenarioPlanner.js';
 import {createScenarioDOE} from '../src/analysis/ScenarioDOE.js';
-import {scenarioSearchRun,scenarioSearchProfile,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence,planScenarioConfirmation,assessScenarioConfirmation,scenarioPracticalGain,planScenarioFinalistRanking,selectScenarioFinalists} from '../src/analysis/ScenarioSearch.js';
+import {scenarioSearchRun,scenarioSearchProfile,scenarioSearchSettings,scenarioSearchSettingsSignature,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence,planScenarioConfirmation,assessScenarioConfirmation,scenarioPracticalGain,planScenarioFinalistRanking,selectScenarioFinalists} from '../src/analysis/ScenarioSearch.js';
 import {scenarioSourceReadiness} from '../src/analysis/ScenarioReadiness.js';
 import {buildScenarioStudy,scenarioTechnicalMethodology} from '../src/analysis/ScenarioMethodology.js';
 import {searchReliabilityTargets} from '../src/analysis/ReliabilityTargetSearch.js';
@@ -42,7 +42,7 @@ test('High card reliability search uses paired experiments, independent confirma
  w.STScenarios={plan:planner.planScenarios,apply:planner.applyScenarioChanges,signature:planner.scenarioSignature,fields:planner.SCENARIO_FIELDS,definitions:planner.SCENARIO_DEFINITIONS,interventions:planner.SCENARIO_INTERVENTIONS,categoryAllows:planner.scenarioCategoryAllows,
   readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,study:buildScenarioStudy};
  w.STWhatIf={changeInfo(c){return {equipment:c.equipmentId,parameter:c.path,before:c.before,after:c.after};}};w.STScenarioText={HIGH:'High'};
- w.STScenarioSearch={run:scenarioSearchRun,profile:scenarioSearchProfile,profiles:SCENARIO_SEARCH_PROFILES,reliabilityTargets:searchReliabilityTargets,
+ w.STScenarioSearch={settings:scenarioSearchSettings,settingsSignature:scenarioSearchSettingsSignature,run:scenarioSearchRun,profile:scenarioSearchProfile,profiles:SCENARIO_SEARCH_PROFILES,reliabilityTargets:searchReliabilityTargets,
   rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain};
  w.SimulatorEngine={validateSimulationInput(){return {ok:true};},inputSignature:input=>JSON.stringify(input),async simulateBatch(input){
   calls.push(structuredClone(input));const r=input.case.equipment[0].noiseProfile.reliability,oee=input.run.reliabilityEnabled===false||!r?100:100*r.mtbfMinutes/(r.mtbfMinutes+r.mttrMinutes),summary={lineOeePercent:oee,outputCount:oee*input.run.durationSeconds/60};

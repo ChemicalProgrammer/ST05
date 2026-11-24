@@ -14,6 +14,20 @@ const PHOTOEYE_FIELDS = {
 };
 const TRANSPORT_PHOTOEYES = [PHOTOEYE_FIELDS.backup, PHOTOEYE_FIELDS.prime];
 
+// Residence calculations retain the historical 120-Hz step unless the user
+// explicitly selects a coarser resolution. Apply it to every execution path,
+// including replications and numerical playback, rather than only background work.
+const RESIDENCE_TIME_STEPS = {PRECISE:1/120,BALANCED:1/60,FAST:1/20};
+export function resolveSimulationNumerics(run) {
+  const resolution=run.numericalResolution||'PRECISE';
+  const requestedTickSeconds=run.tickSeconds;
+  const preciseTick=run.machineResidenceEnabled?Math.min(requestedTickSeconds,1/120):requestedTickSeconds;
+  const effectiveTickSeconds=run.machineResidenceEnabled
+    ?Math.min(requestedTickSeconds,RESIDENCE_TIME_STEPS[resolution]):requestedTickSeconds;
+  return {resolution,requestedTickSeconds,effectiveTickSeconds,
+    coarserThanPrecise:effectiveTickSeconds>preciseTick};
+}
+
 export function simulateLine(input) {
   const validation = validateSimulationInput(input);
   if (!validation.ok) return validation;
@@ -60,7 +74,7 @@ export function createLinePlaybackSession(input) {
     const next=createSample(runtime,true);
     const rates=playbackMeasuredRates(runtime);
     next.instantaneousOutputRatePerSecond=rates.output;
-    // Whole packages appear as 0/120 per-second impulses at a 120-Hz tick.
+    // Whole packages appear as impulses at the selected physical tick.
     // Display the measured count delta over the last physical second, using
     // the same window regardless of worker chunks or display FPS.
     next.equipment.forEach((unit,index)=>{
@@ -214,7 +228,8 @@ export async function simulateLineAsync(input, options = {}) {
 }
 
 function createRuntime(input) {
-  if(input.run.machineResidenceEnabled)input={...input,run:{...input.run,discretePackages:true,tickSeconds:Math.min(input.run.tickSeconds,1/120)}};
+  const numerics=resolveSimulationNumerics(input.run);
+  if(input.run.machineResidenceEnabled)input={...input,run:{...input.run,discretePackages:true,tickSeconds:numerics.effectiveTickSeconds}};
   const product=input.run.productCatalog?.find(p=>p.id===(input.run.initialFormatId??input.run.initialProductId));
   const baseEquipment=input.case.equipment;
   if(product)input={...input,case:{...input.case,equipment:applyProductProfile(baseEquipment,product)}};
@@ -252,6 +267,7 @@ function createRuntime(input) {
     unitOfFlow: product ? 'bottles' : input.case.unitOfFlow,
     baseEquipment, product, productRows:{}, productTimeline:[], sourceInputUnits:0, overflowBottleEquivalents:0, clearoutBottleEquivalents:0, idealBottleOutput:0,
     run: input.run,
+    numerics,
     virtualSecond: 0,
     equipment,
     equipmentById: new Map(equipment.map(unit => [unit.id, unit])),
@@ -1847,6 +1863,7 @@ function createResult(runtime,partial=false) {
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
     engineVersion: '0.20.1',
+    numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
     detailCoverage:recordingCoverage(runtime),

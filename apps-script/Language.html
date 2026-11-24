@@ -53,6 +53,22 @@ window.STLanguage=(function(){
     "Throughput (units/min)":"Producción efectiva (unid/min)",
     "Use the per-product operating settings and conveyor geometry in Simulation → Configure products. Rates in bpm and cpm cannot be compared directly.":"Utiliza los ajustes de operación por producto y la geometría de los transportadores en Simulación → Configurar productos. Las velocidades en bpm y cpm no se pueden comparar directamente."
   });
+  Object.assign(translations,{
+    "Numerical resolution":"Resolución numérica",
+    "Precise (default)":"Precisa (predeterminada)",
+    "Balanced":"Equilibrada",
+    "Fast (approximate)":"Rápida (aproximada)",
+    "For the current engine, faster profiles use a coarser calculation step and may change results. Applies to every round; the simulated duration is preserved. Changing resolution requires recalculating the base simulation.":"En el motor actual, los perfiles más rápidos usan un paso de cálculo mayor y pueden cambiar los resultados. Se aplica a todas las rondas y conserva la duración simulada. Cambiar la resolución requiere recalcular la simulación base.",
+    "Scenario search":"Búsqueda de escenarios",
+    "Search speed":"Velocidad de búsqueda",
+    "Fast search":"Búsqueda rápida",
+    "Balanced search (default)":"Búsqueda equilibrada (predeterminada)",
+    "Thorough search":"Búsqueda exhaustiva",
+    "Scenario search settings changed. Recalculate before creating a scenario.":"Cambiaron los ajustes de búsqueda de escenarios. Recalcula antes de crear un escenario.",
+    "Saved result from previous inputs or search settings. Recalculate before creating a scenario.":"Resultado guardado con entradas o ajustes de búsqueda anteriores. Recalcula antes de crear un escenario.",
+    "Scenario search settings changed.":"Cambiaron los ajustes de búsqueda de escenarios.",
+    "Controls screening duration and the number of finalists. Final confirmation uses the full base horizon, with a minimum of 30 minutes. DOE and ANOVA settings are independent. Saved with this case.":"Controla la duración de la exploración y el número de finalistas. La confirmación final utiliza el horizonte completo de la base, con un mínimo de 30 minutos. Los ajustes de DOE y ANOVA son independientes. Se guarda con el caso."
+  });
   // Resource fragments often include leading/trailing spaces. The DOM translator
   // preserves that whitespace separately, so expose trim-normalized aliases.
   Object.keys(translations).forEach(function(key){

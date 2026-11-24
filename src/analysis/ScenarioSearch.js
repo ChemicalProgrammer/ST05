@@ -6,9 +6,24 @@ export const SCENARIO_SEARCH_PROFILES = Object.freeze({
   MEDIUM: {explorationSeconds:600,confirmationSeconds:1800,maxCandidates:128,maxSearchMs:300000,maxWithoutImprovement:32,maxFactors:3,passes:2,finalists:6,fullHorizonFinalists:2},
   HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6,fullHorizonFinalists:3}
 });
-export function scenarioSearchProfile(level) { return SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM; }
-export function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
-  const profile=scenarioSearchProfile(level);
+export function scenarioSearchSettings(raw) {
+  return {speedProfile:['FAST','BALANCED','THOROUGH'].includes(raw?.speedProfile)?raw.speedProfile:'BALANCED'};
+}
+export function scenarioSearchSettingsSignature(raw) {
+  return JSON.stringify(['SCENARIO_SEARCH_SPEED_V1',scenarioSearchSettings(raw)]);
+}
+export function scenarioSearchProfile(level,settings) {
+  const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
+  // Execution budgets are independent of factor depth and statistical acceptance.
+  // Balanced deliberately preserves the existing search, including its adaptive budget.
+  switch(scenarioSearchSettings(settings).speedProfile){
+    case 'FAST':return {...profile,explorationSeconds:Math.min(300,profile.explorationSeconds),confirmationSeconds:900,maxCandidates:Math.min(48,profile.maxCandidates),passes:1,fullHorizonFinalists:1,hardCandidateLimit:true};
+    case 'THOROUGH':return {...profile,explorationSeconds:Math.min(1800,profile.explorationSeconds*2),confirmationSeconds:3600,maxCandidates:profile.maxCandidates*2,passes:profile.passes+1,fullHorizonFinalists:Math.min(4,profile.fullHorizonFinalists+1)};
+    default:return profile;
+  }
+}
+export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings) {
+  const profile=scenarioSearchProfile(level,settings);
   // Independent What-If horizons; replay configuration and scheduled commands stay intact.
   const copy={...run,durationMode:'FIXED',durationSeconds:confirmation==='validation'?Math.max(1800,Number(run.durationSeconds)||0):confirmation?profile.confirmationSeconds:profile.explorationSeconds,rounds};
   delete copy.shiftSeconds;delete copy.shiftHours;delete copy.shiftCount;
@@ -21,9 +36,9 @@ export function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
 // The intermediate screen selects where to spend simulation time; it never
 // certifies a gain. Selection and independent confirmation retain the full day.
 export function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
-  const profile=scenarioSearchProfile(level),fullRun=scenarioSearchRun(run,level,'validation');
+  const settings=scenarioSearchSettings(options.searchSettings),profile=scenarioSearchProfile(level,settings),fullRun=scenarioSearchRun(run,level,'validation',3,settings);
   const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
-  const screenRun=scenarioSearchRun(run,level,true);
+  const screenRun=scenarioSearchRun(run,level,true,3,settings);
   // A short prefix does not represent an entire shift/calendar/product program.
   // Keep every finalist when the run has explicit changes over time.
   const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);

@@ -2823,6 +2823,37 @@ test('UI: Fast and Summary finish at the final snapshot without auto-playing a l
   assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });
+test('UI: performance settings persist numerical resolution and preserve the base for search profiles',async()=>{
+ const h=await setup({remember:true,autosaveSeconds:180});try{
+  h.w.HTMLCanvasElement.prototype.getContext=()=>new Proxy({measureText:()=>({width:0})},{get:(target,key)=>target[key]??(()=>{})});
+  await h.click('.open-case');h.w.STSettings.open();await h.click('#settings-tab-simulation');
+  const resolution=h.d.getElementById('settings-numerical-resolution'),searchSpeed=h.d.getElementById('settings-scenario-search-speed');
+  const change=(element,value)=>{element.value=value;element.dispatchEvent(new h.w.Event('change',{bubbles:true}));};
+  assert.equal(resolution.value,'PRECISE');assert.equal(searchSpeed.value,'BALANCED');
+  change(resolution,'FAST');
+  for(const [id,value] of [['duration-mode','FIXED'],['run-duration','5'],['run-duration-unit','SECONDS'],['run-calculation-mode','SUMMARY'],['run-rounds','1']])change(h.d.getElementById(id),value);
+  let calculatedRun;const calculate=h.w.SimulatorEngine.simulateBatch;
+  h.w.SimulatorEngine.simulateBatch=(input,options)=>{calculatedRun=JSON.parse(JSON.stringify(input.run));return calculate(input,options);};
+  await h.w.STSettings.close();await h.click('#play-simulation');
+  await waitFor(()=>h.storedCases()[0].simulations[0].results?.replicationStatus?.state==='COMPLETE');
+  assert.equal(calculatedRun.numericalResolution,'FAST');assert.equal(calculatedRun.durationSeconds,5);
+  const base=h.storedCases()[0].simulations[0];
+  assert.equal(base.dynamicConfig.numericalResolution,'FAST');assert.equal(base.results.durationSeconds,5);
+  h.w.STSettings.open();await h.click('#settings-tab-simulation');
+  const activity=active=>h.w.dispatchEvent(new h.w.CustomEvent('st-calculation-activity',{detail:{active}}));
+  activity(true);activity(true);assert(resolution.disabled);assert(searchSpeed.disabled);
+  activity(false);assert(resolution.disabled);assert(searchSpeed.disabled);
+  activity(false);assert(!resolution.disabled);assert(!searchSpeed.disabled);
+  change(searchSpeed,'FAST');await h.w.STSettings.close();await h.click('#save-case');
+  await waitFor(()=>h.storedCases()[0].metadata.scenarioSearch?.speedProfile==='FAST');
+  const saved=h.storedCases()[0];
+  assert.deepEqual(saved.simulations[0].results,base.results,'Search speed must retain the completed numerical baseline');
+  assert.equal(saved.simulations[0].dynamicConfig.numericalResolution,'FAST');
+  await h.click('#home-cases');await h.click('.open-case');h.w.STSettings.open();await h.click('#settings-tab-simulation');
+  assert.equal(resolution.value,'FAST');assert.equal(searchSpeed.value,'FAST');
+  assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});
 test('UI: long-period loss diagnostics run only after an explicit request and then reuse the result',async()=>{
  const h=await setup({remember:true});try{
   await h.click('.open-case');const record=h.storedCases()[0],simulation=record.simulations[0],run={durationSeconds:86400,tickSeconds:.25,sampleEverySeconds:60,seed:17,rounds:1};simulation.dynamicConfig=run;const result={durationSeconds:86400,seed:17,inputSignature:h.w.SimulatorEngine.inputSignature({case:{equipment:simulation.equipment,unitOfFlow:record.unitOfFlow},run}),summary:{lineOeePercent:50,outputCount:1000,qualityAssumption:'NO_REJECT_MODEL_ASSUMES_100_PERCENT'},equipmentMetrics:{},accumulationZoneMetrics:{},samples:[]};let calls=0;h.w.SimulatorEngine.simulateBatch=async()=>{calls++;return {ok:true,result:{summary:{lineOeePercent:60},durationSeconds:86400}};};h.w.STResults.render(result,record,simulation);await settle();assert.equal(calls,0);const calculate=h.d.querySelector('.fold-tools #calculate-matched-loss');assert(calculate&&!calculate.hidden);assert(calculate.classList.contains('icon-button'));assert.equal(calculate.getAttribute('aria-label'),'Calculate matched loss diagnostics');assert(h.d.getElementById('results-loss-breakdown').hidden);calculate.click();assert(!h.d.getElementById('results-loss-breakdown').hidden);await waitFor(()=>simulation.whatIf?.lossDiagnostic?.status==='COMPLETE');assert.equal(calls,1);h.w.STResults.render(result,record,simulation);await settle();assert.equal(calls,1);assert.deepEqual(h.errors,[]);

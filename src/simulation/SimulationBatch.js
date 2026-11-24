@@ -1,4 +1,4 @@
-import { simulateLineAsync } from './LineSimulationEngine.js';
+import { simulateLineAsync, resolveSimulationNumerics } from './LineSimulationEngine.js';
 
 export function summarizeReplications(values) {
   const n=values.length,mean=values.reduce((a,b)=>a+b,0)/n;
@@ -9,6 +9,15 @@ export async function simulateBatch(input, options={}) {
   const count=input.run.rounds||1;
   if(!Number.isInteger(count)||count<1||count>100)throw new Error('INVALID_BATCH_ROUNDS');
   if(options.firstResult&&(options.firstResult.seed!==(input.run.seed>>>0)||(options.firstResult.effectiveRuntimeStop?.limitSeconds??options.firstResult.durationSeconds)!==input.run.durationSeconds||options.firstResult.effectiveRuntimeStop?.targetSeconds!==input.run.effectiveRuntimeTargetSeconds))throw new Error('BATCH_FIRST_RESULT_MISMATCH');
+  if(options.firstResult&&(input.run.engineId??'ST_CURRENT')==='ST_CURRENT'){
+    // Results without numerical metadata used the historical precise step.
+    // A reused first round must have the same physical resolution as later rounds.
+    const previousTick=options.firstResult.numerics
+      ?options.firstResult.numerics.effectiveTickSeconds
+      :resolveSimulationNumerics({...input.run,numericalResolution:'PRECISE'}).effectiveTickSeconds;
+    if(previousTick!==resolveSimulationNumerics(input.run).effectiveTickSeconds)
+      throw new Error('BATCH_FIRST_RESULT_RESOLUTION_MISMATCH');
+  }
   const baseSeed=input.run.seed>>>0,rows=new Array(count),replays=[];let representative,failed=false;
   const fractions=new Array(count).fill(0);
   async function calculate(index){
@@ -27,6 +36,7 @@ export async function simulateBatch(input, options={}) {
     if(options.firstResult&&index===0){fractions[index]=1;options.progress?.(1/count,1,count);}
     const result=response.result;
     rows[index]={round:index+1,seed:run.seed,summary:result.summary,equipmentMetrics:result.equipmentMetrics,shifts:result.shifts,products:result.products,plantCalendar:result.plantCalendar};
+    if(result.numerics)rows[index].numerics=result.numerics;
     if(result.effectiveRuntimeStop)Object.assign(rows[index],{durationSeconds:result.durationSeconds,effectiveRuntimeStop:result.effectiveRuntimeStop});
     const conveyorRows=Object.values(result.accumulationZoneMetrics||{}).filter(zone=>Number.isFinite(zone.conveyorSpeedMmPerSecond));
     if(conveyorRows.length)rows[index].conveyorResults=conveyorRows.map(zone=>({
@@ -59,7 +69,7 @@ export async function simulateBatch(input, options={}) {
     for(const key of Object.keys(metrics))if(typeof metrics[key]==='number')equipmentStatistics[id][key]=summarizeReplications(rows.map(r=>r.equipmentMetrics[id][key]));
   }
   const batch={schema:'st-replications-v1',rounds:count,baseSeed,representativeRound:closestRound(rows,statistics.outputCount?.mean,statistics.lineOeePercent?.mean),durationSeconds:input.run.durationSeconds,shiftSeconds:input.run.shiftSeconds||null,statistics,equipmentStatistics,rows,replays};
-  if(!options.summaryOnly&&batch.representativeRound>1&&!replays[batch.representativeRound-2]){
+  if(!options.summaryOnly&&input.run.calculationMode!=='SUMMARY'&&batch.representativeRound>1&&!replays[batch.representativeRound-2]){
     const row=rows[batch.representativeRound-1],runner=options.runRound||simulateLineAsync;
     options.onRepresentative?.(row.round);
     const response=await runner({case:input.case,run:{...input.run,seed:row.seed}},{detail:true,summaryOnly:false,cancelled:options.cancelled});

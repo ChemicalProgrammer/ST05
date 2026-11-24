@@ -178,12 +178,16 @@
       document.getElementById('workspace-form').addEventListener('submit', function(event){event.preventDefault();});
       STSettings.connect(saveWorkspace);
       STSettings.connectReset(resetApplication);
-      STSettings.connectSimulation(activePersistentSimulation,function(engineId,reliabilityEnabled,reliabilityCategories){
+      STSettings.connectSimulation(activePersistentSimulation,function(engineId,reliabilityEnabled,reliabilityCategories,performance){
         var simulation=activePersistentSimulation();if(!simulation||runControlsLocked())return;
         simulation.dynamicConfig=Object.assign({},simulation.dynamicConfig,{engineId:engineId});if(reliabilityEnabled!==undefined){if(reliabilityEnabled)delete simulation.dynamicConfig.reliabilityEnabled;else simulation.dynamicConfig.reliabilityEnabled=false;}
         if(reliabilityCategories){
           if(Object.keys(reliabilityCategories).length)simulation.dynamicConfig.reliabilityCategories=reliabilityCategories;
           else delete simulation.dynamicConfig.reliabilityCategories;
+        }
+        if(performance?.numericalResolution){
+          if(performance.numericalResolution==='PRECISE')delete simulation.dynamicConfig.numericalResolution;
+          else simulation.dynamicConfig.numericalResolution=performance.numericalResolution;
         }
         simulation.results=null;
         cancelRoundSession();stopPlaybackTimer();state.run.result=null;state.run.representative=null;state.run.configuration=null;

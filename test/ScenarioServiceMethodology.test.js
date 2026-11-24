@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createScenarioDOE,analyzeScenarioDOE,analyzeScenarioANOVA} from '../src/analysis/ScenarioDOE.js';
-import {planScenarioConfirmation} from '../src/analysis/ScenarioSearch.js';
+import {planScenarioConfirmation,scenarioSearchSettingsSignature} from '../src/analysis/ScenarioSearch.js';
 
 const plain=value=>JSON.parse(JSON.stringify(value));
 function canonical(value) {
@@ -58,7 +58,7 @@ function setup() {
     const roundMetrics=[-.1,0,.1].map((noise,i)=>({seed:10+i,throughput:100+(2+noise)*point.levels[0],oee:50+(.5+noise)*point.levels[0]}));
     return {index:point.index,levels:point.levels,feasible:true,throughput:roundMetrics.reduce((sum,row)=>sum+row.throughput,0)/3,oee:roundMetrics.reduce((sum,row)=>sum+row.oee,0)/3,roundMetrics};
   });
-  const evaluation={recordKey:'saved-v11-experiment',sourceSimulationId:source.id,sourceSignature,searchPolicyVersion:'MATCHED_CAPEX_V11',
+  const evaluation={recordKey:'saved-v11-experiment',sourceSimulationId:source.id,sourceSignature,searchPolicyVersion:'MATCHED_CAPEX_V11',searchSettingsSignature:scenarioSearchSettingsSignature(),
     methodologySignature:JSON.stringify(canonical(source.whatIf.methodology)),evaluatedChanges:plain(normalized.changes),unitOfFlow:'bottles',status:'IMPROVEMENT_REPRODUCED',updatedAt:'2026-11-24T12:00:00Z',
     baseline:pilot.base,candidate:pilot.candidate,confirmationPlan,
     independentCheck:{passed:true,durationSeconds:1800,rounds:6,seed:100,unitOfFlow:'bottles',baseline:confirmation.base,candidate:confirmation.candidate,
@@ -120,6 +120,8 @@ test('old policy, stale source, changed methodology or another change package ca
     h=>{h.evaluation.sourceSignature='stale-source';},
     h=>{h.evaluation.sourceSimulationId='another-simulation';},
     h=>{h.evaluation.methodologySignature='stale-methodology';},
+    h=>{delete h.evaluation.searchSettingsSignature;},
+    h=>{h.record().metadata={scenarioSearch:{speedProfile:'FAST'}};},
     h=>{h.source.whatIf.methodology.objective.minimumPracticalGain=2;},
     h=>{h.evaluation.evaluatedChanges[1].after+=100;}
   ]) {

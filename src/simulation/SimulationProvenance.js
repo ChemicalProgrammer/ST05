@@ -14,6 +14,9 @@ export function canonicalSimulationInputSignature(input) {
   const run = {...input.run};
   // Enabled/default reliability are equivalent; disabled reliability is not.
   if (run.reliabilityEnabled !== false) delete run.reliabilityEnabled;
+  // PRECISE preserves the historical step. Explicitly choosing it must not
+  // invalidate an otherwise identical completed simulation.
+  if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
   return JSON.stringify(canonical({
     version: SIMULATION_PROVENANCE_VERSION,
     unitOfFlow: input.case.unitOfFlow || 'units',

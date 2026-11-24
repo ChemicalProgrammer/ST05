@@ -15,6 +15,12 @@ test('browser and diagnostic consumers use the same provenance and keep enabled/
   assert.equal(JSON.parse(signature).version,SIMULATION_PROVENANCE_VERSION);
   assert.equal(canonicalSimulationInputSignature({...input,run:{...input.run,reliabilityEnabled:true}}),signature);
   assert.notEqual(canonicalSimulationInputSignature({...input,run:{...input.run,reliabilityEnabled:false}}),signature);
+  assert.equal(canonicalSimulationInputSignature({...input,run:{...input.run,numericalResolution:'PRECISE'}}),signature);
+  for(const numericalResolution of ['BALANCED','FAST']){
+    assert.notEqual(canonicalSimulationInputSignature({...input,run:{...input.run,numericalResolution}}),signature);
+    assert.notEqual(scenarioSignature({...simulation,dynamicConfig:{...simulation.dynamicConfig,numericalResolution}}),scenarioSignature(simulation));
+  }
+  assert.equal(scenarioSignature({...simulation,dynamicConfig:{...simulation.dynamicConfig,numericalResolution:'PRECISE'}}),scenarioSignature(simulation));
   assert.equal(canonicalSimulationInputSignature({...input,run:Object.fromEntries(Object.entries(input.run).reverse())}),signature);
 });
 

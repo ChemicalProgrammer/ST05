@@ -15,6 +15,9 @@ function canonicalSimulationInputSignature(input) {
   const run = {...input.run};
   // Enabled/default reliability are equivalent; disabled reliability is not.
   if (run.reliabilityEnabled !== false) delete run.reliabilityEnabled;
+  // PRECISE preserves the historical step. Explicitly choosing it must not
+  // invalidate an otherwise identical completed simulation.
+  if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
   return JSON.stringify(canonical({
     version: SIMULATION_PROVENANCE_VERSION,
     unitOfFlow: input.case.unitOfFlow || 'units',
@@ -1234,6 +1237,7 @@ function validateRun(run, details) {
   if(run.discretePackages!==undefined&&typeof run.discretePackages!=='boolean')details.push(invalid('run.discretePackages','must be a boolean'));
   if(run.discretePackages&&(run.engineId==='DES_SIMPY_EXPERIMENTAL'||(run.rounds??1)!==1))details.push(invalid('run.discretePackages','Bottle Live requires the ST engine and one round'));
   if(run.calculationMode!==undefined&&!['LIVE','FAST','SUMMARY'].includes(run.calculationMode))details.push(invalid('run.calculationMode','unsupported mode'));
+  if(run.numericalResolution!==undefined&&!['PRECISE','BALANCED','FAST'].includes(run.numericalResolution))details.push(invalid('run.numericalResolution','must be PRECISE, BALANCED, or FAST'));
   if (run.reliabilityEnabled !== undefined && typeof run.reliabilityEnabled !== 'boolean') details.push(invalid('run.reliabilityEnabled', 'must be a boolean'));
   if (run.reliabilityCategories !== undefined) {
     const categories=run.reliabilityCategories;
@@ -1605,6 +1609,7 @@ function scenarioSignature(simulation){
   }));
   const config=simulation.dynamicConfig&&typeof simulation.dynamicConfig==='object'&&!Array.isArray(simulation.dynamicConfig)?{...simulation.dynamicConfig}:{};
   delete config.chartWindow;
+  if(config.numericalResolution==='PRECISE')delete config.numericalResolution;
   const unitOfFlow=simulation.unitOfFlow||simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||'units';
   const text=JSON.stringify(stableScenarioValue(["SCENARIO_STREAMS_V5",SIMULATION_PROVENANCE_VERSION,simulation.id,unitOfFlow,equipment,config]));
   let hash=2166136261;for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
@@ -2052,9 +2057,24 @@ const SCENARIO_SEARCH_PROFILES = Object.freeze({
   MEDIUM: {explorationSeconds:600,confirmationSeconds:1800,maxCandidates:128,maxSearchMs:300000,maxWithoutImprovement:32,maxFactors:3,passes:2,finalists:6,fullHorizonFinalists:2},
   HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6,fullHorizonFinalists:3}
 });
-function scenarioSearchProfile(level) { return SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM; }
-function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
-  const profile=scenarioSearchProfile(level);
+function scenarioSearchSettings(raw) {
+  return {speedProfile:['FAST','BALANCED','THOROUGH'].includes(raw?.speedProfile)?raw.speedProfile:'BALANCED'};
+}
+function scenarioSearchSettingsSignature(raw) {
+  return JSON.stringify(['SCENARIO_SEARCH_SPEED_V1',scenarioSearchSettings(raw)]);
+}
+function scenarioSearchProfile(level,settings) {
+  const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
+  // Execution budgets are independent of factor depth and statistical acceptance.
+  // Balanced deliberately preserves the existing search, including its adaptive budget.
+  switch(scenarioSearchSettings(settings).speedProfile){
+    case 'FAST':return {...profile,explorationSeconds:Math.min(300,profile.explorationSeconds),confirmationSeconds:900,maxCandidates:Math.min(48,profile.maxCandidates),passes:1,fullHorizonFinalists:1,hardCandidateLimit:true};
+    case 'THOROUGH':return {...profile,explorationSeconds:Math.min(1800,profile.explorationSeconds*2),confirmationSeconds:3600,maxCandidates:profile.maxCandidates*2,passes:profile.passes+1,fullHorizonFinalists:Math.min(4,profile.fullHorizonFinalists+1)};
+    default:return profile;
+  }
+}
+function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings) {
+  const profile=scenarioSearchProfile(level,settings);
   // Independent What-If horizons; replay configuration and scheduled commands stay intact.
   const copy={...run,durationMode:'FIXED',durationSeconds:confirmation==='validation'?Math.max(1800,Number(run.durationSeconds)||0):confirmation?profile.confirmationSeconds:profile.explorationSeconds,rounds};
   delete copy.shiftSeconds;delete copy.shiftHours;delete copy.shiftCount;
@@ -2067,9 +2087,9 @@ function scenarioSearchRun(run,level,confirmation=false,rounds=3) {
 // The intermediate screen selects where to spend simulation time; it never
 // certifies a gain. Selection and independent confirmation retain the full day.
 function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
-  const profile=scenarioSearchProfile(level),fullRun=scenarioSearchRun(run,level,'validation');
+  const settings=scenarioSearchSettings(options.searchSettings),profile=scenarioSearchProfile(level,settings),fullRun=scenarioSearchRun(run,level,'validation',3,settings);
   const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
-  const screenRun=scenarioSearchRun(run,level,true);
+  const screenRun=scenarioSearchRun(run,level,true,3,settings);
   // A short prefix does not represent an entire shift/calendar/product program.
   // Keep every finalist when the run has explicit changes over time.
   const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);
@@ -2643,5 +2663,5 @@ function buildScenarioStudy(simulation, evaluation) {
   };
 }
 
-return {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary};
+return {productVolumeUnits,normalizeFormatCatalog:normalizeFormatCatalog,validateFormatCatalog:validateFormatCatalog,plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,searchSettingsSignature:scenarioSearchSettingsSignature,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary};
 })();

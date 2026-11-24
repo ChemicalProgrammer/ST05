@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {JSDOM} from 'jsdom';
-import {scenarioSearchRun,scenarioSearchProfile,scenarioConfirmationNeedsMore,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence,planScenarioConfirmation,assessScenarioConfirmation,scenarioPracticalGain,planScenarioFinalistRanking,selectScenarioFinalists} from '../src/analysis/ScenarioSearch.js';
+import {scenarioSearchRun,scenarioSearchProfile,scenarioSearchSettings,scenarioSearchSettingsSignature,scenarioConfirmationNeedsMore,SCENARIO_SEARCH_PROFILES,scenarioPairedEvidence,planScenarioConfirmation,assessScenarioConfirmation,scenarioPracticalGain,planScenarioFinalistRanking,selectScenarioFinalists} from '../src/analysis/ScenarioSearch.js';
 import {scenarioSourceReadiness} from '../src/analysis/ScenarioReadiness.js';
 import {completeSyntheticScenarioSource} from './helpers/CompletedScenarioFixture.js';
 import {buildScenarioStudy,scenarioTechnicalMethodology} from '../src/analysis/ScenarioMethodology.js';
@@ -13,6 +13,23 @@ test('What-If horizons are independent of playback and preserve commands and see
  const original={durationMode:'SHIFTS',durationSeconds:9999,rounds:40,shiftSeconds:3600,seed:55,commands:[{atVirtualSecond:60}]};
  for(const level of ['LIGHT','MEDIUM','HIGH']){const run=scenarioSearchRun(original,level);assert.equal(run.rounds,3);assert.equal(run.durationSeconds,scenarioSearchProfile(level).explorationSeconds);assert.equal(run.seed,55);assert.equal(run.durationMode,'FIXED');assert.equal(run.shiftSeconds,undefined);assert.deepEqual(run.commands,original.commands);}
  assert.equal(original.durationMode,'SHIFTS');assert.equal(original.rounds,40);assert.equal(scenarioSearchRun(original,'HIGH',true,6).durationSeconds,1800);
+});
+test('scenario speed profiles bound exploration without changing DOE depth or confirmation',()=>{
+ const original={durationSeconds:86400,rounds:40,tickSeconds:.25,sampleEverySeconds:5,seed:55,effectiveRuntimeTargetSeconds:72000},before=structuredClone(original);
+ assert.deepEqual(scenarioSearchSettings({speedProfile:'unknown'}),{speedProfile:'BALANCED'});
+ for(const depth of ['LIGHT','MEDIUM','HIGH']){
+  const current=SCENARIO_SEARCH_PROFILES[depth],fast={speedProfile:'FAST'},thorough={speedProfile:'THOROUGH'};
+  assert.deepEqual(scenarioSearchProfile(depth,{speedProfile:'BALANCED'}),current);
+  const quick=scenarioSearchProfile(depth,fast),deep=scenarioSearchProfile(depth,thorough);
+  assert.equal(quick.explorationSeconds,300);assert.equal(quick.confirmationSeconds,900);assert.equal(quick.maxCandidates,48);assert.equal(quick.hardCandidateLimit,true);assert.equal(quick.passes,1);assert.equal(quick.fullHorizonFinalists,1);assert.equal(quick.maxFactors,current.maxFactors);
+  assert.equal(deep.explorationSeconds,Math.min(1800,current.explorationSeconds*2));assert.equal(deep.confirmationSeconds,3600);assert.equal(deep.maxCandidates,current.maxCandidates*2);assert.equal(deep.passes,current.passes+1);assert.equal(deep.maxFactors,current.maxFactors);
+  for(const settings of [fast,{speedProfile:'BALANCED'},thorough]){
+   const full=scenarioSearchRun(original,depth,'validation',12,settings);
+   assert.equal(full.durationSeconds,86400);assert.equal(full.rounds,12);assert.equal(full.tickSeconds,.25);assert.equal(full.sampleEverySeconds,5);assert.equal(full.seed,55);assert.equal(full.effectiveRuntimeTargetSeconds,undefined);
+  }
+ }
+ assert.notEqual(scenarioSearchSettingsSignature({speedProfile:'FAST'}),scenarioSearchSettingsSignature());
+ assert.deepEqual(original,before);
 });
 test('uncertain paired confirmation requests more rounds, consistent gains do not',()=>{
  const base={throughput:100,roundMetrics:[0,1,2].map(()=>({throughput:100}))};
@@ -32,20 +49,20 @@ test('F upper-tail probabilities match tabulated values',()=>{
  assert.equal(scenarioFSurvival(0,1,10),1);
 });
 
-function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=99,factorCount=2){
+function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=99,factorCount=2,speedProfile='BALANCED'){
  const dom=new JSDOM('<article class="analysis-recommendation"></article>',{runScripts:'outside-only'}),w=dom.window,calls=[];
  const paths=factorCount===3?['speed','sensor','buffer']:['speed','sensor'];
  w.HTMLDialogElement.prototype.close=function(){};w.HTMLDialogElement.prototype.showModal=function(){};
  w.STPreferences={read(){return '';},write(){return true;}};w.STIcons={svg(){return '<svg></svg>';}};w.STErrors={register(){},capture(){}};w.STScenarioText={HIGH:'High'};
- w.STScenarioSearch={screenFlow:screenFlowFactors,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
+ w.STScenarioSearch={settings:scenarioSearchSettings,settingsSignature:scenarioSearchSettingsSignature,screenFlow:screenFlowFactors,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
  w.STWhatIf={changeInfo(c){return {equipment:'Unit',parameter:c.path,before:c.before,after:c.after};}};
  w.STScenarios={study:buildScenarioStudy,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,fields:{speed:[1,100,'u/s'],sensor:[1,100,'m'],...(factorCount===3?{buffer:[1,100,'m']}:{})},signature(){return 'same';},plan(){return {candidates:[]};},apply(source,changes){const copy=JSON.parse(JSON.stringify(source));for(const c of changes)copy.equipment[0][c.path]=c.after;return copy;}};
  w.SimulatorEngine={validateSimulationInput(){return {ok:true};},inputSignature(input){return JSON.stringify(input);},async simulateBatch(input){calls.push(JSON.parse(JSON.stringify(input)));const gain=paths.reduce((sum,path)=>sum+input.case.equipment[0][path]-10,0);const rows=Array.from({length:input.run.rounds},(_,j)=>{const noise=uncertain&&input.run.seed>1000000&&gain>0?[0,-20,20,0,0,0][j]:0;return {seed:input.run.seed+j,summary:{lineOeePercent:50+gain/10,outputCount:(100+gain+noise)*input.run.durationSeconds/60}};});return {ok:true,result:{durationSeconds:input.run.durationSeconds,summary:rows[0].summary,batch:{rows,statistics:{lineOeePercent:{mean:50+gain/10},throughputPerMinute:{mean:rows.reduce((sum,row)=>sum+row.summary.outputCount/input.run.durationSeconds*60,0)/rows.length}}}}};}};
- const sim={id:'sim',equipment:[{id:'e',...Object.fromEntries(paths.map(path=>[path,10]))}],dynamicConfig:{durationSeconds:durationSeconds,rounds:40,seed:1},whatIf:{searchDepth:depth}},record={metadata:{includeDOE:doe},simulations:[sim]};completeSyntheticScenarioSource(sim);
+ const sim={id:'sim',equipment:[{id:'e',...Object.fromEntries(paths.map(path=>[path,10]))}],dynamicConfig:{durationSeconds:durationSeconds,rounds:40,seed:1},whatIf:{searchDepth:depth}},record={metadata:{includeDOE:doe,scenarioSearch:{speedProfile}},simulations:[sim]};completeSyntheticScenarioSource(sim);
  w.eval(fs.readFileSync('apps-script/ScenarioExplorer.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1]);w.STScenarioExplorer.connectCase(()=>record,()=>{});w.ST_SCENARIO_SEARCH_LIMITS.maxCandidates=1;
  const host=w.document.querySelector('article');w.STScenarioExplorer.attach(host,{kind:'CUSTOM',tier:tier,explore:true,changes:paths.map(path=>({equipmentId:'e',path,before:10,after:20,unit:'u/s'}))},()=>{},sim);
  if(doe){for(const checkbox of host.querySelectorAll('.scenario-doe-select')){checkbox.checked=true;checkbox.onchange();}}
- return {dom,w,sim,host,calls,project:{kind:'CUSTOM',tier:tier,explore:true,changes:paths.map(path=>({equipmentId:'e',path,before:10,after:20,unit:'u/s'}))}};
+ return {dom,w,sim,record,host,calls,project:{kind:'CUSTOM',tier:tier,explore:true,changes:paths.map(path=>({equipmentId:'e',path,before:10,after:20,unit:'u/s'}))}};
 }
 async function search(h){h.host.querySelector('.scenario-search').click();for(let i=0;i<200;i++){if(h.sim.whatIf.evaluations?.[0]&&!['RUNNING','VALIDATING'].includes(h.sim.whatIf.evaluations[0].status))return h.sim.whatIf.evaluations[0];await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Search did not finish');}
 test('reserved DOE completes after exploration exhausts its budget; confirmation uses common horizons',async()=>{
@@ -105,6 +122,29 @@ test('scheduled conditions bypass the short finalist screen and reliability targ
  const chosen=selectScenarioFinalists(targets,{throughput:100,oee:60},2);
  assert(chosen.includes(targets[0]));assert(chosen.includes(targets[2]),'A reliability target with no event in the prefix still reaches the full horizon');
  assert.deepEqual(run,before);
+ const fast={searchSettings:{speedProfile:'FAST'}},fastPlan=planScenarioFinalistRanking({...run,tickSeconds:.25},'MEDIUM',6,fast);
+ assert.equal(fastPlan.screenRun.durationSeconds,900);assert.equal(fastPlan.fullRun.durationSeconds,86400);assert.equal(fastPlan.fullRun.tickSeconds,.25);assert.equal(fastPlan.fullHorizonFinalists,1);
+ assert.equal(planScenarioFinalistRanking({...run,plannedStops:[{startSeconds:6000,endSeconds:6060}]},'MEDIUM',6,fast).fullHorizonFinalists,6);
+ assert(selectScenarioFinalists(targets,{throughput:100,oee:60},1).includes(targets[2]));
+});
+
+test('FAST scenario search keeps complete DOE and full confirmation, and speed changes stale only scenario evidence',async()=>{
+ const h=harness(true,'MEDIUM',false,'ZERO',86400,3,'FAST');
+ try{
+  h.w.ST_SCENARIO_SEARCH_LIMITS.maxCandidates=999;
+  const inputBefore=JSON.stringify(h.sim.dynamicConfig),baseBefore=JSON.stringify(h.sim.results),result=await search(h);
+  assert.equal(result.status,'IMPROVEMENT_REPRODUCED',result.message);assert.equal(result.searchSettings.speedProfile,'FAST');assert.equal(result.searchLimits.maxCandidates,48);assert.equal(result.searchLimits.passes,1);
+  assert(result.doe.analysis.complete);assert(result.doe.anova.complete);assert.equal(result.doe.observations.length,8);
+  assert.equal(result.explorationRun.durationSeconds,300);assert.equal(result.phaseAudit.finalistScreening.run.durationSeconds,900);assert.equal(result.phaseAudit.ranking.finalists,1);
+  assert.equal(h.calls.filter(call=>call.run.seed===100004).length,2);assert.equal(result.independentCheck.durationSeconds,86400);assert.equal(result.independentCheck.rounds,result.confirmationPlan.rounds);
+  assert(h.calls.every(call=>call.run.tickSeconds===.25));assert.equal(h.host.querySelector('.scenario-create').disabled,false);
+  const oldSignature=result.searchSettingsSignature;
+  h.record.metadata.scenarioSearch={speedProfile:'BALANCED'};h.w.dispatchEvent(new h.w.Event('st-scenario-search-settings-change'));
+  const invalidated=h.sim.whatIf.evaluations[0];assert.equal(invalidated.status,'NOT_EVALUATED');assert.equal(invalidated.lastResult.searchSettingsSignature,oldSignature);assert.equal(invalidated.lastResult.searchSettings.speedProfile,'FAST');assert.notEqual(invalidated.searchSettingsSignature,oldSignature);assert.equal(h.host.querySelector('.scenario-create').disabled,true);
+  assert.equal(JSON.stringify(h.sim.dynamicConfig),inputBefore);assert.equal(JSON.stringify(h.sim.results),baseBefore);assert.equal(scenarioSourceReadiness(h.sim).ready,true);
+  h.sim.whatIf.evaluations=[result];h.host.remove();h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);
+  assert.equal(h.host.querySelector('.scenario-create').disabled,true);assert.equal(h.host.querySelector('.scenario-preview-status').dataset.state,'stale');assert.equal(h.sim.whatIf.evaluations[0].searchSettingsSignature,oldSignature);
+ }finally{h.dom.window.close();}
 });
 
 test('scenario search and factor suggestion cannot run from an incomplete or stale numerical result',async()=>{

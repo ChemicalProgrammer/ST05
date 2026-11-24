@@ -163,7 +163,7 @@ window.STSettings = (function() {
     if(!el('settings-dialog').open||event.repeat||event.ctrlKey||event.altKey||event.metaKey||event.target.closest('input,select,textarea,[contenteditable]'))return;
     if(event.key.toLowerCase()!=='m'){modeCount=0;return;}
     var now=Date.now();if(!modeCount||now-modeStarted>3000){modeCount=0;modeStarted=now;}
-    if(++modeCount===5){el('settings-interface-section').classList.remove('hidden');selectTab('appearance');el('settings-interface-mode').focus();modeCount=0;}
+    if(++modeCount===5){el('settings-interface-section').classList.remove('hidden');selectTab('appearance');var modeGroup=el('settings-interface-section');if(modeGroup.querySelector(':scope > .fold-content')?.hidden)modeGroup.querySelector('[data-subsection-toggle]')?.click();el('settings-interface-mode').focus();modeCount=0;}
   }
   function settle(ok){waiters.splice(0).forEach(function(done){done(ok);});}
   function write(){
@@ -233,7 +233,32 @@ window.STSettings = (function() {
     });
   }
   function clearDraft(){clearTimeout(timer);version=0;savedVersion=0;failure=null;settle(true);el('gemini-api-key').value='';invalidateModels();el('settings-error').textContent='';}
+  // Adopt the shared compact subsection without replacing existing form
+  // controls, section IDs, headings or their event listeners.
+  function initializeSettingsSubsections(){
+    const dialog=el('settings-dialog');
+    dialog.querySelectorAll('.settings-section').forEach(section=>{
+      if(section.classList.contains('st-subsection'))return;
+      const legacyHeader=section.querySelector(':scope > .settings-section-heading');
+      const heading=legacyHeader?.querySelector('h3')||section.querySelector(':scope > h3');
+      const next=(legacyHeader||heading)?.nextElementSibling;
+      const description=next?.tagName==='P'&&!next.id&&next.textContent.trim().length<=160?next:null;
+      const group=STSubsection.create({title:heading?'':section.querySelector('label')?.textContent.trim()||'Interface mode',description:description||undefined,variant:'B',native:false});
+      if(heading){
+        const toggle=group.title.querySelector('button');
+        toggle.replaceChildren(...heading.childNodes);
+        heading.append(toggle);group.title.replaceWith(heading);
+      }
+      if(legacyHeader){group.tools.append(...legacyHeader.children);legacyHeader.remove();}
+      group.body.append(...section.childNodes);
+      section.append(group.header,group.body);
+      section.classList.add('fold-card','st-subsection-b');
+      section.dataset.subsectionVariant='B';
+      STSubsection.enhance(section);
+    });
+  }
   function init(){
+    initializeSettingsSubsections();
     syncMode();
     window.addEventListener('st-calculation-activity',function(event){calculationActivity=Math.max(0,calculationActivity+(event.detail?.active?1:-1));syncPerformanceControls();});
     renderCalendar=STPlantCalendar.mount(el('settings-plant-calendar'),function(){return simulationProvider?.();},function(detail){calendarChanged?.(detail);},function(){return !!engineLocked?.();});

@@ -38,15 +38,15 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 #settings-dialog .dialog-body { padding:var(--space-4); }
 /* Shared Settings section spacing for every tab (including Simulation).
    One rule owns section padding and dividers; avoid stacked margins. */
-#settings-dialog .settings-section {
+#settings-dialog .settings-section:not(.st-subsection) {
   display:grid;gap:var(--space-3);min-width:0;
   padding:var(--space-4) 0;margin:0;
   border-bottom:var(--border-width) solid var(--line);
 }
-#settings-dialog :is(#settings-page-case,#settings-page-appearance,#settings-run-options,#settings-page-gemini,#settings-page-storage) > .settings-section:first-of-type {
+#settings-dialog :is(#settings-page-case,#settings-page-appearance,#settings-run-options,#settings-page-gemini,#settings-page-storage) > .settings-section:not(.st-subsection):first-of-type {
   padding-top:0;
 }
-#settings-dialog :is(#settings-page-case,#settings-page-appearance,#settings-run-options,#settings-page-gemini,#settings-page-storage) > .settings-section:last-of-type {
+#settings-dialog :is(#settings-page-case,#settings-page-appearance,#settings-run-options,#settings-page-gemini,#settings-page-storage) > .settings-section:not(.st-subsection):last-of-type {
   padding-bottom:0;border-bottom:0;
 }
 #settings-dialog .settings-section > :is(h3,p,label,form,.settings-row,.settings-section-heading,.gemini-connection-grid,.gemini-prompt-editor,.settings-color-columns,.settings-simulation-grid) { margin:0; }
@@ -64,6 +64,17 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 #settings-dialog .gemini-prompt-card :is(textarea,.gemini-prompt-footer) { margin:0; }
 
 #settings-dialog .settings-section h3 { margin:0; font-size:var(--font-secondary); }
+/* Settings groups use the shared Subsection B header and body. */
+#settings-dialog :is([role=tabpanel],#settings-run-options) > .settings-section.st-subsection {display:block;min-width:0;margin:0 0 var(--subsection-gap);padding:var(--subsection-padding);border:var(--border-width) solid var(--line);border-radius:var(--radius-md);background:var(--surface-soft)}
+#settings-dialog :is([role=tabpanel],#settings-run-options) > .settings-section.st-subsection:last-of-type {margin-bottom:0}
+#settings-dialog .settings-section.st-subsection.hidden {display:none!important}
+#settings-dialog .settings-section.st-subsection > .st-subsection-header .subsection-heading-title {font-size:var(--subsection-header-title-size);color:var(--subsection-header-text)}
+#settings-dialog .settings-section.st-subsection > .fold-content {display:grid;gap:var(--space-3);min-width:0}
+#settings-dialog .settings-section.st-subsection > .fold-content[hidden] {display:none!important}
+#settings-dialog .settings-section.st-subsection > .fold-content > :is(p,label,form,.settings-row,.gemini-connection-grid,.gemini-prompt-editor,.settings-color-columns,.settings-simulation-grid) {margin:0}
+#settings-dialog .settings-section.st-subsection > .fold-content > form {display:grid;gap:var(--space-2);min-width:0}
+#settings-dialog .gemini-settings.st-subsection > .fold-content > .gemini-ai-policy-note {display:flex;align-items:flex-start;gap:var(--space-2);margin:0;padding:var(--space-3);border:var(--border-width) solid var(--warning);border-radius:var(--radius-md);background:var(--warning-soft);color:var(--warning);line-height:1.45}
+
 #settings-dialog .settings-section > p { margin:0; }
 #settings-dialog .settings-row { margin-top:var(--space-2); gap:var(--space-3); }
 #settings-dialog .settings-colors { grid-template-columns:1fr; gap:var(--space-2); }

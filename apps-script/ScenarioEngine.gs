@@ -1504,6 +1504,17 @@ function scenarioSourceReadiness(simulation) {
       if(typeof copy.name==='string')copy.name=copy.name.trim();
       if(typeof copy.unitOfFlow==='string')copy.unitOfFlow=copy.unitOfFlow.trim()||undefined;
       for(const key of ['characteristics','noiseProfile','processData'])if(copy[key]===undefined)copy[key]={};
+      // A declared 0/0 minor AND major pair with no active failure profile
+      // has no aggregate MTBF or MTTR. Editors/older storage may represent
+      // that undefined aggregate as null, omitted, or zero. Compare those
+      // representations alike, without accepting changes to active failures
+      // or to the declared stop categories.
+      const data=copy.processData?.equipment,split=data?.stopInputs;
+      if(!copy.noiseProfile?.reliability&&split&&['minor','major'].every(kind=>split[kind]?.mtbfMinutes===0&&split[kind]?.mttrMinutes===0)&&
+         [data.mtbfMinutes,data.mttrMinutes].every(value=>value===undefined||value===null||value===0)){
+        const normalized={...data};delete normalized.mtbfMinutes;delete normalized.mttrMinutes;
+        copy.processData={...copy.processData,equipment:normalized};
+      }
       return copy;
     }):items;
   }

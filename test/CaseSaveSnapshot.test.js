@@ -119,3 +119,47 @@ test('draft case export captures the latest owned 2D state without saving or mut
  await context.exportCompleteCase();
  assert.equal(sent[1].simulations[0].simulation2d.checkpoint.time,15);
 });
+
+
+test('case export recovers a completed matching numerical run and keeps all available history outside the save budget',async()=>{
+ const signature='matching-inputs',frames=Array.from({length:640},(_,i)=>({virtualSecond:i,outputCount:i})),events=Array.from({length:2001},(_,i)=>({virtualSecond:i}));
+ const live={caseId:'c',inputSignature:signature,seed:7,durationSeconds:639,unitOfFlow:'bottles',summary:{outputCount:639},equipmentMetrics:{},accumulationZoneMetrics:{},replicationStatus:{state:'COMPLETE',rounds:1},samples:frames,events,stateTransitions:[{time:1}],detailCoverage:{}};
+ const owner={id:'s',equipment:[],dynamicConfig:{seed:7,durationSeconds:639,rounds:1},whatIf:{evaluations:[{status:'ENGINEERING_REVIEW_REQUIRED'}]}};
+ const state={activeCase:{id:'c',unitOfFlow:'bottles',simulations:[owner]},activeSimulationId:'s',run:{representative:live,result:{...live,seed:99},roundIndex:1}};
+ const sent=[],button={disabled:false};
+ const context=vm.createContext({state,window:{},cloneJson:clone,console,
+  document:{getElementById:id=>id==='export-complete-case'?button:{reportValidity:()=>true}},
+  prepareCaseDraft:()=>Promise.resolve(),captureSimulationView(){},STReports:{requestCaseExport:async draft=>sent.push(draft)},showError:e=>{throw e;},
+  SimulatorEngine:{inputSignature:()=>signature},prepareCalendarRun:r=>r,
+  compactStoredReplays(){throw Error('Full export must not compact recording');},retainedReplaySamples(){throw Error('Full export must not sample recording');}});
+ vm.runInContext(simulationSource.slice(simulationSource.indexOf('    function createStoredSimulationResult('),simulationSource.indexOf('    function renderSimulationAnalysis(')),context);
+ vm.runInContext(source.slice(source.indexOf('    async function exportCompleteCase()'),source.indexOf('    function fitCaseSave(')),context);
+ await context.exportCompleteCase();
+ assert.equal(sent[0].simulations[0].results.replay.samples.length,640);
+ assert.equal(sent[0].simulations[0].results.replay.events.length,2001);
+ assert.equal(sent[0].simulations[0].results.seed,7);
+ assert.equal(owner.results,undefined);
+ assert.equal(live.samples.length,640);
+ assert.equal(button.disabled,false);
+ state.run.representative={...live,provisional:true};
+ await context.exportCompleteCase();assert.equal(sent[1].simulations[0].results,undefined);
+ state.run.representative={...live,caseId:'other'};await context.exportCompleteCase();assert.equal(sent[2].simulations[0].results,undefined);
+ state.run.representative=live;context.SimulatorEngine.inputSignature=()=> 'changed-inputs';
+ await context.exportCompleteCase();assert.equal(sent[3].simulations[0].results,undefined);
+});
+
+test('case export supplements a compact snapshot only with matching live recording and retains its saved view',async()=>{
+ const first={caseId:'c',inputSignature:'same',seed:7,durationSeconds:2,summary:{outputCount:3},replicationStatus:{state:'COMPLETE'},samples:[{virtualSecond:0},{virtualSecond:1},{virtualSecond:2}],events:[{time:1},{time:2}],detailCoverage:{recordingMode:'LIVE'},
+ batch:{rounds:2,baseSeed:7,replays:[{round:2,seed:8,samples:[{virtualSecond:0},{virtualSecond:1},{virtualSecond:2}]}]}};
+ const saved={inputSignature:'same',seed:7,durationSeconds:2,summary:{outputCount:3},view:{virtualSecond:1},replicationStatus:{state:'COMPLETE'},replay:{caseId:'c',samples:[{virtualSecond:0},{virtualSecond:2}],events:[],detailCoverage:{savedReplaySampled:true,savedEventsOmitted:2}},
+ batch:{rounds:2,baseSeed:7,replays:[{round:2,seed:8,samples:[{virtualSecond:2}]}]}};
+ const owner={id:'s',results:saved},state={activeCase:{id:'c',simulations:[owner]},activeSimulationId:'s',run:{representative:first,roundIndex:1,result:{...first,seed:8}}};
+ const context=vm.createContext({state,cloneJson:clone,console});
+ vm.runInContext(source.slice(source.indexOf('    function captureCaseNumerical('),source.indexOf('    function captureCase2D(')),context);
+ const draft=clone(state.activeCase);context.captureCaseNumerical(draft);
+ const result=draft.simulations[0].results;
+ assert.equal(result.replay.samples.length,3);assert.equal(result.replay.events.length,2);
+ assert.equal(result.replay.detailCoverage.savedReplaySampled,false);assert.equal(result.replay.detailCoverage.savedEventsOmitted,0);
+ assert.equal(result.batch.replays[0].samples.length,3);assert.deepEqual(result.view,saved.view);assert.equal(saved.replay.samples.length,2);
+ state.run.representative={...first,inputSignature:'different'};const invalid=clone(state.activeCase);context.captureCaseNumerical(invalid);assert.deepEqual(invalid,state.activeCase);
+});

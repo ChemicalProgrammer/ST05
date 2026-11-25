@@ -251,15 +251,16 @@
       });
     }
 
-    function createStoredSimulationResult(result, run) {
-      var batch=result.batch,storedBatch;
-      if(batch){
+    function createStoredSimulationResult(result, run, options) {
+      var fullReplay=options?.fullReplay===true,batch=result.batch,storedBatch;
+      if(fullReplay)storedBatch=batch;
+      else if(batch){
         var laterLimit=Math.max(2,Math.min(120,Math.floor(600/Math.max(1,batch.rounds-1))));
         storedBatch=Object.assign({},batch,{replays:(batch.replays||[]).map(function(replay){
           return Object.assign({},replay,{samples:retainedReplaySamples(replay.samples,laterLimit)});
         })});
       }
-      if(storedBatch?.representativeReplay)storedBatch.representativeReplay=Object.assign({},storedBatch.representativeReplay,{samples:retainedReplaySamples(storedBatch.representativeReplay.samples,120)});
+      if(!fullReplay&&storedBatch?.representativeReplay)storedBatch.representativeReplay=Object.assign({},storedBatch.representativeReplay,{samples:retainedReplaySamples(storedBatch.representativeReplay.samples,120)});
       var replaySamples=result.samples||[];
       var stored = {
         inputSignature:result.inputSignature,unitOfFlow:result.unitOfFlow,engineId:result.engineId||'ST_CURRENT',engine:result.engine,limitations:result.limitations,diagnostics:result.diagnostics,
@@ -288,7 +289,7 @@
           stateTransitions:result.stateTransitions||[]
         }
       };
-      compactStoredReplays([{results:stored}]);
+      if(!fullReplay)compactStoredReplays([{results:stored}]);
       return cloneJson(stored);
     }
 

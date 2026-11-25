@@ -304,6 +304,11 @@ test('2D results and checkpoints have an independent export choice in Basic and 
    const pending=api.requestCaseExport(record),dialog=w.document.querySelector('.case-export-dialog');
    const a=dialog.querySelector('[data-export-simulation2d="a"]'),b=dialog.querySelector('[data-export-simulation2d="b"]');
    assert(a.checked&&!a.disabled);assert(!b.checked&&b.disabled);
+   const available=dialog.querySelector('[data-export-numerical="a"]'),unavailable=dialog.querySelector('[data-export-numerical="b"]');
+   assert(available.checked&&!available.disabled);
+   assert(!unavailable.checked&&unavailable.disabled);
+   assert.match(unavailable.closest('label').textContent,/Not available/);
+   assert.match(unavailable.closest('label').title,/No numerical result is available/);
    const select=dialog.querySelector('#case-export-mode');select.value='NONE';select.onchange();
    assert(dialog.querySelector('[data-export-simulation2d="a"]').checked&&!dialog.querySelector('[data-export-simulation2d="a"]').disabled);
    assert(!dialog.querySelector('[data-export-numerical="a"]').checked);

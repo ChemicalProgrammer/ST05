@@ -607,13 +607,17 @@ window.STReports=(function(){
           var choice=selections[index],card=el('fieldset',null,'case-export-section case-export-simulation'),legend=el('legend'),include=el('input');include.type='checkbox';include.checked=choice.included;include.dataset.simulationId=sim.id;
           var label=el('label',null,'case-export-check st-checkbox-card st-checkbox-card--compact'),name=el('span',sim.name||sim.id);name.setAttribute('data-st-no-translate','');label.append(include,name);legend.append(label);card.append(legend);
           var controls=el('div',null,'case-export-controls'),results=section('Results','Select saved numerical and 2D results, analyses, and conversations.','case-export-results');
-          var numericalCheck=check('Numerical results',!!sim.results&&choice.results!=='NONE',function(value){
+          var numericalCheck=check(sim.results?'Numerical results':'Numerical results · Not available',!!sim.results&&choice.results!=='NONE',function(value){
             // The header determines the shared detail level; each simulation
             // can still omit numerical results independently of its 2D state.
             if(value&&resultLevel==='NONE')resultLevel='FULL';
             choice.results=value?resultLevel:'NONE';
           });
           var numericalInput=numericalCheck.querySelector('input');numericalInput.dataset.exportNumerical=sim.id;
+          if(!sim.results){
+            numericalCheck.title='No numerical result is available for this simulation. Run the numerical simulation to export its results.';
+            numericalInput.setAttribute('aria-label',numericalCheck.title);
+          }
           var spatialCheck=check('Simulation 2D results and state',choice.simulation2d,function(value){choice.simulation2d=value;});
           var spatialInput=spatialCheck.querySelector('input');spatialInput.dataset.exportSimulation2d=sim.id;
           results.grid.append(numericalCheck,spatialCheck,

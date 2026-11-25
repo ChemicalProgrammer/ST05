@@ -389,6 +389,7 @@ async function openCase(caseId, initialView) {
         if(!document.getElementById('case-editor-form').reportValidity())return;
         await prepareCaseDraft();captureSimulationView();
         var draft=cloneJson(state.activeCase);draft.activeSimulationId=state.activeSimulationId;delete draft.expectedRevision;
+        captureCaseNumerical(draft);
         captureCase2D(draft);
         await STReports.requestCaseExport(draft);
       }catch(error){showError(error);}finally{button.disabled=false;}
@@ -405,6 +406,58 @@ async function openCase(caseId, initialView) {
       else if(simulation){var before=JSON.stringify([simulation.equipment,simulation.dynamicConfig]);simulation.equipment=cloneJson(next.equipment);simulation.dynamicConfig=cloneJson(run);if(before!==JSON.stringify([simulation.equipment,simulation.dynamicConfig]))simulation.updatedAt=new Date().toISOString();captureSimulationView();}
       next.simulations=state.activeCase.simulations;
       return fitCaseSave(cloneJson(next));
+    }
+    // Export the available full numerical history before any Drive save budget.
+    // A displayed later round is not the first/representative calculation.
+    // Never restore invalidated, provisional or incompatible results.
+    function captureCaseNumerical(record){
+      if(!record||record.id!==state.activeCase?.id)return;
+      var owner=(record.simulations||[]).find(function(sim){return sim.id===state.activeSimulationId;});
+      var live=state.run?.representative||(state.run?.roundIndex===0?state.run.result:null);
+      if(!owner||!live?.summary||live.provisional||!live.inputSignature)return;
+      var saved=owner.results,signature=saved?.inputSignature||saved?.replay?.inputSignature;
+      var sameCase=live.caseId===record.id||Boolean(saved?.replay?.caseId&&live.caseId===saved.replay.caseId);
+      if(!sameCase)return;
+      if(!saved){
+        // A finished result may still be in memory if building its saved
+        // snapshot failed. Verify the committed inputs before exporting it.
+        if(live.replicationStatus?.state!=='COMPLETE'||typeof roundSession!=='undefined'&&roundSession&&(roundSession.pending||roundSession.firstUpdating||roundSession.dirty))return;
+        try{
+          var run=owner.dynamicConfig;
+          if(!run||SimulatorEngine.inputSignature({case:{id:record.id,unitOfFlow:record.unitOfFlow,equipment:owner.equipment},run:prepareCalendarRun(run)})!==live.inputSignature)return;
+          owner.results=createStoredSimulationResult(live,run,{fullReplay:true});
+        }catch(error){console.warn('Cannot recover a matching numerical result for case export:',error?.message);}
+        return;
+      }
+      // The persistent snapshot remains authoritative for summaries and the
+      // saved view; only add more detailed, matching recordings to its copy.
+      if(signature!==live.inputSignature||saved.seed!==undefined&&saved.seed!==live.seed||saved.durationSeconds!==undefined&&saved.durationSeconds!==live.durationSeconds)return;
+      if(saved.replicationStatus?.state==='COMPLETE'&&live.replicationStatus?.state!=='COMPLETE')return;
+      function enrich(target,recording){
+        if(!target||!recording)return;
+        var hasMoreSamples=(recording.samples?.length||0)>(target.samples?.length||0);
+        if(hasMoreSamples){
+          target.samples=cloneJson(recording.samples);
+          if(recording.zoneDefinitions)target.zoneDefinitions=cloneJson(recording.zoneDefinitions);
+          target.detailCoverage=Object.assign({},target.detailCoverage,recording.detailCoverage||{});
+          // These flags describe save-time compaction, not engine recording.
+          target.detailCoverage.savedReplaySampled=Boolean(recording.detailCoverage?.savedReplaySampled);
+        }
+        if((recording.events?.length||0)>(target.events?.length||0)){
+          target.events=cloneJson(recording.events);
+          target.detailCoverage=Object.assign({},target.detailCoverage,{savedEventsOmitted:recording.detailCoverage?.savedEventsOmitted||0});
+        }
+        if((recording.stateTransitions?.length||0)>(target.stateTransitions?.length||0))target.stateTransitions=cloneJson(recording.stateTransitions);
+      }
+      enrich(saved.replay,live);
+      var oldBatch=saved.batch,newBatch=live.batch;
+      if(oldBatch&&newBatch&&oldBatch.rounds===newBatch.rounds&&oldBatch.baseSeed===newBatch.baseSeed){
+        (oldBatch.replays||[]).forEach(function(replay,index){
+          var candidate=newBatch.replays?.[index];
+          if(candidate&&replay.seed===candidate.seed&&replay.round===candidate.round)enrich(replay,candidate);
+        });
+        if(oldBatch.representativeReplay?.round===newBatch.representativeReplay?.round&&oldBatch.representativeReplay?.seed===newBatch.representativeReplay?.seed)enrich(oldBatch.representativeReplay,newBatch.representativeReplay);
+      }
     }
     // Use the same checkpoint capture for both Save and a draft export.
     // Never attach a live view from another case or a removed simulation.

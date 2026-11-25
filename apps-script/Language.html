@@ -1085,6 +1085,8 @@ window.STLanguage=(function(){
   "resultados": "result(s)",
   "escenarios": "scenario(s)"
 });
+  Object.assign(translations,{"Numerical results · Not available":"Resultados numéricos · No disponibles","No numerical result is available for this simulation. Run the numerical simulation to export its results.":"No hay resultados numéricos disponibles para esta simulación. Ejecuta la simulación numérica para exportar sus resultados."});
+  Object.assign(englishOfSpanish,{"Resultados numéricos · No disponibles":"Numerical results · Not available","No hay resultados numéricos disponibles para esta simulación. Ejecuta la simulación numérica para exportar sus resultados.":"No numerical result is available for this simulation. Run the numerical simulation to export its results."});
   function applyTree(root){
     if(!root)return;
     if(root.nodeType===3){updateText(root);return;}

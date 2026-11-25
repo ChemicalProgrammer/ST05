@@ -54,3 +54,16 @@ test('the shared focus policy affects rings rather than selected states or norma
   assert.match(read('Styles'),/input:not\(\[type=checkbox\]\):not\(\[type=radio\]\):focus-visible/);
   assert.match(read('ComponentStyles'),/:where\(html:not\(\[data-focus-rings=off\]\)\) #header-errors:not\(\.hidden\) #header-error-button:focus-visible/);
 });
+
+
+test('dialog close icons use a borderless treatment without suppressing other icon focus',()=>{
+  const css=read('DialogStyles');
+  const close='.dialog-heading button.icon-button:is([data-icon="x"],[id$="-close"],[aria-label^="Close" i],[aria-label^="Cerrar" i])';
+  const normal=css.slice(css.indexOf(close+' {'),css.indexOf('}',css.indexOf(close+' {'))+1);
+  assert.ok(normal.includes('background:transparent; border-color:transparent; box-shadow:none; outline:none;'));
+  const focused=css.slice(css.indexOf(close+':focus-visible {'),css.indexOf('}',css.indexOf(close+':focus-visible {'))+1);
+  assert.ok(focused.includes('outline:none; border-color:transparent; box-shadow:none;'));
+  assert.ok(css.includes(':where(html:not([data-focus-rings=off])) '+close+':not(:disabled):focus-visible'));
+  assert.ok(css.includes('background:var(--surface-hover); color:var(--accent); border-color:transparent;'));
+  assert.match(read('Styles'),/icon-button:focus-visible\s*\{\s*outline:/);
+});

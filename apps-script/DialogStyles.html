@@ -4,6 +4,19 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 .dialog-heading { position:relative; }
 .dialog-heading > .dialog-request-progress { position:absolute; left:0; right:0; bottom:0; pointer-events:none; }
 .dialog-heading { flex-shrink:0; display: flex; align-items: center; justify-content: space-between; padding: var(--space-5); border-bottom: var(--border-width) solid var(--line); } .dialog-heading h2 { margin: 0; }
+/* Close icons are the borderless exception to the shared icon-button style.
+   Include legacy dynamic dialogs and the design catalogue preview. Keep a
+   background cue for keyboard users instead of an outline or border. */
+.dialog-heading button.icon-button:is([data-icon="x"],[id$="-close"],[aria-label^="Close" i],[aria-label^="Cerrar" i]) {
+  background:transparent; border-color:transparent; box-shadow:none; outline:none;
+}
+.dialog-heading button.icon-button:is([data-icon="x"],[id$="-close"],[aria-label^="Close" i],[aria-label^="Cerrar" i]):focus-visible {
+  outline:none; border-color:transparent; box-shadow:none;
+}
+.dialog-heading button.icon-button:is([data-icon="x"],[id$="-close"],[aria-label^="Close" i],[aria-label^="Cerrar" i]):not(:disabled):hover,
+:where(html:not([data-focus-rings=off])) .dialog-heading button.icon-button:is([data-icon="x"],[id$="-close"],[aria-label^="Close" i],[aria-label^="Cerrar" i]):not(:disabled):focus-visible {
+  background:var(--surface-hover); color:var(--accent); border-color:transparent;
+}
 .dialog-body { padding: var(--space-5); overflow-y:auto; min-height:0; } .settings-section { padding-bottom: var(--space-5); margin-bottom: var(--space-5); border-bottom: var(--border-width) solid var(--line); }
 .settings-section:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; } .settings-section p { font-size: var(--font-secondary); }
 .settings-row { display: grid; grid-template-columns: 1fr var(--size-180); gap: var(--space-4); align-items: center; margin-top: var(--space-3); }

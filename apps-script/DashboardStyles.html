@@ -62,5 +62,13 @@
 .live-equipment-heading strong { min-width:0; overflow-wrap:anywhere; }
 .live-equipment-symbol { display:grid; place-items:center; flex:0 0 var(--icon-size); color:var(--accent); }
 .live-equipment-symbol[data-type=CONVEYOR] { color:var(--secondary-text,var(--accent)); }
+/* Advance overview: balanced 5 + 5 cards, responsive to available width. */
+html[data-ui-mode=advance] #results-overview-content {container-type:inline-size;}
+html[data-ui-mode=advance] #results-kpis {grid-template-columns:repeat(5,minmax(0,1fr));margin:0;}
+html[data-ui-mode=advance] #results-rate-loss-highlights .result-kpis {grid-template-columns:repeat(3,minmax(0,1fr));margin:0;}
+html[data-ui-mode=advance] #results-rate-loss-highlights {margin-block-start:var(--space-3);}
+@container (max-width:900px) {html[data-ui-mode=advance] #results-kpis {grid-template-columns:repeat(4,minmax(0,1fr));}}
+@container (max-width:680px) {html[data-ui-mode=advance] #results-kpis,html[data-ui-mode=advance] #results-rate-loss-highlights .result-kpis {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@container (max-width:320px) {html[data-ui-mode=advance] #results-kpis,html[data-ui-mode=advance] #results-rate-loss-highlights .result-kpis {grid-template-columns:minmax(0,1fr);}}
 </style>
 

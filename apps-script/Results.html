@@ -38,7 +38,7 @@ window.STResults=(function(){
   function renderSummaryKpis(target,result,activeCase,simulation,knownUnit){
     const equipment=simulation?.equipment||activeCase?.equipment||[],unit=resultUnit(activeCase,simulation,knownUnit);
     const keys=['oee','throughput','production','rate-loss','equipment-downtime','starved','blocked'];
-    const shown=new Set(['failure-downtime','effective-runtime']);
+    const advance=!window.STBasicMode?.isBasic(),shown=new Set(['failure-downtime','effective-runtime']);
     metrics(result,unit).filter(function(_,index){return !window.STBasicMode?.isBasic()||index<3;}).forEach(function(item,index){
       const key=keys[index];shown.add(key);
       // Las clases CSS son identificadores, no texto traducible.
@@ -52,11 +52,32 @@ window.STResults=(function(){
       else if(range)range.remove();
     });
     renderFailureCard(target,result,equipment);renderEffectiveRunTimeCard(target,result,simulation);
+    if(advance){shown.add('scrap');renderScrapCard(target,result);}
     Array.from(target.children).forEach(card=>{if(!shown.has(card.dataset.metric))card.remove();});
-    keys.filter(key=>shown.has(key)).concat(['failure-downtime','effective-runtime']).forEach((key,index)=>{
+    const order=advance?['oee','throughput','production','scrap','effective-runtime','rate-loss','equipment-downtime','failure-downtime','starved','blocked']:keys.filter(key=>shown.has(key)).concat(['failure-downtime','effective-runtime']);
+    order.forEach((key,index)=>{
       const card=target.querySelector(':scope > [data-metric="'+key+'"]');
       if(target.children[index]!==card)target.insertBefore(card,target.children[index]||null);
     });
+  }
+  function scrapTotal(result){
+    if(!result?.summary||result.provisional||(result.engineId||result.replay?.engineId)==='DES_SIMPY_EXPERIMENTAL')return null;
+    const s=result.summary;
+    if(Number.isFinite(s.totalMacroStopScrapBottles))return s.totalMacroStopScrapBottles;
+    if(Number.isFinite(s.materialBalance?.scrapUnits))return s.materialBalance.scrapUnits;
+    return s.qualityAssumption==='MACROSTOP_SCRAP_ONLY_OTHER_REJECTS_NOT_MODELED'?null:0;
+  }
+  function renderScrapCard(target,result){
+    const card=kpiCard(target,'scrap','metric-card--result'),label=card.children[0],value=card.children[1];
+    const stats=result?.resultView?.mode!=='round'?result?.batch?.statistics?.totalMacroStopScrapBottles:null;
+    label.textContent='Scrap';setMetricValue(value,Number.isFinite(stats?.mean)?stats.mean:scrapTotal(result),'bottles',2);
+    card.title='Actual bottles discarded by machines during major/general repair events and restart purge. Excludes overflow, clearout and pending scrap.';
+    card.setAttribute('aria-description',card.title);card.tabIndex=0;
+    let range=card.querySelector('small');
+    if(Number.isFinite(stats?.mean)&&Number.isFinite(stats.min)&&Number.isFinite(stats.max)){
+      if(!range){range=document.createElement('small');card.append(range);}
+      range.textContent='Min '+number(stats.min,2)+' · Max '+number(stats.max,2);
+    }else if(range)range.remove();
   }
   function failureBreakdown(result,equipment){
     const batch=result?.batch,meanView=result?.resultView?.mode!=='round';
@@ -126,7 +147,7 @@ window.STResults=(function(){
   function renderEffectiveRunTimeCard(target,result,simulation){
     const data=effectiveRunTime(result,simulation),card=kpiCard(target,'effective-runtime','metric-card--result effective-run-time-kpi');
     const label=card.children[0],value=card.children[1];label.textContent='Effective Run Time';setTimeMetric(value,data.minutes,label.textContent);
-    card.title='Tiempo efectivo según la fórmula solicitada: Production Available Time − Unplanned Downtime de línea − Production Rate Losses (pérdida bruta de velocidad). '+number(data.available,2)+' − '+number(data.unplanned,2)+' − '+number(data.rateLoss,2)+' = '+number(data.minutes,2)+' min. El downtime se obtiene como tiempo disponible menos tiempo con salida positiva; incluye las causas de falta de producción de línea y no es la suma de fallas de equipos. Las exclusiones del calendario se descuentan del tiempo disponible. No se añade la recuperación por encima de la referencia: por eso puede diferir del tiempo equivalente calculado como producción / referencia. Se supone calidad del 100 %. En vista promedio se promedian todas las rondas. — indica datos incompletos o un calendario que no corresponde al período simulado.';
+    card.title='Tiempo efectivo según la fórmula solicitada: Production Available Time − Unplanned Downtime de línea − Production Rate Losses (pérdida bruta de velocidad). '+number(data.available,2)+' − '+number(data.unplanned,2)+' − '+number(data.rateLoss,2)+' = '+number(data.minutes,2)+' min. El downtime se obtiene como tiempo disponible menos tiempo con salida positiva; incluye las causas de falta de producción de línea y no es la suma de fallas de equipos. Las exclusiones del calendario se descuentan del tiempo disponible. No se añade la recuperación por encima de la referencia: por eso puede diferir del tiempo equivalente calculado como producción / referencia. La producción utilizada ya es buena; no se vuelve a descontar el scrap. En vista promedio se promedian todas las rondas. — indica datos incompletos o un calendario que no corresponde al período simulado.';
     card.setAttribute('aria-description',card.title);card.tabIndex=0;
   }
   function renderFailureCard(target,result,equipment){
@@ -284,7 +305,7 @@ window.STResults=(function(){
     function mean(values){return values.length&&values.every(Number.isFinite)?values.reduce((sum,value)=>sum+value,0)/values.length:null;}
     function ratio(a,b,scale){return Number.isFinite(a)&&b>0?a/b*scale:null;}
     const heading=document.createElement('h3'),note=document.createElement('p'),scroll=document.createElement('div');
-    heading.id='results-equipment-operation-title';heading.textContent='Equipment operation';
+    heading.id='results-equipment-operation-title';heading.className='subsection-title';heading.textContent='Equipment operation';
     target.setAttribute('aria-labelledby',heading.id);
     note.className='chart-note';
     note.textContent='La velocidad productiva divide la salida entre el tiempo con flujo. La velocidad de banda y los pitches corresponden a la geometría al cierre de cada ronda. La acumulación muestra el inventario total en banda, incluyendo producto en tránsito. En vista promedio, el máximo es el promedio de los máximos por ronda. MTBF = exposición operativa / fallas. MTTR = tiempo en falla / fallas iniciadas y puede incluir una reparación parcial al cierre. — indica que el dato no aplica o que faltan registros.';
@@ -307,13 +328,13 @@ window.STResults=(function(){
         cellWithUnit(mean(equipmentZones.map(zone=>zone?.averageInventoryUnits)),unit),
         cellWithUnit(mean(equipmentZones.map(zone=>zone?.maximumInventoryUnits)),unit),number(m.failureCount,2),
         number(ratio(m.reliabilityExposureSeconds,m.failureCount,1/60),2),number(ratio(m.failureSeconds,m.failureCount,1/60),2)];
-      if(showScrap)values.push(conveyor?'—':number(m.macroStopScrapBottles??0,2),conveyor?'—':number(m.macroStopScrapPendingBottles??0,2));
+      if(showScrap)values.push(conveyor?'—':number(m.macroStopScrapBottles??(scrapTotal(result)!==null?0:null),2),conveyor?'—':number(m.macroStopScrapPendingBottles??(scrapTotal(result)!==null?0:null),2));
       const row=body.insertRow();
       values.forEach((value,index)=>{const cell=document.createElement(index?'td':'th');cell.textContent=value;if(index)cell.className='numeric';else cell.scope='row';row.append(cell);});
     }
     scroll.append(table);target.append(heading,note,scroll);
     const efficiencyHeading=document.createElement('h4'),efficiencyScroll=document.createElement('div'),efficiencyTable=document.createElement('table');
-    efficiencyHeading.textContent='Equipment efficiency';
+    efficiencyHeading.className='subsection-title';efficiencyHeading.textContent='Equipment efficiency';
     efficiencyScroll.className='table-scroll';
     const efficiencyHead=efficiencyTable.createTHead().insertRow(),efficiencyBody=efficiencyTable.createTBody();
     const {fields,fromNumerical,basis}=window.STEquipmentEfficiency;
@@ -354,7 +375,7 @@ window.STResults=(function(){
       });
     });
     const stopHeading=document.createElement('h3'),stopNote=document.createElement('p'),stopScroll=document.createElement('div');
-    stopHeading.textContent='Own stop breakdown';stopNote.className='chart-note';
+    stopHeading.className='subsection-title';stopHeading.textContent='Own stop breakdown';stopNote.className='chart-note';
     stopNote.textContent='Minor and Major identify the supplied own-stop profiles. General is used when only a combined profile is available. Durations include the portion of each stop observed in the run. The repair-ramp option applies to both categories. Starvation, blocking and sensor stops retain their own counters.';
     stopScroll.className='table-scroll';stopScroll.append(breakdown);target.append(stopHeading,stopNote,stopScroll);
 
@@ -405,14 +426,14 @@ window.STResults=(function(){
 
     document.getElementById('results-reference').textContent=result.engineId==='DES_SIMPY_EXPERIMENTAL'?'DES · SimPy 4.1.2 (experimental). OEE is not validated. '+(result.limitations||[]).join(' '):__ST_TEXT__('results.oee_reference')+(result.summary.lineOeePacemakerName||'not available')+__ST_TEXT__('results.quality_assumes_100_no_reject_model_loss_and_downtime_totals_are_equipment_')+' '+__ST_TEXT__('results.partial_note')+' '+__ST_TEXT__('results.productive_note');
     window.STLinePerformance.render(result,activeCase.equipment||[]);
-    var rows=(activeCase.equipment||[]).map(function(e){return {model:e,metric:(result.equipmentMetrics||{})[e.id]||{}};});
-    var worst=rows.filter(function(r){return r.model.type!=='CONVEYOR';}).sort(function(a,b){return (b.metric.starvedSeconds||0)+(b.metric.blockedSeconds||0)+(b.metric.failureSeconds||0)-(a.metric.starvedSeconds||0)-(a.metric.blockedSeconds||0)-(a.metric.failureSeconds||0);})[0];
-    document.getElementById('results-insight').textContent=worst?__ST_TEXT__('results.investigate')+worst.model.name+__ST_TEXT__('results.highest_combined_starving_blocking_and_failure_time_among_machines_this_is_'):'';
+    var rows=resultEquipment.map(function(e){return {model:e,metric:(result.equipmentMetrics||{})[e.id]||{}};});
+    document.getElementById('results-insight').replaceChildren();
     var table=document.createElement('table'); table.innerHTML=("<thead><tr><th>" + __ST_HTML_TEXT__('client.equipment') + "</th><th>" + __ST_HTML_TEXT__('sheetimportmerge.type') + "</th><th>" + __ST_HTML_TEXT__('client.equipment_unit_label') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('client.oee') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.produced_processed') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.starved_min') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.blocked_min') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.failure_min') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.failures') + "</th></tr></thead>");
     table.querySelectorAll('thead th')[2].title=__ST_TEXT__('client.equipment_unit_help');
     var head=table.querySelector('thead tr');
-    [__ST_TEXT__('results.partial_starvation'),__ST_TEXT__('results.partial_blocking'),__ST_TEXT__('results.productive_capacity')].forEach(function(label){var th=document.createElement('th');th.className='numeric';th.textContent=label;head.appendChild(th);});
-    var body=document.createElement('tbody'); rows.forEach(function(r){var m=r.metric,tr=document.createElement('tr');[r.model.name,r.model.type,unitLabel(m.unitOfFlow||r.model.unitOfFlow),number(m.oeePercent)+'%',number(m.outputCount),number(m.starvedSeconds/60),number(m.blockedSeconds/60),number(m.failureSeconds/60),number(m.failureCount,0),number((m.partialStarvationLossSeconds||0)/60),number((m.partialBlockingLossSeconds||0)/60),number(m.processingCapacityPercent)].forEach(function(v,i){var td=document.createElement('td');td.textContent=v; if(i>2)td.className='numeric';tr.appendChild(td);});body.appendChild(tr);});table.appendChild(body);document.getElementById('results-table').replaceChildren(table);
+    const showScrap=!window.STBasicMode?.isBasic();
+    [...(showScrap?['Scrap (bottles)']:[]),__ST_TEXT__('results.partial_starvation'),__ST_TEXT__('results.partial_blocking'),__ST_TEXT__('results.productive_capacity')].forEach(function(label){var th=document.createElement('th');th.className='numeric';th.textContent=label;head.appendChild(th);});
+    var body=document.createElement('tbody'); rows.forEach(function(r){var m=r.metric,tr=document.createElement('tr');[r.model.name,r.model.type,unitLabel(m.unitOfFlow||r.model.unitOfFlow),number(m.oeePercent)+'%',number(m.outputCount),number(m.starvedSeconds/60),number(m.blockedSeconds/60),number(m.failureSeconds/60),number(m.failureCount,0),...(showScrap?[r.model.type==='CONVEYOR'||r.model.processData?.role==='CONVEYOR'?'—':number(m.macroStopScrapBottles??(scrapTotal(result)!==null?0:null),2)]:[]),number((m.partialStarvationLossSeconds||0)/60),number((m.partialBlockingLossSeconds||0)/60),number(m.processingCapacityPercent)].forEach(function(v,i){var td=document.createElement('td');td.textContent=v; if(i>2)td.className='numeric';tr.appendChild(td);});body.appendChild(tr);});table.appendChild(body);document.getElementById('results-table').replaceChildren(table);
   }
   function comparisonSection(title,className){
     return STSubsection.create({title,open:true,persistKey:'comparison:'+className,className:'comparison-section '+className});

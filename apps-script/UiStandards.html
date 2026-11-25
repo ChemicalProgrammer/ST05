@@ -371,6 +371,10 @@ html[data-ui-mode=basic][data-events-enabled=true] .live-controls-help { display
 #results-plant-comparison :is(th,td), .observed-equipment-times :is(th,td) { padding:var(--space-3); }
 #results-plant-comparison td:first-child { white-space:normal; }
 #results-equipment-times .observed-equipment-columns { margin-block:var(--space-4); }
+#results-equipment-operation > .subsection-title:not(:first-child) { margin-block-start:var(--section-gap); }
+#results-equipment-operation > .table-scroll { margin-block:0; }
+#results-equipment-operation > .subsection-title:first-child {margin-block-start:0;}
+#results-equipment-group #results-insight {display:none!important;}
 #results-rate-loss > section > h3:not(:first-child) { margin-block-start:var(--section-gap); }
 
 /* Encabezados y ritmo compartidos de los grupos de Resultados. */

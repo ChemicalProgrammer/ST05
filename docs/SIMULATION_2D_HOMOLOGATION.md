@@ -18,7 +18,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Startup, Prime y rampas | Implementado y evaluado |
 | Exposición a fallas | Implementado y evaluado (en conjunto con sensores) |
 | Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
-| Descarga y overflow | Implementado y evaluado (2D; comparación numérica actual pendiente) |
+| Descarga y overflow | Implementado y evaluado (ambos motores; diferencias residuales pendientes) |
 | Contadores | Parcialmente implementado |
 | Resolución temporal | Pendiente |
 | Validación contra planta | Pendiente |
@@ -42,10 +42,10 @@ Datos históricos de la conversación y última evidencia del archivo de caso ex
 | Simulación 2D, posterior a etapa 1 | 146,040 | 101.42 | −14.28% |
 | Simulación 2D, posterior a etapa 2 (`PHYSICAL_FLOW_4`) | Pendiente | Pendiente | Pendiente |
 | Simulación 2D, posterior a etapas 2 y 3 (`PHYSICAL_FLOW_5`) | 152,376 | 105.82 | −10.56% |
-| Simulación numérica corregida (ST_CURRENT 0.20.2) | Pendiente | Pendiente | Pendiente |
+| Simulación numérica corregida, ronda 1 (ST_CURRENT 0.20.2) | 181,548 | 126.08 | +6.56% |
 | Simulación 2D, posterior a etapa 4 (`PHYSICAL_FLOW_6`) | 207,132 | 143.84 | +21.57% |
 
-Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores.
+Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores. Tras evaluar ambos motores de la etapa 4, la diferencia 2D − numérica es +25,584 botellas. La numérica histórica de 136,764 se conserva y no se usa como referencia vigente.
 
 ## 4. Registro de cambios publicados
 
@@ -153,13 +153,53 @@ Revisión visual del video aportado `Recording 2026-11-24 233317.mp4` (13.25 s):
 
 **Secuencia de rearranque vigente (commit f3eb930):** B de salida debe permanecer desocupado durante Clear Time Delay (reiniciado si se vuelve a ocupar). Tras paro completo y liberación, se rearma Prime de entrada si existe y se autoriza al alcanzar la reserva de cola compacta. Luego Startup Time y ramp-up solo si el perfil de rearranque los requiere, sin fallas ni comandos externos que impidan operar. Un pulso que termina antes de completar el paro no necesariamente dispara un nuevo startup. El Recovery Point no es una segunda fotocelda de liberación en el modelo discreto. Parámetros G resueltos: blocked/clear delay 0.5 s en los cuatro conveyors; restart delay 2/2/4/2 s (Scrambler/Virtual inlet/Filler/Case Packer); residual 3/2/3 botellas y 2 cajas; stop-response 0 s. Los perfiles Back-up de G no tienen ramp-up adicional (override nulo y ramp de máquina 0); el ramp-up de Prime es otro perfil. Código: `apps-script/Simulation2DEngine.html` (moveBelt, restart, stepMachine) y `src/simulation/LineSimulationEngine.js` (updateBackupSensorSegment, requestEquipmentStart). Se documenta la política vigente, sin modificarla ni afirmar que reproduzca un PLC de planta.
 
+### Evaluación conjunta de etapa 4 y diagnóstico previo a Contadores
+
+Fuente: exportación del usuario `G-complete (8).json`, revisión 56, SHA-256 `f842f45c9a732373ce78b3800ab5cb0993f1faab33e41bbad7697a584a77d83f`. Se verificó que equipment, dynamicConfig y summary 2D son iguales a los del archivo (7). La firma numérica contiene exactamente los equipos guardados, ST_CURRENT:0.20.2/DES:0.5.0/cache:31, semilla 20261124, 86,400 s, FAST (tick efectivo 0.05 s), residencia y fallas habilitadas, eventos/calendario deshabilitados, tres rondas completas. La 2D sigue siendo política 6, independiente, misma semilla y duración. Las secuencias aleatorias y los pasos temporales no son necesariamente equivalentes.
+
+Ronda 1 numérica: 181,548 botellas (+44,784 frente a 0.20.1; +6.56% vs planta); rondas 2 y 3: 176,040 y 178,188 con semillas 20261125 y 20261126. Media 178,592 (DE muestral 2,776.14; +4.82% vs planta). El batch identifica ronda 3 como representativa, pero summary/equipmentMetrics y replay principal corresponden a ronda 1; comparar solo esta última con la 2D. El gap anterior de 70,368 botellas (2D política 6 vs numérica histórica) baja a 25,584 (+14.09% vs numérica actual); reducción 63.64%. No atribuir el cambio de trayectoria a un incremento directo de descarga de cajas: ambas corridas nuevas registran cero descarga de transición/residual de Case Packer.
+
+| Balance (botellas equiv.) | Numérica ronda 1 | 2D |
+| --- | ---: | ---: |
+| Entrada | 185,813 | 212,424 |
+| Salida | 181,548 | 207,132 |
+| Inventario final | 1,004 | 941 |
+| Overflow | 3,261 | 4,351 |
+| Clearout | 0 | No separado |
+| Residual del balance | 0 | 0 |
+
+Descomposición aritmética del gap de salida: +26,611 entrada +63 menor inventario −1,090 overflow adicional = +25,584. Por tanto, el mayor flujo de entrada 2D domina la diferencia observada; no se trata principalmente de que 2D pierda menos producto. No confundir descomposición con atribución causal.
+
+| Conveyor | Overflow num. / 2D (botellas) | Activaciones B num. / 2D |
+| --- | ---: | ---: |
+| US-LAB | 2,177 / 3,047 | 2,178 / 1,525 |
+| LAB-FIL | 0 / 0 | 433 / 492 |
+| FIL-CAS | 1,084 / 1,304 | 1,088 / 656 |
+| PAC-PAL | 0 / 0 | 15,147 / 17,276 |
+
+Tiempos registrados por máquina (minutos, no sumables entre equipos). RUNNING numérico se toma de stateSeconds, no runningSeconds (que incluye fases productivas); 2D running incluye Discharging. Starting, Blocked, Back-up stop, Failure según estados respectivos. Waiting for Prime está incluido en starving 2D y separado en numérica.
+
+| Máquina | Running num./2D | Blocked num./2D | Starting num./2D | Back-up stop num./2D | Fallas num./2D |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scrambler | 619.43 / 826.22 | 147.53 / 28.44 | 72.57 / 50.73 | 275.26 / 275.71 | 18 / 15 |
+| Virtual inlet | 915.54 / 925.02 | 0.03 / 0.00 | 14.40 / 16.37 | 101.65 / 141.87 | 222 / 211 |
+| Filler | 761.93 / 927.25 | 150.64 / 57.09 | 73.24 / 43.47 | 110.00 / 109.25 | 61 / 68 |
+| Case Packer | 708.07 / 916.60 | 113.42 / 0.00 | 2.70 / 3.13 | 0.81 / 0.89 | 79 / 93 |
+| Palletizer | 761.34 / 875.26 | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 / 0.00 | 32 / 21 |
+
+Hallazgos para etapa 5:
+- Los estados exclusivos de cada máquina ya suman 86,400 s en ambos motores dentro del redondeo numérico. Esto no demuestra que su clasificación sea equivalente. El numérico registra 150.41 min de BACKUP_STOPPING en Case Packer sin ninguna unidad de salida durante esa fase, frente a cero Ramp down 2D (response delay 0) y Discharging incluido en running 2D. Separar Discharging, Ramp down, Back-up stop, pulso B y parada efectiva; conciliar la exposición MTBF y no contar solo por etiqueta sin verificar actividad física.
+- Scrambler es el primer punto con diferencia de flujo (185,812 vs 212,401 botellas descargadas). Su Blocked difiere 119.09 min, mientras Back-up stop es casi igual; Filler también difiere 93.55 min de Blocked. Revisar criterios y transferencia, no asumir que toda discrepancia de tiempos es solamente de presentación.
+- Contrastar producción real por máquina, output equivalente a velocidad de diseño durante estados productivos, y pérdidas parciales antes de calcular Availability/Runtime Efficiency/Operational Efficiency/throughput. En el numérico, Scrambler registra 185,812 unidades frente a runningDesignOutput 159,806.59; investigar si se debe a créditos acumulados, clasificación de ticks o definición de denominador. No ocultar discrepancias mediante tope de 100%.
+- Mantener las siete etapas originales. La etapa 4 está evaluada en ambos motores con balance cerrado, pero equivalencia por evento y descarga visual máxima siguen pendientes. Los resultados acotados (2,000 eventos guardados; 51,553 eventos omitidos por motor; 4,000 transiciones registradas y 908,653 omitidas) no permiten reconstrucción exhaustiva. Probar trazas cortas deterministas, sin fallas y con paros controlados, luego repetir G con fallas. No cambiar parámetros de entrada para forzar concordancia. No ejecutar otra corrida G antes de decidir/publicar etapa 5.
+
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |
 | --- | --- |
 | Exposición a fallas | Evaluación conjunta registrada; queda pendiente aislar etapa 2 y conciliar clasificación de exposición y secuencias aleatorias. |
 | Sensores | Evaluación conjunta registrada; revisar las diferencias de disparos, especialmente PAC-PAL, sin cambiar los inputs durante la homologación. |
-| Descarga y overflow | Balance 2D comprobado con política 6; falta nueva numérica 0.20.2, comparar descarga/overflow y explicar diferencias de paros completos frente a pulsos. |
+| Descarga y overflow | Evaluación de ambos motores registrada y balances cerrados; revisar equivalencia de eventos de descarga/parada y máximo visual como diagnóstico transversal. |
 | Contadores | Homologar definiciones, unidades y exclusividad de estados; distinguir pérdidas internas y externas, y evitar doble conteo (Waiting for Prime ya forma parte de starving en el resumen 2D). |
 | Resolución temporal | Medir sensibilidad al paso de integración y a los límites de tick; distinguir velocidad de reproducción de resolución del modelo. |
 | Validación contra planta | Comparar resultados con datos reales, revisar por equipo y por turno si existen datos, y evaluar variación entre réplicas. |
@@ -168,18 +208,17 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 
 ## 6. Punto de continuación
 
-1. Conservar corrida 2D política 6 de 207,132 botellas; no es necesario repetirla si no se cambia el modelo.
-2. Ejecutar nuevamente solo numérica ST_CURRENT 0.20.2 (no reutilizar resultados 0.20.1), con los mismos datos G, 1,440 min, semilla 20261124, formato S, fallas habilitadas y sin eventos/calendario, resolución FAST.
-3. Exportar ambos resultados; verificar versión y comparar con la 2D política 6. Registrar diferencias de producción, balance, descarga residual y paros efectivos. Confirmar la cantidad descargada por paro mediante revisión visual o eventos; no confundir activación del sensor con paro completo.
-4. Siguiente etapa de implementación: Contadores; luego resolución temporal. No corregir parámetros para forzar coincidencia con planta.
-5. Para aislar etapas 2 y 3, aún falta política 4 (`7ae1681`). Para aislar estrictamente el efecto de cambio de unidad numérica y el resto de la política 6, conservar resultados de cada versión y comparar con mismo input.
-
+1. Conservar ambas corridas actuales: numérica 0.20.2 (181,548 botellas, ronda 1) y 2D política 6 (207,132); no se requiere repetirlas.
+2. Etapa 5: auditar estados exclusivos, subestados, tiempos productivos, exposición MTBF, paros por Back-up, descarga y criterios de cálculo de eficiencia. Verificar especialmente Scrambler, Filler y Case Packer.
+3. Añadir pruebas deterministas pequeñas para funcionamiento sin fallas, pulsos cortos, paro completo, Prime, descarga y reparación; comprobar suma de tiempos por equipo, conservación material y denominadores equivalentes. Distinguir correcciones solo de contadores de cambios de física. Mantener interfaz e inputs.
+4. Publicar cambios con documentación y luego repetir únicamente los motores afectados, conservando semillas y versiones de referencia. Después pasar a resolución temporal.
+5. Para aislar etapas 2 y 3, todavía falta la corrida política 4. La validación de planta permanece pendiente.
 
 La evaluación conjunta no equivale a homologación completa ni validación de planta.
 
 ### Ajuste transversal: cámara lenta de reproducción
 
-Se incorporan 0.2× y 0.5× al componente compartido de velocidades, preservando 1× por defecto y todas las velocidades anteriores. Se elimina el mínimo artificial de 1× del reloj Live numérico y se valida que los multiplicadores sean positivos y finitos. El reloj 2D y su paso físico fijo permanecen sin cambios. Se actualiza la lista de velocidades persistibles del servidor para que coincida con el selector (manteniendo compatibilidad con 1,000,000× histórico). No cambia el motor físico, la procedencia de resultados ni el estado de las etapas. Pruebas focalizadas: 4/4 en arnés JavaScript aislado; se amplía la prueba DOM existente, no ejecutada en este arnés. La nueva corrida numérica 0.20.2 sigue pendiente.
+Se incorporan 0.2× y 0.5× al componente compartido de velocidades, preservando 1× por defecto y todas las velocidades anteriores. Se elimina el mínimo artificial de 1× del reloj Live numérico y se valida que los multiplicadores sean positivos y finitos. El reloj 2D y su paso físico fijo permanecen sin cambios. Se actualiza la lista de velocidades persistibles del servidor para que coincida con el selector (manteniendo compatibilidad con 1,000,000× histórico). No cambia el motor físico, la procedencia de resultados ni el estado de las etapas. Pruebas focalizadas: 4/4 en arnés JavaScript aislado; se amplía la prueba DOM existente, no ejecutada en este arnés. La nueva corrida numérica 0.20.2 está registrada en la evaluación conjunta de etapa 4.
 
 ## 7. Protocolo de mantenimiento
 

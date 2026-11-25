@@ -60,6 +60,6 @@ test('export includes both sensor diagnostics and the new policy without changin
  const summarize=new Function(code+';return summarize2DRun;')();
  const model=create([belt('b',{prime:140,backup:100})]);const b=model.line[0];b.bottlesPerUnit=1;b.produced=42;
  model.step(.25);const summary=summarize(model,'Completed',7,'INDEPENDENT',null,.25,[]);
- assert.equal(summary.controlPolicy,'PHYSICAL_FLOW_5');assert.equal(summary.outputBottles,42);
+ assert.equal(summary.controlPolicy,'PHYSICAL_FLOW_6');assert.equal(summary.outputBottles,42);
  assert.equal(summary.equipment[0].sensors.prime.thresholdUnits,3);assert.equal(summary.equipment[0].sensors.backup.triggerCount,0);
 });

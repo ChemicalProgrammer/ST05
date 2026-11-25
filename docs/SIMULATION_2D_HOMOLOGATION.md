@@ -18,7 +18,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Startup, Prime y rampas | Implementado y evaluado |
 | Exposición a fallas | Implementado y evaluado (en conjunto con sensores) |
 | Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
-| Descarga y overflow | Pendiente |
+| Descarga y overflow | Implementado |
 | Contadores | Parcialmente implementado |
 | Resolución temporal | Pendiente |
 | Validación contra planta | Pendiente |
@@ -42,6 +42,8 @@ Datos históricos de la conversación y última evidencia del archivo de caso ex
 | Simulación 2D, posterior a etapa 1 | 146,040 | 101.42 | −14.28% |
 | Simulación 2D, posterior a etapa 2 (`PHYSICAL_FLOW_4`) | Pendiente | Pendiente | Pendiente |
 | Simulación 2D, posterior a etapas 2 y 3 (`PHYSICAL_FLOW_5`) | 152,376 | 105.82 | −10.56% |
+| Simulación numérica corregida (ST_CURRENT 0.20.2) | Pendiente | Pendiente | Pendiente |
+| Simulación 2D, posterior a etapa 4 (`PHYSICAL_FLOW_6`) | Pendiente | Pendiente | Pendiente |
 
 Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores.
 
@@ -117,13 +119,26 @@ Balance de material:
 - La etapa 4 debe distinguir intento de transferencia bloqueada, descarga física residual, espacio real a la entrada, capacidad y pérdida por overflow, con unidades nativas y equivalentes. En particular PAC-PAL usa cajas y no debe dividir por 12 una cantidad ya expresada en cajas. Revisar también el balance de las transiciones Back-up.
 - No hay tiempos reales por equipo en el registro de planta; las posiciones de sensores resueltas son datos de modelo, no necesariamente medidas. Validación contra planta sigue pendiente.
 
+### Etapa 4: Descarga y overflow
+
+Política 2D `PHYSICAL_FLOW_6`; versión numérica ST_CURRENT 0.20.2, provenance cache:31. Referencia previa: 6,325 botellas perdidas por overflow en la numérica y balance 2D sin pérdida deducible (política 5). No se cambian inputs, velocidades, sensores, retardos ni interfaz.
+
+- La transferencia normal a un conveyor detenido o sin separación suficiente en la entrada se bloquea; el producto permanece dentro de la máquina. Los intentos bloqueados se cuentan por intento de transferencia, no como pérdidas físicas ni como eventos únicos de parada.
+- Tras el tiempo de respuesta al Back-up, una descarga residual real puede salir aun si la banda no admite otra unidad. Si hay espacio físico de entrada, el envase entra; si no, se registra overflow y se retira del inventario de la máquina. No se inserta producto superpuesto ni se crea material. Durante la respuesta anterior a ese instante, se sigue aplicando bloqueo normal.
+- El número de descargas residuales en máquinas con residencia se limita a las unidades completas contenidas al activar Back-up. El nombre heredado `bottlesDischargedAtStop` representa envases nativos, como especifica CAT L21/L52. Se corrige en ambos motores la división indebida por el factor botellas/caja. Dos cajas configuradas equivalen a dos cajas (24 botellas para formato S), no cero. No se modifica el motor Python alternativo; la homologación se refiere al ST_CURRENT.
+- La salida de máquina incluye envases físicamente descargados aunque se pierdan; entrada y salida de conveyor incluyen solo envases aceptados y entregados, respectivamente. Se exportan conteos de descarga durante Back-up, descarga residual, overflow e intentos bloqueados, e inventario en unidades nativas y botellas equivalentes. El balance global usa admisiones de la primera máquina (incluye su inventario interno), salida final, inventarios y overflow. El inventario de Case Packer se convierte por su unidad de entrada (botellas), no su salida (cajas). Si faltan contadores de una corrida anterior, el balance es nulo.
+- La firma de política 2D y la versión de procedencia numérica cambian para evitar reutilizar checkpoints/resultados incompatibles. La referencia de 136,764 botellas permanece histórica; es necesario recalcular la ronda numérica con 0.20.2 para comparar motores corregidos. Mantener separada la referencia 2D de 152,376 botellas de política 5.
+- Archivos: motor 2D y resumen, motor numérico fuente y bundle browser, procedencia fuente y bundle de escenarios, pruebas de descarga, ajuste de versión en prueba de sensores y esta bitácora.
+- Pruebas: 25/25 casos superados en arnés JavaScript aislado (incluye ejecución real del bundle numérico, balance material, spill residual, cajas, checkpoint, sensores, reinicios y reloj MTBF). Se verificó coincidencia textual del fuente numérico y procedencia con sus bundles generados. No se ejecutó la suite completa de Node/npm ni el caso G de 24 h. Validar con la exportación de las siguientes corridas.
+- Limitación: se homologa el manejo de descarga residual en conveyors físicos; las diferencias de política de transición/temporización, contadores y otras topologías siguen sujetas a revisión en las etapas correspondientes.
+
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |
 | --- | --- |
 | Exposición a fallas | Evaluación conjunta registrada; queda pendiente aislar etapa 2 y conciliar clasificación de exposición y secuencias aleatorias. |
 | Sensores | Evaluación conjunta registrada; revisar las diferencias de disparos, especialmente PAC-PAL, sin cambiar los inputs durante la homologación. |
-| Descarga y overflow | Revisar producto descargado durante la parada, capacidad efectiva, acumulación y transferencias; comprobar conservación de producto. |
+| Descarga y overflow | Comparar las corridas nuevas con las históricas y verificar overflow e inventarios por conveyor, así como cierre del balance. |
 | Contadores | Homologar definiciones, unidades y exclusividad de estados; distinguir pérdidas internas y externas, y evitar doble conteo (Waiting for Prime ya forma parte de starving en el resumen 2D). |
 | Resolución temporal | Medir sensibilidad al paso de integración y a los límites de tick; distinguir velocidad de reproducción de resolución del modelo. |
 | Validación contra planta | Comparar resultados con datos reales, revisar por equipo y por turno si existen datos, y evaluar variación entre réplicas. |
@@ -132,11 +147,12 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 
 ## 6. Punto de continuación
 
-1. Continuar con etapa 4: Descarga y overflow, usando el commit `cf8d1e5` y los resultados de política 5 como referencia. Revisar la diferencia de manejo de descargas residuales, pérdida por desbordamiento y conversiones de botellas/cajas antes de modificar el motor.
-2. Conservar la configuración y semilla del caso G; no ajustar parámetros para acercar artificialmente la producción a planta.
-3. Añadir pruebas de balance material, transferencias bloqueadas y descarga residual en unidades nativas y botellas equivalentes; actualizar esta bitácora en el commit.
-4. Ejecutar y exportar la siguiente corrida 2D completa (1,440 min, semilla 20261124), comparar con política 5 y numérica ronda 1. Si se modifica el motor numérico, generar una nueva referencia sin sobrescribir el histórico.
-5. Si se requiere atribución individual de etapas 2 y 3, correr política 4 (`7ae1681`) por separado. Para resolver diferencias de paso temporal, ejecutar una comparación de resolución controlada en etapa 6.
+1. Actualizar Apps Script con política 6 y motor ST_CURRENT 0.20.2; iniciar corridas nuevas, sin restaurar el checkpoint de política 5.
+2. Ejecutar 2D y numérica con los mismos datos G, 1,440 min, semilla 20261124, formato S, fallas habilitadas y sin eventos/calendario; conservar configuración numérica FAST y paso 2D nominal 1/120 s. Mantener histórico separado.
+3. Exportar los resultados numéricos y Simulation 2D; registrar producción, balance de material, overflow por conveyor, descargas residuales, inventarios, tiempos y fallas. Solo entonces marcar etapa 4 evaluada.
+4. Siguiente etapa de implementación: Contadores; luego resolución temporal. No corregir parámetros para forzar coincidencia con planta.
+5. Para aislar etapas 2 y 3, aún falta política 4 (`7ae1681`). Para aislar estrictamente el efecto de cambio de unidad numérica y el resto de la política 6, conservar resultados de cada versión y comparar con mismo input.
+
 
 La evaluación conjunta no equivale a homologación completa ni validación de planta.
 

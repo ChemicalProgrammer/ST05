@@ -19,9 +19,11 @@ window.STSimulation2DEngine=(function(){
       ? {...definition,items:[],backupBlocked:false,backupElapsed:0,primeSeen:false,backupBeam:false,primeBeam:false,
         primeThresholdUnits:primeThresholdUnits(definition),primeQueueUnits:0,primeTriggerCount:0,
         backupOccupied:false,backupTriggerCount:0,backupClearCount:0,produced:0,state:'Empty',
+        receivedUnits:0,overflowUnits:0,overflowEvents:0,blockedEntryAttempts:0,
         durations:{empty:0,flowing:0,accumulating:0},recentOutput:[],ratePerMinute:0}
       : {...definition,input:0,remaining:null,ready:false,started:0,produced:0,backupSince:null,residual:0,state:'Waiting',
-        resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
+        admittedInputUnits:0,stopDischargedUnits:0,residualDischargedUnits:0,dischargeOverflowUnits:0,
+        residualAtTrigger:0,resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
         activeStartDelaySeconds:definition.startDelay??0,startCause:'INITIAL',repairRecoveryPending:false,
         reliabilityExposureSeconds:0,reliabilityChargedSeconds:0,
         restartRequests:{INITIAL:1},startingSecondsByCause:{},rampUpSecondsByCause:{},waitingForPrimeSeconds:0,
@@ -29,7 +31,7 @@ window.STSimulation2DEngine=(function(){
         randomState:(Math.trunc(seed)+Math.imul(index+1,2654435761))>>>0,
         durations:{starting:0,running:0,starving:0,acceleration:0,deceleration:0,blocked:0,backupStop:0,failure:0,paused:0,stopped:0,emergencyStop:0,plannedStop:0},
         recentOutput:[],ratePerMinute:0});
-    let time=0,commandIndex=0,stopIndex=0,activeStop=null;
+    let time=0,commandIndex=0,stopIndex=0,activeStop=null,materialAccountingComplete=true;
     const commands=schedule.commands||[],stops=schedule.stops||[];
     const byId=new Map(line.map(item=>[item.id,item]));
     const options={failures:true,events:true,calendar:true};
@@ -81,6 +83,9 @@ window.STSimulation2DEngine=(function(){
     }
     if(checkpoint&&Number.isFinite(checkpoint.time)&&checkpoint.time>=0&&checkpoint.line?.length===line.length){
       time=checkpoint.time;
+      // Older checkpoints do not contain the input and loss counters needed
+      // to reconstruct a lifetime balance. Do not report a fabricated zero.
+      materialAccountingComplete=checkpoint.materialAccountingComplete===true;
       commandIndex=checkpoint.commandIndex??0;
       stopIndex=checkpoint.stopIndex??0;
       activeStop=stops[checkpoint.activeStopIndex]??null;
@@ -91,7 +96,7 @@ window.STSimulation2DEngine=(function(){
       });
     }
     function snapshot(){
-      return JSON.parse(JSON.stringify({time,commandIndex,stopIndex,activeStopIndex:activeStop?stops.indexOf(activeStop):-1,line:line.map((item,index)=>Object.fromEntries(
+      return JSON.parse(JSON.stringify({time,commandIndex,stopIndex,materialAccountingComplete,activeStopIndex:activeStop?stops.indexOf(activeStop):-1,line:line.map((item,index)=>Object.fromEntries(
         Object.entries(item).filter(([key])=>!Object.hasOwn(definitions[index],key))
       ))}));
     }
@@ -141,22 +146,41 @@ window.STSimulation2DEngine=(function(){
         else belt.backupClearCount++;
       }
     }
-    function discharge(machine,downstream){
-      if(downstream&&!available(downstream))return false;
+    // Normal output is retained when the receiving conveyor cannot accept
+    // a package. After the response delay, a physical residual discharge
+    // may spill, just like numerical addFlowToZone(..., allowOverflow).
+    // The released package is counted at the machine even if it is lost;
+    // only accepted packages enter the conveyor's inventory.
+    function discharge(machine,downstream,residualDischarge=false){
       if(downstream?.kind==='belt'){
         const entry=downstream.packageLength/2;
         const last=downstream.items.at(-1);
-        if(last&&last.x-entry+epsilon<downstream.pitch)return false;
-        downstream.items.push({x:entry});
+        const hasSpace=!last||last.x-entry+epsilon>=downstream.pitch;
+        if(!residualDischarge&&(!available(downstream)||!hasSpace)){
+          downstream.blockedEntryAttempts++;
+          return false;
+        }
+        // An unavoidable residual can enter a stopped belt if its physical
+        // entry is free; no new space is created by stopping the belt.
+        if(hasSpace){
+          downstream.items.push({x:entry});
+          downstream.receivedUnits++;
+        }else{
+          downstream.overflowUnits++;
+          downstream.overflowEvents++;
+          machine.dischargeOverflowUnits++;
+        }
       }else if(downstream?.capacityBottles!=null){
-        if(downstream.resident.length>=Math.floor(downstream.capacityBottles/downstream.inputBottleFactor)||
+        if(!available(downstream)||downstream.resident.length>=Math.floor(downstream.capacityBottles/downstream.inputBottleFactor)||
           downstream.failureRemaining>0||downstream.started<downstream.activeStartDelaySeconds||downstream.backupSince!==null)return false;
         downstream.resident.push(downstream.residenceClock+downstream.residenceSeconds);
+        downstream.admittedInputUnits++;
         if(downstream.occupancyMode==='POSITIONS')downstream.positionDue.push(downstream.positionClock+
           Math.floor(downstream.capacityBottles/downstream.inputBottleFactor));
       }else if(downstream){
-        if(downstream.input>=downstream.batch||downstream.ready||downstream.remaining!==null||downstream.backupSince!==null)return false;
+        if(!available(downstream)||downstream.input>=downstream.batch||downstream.ready||downstream.remaining!==null||downstream.backupSince!==null)return false;
         downstream.input++;
+        downstream.admittedInputUnits++;
       }
       if(machine.capacityBottles!=null){
         machine.resident.splice(0,machine.batch);
@@ -165,6 +189,8 @@ window.STSimulation2DEngine=(function(){
       machine.ready=false;
       machine.input=0;
       machine.produced++;
+      if(machine.backupSince!==null)machine.stopDischargedUnits++;
+      if(residualDischarge)machine.residualDischargedUnits++;
       machine.recentOutput.push(time);
       return true;
     }
@@ -220,16 +246,23 @@ window.STSimulation2DEngine=(function(){
       if(downstream?.backupBlocked){
         if(machine.backupSince===null){
           machine.backupSince=time;
-          machine.residual=machine.capacityBottles==null?downstream.residual:
-            Math.min(Math.floor(downstream.residual/(machine.bottlesPerUnit||1)),Math.floor(machine.resident.length/machine.batch));
+          // Legacy input name "bottlesDischargedAtStop" denotes native
+          // packages (CAT L21/L52), including complete cases after packing.
+          const configured=Math.max(0,Math.floor(downstream.residual??0));
+          machine.residual=machine.capacityBottles==null?configured:
+            Math.min(configured,Math.floor(machine.resident.length/machine.batch));
+          machine.residualAtTrigger=machine.residual;
         }
       }else if(machine.backupSince!==null){
         // Do not restart after a short pulse that clears before the stop.
         // Once a stop or its last residual discharge occurred, a restart
         // is required. A pending repair recovery takes precedence.
-        const completed=machine.backupStopped||(machine.residual<=0&&machine.state==='Discharging');
+        const completed=machine.backupStopped||(machine.residual<=0&&
+          (machine.state==='Discharging'||machine.capacityBottles!=null&&machine.residualAtTrigger>0));
         machine.backupStopped=false;
         machine.backupSince=null;
+        machine.residual=0;
+        machine.residualAtTrigger=0;
         if(completed&&!machine.repairRecoveryPending)restart(machine,'BACKUP_CLEAR',
           downstream.upstreamRestartDelaySeconds??machine.startDelay??0,
           downstream.upstreamRestartRampUpSeconds??machine.rampSeconds??0);
@@ -265,13 +298,13 @@ window.STSimulation2DEngine=(function(){
         if(machine.remaining<=epsilon){machine.remaining=null;machine.ready=true;}
       }
       if(machine.ready){
-        if(!discharge(machine,downstream)){machine.state='Blocked';return;}
-        if(braking)machine.residual--;
+        if(!discharge(machine,downstream,braking)){machine.state='Blocked';return;}
+        if(braking)machine.residual=Math.max(0,machine.residual-1);
       }
       if(braking&&machine.input===0){machine.state='Back-up stop';return;}
       if(machine.remaining!==null){machine.state=motionState;return;}
       if(machine.input<machine.batch&&!braking){
-        if(!upstream)machine.input=machine.batch;
+        if(!upstream){machine.admittedInputUnits+=machine.batch-machine.input;machine.input=machine.batch;}
         if(upstream?.kind==='belt'&&available(upstream)){
           const first=upstream.items[0];
           if(first&&first.x+upstream.packageLength/2>=upstream.length-epsilon){
@@ -279,6 +312,7 @@ window.STSimulation2DEngine=(function(){
             upstream.produced++;
             upstream.recentOutput.push(time);
             machine.input++;
+            machine.admittedInputUnits++;
           }
         }
       }
@@ -297,9 +331,9 @@ window.STSimulation2DEngine=(function(){
       const beforeOutput=machine.produced;let admitted=0;
       let blocked=false;
       if((!stopping||machine.residual>0)&&machine.outletCredit+epsilon>=1&&ready){
-        if(discharge(machine,downstream)){
+        if(discharge(machine,downstream,motionState==='Discharging')){
           machine.outletCredit=Math.max(0,machine.outletCredit-1);
-          if(stopping)machine.residual--;
+          if(stopping)machine.residual=Math.max(0,machine.residual-1);
         }else blocked=true;
       }
       machine.outletCredit=Math.min(1,machine.outletCredit);
@@ -312,6 +346,7 @@ window.STSimulation2DEngine=(function(){
             upstream.items.shift();upstream.produced++;upstream.recentOutput.push(time);
           }
           machine.resident.push(machine.residenceClock+machine.residenceSeconds);
+          machine.admittedInputUnits++;
           if(machine.occupancyMode==='POSITIONS')machine.positionDue.push(machine.positionClock+capacity);
           admitted++;
           machine.intakeCredit=Math.max(0,machine.intakeCredit-1);
@@ -323,7 +358,7 @@ window.STSimulation2DEngine=(function(){
         admitted>0||machine.produced>beforeOutput||machine.resident.some(due=>due>machine.residenceClock+epsilon)||ready&&machine.outletCredit>0||accelerating||motionState==='Ramp down'?motionState:
         'Starved';
     }
-    return {line,snapshot,configure,control,get time(){return time;},step(seconds){
+    return {line,snapshot,configure,control,get time(){return time;},get materialAccountingComplete(){return materialAccountingComplete;},step(seconds){
       while(commandIndex<commands.length&&commands[commandIndex].atVirtualSecond<=time+epsilon){
         const event=commands[commandIndex++];
         if(options.events)control(event.equipmentId,event.action);

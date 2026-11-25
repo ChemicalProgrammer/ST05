@@ -818,8 +818,10 @@ function updateBackupSensorSegment(runtime, zone, seconds, occupied, atSecond) {
         zoneId: zone.id,
         active: true,
         responseRemainingSeconds: zone.upstreamStopResponseSeconds,
+        // CAT L21/L52 stores native packages, including cases. The
+        // residence inventory is already in output-package equivalents.
         residualRemainingUnits: upstream.residence
-          ? Math.min(Math.floor(zone.bottlesDischargedAtStop/(upstream.outputBottleFactor||1)),Math.floor(upstream.residence.inventory+1e-8))
+          ? Math.min(Math.floor(zone.bottlesDischargedAtStop),Math.floor(upstream.residence.inventory+1e-8))
           : zone.bottlesDischargedAtStop
       };
     }
@@ -1862,7 +1864,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: '0.20.1',
+    engineVersion: '0.20.2',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,

@@ -26,7 +26,7 @@ window.STCaseGallery = (function() {
       var description=row.querySelector('.case-description');description.id='case-description-'+index;open.setAttribute('aria-describedby',description.id);
       row.querySelector('.case-description').textContent=item.equipmentCount+__ST_TEXT__('casegallery.equipment_units')+(/^(?:PUBLIC_)?(?:DEMONSTRATION|DEMO)_ONLY$/.test(item.dataClassification||'')?__ST_TEXT__('casegallery.demo'):'');
       var badge=row.querySelector('.badge');badge.classList.toggle('ready',Boolean(item.isSimulationReady));badge.innerHTML=STIcons.svg(item.isSimulationReady?'check':'edit')+(item.isSimulationReady?__ST_TEXT__('casegallery.ready'):__ST_TEXT__('casegallery.draft'));
-      var date=new Date(item.updatedAt);if(!Number.isNaN(date.getTime()))row.querySelector('time').dateTime=date.toISOString();row.querySelector('time').textContent=Number.isNaN(date.getTime())?'':date.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+      var date=new Date(item.updatedAt);if(!Number.isNaN(date.getTime()))row.querySelector('time').dateTime=date.toISOString();row.querySelector('time').textContent=Number.isNaN(date.getTime())?'':date.toLocaleString(document.documentElement.lang==='es'?'es-MX':'en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
       open.onclick=function(){openCase(item.id);};
       // Native stretched button covers the surface. The row handler also handles
       // direct/assistive activation without intercepting independent tools.

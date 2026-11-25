@@ -144,6 +144,7 @@
       state.run.active=false;
       state.run.playing=false;
       var view=simulation.results?.view;
+      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock(view?.executionWallMs??simulation.results?.executionWallMs);
       markNumericalPlaybackAction(view?.playbackAction);
       state.run.equipmentControlActions=cloneJson(view?.equipmentControlActions||{});
       state.run.playbackPositions={result:state.run.representative,times:{...view?.roundTimes}};
@@ -231,7 +232,7 @@
         replay.samples.sort(function(a,b){return a.virtualSecond-b.virtualSecond;});
       }
       var history=typeof charts!=='undefined'?charts.captureSpeedHistory?.():null;
-      simulation.results.view={virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),playbackAction:state.run.playbackAction,equipmentControlActions:cloneJson(state.run.equipmentControlActions||{}),lossesOpen:Array.from(document.querySelectorAll('#live-equipment .live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;}),
+      simulation.results.view={executionWallMs:typeof numericalExecutionElapsedMs==='function'?numericalExecutionElapsedMs():undefined,virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),playbackAction:state.run.playbackAction,equipmentControlActions:cloneJson(state.run.equipmentControlActions||{}),lossesOpen:Array.from(document.querySelectorAll('#live-equipment .live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;}),
         ...(history&&history.endSecond===sample.virtualSecond?{speedHistory:history}:{})};
     }
     function compactStoredReplays(simulations) {
@@ -265,6 +266,7 @@
         durationMode:run.durationMode,shiftHours:run.shiftHours,shiftCount:run.shiftCount,shiftSeconds:run.shiftSeconds,rounds:run.rounds,
         durationSeconds: result.durationSeconds??run.durationSeconds,effectiveRuntimeStop:result.effectiveRuntimeStop,
         completedAt: new Date().toISOString(),
+        executionWallMs:typeof numericalExecutionElapsedMs==='function'?numericalExecutionElapsedMs():undefined,
         batch: storedBatch?cloneJson(storedBatch):undefined,shifts:result.shifts,replicationStatus:cloneJson(result.replicationStatus||null),
         detailCoverage:cloneJson(result.detailCoverage||{}),numerics:cloneJson(result.numerics||null),
         plantCalendar:cloneJson(result.plantCalendar||null),products:cloneJson(result.products||null),
@@ -401,6 +403,7 @@
       // Keep a visible terminal summary for multi-round runs too: fast
       // background calculation may finish before the user opens playback.
       syncBatchProgress();
+      if(typeof syncNumericalExecutionIndicators==='function')syncNumericalExecutionIndicators();
       if(typeof activity==='function')activity();
       var numericalLocked=runControlsLocked();
       var twoDRunning=Boolean(window.STSimulation2D?.isRunning?.());
@@ -845,6 +848,7 @@
     }
     function calculateBatch(run,execution){
       cancelRoundSession();stopPlaybackTimer();
+      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock();
       return new Promise(function(resolve){
         var session={caseId:state.activeCase.id,simulationId:state.activeSimulationId,caseModel:cloneJson({id:state.activeCase.id,unitOfFlow:state.activeCase.unitOfFlow,equipment:state.activeCase.equipment}),run:cloneJson(run),generation:0,version:0,cancelled:false,dirty:false,finishing:false,resolveFirst:resolve};roundSession=session;
         document.getElementById('batch-cancel').onclick=function(){

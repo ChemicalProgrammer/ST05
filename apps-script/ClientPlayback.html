@@ -1,3 +1,42 @@
+    // Real execution time measures the union of calculation and playback activity,
+    // never virtual seconds or requested playback speed.
+    var numericalExecutionClock={elapsedMs:0,startedAt:null,known:false}, numericalExecutionTimer=null;
+    function resetNumericalExecutionClock(saved){
+      if(numericalExecutionTimer!==null)window.clearTimeout(numericalExecutionTimer);
+      numericalExecutionTimer=null;
+      var known=typeof saved==='number'&&Number.isFinite(saved)&&saved>=0;
+      numericalExecutionClock={elapsedMs:known?saved:0,startedAt:null,known:known};
+    }
+    function numericalExecutionElapsedMs(){
+      var c=numericalExecutionClock;
+      return c.known?c.elapsedMs+(c.startedAt===null?0:Math.max(0,performance.now()-c.startedAt)):null;
+    }
+    function executionTimeText(ms){
+      if(!Number.isFinite(ms))return '—';
+      var seconds=Math.floor(Math.max(0,ms)/1000);
+      return [Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(function(n){return String(n).padStart(2,'0');}).join(':');
+    }
+    function syncNumericalExecutionIndicators(){
+      var timer=document.getElementById('playback-execution-time'),calc=document.getElementById('playback-calculation-progress');
+      if(!timer||!calc)return;
+      var session=typeof roundSession==='undefined'?null:roundSession;
+      var pending=Boolean(session&&!session.cancelled&&(session.pending||session.firstUpdating||session.dirty));
+      var active=Boolean(state.run.playing||pending);
+      var c=numericalExecutionClock;
+      if(active&&c.startedAt===null){c.known=true;c.startedAt=performance.now();}
+      if(!active&&c.startedAt!==null){c.elapsedMs+=Math.max(0,performance.now()-c.startedAt);c.startedAt=null;}
+      var es=document.documentElement.lang==='es';
+      var real=es?'Real':'Elapsed', calculation=es?'Cálculo':'Calc';
+      timer.textContent=real+' '+executionTimeText(numericalExecutionElapsedMs());
+      timer.title=es?'Tiempo real de cálculo o reproducción; excluye pausas sin cálculo activo.':'Real time spent calculating or playing; excludes pauses without active computation.';
+      var result=state.run.result, reset=state.run.playbackAction==='reset'&&!pending;
+      var target=Number(result?.durationSeconds||session?.run?.durationSeconds);
+      var percent=reset?0:result&&!result.provisional?100:result?.provisional&&target>0?Math.max(0,Math.min(99.9,(Number(result.calculatedThroughSeconds)||0)/target*100)):pending?0:null;
+      calc.textContent=calculation+' '+(percent===null?'—':percent.toFixed(1)+'%');
+      calc.title=es?'Avance del cálculo de la ronda mostrada. La reproducción precisa reconstruye estados bajo demanda; 100% no garantiza reproducción instantánea.':'Calculation of the displayed round. Precise playback reconstructs states on demand; 100% does not guarantee instant playback.';
+      if(active&&numericalExecutionTimer===null)numericalExecutionTimer=window.setTimeout(function(){numericalExecutionTimer=null;syncNumericalExecutionIndicators();},250);
+      if(!active&&numericalExecutionTimer!==null){window.clearTimeout(numericalExecutionTimer);numericalExecutionTimer=null;}
+    }
     var playbackClock;
     var playbackMetricTimer=null;
     var numericalPlaybackSession=null;
@@ -227,6 +266,7 @@
         playbackRoundPositions()[state.run.roundIndex]=0;
       }
       markNumericalPlaybackAction('play');
+      if(typeof syncNumericalExecutionIndicators==='function'&&state.run._resumeVirtualSecond===0&&!roundSession?.pending&&numericalExecutionClock.startedAt===null&&state.run.result&&!state.run.result.provisional)resetNumericalExecutionClock(0);
       state.run.active=true;
       state.run.playing = true;
       state.run._displayedVirtualSecond=state.run.result.samples?.[state.run.sampleIndex]?.virtualSecond||0;
@@ -272,6 +312,7 @@
         state.run.sampleIndex=index;state.run._displayedVirtualSecond=frame.virtualSecond;state.run._resumeVirtualSecond=frame.virtualSecond;
       }
       state.run.active=false;
+      if(typeof syncNumericalExecutionIndicators==='function')syncNumericalExecutionIndicators();
       if(pending&&result&&!result.provisional){
         var tab=activePersistentSimulation();
         if(tab){tab.dynamicConfig=cloneJson(session.run);tab.run=cloneJson(session.run);tab.results=createStoredSimulationResult(result,session.run);}
@@ -305,6 +346,7 @@
       state.run.equipmentControlActions={};
       state.run.playbackPositions={result:state.run.representative,times:{0:0}};
       markNumericalPlaybackAction('reset');
+      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock(0);
       syncPlaybackRounds();syncRunControls();
       renderPlaybackFrame();
       setPlaybackStatus('Ready');

@@ -194,7 +194,7 @@
         <div id="simulation2d-results" class="fold-card" role="region" aria-labelledby="simulation2d-title">
           <div class="fold-heading">
             <div class="subsection-heading-copy"><h3 id="simulation2d-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation2d-content">Layout</button></h3>
-              <div class="subsection-playback-meta"><p class="subsection-description">Watch the line layout and its equipment and conveyor behavior during the run.</p><p class="simulation2d-progress-status subsection-progress-status"><span id="simulation2d-playback-state">Ready</span><output id="simulation2d-progress" aria-label="2D simulation progress">0%</output></p></div>
+              <div class="subsection-playback-meta"><p class="subsection-description">Watch the line layout and its equipment and conveyor behavior during the run.</p><p class="simulation2d-progress-status subsection-progress-status"><span id="simulation2d-playback-state">Ready</span><output id="simulation2d-progress" aria-label="2D simulation progress">0%</output><output id="simulation2d-execution-time" class="execution-indicator" aria-label="Execution time">—</output><output id="simulation2d-calculation-progress" class="execution-indicator" aria-label="Calculation progress">—</output></p></div>
             </div>
             <div class="fold-tools button-row" role="group" aria-label="Simulation controls">
               <button id="simulation2d-play" type="button" class="secondary icon-button icon-button--retain-active" data-icon="play" aria-label="Start" title="Start"></button>
@@ -285,7 +285,7 @@
         <section id="simulation-playback" class="fold-card">
           <div class="fold-heading">
             <div class="subsection-heading-copy"><h3 class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="simulation-playback-content">Simulation playback</button></h3>
-              <div class="subsection-playback-meta"><p class="subsection-description">Play a simulation round and monitor efficiencies, output, and runtime metrics.</p><p id="simulation-playback-status" class="subsection-progress-status"><span id="playback-status"><?= __ST_TEXT__('casegallery.ready') ?></span><output id="playback-progress" aria-label="Simulation progress">0%</output><output id="playback-performance" class="playback-performance" aria-hidden="true" hidden></output></p></div>
+              <div class="subsection-playback-meta"><p class="subsection-description">Play a simulation round and monitor efficiencies, output, and runtime metrics.</p><p id="simulation-playback-status" class="subsection-progress-status"><span id="playback-status"><?= __ST_TEXT__('casegallery.ready') ?></span><output id="playback-progress" aria-label="Simulation progress">0%</output><output id="playback-execution-time" class="execution-indicator" aria-label="Execution time">—</output><output id="playback-calculation-progress" class="execution-indicator" aria-label="Calculation progress">—</output><output id="playback-performance" class="playback-performance" aria-hidden="true" hidden></output></p></div>
             </div>
             <div class="playback-toolbar fold-tools button-row">
             <div id="playback-round-control" class="hidden"><select id="playback-round" aria-label="Playback round"></select></div>

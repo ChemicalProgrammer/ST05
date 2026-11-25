@@ -141,6 +141,24 @@ window.STSimulation2D=(function(){
   let shiftHours=8,shiftOutput=[],limitSeconds=3600,save,signature,lastSave=0;
   let seed=1,key,viewKey,definitions=[],model=null,frame,previous=0,lag=0,playbackRateAtFrame=null,drag,validation='',runState='Ready',lastMetrics=-Infinity;
   let representative=null,defaultRun=null,palletAnimation=null,palletFlow=null;
+  let executionWallMs=null,executionStartedAt=null;
+  function executionElapsed(){
+    return executionWallMs===null?null:executionWallMs+(executionStartedAt===null?0:Math.max(0,performance.now()-executionStartedAt));
+  }
+  function stopExecutionClock(){
+    if(executionStartedAt!==null){executionWallMs=executionElapsed();executionStartedAt=null;}
+  }
+  function restoreExecutionClock(ms){
+    executionWallMs=typeof ms==='number'&&Number.isFinite(ms)&&ms>=0?ms:null;executionStartedAt=null;
+  }
+  function startExecutionClock(){
+    if(executionStartedAt===null){executionWallMs=executionWallMs??0;executionStartedAt=performance.now();}
+  }
+  function executionClockLabel(ms){
+    if(!Number.isFinite(ms))return '—';
+    const seconds=Math.floor(Math.max(0,ms)/1000);
+    return [Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':');
+  }
   let productHeights={},machineTypes=new Map(),bottleStages=new Map(),conveyorDimensions=new Map();
   const dimensionRowHeight=32,dimensionLevels=3,dimensionOffset=126;
   let dimensionPointer=null;
@@ -1824,6 +1842,9 @@ window.STSimulation2D=(function(){
     const progress=el('progress'),playbackState=el('playback-state');
     if(progress)progress.textContent=(limitSeconds>0?Math.max(0,Math.min(100,(model?.time??0)/limitSeconds*100)):0).toFixed(1)+'%';
     if(playbackState)playbackState.textContent=localize2D(runState);
+    const elapsed=el('execution-time'),calculation=el('calculation-progress'),es=document.documentElement.lang==='es';
+    if(elapsed){elapsed.textContent=(es?'Real ':'Elapsed ')+executionClockLabel(executionElapsed());elapsed.title=es?'Tiempo real de ejecución, sin pausas.':'Real execution time, excluding pauses.';}
+    if(calculation){calculation.textContent=(es?'Cálculo ':'Calc ')+(limitSeconds>0?Math.max(0,Math.min(100,(model?.time??0)/limitSeconds*100)):0).toFixed(1)+'%';calculation.title=es?'El motor 2D calcula conforme avanza la animación; no hay datos precalculados por delante.':'The 2D engine calculates as animation advances; no precomputed look-ahead buffer.';}
     el('time').textContent=num(model?.time??0)+' s';
     const output=line.at(-1);
     el('output').textContent=num((output?.produced??0)*(output?.bottlesPerUnit??1));
@@ -1839,7 +1860,7 @@ window.STSimulation2D=(function(){
   }
   function cancelFrame(){
     if(frame!==undefined)window.cancelAnimationFrame(frame);
-    frame=undefined;resetPlaybackClock();
+    frame=undefined;resetPlaybackClock();stopExecutionClock();
   }
   let lastRunningNotification=null;
   function syncControls(){
@@ -1962,10 +1983,10 @@ window.STSimulation2D=(function(){
     const independentModel=defaultRun?.model??model,independentState=defaultRun?.runState??runState,independentShifts=defaultRun?.shiftOutput??shiftOutput;
     return {
       identity:JSON.parse(viewKey),layout:layoutRecord(),version:2,appearance:{...appearance},viewports:viewportCount,options:scheduleSettings(),speed:Number(el('speed').value),limitSeconds,signature,runState:independentState,
-      shiftOutput:[...independentShifts],checkpoint:independentModel?.snapshot()??null,
+      shiftOutput:[...independentShifts],executionWallMs:defaultRun?defaultRun.executionWallMs:executionElapsed(),checkpoint:independentModel?.snapshot()??null,
       summary:summarize2DRun(independentModel,independentState,seed,'INDEPENDENT',null,limitSeconds,independentShifts),
       presentation:defaultRun?.presentation??presentationRecord(),source:defaultRun?'representative':'independent',
-      representativeView:defaultRun?{seed:representative.seed,round:representative.round,runState,shiftOutput:[...shiftOutput],checkpoint:model?.snapshot(),presentation:presentationRecord(),
+      representativeView:defaultRun?{seed:representative.seed,round:representative.round,runState,shiftOutput:[...shiftOutput],executionWallMs:executionElapsed(),checkpoint:model?.snapshot(),presentation:presentationRecord(),
         summary:summarize2DRun(model,runState,representative.seed,'REPRESENTATIVE_SEED',representative.round,limitSeconds,shiftOutput)}:undefined
     };
   }
@@ -1979,7 +2000,7 @@ window.STSimulation2D=(function(){
     cancelFrame();runState='Paused';syncControls();draw();checkpoint();
   }
   function reset(){
-    cancelFrame();lag=0;lastMetrics=-Infinity;shiftOutput=[];lastMachineActions.clear();palletAnimation=null;palletFlow=null;validation=validate();
+    cancelFrame();restoreExecutionClock(0);lag=0;lastMetrics=-Infinity;shiftOutput=[];lastMachineActions.clear();palletAnimation=null;palletFlow=null;validation=validate();
     model=validation?null:STSimulation2DEngine.create(definitions,defaultRun?representative.seed:seed,undefined,schedule);
     configureModel();
     runState='Ready';syncControls();
@@ -1989,11 +2010,12 @@ window.STSimulation2D=(function(){
     if(useRepresentative===Boolean(defaultRun))return;
     pause();
     if(useRepresentative){
-      defaultRun={model,shiftOutput,runState,validation,presentation:presentationRecord()};
+      defaultRun={model,shiftOutput,runState,validation,executionWallMs:executionElapsed(),presentation:presentationRecord()};
       reset();
     }else{
       const savedPresentation=defaultRun.presentation;
       ({model,shiftOutput,runState,validation}=defaultRun);
+      restoreExecutionClock(defaultRun.executionWallMs);
       defaultRun=null;lag=0;lastMetrics=-Infinity;configureModel();restorePresentation(savedPresentation);
       syncControls();if(camera.fit)fit();else draw();
     }
@@ -2060,7 +2082,7 @@ window.STSimulation2D=(function(){
     if(!model||frame!==undefined||window.STNumericalSimulationBusy?.())return;
     if(runState==='Stopped'||runState==='Completed'||model.time>=limitSeconds)reset();
     markPlaybackAction('play');
-    lastSave=performance.now();runState='Running';syncControls();
+    lastSave=performance.now();startExecutionClock();runState='Running';syncControls();
     frame=window.requestAnimationFrame(animate);
   };
   el('stop').onclick=()=>{markPlaybackAction('stop');cancelFrame();runState='Stopped';syncControls();draw();checkpoint();};
@@ -2240,12 +2262,14 @@ window.STSimulation2D=(function(){
       configureModel();
       shiftOutput=Array.isArray(stored.shiftOutput)?[...stored.shiftOutput]:[];
       runState=model.time>=limitSeconds-1e-8?'Completed':stored.runState==='Stopped'?'Stopped':'Paused';
+      restoreExecutionClock(stored.executionWallMs);
       restoredRun=true;resumedPresentation=stored.presentation;
       const visible=stored.representativeView;
       if(stored.source==='representative'&&visible?.checkpoint&&representative?.seed===visible.seed){
-        defaultRun={model,shiftOutput,runState,validation,presentation:stored.presentation};
+        defaultRun={model,shiftOutput,runState,validation,executionWallMs:executionElapsed(),presentation:stored.presentation};
         model=STSimulation2DEngine.create(definitions,visible.seed,visible.checkpoint,schedule);configureModel();
         shiftOutput=[...(visible.shiftOutput||[])];runState=model.time>=limitSeconds-1e-8?'Completed':visible.runState==='Stopped'?'Stopped':'Paused';
+        restoreExecutionClock(visible.executionWallMs);
         resumedPresentation=visible.presentation;el('source').value='representative';
       }
       syncControls();if(camera.fit)fit();else draw();

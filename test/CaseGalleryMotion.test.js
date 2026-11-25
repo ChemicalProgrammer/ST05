@@ -1,17 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import {JSDOM} from 'jsdom';
 
 const read=name=>fs.readFileSync(new URL('../apps-script/'+name,import.meta.url),'utf8');
-const script=name=>read(name).match(/<script>([\s\S]*?)<\/script>/)[1];
+const resources=vm.createContext({});
+vm.runInContext(read('TextResources.gs'),resources);
+const script=name=>{
+ const source=resources.resolveTextResources_(read(name));
+ assert(!/__ST_(?:HTML_)?TEXT__\s*\(/.test(source),name+' has unresolved text resources');
+ return source.match(/<script>([\s\S]*?)<\/script>/)[1];
+};
 
 test('Case Gallery animates both layout directions without changing filters or case identity',()=>{
  const dom=new JSDOM('<!doctype html><html><body><main id="application"><span id="breadcrumb-view"></span><input id="case-search"><select id="case-filter"><option value="all">Active</option><option value="archived">Archived</option></select><select id="case-sort"><option value="name">Name</option></select><button id="case-layout"></button><div id="cases-list"></div><div id="case-pagination"></div></main></body></html>',{runScripts:'outside-only'});
  try{
   const w=dom.window,d=w.document,animations=[],prefs={caseLayout:'list'},media={matches:false};
   w.matchMedia=()=>media;w.STPreferences={read:key=>prefs[key],write:(key,value)=>{prefs[key]=value;}};
-  w.STIcons={svg:()=>'<svg></svg>'};w.__ST_TEXT__=key=>key;
+  w.STIcons={svg:()=>'<svg></svg>'};
+  assert.equal(w.__ST_TEXT__,undefined,'browser must not require server-side text resolver');
   w.HTMLElement.prototype.getBoundingClientRect=function(){
    const grid=this.parentElement?.classList.contains('grid'),index=Array.from(this.parentElement?.children||[]).indexOf(this);
    return {left:grid?index*320:0,top:grid?0:index*60,width:grid?300:800,height:grid?150:60};
@@ -22,10 +30,13 @@ test('Case Gallery animates both layout directions without changing filters or c
   };
   w.eval(script('Motion.html'));w.eval(script('CaseGallery.html'));
   const cases=['a','b','c'].map((id,i)=>({id,name:id,equipmentCount:3,isSimulationReady:true,archived:i===2,updatedAt:'2026-11-24T00:00:00Z'}));
-  const render=()=>w.STCaseGallery.render(cases,()=>{},()=>{});
+  const archiveCalls=[];
+  const render=()=>w.STCaseGallery.render(cases,()=>{},()=>{},{archiveCase:(id,value)=>archiveCalls.push([id,value])});
   const target=d.getElementById('cases-list'),toggle=d.getElementById('case-layout');
   const keys=()=>Array.from(target.querySelectorAll('.case-row'),r=>r.dataset.motionKey);
   render();assert.deepEqual(keys(),['a','b']);assert.equal(animations.length,0);
+  const archive=target.querySelector('.archive-gallery-case');assert.equal(archive.title,resources.ST_TEXT_RESOURCES['casegallery.archive']);
+  archive.click();assert.deepEqual(archiveCalls,[['a',true]]);
   toggle.click();assert(target.classList.contains('grid'));assert.equal(prefs.caseLayout,'grid');assert.deepEqual(keys(),['a','b']);
   assert.equal(animations.length,2);assert(animations.every(a=>a.options.duration===220));
   assert.equal(animations[1].frames[0].transform,'translate(-40px,40px)');
@@ -33,6 +44,8 @@ test('Case Gallery animates both layout directions without changing filters or c
   assert.equal(animations.length,4);assert(animations.slice(0,2).every(a=>a.cancelled));
   assert.equal(animations[3].frames[0].transform,'translate(40px,-40px)');
   d.getElementById('case-filter').value='archived';render();assert.deepEqual(keys(),['c']);assert.equal(animations.length,4);
+  const unarchive=target.querySelector('.archive-gallery-case');assert.equal(unarchive.title,resources.ST_TEXT_RESOURCES['casegallery.unarchive']);
+  unarchive.click();assert.deepEqual(archiveCalls,[['a',true],['c',false]]);
   media.matches=true;toggle.click();assert(target.classList.contains('grid'));assert.deepEqual(keys(),['c']);assert.equal(animations.length,4);
   assert.equal(d.getElementById('case-filter').value,'archived');
  }finally{dom.window.close();}

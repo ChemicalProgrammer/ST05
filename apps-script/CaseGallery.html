@@ -50,7 +50,7 @@ window.STCaseGallery = (function() {
       }
       if(options?.archiveCase){
         var archived=item.archived===true,archive=document.createElement('button');archive.type='button';archive.className='archive-gallery-case ghost icon-button';archive.dataset.caseId=item.id;archive.dataset.icon=archived?'unarchive':'archive';archive.innerHTML=STIcons.svg(archive.dataset.icon);
-        var action=__ST_TEXT__(archived?'casegallery.unarchive':'casegallery.archive');
+        var action=archived?__ST_TEXT__('casegallery.unarchive'):__ST_TEXT__('casegallery.archive');
         action=window.STLanguage?.translate(action)||action;archive.title=action;archive.setAttribute('aria-label',action+' · '+item.name);archive.disabled=!!options.archiveCasePending?.(item.id);
         archive.onclick=function(){options.archiveCase(item.id,!archived,archive);};row.querySelector('.case-tools').appendChild(archive);
       }

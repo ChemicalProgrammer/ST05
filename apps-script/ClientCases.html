@@ -644,7 +644,7 @@ async function openCase(caseId, initialView) {
         var restoreFocus=document.activeElement===button;
         renderCases(session.cases);
         if(restoreFocus&&!state.activeCase)document.getElementById('case-filter')?.focus();
-        setStatus(__ST_TEXT__(summary.archived?'casegallery.archived_message':'casegallery.unarchived_message'));
+        setStatus(summary.archived?__ST_TEXT__('casegallery.archived_message'):__ST_TEXT__('casegallery.unarchived_message'));
       },function(){
         if(archivingCases.get(caseId)!==token)return;
         archivingCases.delete(caseId);button.disabled=false;delete button.dataset.busy;

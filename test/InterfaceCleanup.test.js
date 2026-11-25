@@ -54,6 +54,13 @@ test('Case saving is exclusively manual and the JSON fields preference was remov
   assert.ok(!preferences.includes('autosaveSeconds'));
   assert.match(cases,/function automaticSaving\(\)\{return false;\}/);
   assert.match(cases,/autosave\.configure\(\{enabled:false,intervalMs:10000\}\)/);
+  const shell=read('Shell.html'),core=read('ClientCore.html'),real=read('RealDataPanel.html');
+  assert.doesNotMatch(shell,/autosaveEnabled/);
+  assert.match(shell,/actions\.syncSaveButton\(\)/);
+  assert.match(core,/syncSaveButton:syncSaveButton/);
+  assert.match(core,/STRealData\.init\(state,\{changed:queueCaseEvidenceSave\}\)/);
+  assert.match(core,/\['save-case','real-data-save'\]\.forEach/);
+  assert.match(real,/id="real-data-save"[^>]*data-icon="save"/);
 });
 
 test('Real Data and Comparison are Advance-only in navigation and workspace tabs',()=>{

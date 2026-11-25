@@ -7,7 +7,7 @@
     window.addEventListener('st-dialog-activity',activity);
     window.addEventListener('st-calculation-activity',function(event){localCalculations=Math.max(0,localCalculations+(event.detail.active?1:-1));activity();});
     var whatIfOnlySave=false;
-    var autosave = STAutosave({capture:captureForSave,send:function(payload,done){callServer('saveCase',[payload],done);},accept:function(saved){
+    var autosave = STAutosave({enabled:false,capture:captureForSave,send:function(payload,done){callServer('saveCase',[payload],done);},accept:function(saved){
       if (!state.activeCase || state.activeCase.id !== saved.id) return;
       state.activeCase.revision=saved.revision;state.activeCase.updatedAt=saved.updatedAt;
       var item=(state.bootstrap?.cases||[]).find(function(x){return x.id===saved.id;});
@@ -22,12 +22,26 @@
       if(shell)shell.sync();
     }});
     var queueCaseSave=autosave.change;autosave.change=function(immediate){whatIfOnlySave=false;queueCaseSave(immediate);};
-    // Chat/evaluation-only writes must preserve the exact saved physical inputs.
-    function saveGeminiHistory(options){if(!autosave.pending())whatIfOnlySave=true;queueCaseSave();return options?.draftOnly||!automaticSaving()?Promise.resolve():autosave.flush();}
-    window.addEventListener('st-whatif-change',function(event){if(state.activeCase?.simulations?.includes(event.detail.simulation)){if(!autosave.pending())whatIfOnlySave=true;queueCaseSave();}});
+    // Metadata/evidence-only edits (including Real Data) must not invalidate
+    // the numerical result or re-read committed equipment/run inputs.
+    // If a physical edit is already pending, preserve that full-save path.
+    function queueCaseEvidenceSave(){if(!state.activeCase)return;if(!autosave.pending())whatIfOnlySave=true;queueCaseSave();}
+    function saveGeminiHistory(options){queueCaseEvidenceSave();return options?.draftOnly||!automaticSaving()?Promise.resolve():autosave.flush();}
+    window.addEventListener('st-whatif-change',function(event){if(state.activeCase?.simulations?.includes(event.detail.simulation))queueCaseEvidenceSave();});
     window.addEventListener('beforeunload',function(event){if(autosave.pending()||STSettings.pending()){event.preventDefault();event.returnValue='';}});
     function automaticSaving(){return false;} // Legacy callsites use explicit manual-only policy.
-    function syncSaveButton(){var b=document.getElementById('save-case');if(!b)return;b.classList.toggle('hidden',!state.activeCase||automaticSaving());b.disabled=state.saving||(!state.isDirty&&!window.STSimulation2D?.hasState?.());b.classList.toggle('has-changes',state.isDirty);}
+    function syncSaveButton(){
+      var active=Boolean(state.activeCase),dirty=active&&Boolean(state.isDirty||autosave.pending());
+      var available=active&&!state.saving&&(dirty||Boolean(window.STSimulation2D?.hasState?.()));
+      // All Save controls share one source of truth, independent of view,
+      // interface mode or obsolete autosave preferences.
+      ['save-case','real-data-save'].forEach(function(id){
+        var button=document.getElementById(id);if(!button)return;
+        button.classList.toggle('hidden',!active||automaticSaving());
+        button.disabled=!available;
+        button.classList.toggle('has-changes',dirty);
+      });
+    }
     function configureSaving(){autosave.configure({enabled:false,intervalMs:10000});syncSaveButton();}
     window.addEventListener('st-save-policy-change',configureSaving);
     function prepareCaseDraft(){try{STProducts.validateForSave();}catch(error){return Promise.reject(error);}state.lastInputError=null;

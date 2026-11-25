@@ -60,3 +60,45 @@ test('manual Save flushes the request even when automatic saving is disabled',as
  await Promise.resolve();assert.equal(sent.length,1);assert.equal(finished,false);
  sent[0].done({ok:true,data:{id:'c',revision:2}});await saving;assert.equal(finished,true);assert(!context.autosave.pending());
 });
+
+test('Real Data metadata changes use the shared manual Save controls without invalidating the completed simulation',async()=>{
+ const equipment=[{id:'filler',name:'Filler',type:'FILLER',nominalRatePerSecond:4,noiseProfile:{reliability:{mtbfMinutes:20,mttrMinutes:1}}}];
+ const simulation={id:'s',equipment:clone(equipment),dynamicConfig:{durationSeconds:86400,rounds:3},results:{summary:{outputCount:180000,lineOeePercent:65},inputSignature:'complete-inputs',replicationStatus:{state:'COMPLETE'}}};
+ const state={activeCase:{id:'c',name:'Line G',revision:4,equipment:clone(equipment),metadata:{consoleOptions:{autosaveEnabled:true}},simulations:[simulation]},activeSimulationId:'s',run:{result:simulation.results},isDirty:false,saving:false};
+ const makeButton=()=>({disabled:true,classList:{values:new Set(['hidden']),toggle(key,flag){if(flag)this.values.add(key);else this.values.delete(key);},contains(key){return this.values.has(key);}}});
+ const buttons={'save-case':makeButton(),'real-data-save':makeButton()},sent=[],errors=[];
+ const context=vm.createContext({window:{},state,setTimeout,clearTimeout,Date,__ST_TEXT__:key=>key,
+  document:{getElementById:id=>buttons[id]},STProducts:{validateForSave(){}},
+  whatIfOnlySave:false,activePersistentSimulation:()=>simulation,cloneJson:clone,
+  collectCaseEditor:()=>{throw Error('Metadata-only save must not reread the equipment editor');},
+  readRunConfiguration:()=>{throw Error('Metadata-only save must not reread the run settings');},
+  captureSimulationView(){},fitCaseSave:value=>value,prepareCaseDraft:()=>Promise.resolve(),showError:error=>errors.push(error)});
+ loadCapture(context);
+ vm.runInContext(fs.readFileSync('apps-script/Autosave.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1],context);
+ context.autosave=context.window.STAutosave({enabled:false,capture:()=>context.captureForSave(),
+  send:(payload,done)=>sent.push({payload,done}),accept(){},
+  status(status){state.saving=status==='saving';state.isDirty=status!=='saved';context.syncSaveButton();}});
+ vm.runInContext(source.slice(source.indexOf('    var queueCaseSave='),source.indexOf('    function saveGeminiHistory(')),context);
+ vm.runInContext(source.slice(source.indexOf('    function automaticSaving('),source.indexOf('    function configureSaving(')),context);
+ vm.runInContext(source.slice(source.indexOf('    function saveActiveCase('),source.indexOf('    function captureSheetImport(')),context);
+ context.syncSaveButton();
+ assert(Object.values(buttons).every(b=>!b.classList.contains('hidden')&&b.disabled));
+ const before=clone(simulation);
+ state.activeCase.metadata.realData={schema:'st-real-data-v1',records:[{id:'r',name:'Observed shift',durationSeconds:86400}]};
+ context.queueCaseEvidenceSave();
+ assert.equal(context.whatIfOnlySave,true);
+ assert.equal(sent.length,0,'Importing observations remains a draft until explicit Save');
+ assert(Object.values(buttons).every(b=>!b.disabled&&!b.classList.contains('hidden')&&b.classList.contains('has-changes')));
+ assert.deepEqual(simulation,before);
+ const pending=context.saveActiveCase();await Promise.resolve();
+ assert.equal(sent.length,1);
+ assert.deepEqual(sent[0].payload.metadata.realData,state.activeCase.metadata.realData);
+ assert.deepEqual(sent[0].payload.simulations[0],before);
+ assert(Object.values(buttons).every(b=>b.disabled&&!b.classList.contains('hidden')));
+ sent[0].done({ok:true,data:{id:'c',revision:5}});await pending;
+ assert(Object.values(buttons).every(b=>b.disabled&&!b.classList.contains('has-changes')&&!b.classList.contains('hidden')));
+ assert.deepEqual(errors,[]);
+ assert.deepEqual(simulation,before);
+ state.activeCase=null;context.syncSaveButton();
+ assert(Object.values(buttons).every(b=>b.disabled&&b.classList.contains('hidden')));
+});

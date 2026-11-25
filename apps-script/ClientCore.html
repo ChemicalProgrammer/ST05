@@ -37,7 +37,7 @@
     var renderCaseComparison = STComparison(state,isFiniteNumber).render;
     var assistant = STAssistant(state, {flush:flushForServer, saveChat:saveGeminiHistory, applyScenario:applyChatScenario});
     var sheetImport = STSheetImport(state,{apply:applySheetImport,capture:captureSheetImport});
-    var shell = STShell(state,{assistant:assistant.sync,signout:lockWorkspace,navigate:navigateView,rememberView:rememberCaseView,home:showCaseHome,save:saveActiveCase,cases:function(){renderCases(state.bootstrap?.cases||[]);},redraw:renderPlaybackFrame,preview:basicEquipmentPreview,syncSimulation2D:syncSimulation2D});
+    var shell = STShell(state,{assistant:assistant.sync,signout:lockWorkspace,navigate:navigateView,rememberView:rememberCaseView,home:showCaseHome,save:saveActiveCase,syncSaveButton:syncSaveButton,cases:function(){renderCases(state.bootstrap?.cases||[]);},redraw:renderPlaybackFrame,preview:basicEquipmentPreview,syncSimulation2D:syncSimulation2D});
     function syncSimulation2D(visible){
       var simulation2D=window.STSimulation2D;
       if(!simulation2D){
@@ -108,7 +108,7 @@
           apply: function(config){ var simulation=activePersistentSimulation(); invalidateActiveResult(); if(config.formatCatalog){state.activeCase.metadata={...state.activeCase.metadata,formatCatalog:cloneJson(config.formatCatalog)};delete state.activeCase.metadata.products;} simulation.equipment=cloneJson(config.equipment); simulation.dynamicConfig=cloneJson(config.dynamicConfig); simulation.updatedAt=new Date().toISOString(); activatePersistentSimulation(simulation.id,true); state.uiView='editor'; shell.sync(); autosave.change(true); }
         });
         STProducts.init(state,{navigate:function(){state.basicView='products';navigateView('products');},simulation:activePersistentSimulation,locked:runControlsLocked,capture:syncEquipmentFromEditor,edited:function(){markCaseDirty();},changed:function(all){invalidateActiveResult();renderEditor();markCaseDirty();renderRunWorkspace();renderSimulationAnalysis();shell.sync();}});
-        STRealData.init(state,{changed:function(){saveGeminiHistory({draftOnly:true});}});
+        STRealData.init(state,{changed:queueCaseEvidenceSave});
         shell.init();
         if (STPreferences.read('remember') === 'yes') {
           document.getElementById('remember-session').checked = true;
@@ -169,7 +169,7 @@
       },runControlsLocked);
       window.addEventListener('st-simpy-status',function(event){if(roundSession?.pending)document.getElementById('batch-status').textContent=event.detail.message;});
       STPreferences.connectCase(function(){return state.activeCase;},function(){autosave.change();});
-      STSubsection.connectCase(function(){return state.activeCase;},function(){if(!autosave.pending())whatIfOnlySave=true;queueCaseSave();});
+      STSubsection.connectCase(function(){return state.activeCase;},queueCaseEvidenceSave);
       window.addEventListener('st-rate-loss-reporting-change',function(){shell.sync();});
       window.addEventListener('st-equipment-layout-change',function(){STBasicMode.sync(state);shell.sync();});
       STSettings.connectCase(function(){return state.activeCase;},function(){autosave.change();});
@@ -190,7 +190,10 @@
       STSettings.connectModels(function(done){callServer('listGeminiModels',[],done);});
       STSettings.connectRemoval(function(done){callServer('deleteGeminiApiKey',[],function(response){if(response.ok){state.bootstrap.gemini=response.data;STSettings.configureGemini(response.data);}done(response);});});
       document.getElementById('retry-autosave').onclick = retryAutosave;
-      document.getElementById('save-case').onclick = function(){flushCase(true).catch(function(error){showError(error);});};
+      ['save-case','real-data-save'].forEach(function(id){
+        var button=document.getElementById(id);
+        if(button)button.onclick=function(){if(!button.disabled&&state.activeCase)saveActiveCase();};
+      });
       document.getElementById('new-case-form').addEventListener('submit', createDraftCase);
       document.getElementById('create-demo-case').addEventListener('click', createDemoCase);
       document.getElementById('clone-case').addEventListener('click', cloneActiveSimulation);

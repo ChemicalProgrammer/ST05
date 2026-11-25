@@ -113,3 +113,34 @@ test('record tree keeps a consistent horizontal inset for selected and unselecte
   assert(selected.classList.contains('real-data-explorer-link'));
  }finally{w.close();}
 });
+
+test('registration tree sizes itself from all labels, including closed branches and live minute totals',()=>{
+ const w=setup('en');try{
+  const f=fixture(),{owner}=mount(w,f),original=JSON.stringify(f.result);
+  const nav=w.document.querySelector('#real-data-editor .real-data-explorer-nav');
+  const sizer=nav.querySelector('.real-data-tree-sizer');
+  assert(sizer.hasAttribute('inert'));assert.equal(sizer.getAttribute('aria-hidden'),'true');
+  assert.equal(sizer.querySelectorAll('button,input,[id]').length,0);
+  const buttons=[...nav.querySelectorAll('[data-explorer-select]')],rows=[...sizer.querySelectorAll('[data-tree-size-for]')];
+  assert.equal(rows.length,buttons.length);
+  const row=id=>rows.find(r=>r.dataset.treeSizeFor===id);
+  for(const b of buttons)assert.equal(row(b.dataset.explorerSelect).textContent,b.textContent);
+  assert.equal(row('total').style.getPropertyValue('--tree-depth'),'0');
+  assert.equal(row('unscheduledMaintenance').style.getPropertyValue('--tree-depth'),'4');
+  const before=rows.map(r=>[r.dataset.treeSizeFor,r.textContent,r.style.getPropertyValue('--tree-depth')]);
+  nav.querySelector('[data-explorer-folder="total"]').open=false;
+  assert.deepEqual(rows.map(r=>[r.dataset.treeSizeFor,r.textContent,r.style.getPropertyValue('--tree-depth')]),before);
+  assert.equal(row('unscheduledMaintenance').parentElement,sizer);
+  const external=choose(w,'external'),input=external.querySelector('[data-real-field="timeBreakdown.external.holidaysSeconds"]');
+  input.value='12.5';input.dispatchEvent(new w.Event('input'));
+  assert.match(row('external').textContent,/12.5 min/);
+  assert.equal(row('external').textContent,nav.querySelector('[data-explorer-select="external"]').textContent);
+  assert.equal(owner.metadata.realData.records[0].timeBreakdown.external.holidaysSeconds,750);
+  assert.equal(JSON.stringify(f.result),original);
+  const css=fs.readFileSync('apps-script/RealDataStyles.html','utf8');
+  assert.match(css,/\.real-data-registration-explorer\s*\{[^}]*grid-template-columns:fit-content\(40%\) minmax\(0,1fr\)/);
+  assert.match(css,/\.real-data-tree-sizer\s*\{[^}]*block-size:0;overflow:clip;visibility:hidden/);
+  assert.match(css,/\.real-data-tree-size-row\s*\{[^}]*inline-size:max-content;[^}]*var\(--tree-depth,0\) \* var\(--real-data-tree-indent\)/);
+  assert.match(css,/\.real-data-registration-explorer \.real-data-explorer-nav\s*\{[^}]*scrollbar-gutter:stable/);
+ }finally{w.close();}
+});

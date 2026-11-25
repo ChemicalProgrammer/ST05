@@ -334,6 +334,7 @@ window.STRealData=(function(){
       const seconds=id==='unscheduledMaintenance'?M.at(record,'timeBreakdown.unplanned.unscheduledMaintenanceSeconds')??0:h.values[id];
       minutes.textContent=' · '+fmt(finite(seconds)?seconds/60:null)+' min';
     }
+    syncRegistrationTreeWidth();
     for(const id of M.timeSectionIds){
       const node=document.querySelector('[data-time-node="'+id+'"]');if(!node)continue;const manual=M.timeMode(record,id);node.dataset.manual=String(manual);
       for(const panel of document.querySelectorAll('[data-time-owner="'+id+'"]'))for(const input of panel.querySelectorAll('[data-real-field]'))if(!input.dataset.timeValue&&!input.dataset.equipmentId)input.disabled=manual&&id!=='unplanned';
@@ -396,10 +397,24 @@ window.STRealData=(function(){
       return true;
     };
   }
+  // A zero-height, noninteractive sizing mirror includes every label even
+  // when its ancestors are closed. CSS then measures the real font and indent
+  // without expanding the tree, guessing text widths or cloning inputs.
+  function syncRegistrationTreeWidth(){
+    const nav=document.querySelector('#real-data-editor .real-data-registration-explorer .real-data-explorer-nav');
+    if(!nav)return;
+    const labels=new Map([...nav.querySelectorAll('[data-explorer-select]')].map(button=>[button.dataset.explorerSelect,button.textContent]));
+    for(const row of nav.querySelectorAll('[data-tree-size-for]')){
+      const label=labels.get(row.dataset.treeSizeFor)||'';
+      if(row.textContent!==label)row.textContent=label;
+    }
+  }
   function installRegistrationExplorer(target){
     const key=String(state.activeCase.id)+'/'+String(current().id),previous=editorFolders.get(key)||new Map(),all=new Map();
     const explorer=el('div',null,'real-data-explorer real-data-registration-explorer'),nav=el('nav',null,'real-data-explorer-nav'),content=el('div',null,'real-data-explorer-content');nav.setAttribute('aria-label',ui('Conceptos del registro'));
     const select=explorerSelection(explorer,content,all);
+    const sizer=el('div',null,'real-data-tree-sizer');
+    sizer.setAttribute('aria-hidden','true');sizer.setAttribute('inert','');
     explorer.dataset.editorKey=key;
     let serial=0;
     function section(id,label){
@@ -473,14 +488,14 @@ window.STRealData=(function(){
       for(let parent=d.parent;parent;parent=parent.parent)if(parent.folder)parent.folder.open=true;
       if(focus){d.heading.tabIndex=-1;d.heading.focus();}
     }
-    function navigation(d,parent){
+    function navigation(d,parent,depth=0){
       d.parent=parent;const wrap=el(d.children.length?'details':'div',null,'real-data-explorer-entry'),button=el('button',d.label,'real-data-explorer-link');button.type='button';button.dataset.explorerSelect=d.id;button.id='real-data-concept-'+(++serial);button.setAttribute('aria-controls','real-data-panel-'+serial);d.panel.id='real-data-panel-'+serial;d.panel.setAttribute('aria-labelledby',button.id);d.button=button;
       button.onclick=e=>{e.stopPropagation();choose(d.id);};
       if(d.children.length){
         d.folder=wrap;wrap.dataset.explorerFolder=d.id;wrap.open=previous.has(d.id)?previous.get(d.id):['total','plant','production','runtime'].includes(d.id);
         const summary=el('summary'),children=el('div',null,'real-data-explorer-children');summary.append(button);wrap.append(summary,children);
         wrap.addEventListener('toggle',()=>{let saved=editorFolders.get(key);if(!saved){saved=new Map();editorFolders.set(key,saved);}saved.set(d.id,wrap.open);});
-        for(const child of d.children)children.append(navigation(child,d));
+        for(const child of d.children)children.append(navigation(child,d,depth+1));
         const links=el('div',null,'real-data-explorer-shortcuts');for(const child of d.children){const link=el('button',child.label,'real-data-explorer-child');link.type='button';link.dataset.explorerShortcut=child.id;link.onclick=()=>choose(child.id,true);links.append(link);}d.body.append(links);
       }else wrap.append(button);
       if(d.panel.dataset.timeNode||d.id==='unscheduledMaintenance'){
@@ -488,9 +503,14 @@ window.STRealData=(function(){
         minutes.dataset.explorerMinutes=d.panel.dataset.timeNode||d.id;
         button.append(minutes);
       }
+      const sizeRow=el('span',button.textContent,'real-data-tree-size-row');
+      sizeRow.dataset.treeSizeFor=d.id;
+      sizeRow.style.setProperty('--tree-depth',String(depth));
+      sizer.append(sizeRow);
       return wrap;
     }
-    for(const root of roots)nav.append(navigation(root,null));explorer.append(nav,content);target.replaceChildren(...(identification?[identification,explorer]:[explorer]));choose(all.has(editorSelections.get(key))?editorSelections.get(key):all.has('total')?'total':roots[0]?.id);
+    for(const root of roots)nav.append(navigation(root,null));
+    nav.append(sizer);explorer.append(nav,content);target.replaceChildren(...(identification?[identification,explorer]:[explorer]));choose(all.has(editorSelections.get(key))?editorSelections.get(key):all.has('total')?'total':roots[0]?.id);
   }
   function displayText(value){
     const names=isSpanish()?{T1:'tiempo total',T2:'tiempo disponible de planta',T3:'tiempo disponible para producción',T4:'tiempo de marcha',T5:'tiempo efectivo'}:{T1:'total time',T2:'plant available time',T3:'production available time',T4:'runtime',T5:'effective runtime'};

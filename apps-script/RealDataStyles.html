@@ -61,6 +61,33 @@
 @media(max-width:600px){#realdata-panel .real-data-time-switch{float:none;display:flex;margin-block:var(--space-2);justify-content:flex-end}}
 #realdata-panel .real-data-explorer { display:grid;grid-template-columns:minmax(220px,28%) minmax(0,1fr);gap:var(--space-3);align-items:start; }
 #realdata-panel .real-data-explorer-nav { border:var(--border-width) solid var(--line);border-radius:var(--radius-md);padding:var(--space-2);max-height:70vh;overflow:auto;position:sticky;top:var(--space-2); }
+/* The tree uses the widest fully indented row, including collapsed descendants.
+   A capped intrinsic column leaves the remaining space to the editor/table. */
+#realdata-panel .real-data-registration-explorer {
+  grid-template-columns:fit-content(40%) minmax(0,1fr);
+  --real-data-tree-marker:10px;
+  --real-data-tree-marker-gap:2px;
+  --real-data-tree-indent:calc(var(--space-2) + var(--border-width) + var(--space-3));
+}
+#realdata-panel .real-data-registration-explorer .real-data-explorer-nav {
+  min-width:0;scrollbar-gutter:stable;
+}
+#realdata-panel .real-data-tree-sizer {
+  block-size:0;overflow:clip;visibility:hidden;pointer-events:none;
+}
+#realdata-panel .real-data-tree-size-row {
+  display:block;inline-size:max-content;
+  padding-inline-start:calc(var(--tree-depth,0) * var(--real-data-tree-indent) + var(--real-data-tree-marker) + var(--real-data-tree-marker-gap) + var(--space-2));
+  padding-inline-end:var(--space-2);
+  font-family:inherit;font-size:var(--font-button);
+  font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+@media(max-width:700px){
+  #realdata-panel .real-data-registration-explorer {grid-template-columns:minmax(0,1fr);}
+  #realdata-panel .real-data-registration-explorer .real-data-explorer-nav {
+    width:fit-content;max-width:100%;justify-self:start;
+  }
+}
 #realdata-panel .real-data-explorer-entry { min-width:0; }
 #realdata-panel .real-data-explorer-entry > summary { padding:0;white-space:normal; }
 #realdata-panel .real-data-explorer-children { padding-left:var(--space-3);border-left:var(--border-width) solid var(--line);margin-left:var(--space-2); }
@@ -158,8 +185,8 @@
 #real-data-editor .real-data-explorer-entry > summary,
 #real-data-editor div.real-data-explorer-entry {
   display:grid;
-  grid-template-columns:10px minmax(0,1fr);
-  column-gap:2px;
+  grid-template-columns:var(--real-data-tree-marker) minmax(0,1fr);
+  column-gap:var(--real-data-tree-marker-gap);
   align-items:center;
 }
 #real-data-editor .real-data-explorer-entry > summary { list-style:none; }
@@ -179,5 +206,6 @@
   max-width:100%;
   /* Reserve the same inset in both states so selection never shifts text. */
   padding-inline:var(--space-2);
+  overflow-wrap:anywhere;
 }
 </style>

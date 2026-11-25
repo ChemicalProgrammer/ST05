@@ -1,0 +1,275 @@
+<script>
+// Advance presentation adapter. The original cards/inspector own the only
+// model inputs and their event listeners. Table controls are DOM projections;
+// never serialize them, assign a second equipment ID, or replace a draft.
+window.STEquipmentTable=(function(){
+  var current=null,section='equipment',separate=false,scope='equipment',active=false,initialized=false;
+  var signature='',renderedCards=[],bindings=[],rowActions=[],updating=false,queued=false;
+  var labels={};
+  function el(id){return document.getElementById(id);}
+  function tr(en,es){return document.documentElement.lang==='es'?es:en;}
+  function node(tag,cls,text){var n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
+  function key(view,split){return split?(view==='conveyors'?'conveyors':'equipment'):'combined';}
+  function wantsTable(state,view,split){
+    return Boolean(state?.activeCase&&state.uiView==='editor'&&
+      ['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase())&&
+      (labels[key(view,split)]||window.STPreferences?.read('equipmentView.'+key(view,split)))==='table');
+  }
+  function col(id,selector,en,es){return {id:id,selectors:Array.isArray(selector)?selector:[selector],en:en,es:es};}
+  function group(en,es,columns){return {en:en,es:es,columns:columns};}
+  var machineGeneral=group('General','General',[
+    col('type','.equipment-type','Type','Tipo'),
+    col('flow','.equipment-material-flow','Material flow','Flujo de material'),
+    col('rate','.equipment-rate','Speed (bpm / cases/min)','Velocidad (bpm / cajas/min)'),
+    col('maximum','.equipment-maximum-speed','Maximum speed (bpm / cases/min)','Velocidad máxima (bpm / cajas/min)'),
+    col('critical','.equipment-pacemaker','Pacemaker','Equipo crítico')]);
+  var physical=group('Machine design','Diseño del equipo',[
+    col('capacity','.equipment-internal-capacity','Internal capacity (input units)','Capacidad interna (unidades de entrada)'),
+    col('occupancy','.equipment-occupancy-mode','Occupancy model','Modelo de ocupación'),
+    col('residence','.equipment-residence-time','Residence (s)','Residencia (s)'),
+    col('recovery','.equipment-recovery-time','Recovery (s)','Recuperación (s)'),
+    col('scrap','.equipment-macrostop-scrap','Scrap (bottles/stop)','Scrap (botellas/paro)')]);
+  function reliability(conveyor){return group('Reliability','Confiabilidad',[
+    col('stop-mode','.reliability-controls select','Stop inputs','Tipo de paro'),
+    col('failure-enabled','.reliability-enabled',conveyor?'Own failures':'Failures enabled',conveyor?'Fallas propias':'Fallas habilitadas'),
+    col('mtbf','.reliability-mtbfMinutes','MTBF (min)','MTBF (min)'),
+    col('mttr','.reliability-mttrMinutes','MTTR (min)','MTTR (min)'),
+    col('minor-mtbf','[data-stop-class="minor"][data-parameter-help="reliability-mtbfMinutes"]','Minor MTBF (min)','MTBF menor (min)'),
+    col('minor-mttr','[data-stop-class="minor"][data-parameter-help="reliability-mttrMinutes"]','Minor MTTR (min)','MTTR menor (min)'),
+    col('major-mtbf','[data-stop-class="major"][data-parameter-help="reliability-mtbfMinutes"]','Major MTBF (min)','MTBF mayor (min)'),
+    col('major-mttr','[data-stop-class="major"][data-parameter-help="reliability-mttrMinutes"]','Major MTTR (min)','MTTR mayor (min)')]);}
+  function zone(id,en,es,manual){return col(id,manual?['.format-zone-'+id+'-enabled','.format-zone-'+id]:'.format-zone-'+id,en,es);}
+  var conveyorGeneral=group('General','General',[col('type','.equipment-type','Type','Tipo'),col('transport','.equipment-transport-unit','Transport unit','Unidad de transporte')]);
+  var geometry=group('Geometry','Geometría',[
+    zone('lact','Lact (mm)','Lact (mm)'),zone('lp-prime','Lp (mm)','Lp (mm)'),zone('package-length','Package length (mm)','Longitud del envase (mm)'),
+    zone('discharge-runout','Discharge (mm)','Descarga (mm)'),zone('reject-runout','Coding (mm)','Codificado (mm)'),
+    zone('backup','Back-up (mm)','Back-up (mm)',true),zone('lba','LBA (mm)','LBA (mm)',true)]);
+  var upstream=group('Upstream','Equipo anterior',[
+    zone('discharge-pitch','Discharge pitch (mm)','Pitch de descarga (mm)'),zone('discharge-velocity','Discharge velocity (m/min)','Vel. de descarga (m/min)'),
+    zone('startup','Startup (s)','Arranque (s)'),zone('restart-first-package','First package after restart (s)','Primer envase al rearrancar (s)'),
+    zone('residual','Bottles at stop (pkgs)','Descarga al paro (unid.)'),zone('stop-response','Stop response (s)','Respuesta de paro (s)')]);
+  var downstream=group('Downstream','Equipo siguiente',[
+    zone('infeed','Infeed pitch (mm)','Pitch de entrada (mm)'),zone('downstream-ramp','Ramp up (s)','Rampa de arranque (s)')]);
+  var speeds=group('Speed & sensors','Velocidad y sensores',[
+    zone('speed-mode','Speed mode','Modo de velocidad'),zone('belt-speed','Belt speed (mm/s)','Vel. de banda (mm/s)'),
+    zone('moving-gap','Moving gap (mm)','Separación en movimiento (mm)'),zone('accumulated-gap','Accumulated gap (mm)','Separación acumulada (mm)'),
+    zone('population','Population (%)','Población (%)',true),zone('overspeed','Overspeed (%)','Sobrevelocidad (%)',true),
+    zone('speed-factor','Discharge factor (%)','Factor de descarga (%)'),zone('coding-factor','Coding factor (%)','Factor de codificado (%)'),
+    zone('acc-factor','Accumulation factor (%)','Factor de acumulación (%)'),zone('blocked-delay','Block delay (s)','Retardo de bloqueo (s)'),
+    zone('clear-delay','Clear delay (s)','Retardo de liberación (s)'),zone('insurance','Insurance factor (pkgs)','Factor de seguridad (unid.)')]);
+  var dynamic=group('Dynamic balancing','Balanceo dinámico',[
+    zone('dynamic-reference','Specified speed reference','Referencia de velocidad'),
+    zone('dynamic-percent','Speed ratio (%)','Relación de velocidades (%)'),zone('dynamic-range','Speed range (m/min)','Rango de velocidad (m/min)'),
+    col('low-reserve','[data-balancing-field="lowReserveSeconds"]','Low reserve (s)','Reserva baja (s)'),
+    col('high-reserve','[data-balancing-field="highReserveSeconds"]','High reserve (s)','Reserva alta (s)'),
+    col('acceleration','[data-balancing-field="accelerationSeconds"]','Acceleration (s)','Aceleración (s)'),
+    col('deceleration','[data-balancing-field="decelerationSeconds"]','Deceleration (s)','Desaceleración (s)'),
+    col('confirmation','[data-balancing-field="confirmSeconds"]','Sensor confirmation (s)','Confirmación del sensor (s)'),
+    col('dwell','[data-balancing-field="minDwellSeconds"]','Minimum dwell (s)','Permanencia mínima (s)')]);
+  function source(card,selector){return card._fields?.querySelector(selector)||null;}
+  function type(card){return source(card,'.equipment-type')?.value||card.dataset.equipmentType;}
+  function applicable(control,card){
+    if(!control||control.type==='hidden')return false;
+    // Original fields can be in a hidden card or inspector by design; only
+    // semantic per-field hiding (general/split, dynamic, type) matters here.
+    for(var p=control;p&&p!==card._fields;p=p.parentElement){
+      if(p.hidden||p.classList.contains('hidden'))return false;
+    }
+    return true;
+  }
+  function columnGroups(cards,conveyor){
+    var groups=conveyor?[conveyorGeneral,geometry,upstream,downstream,speeds,dynamic,reliability(true)]:[machineGeneral,physical,reliability(false)];
+    return groups.map(g=>({...g,columns:g.columns.filter(c=>cards.some(card=>c.selectors.some(s=>applicable(source(card,s),card))))})).filter(g=>g.columns.length);
+  }
+  function captionFor(original,fallback){
+    var label=original.closest('label');
+    var caption=label?Array.from(label.childNodes).filter(n=>n.nodeType===3).map(n=>n.nodeValue).join(' ').trim():'';
+    return caption||fallback;
+  }
+  function copyAttribute(original,proxy,name){
+    var value=original.getAttribute(name);
+    if(value===null)proxy.removeAttribute(name);else if(proxy.getAttribute(name)!==value)proxy.setAttribute(name,value);
+  }
+  function copyOptions(original,proxy){
+    if(original.tagName!=='SELECT')return;
+    var keys=Array.from(original.options).map(o=>[o.value,o.textContent,o.disabled,o.hidden]);
+    var next=JSON.stringify(keys);
+    if(proxy._optionsSignature===next)return;
+    proxy.replaceChildren(...Array.from(original.options).map(o=>o.cloneNode(true)));
+    proxy._optionsSignature=next;
+  }
+  function writeThrough(original,proxy,event){
+    event.stopPropagation();
+    if(!original.isConnected||original.disabled||original.readOnly)return false;
+    if(original.type==='checkbox')original.checked=proxy.checked;else original.value=proxy.value;
+    original.dispatchEvent(new Event(event.type,{bubbles:true}));
+    return true;
+  }
+  function syncControl(binding){
+    var {original,proxy,card,fallback}=binding;
+    var visible=applicable(original,card);
+    proxy.hidden=!visible;
+    if(!visible)return false;
+    if(original.tagName==='OUTPUT'){
+      if(proxy.textContent!==original.textContent)proxy.textContent=original.textContent;
+    }else{
+      copyOptions(original,proxy);
+      if(original.type==='checkbox')proxy.checked=original.checked;
+      else if(proxy.value!==original.value)proxy.value=original.value;
+      proxy.disabled=original.disabled;
+      if('readOnly' in proxy)proxy.readOnly=Boolean(original.readOnly);
+      // Hidden source fields keep their own constraint validation. Do not
+      // attach a second named/required form field or invent a model value.
+      ['min','max','step','maxlength','placeholder','aria-invalid','aria-readonly'].forEach(n=>copyAttribute(original,proxy,n));
+      if(original.validity?.valid===false)proxy.setAttribute('aria-invalid','true');
+      proxy.classList.toggle('equipment-table-calculated',Boolean(original.readOnly)||original.dataset.fieldRole==='OUTPUT');
+    }
+    var label=captionFor(original,fallback),name=source(card,'.equipment-name')?.value||card.dataset.equipmentId||'';
+    proxy.setAttribute('aria-label',name+' · '+label);
+    proxy.title=[label,original.title].filter(Boolean).join('\n');
+    return true;
+  }
+  function makeProxy(original,card,fallback){
+    var proxy=node(original.tagName.toLowerCase(),'equipment-table-control');
+    if(original.tagName==='INPUT')proxy.type=original.type;
+    if(original.type==='checkbox')proxy.classList.add('equipment-table-checkbox');
+    if(original.tagName==='SELECT')proxy.classList.add('equipment-table-select');
+    var binding={original,proxy,card,fallback};
+    if(original.tagName!=='OUTPUT')for(var name of ['input','change'])proxy.addEventListener(name,function(event){
+      writeThrough(original,proxy,event);
+      refresh();
+      scheduleRefresh();
+    });
+    bindings.push(binding);syncControl(binding);return binding;
+  }
+  function cellContent(cell,card,column){
+    var cluster=node('div','equipment-table-cell-controls'),list=[];
+    for(var s of column.selectors){
+      var original=source(card,s);if(!original)continue;
+      var b=makeProxy(original,card,tr(column.en,column.es));list.push(b);cluster.append(b.proxy);
+    }
+    var missing=node('span','equipment-table-na','—');cell.append(cluster,missing);
+    cell._tableBindings=list;cell._tableMissing=missing;
+    missing.hidden=list.some(b=>applicable(b.original,card));
+  }
+  function actionButton(icon,label,fn){
+    var b=node('button','secondary icon-button equipment-table-action');b.type='button';b.setAttribute('aria-label',label);b.title=label;
+    window.STIcons?.button(b,icon);b.addEventListener('click',fn);return b;
+  }
+  function actionCell(card,cell){
+    var tools=node('div','equipment-table-row-actions');
+    var verdict=node('button','secondary equipment-table-verdict');verdict.type='button';verdict.addEventListener('click',()=>{(type(card)==='CONVEYOR'?card._editorConveyorVerdict:card._equipmentReliabilityVerdict)?.click();});
+    var up=actionButton('up',tr('Move up','Mover arriba'),()=>card.querySelector('.equipment-drag')?.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true})));
+    var down=actionButton('down',tr('Move down','Mover abajo'),()=>card.querySelector('.equipment-drag')?.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true})));
+    var remove=actionButton('trash',tr('Delete equipment','Eliminar equipo'),()=>card.querySelector('.remove-equipment')?.click());
+    tools.append(verdict,up,down,remove);cell.append(tools);rowActions.push({card,verdict,up,down,remove});
+  }
+  function syncActions(entry,cards){
+    var {card,verdict,up,down,remove}=entry,original=type(card)==='CONVEYOR'?card._editorConveyorVerdict:card._equipmentReliabilityVerdict;
+    verdict.hidden=!original||original.hidden;
+    if(original&&!original.hidden){
+      // Reuse the semantic evaluation capsule, including its tooltip and click.
+      var cls=original.className+' equipment-table-verdict';
+      if(verdict.className!==cls)verdict.className=cls;
+      if(verdict.innerHTML!==original.innerHTML)verdict.innerHTML=original.innerHTML;
+      for(var attr of ['title','aria-label','aria-description','data-status','data-verdict','data-state'])copyAttribute(original,verdict,attr);
+      verdict.disabled=original.disabled;
+    }
+    var handle=card.querySelector('.equipment-drag'),index=cards.indexOf(card);
+    up.disabled=!handle||handle.disabled||index<=0;
+    down.disabled=!handle||handle.disabled||index===cards.length-1;
+    remove.disabled=Boolean(card.querySelector('.remove-equipment')?.disabled);
+  }
+  function renderTable(host,cards,conveyor,groups,showTitle){
+    if(showTitle){var title=node('h4','equipment-table-heading',conveyor?tr('Conveyors','Conveyors'):tr('Equipment','Equipos'));host.append(title);}
+    var scroller=node('div','equipment-table-scroll'),table=node('table','equipment-editor-table'),head=node('thead'),top=node('tr'),bottom=node('tr');
+    scroller.tabIndex=0;scroller.setAttribute('role','region');scroller.setAttribute('aria-label',conveyor?tr('Conveyor table','Tabla de conveyors'):tr('Equipment table','Tabla de equipos'));
+    table.setAttribute('aria-label',scroller.getAttribute('aria-label'));
+    var name=node('th','equipment-table-identity',tr('Name','Nombre'));name.rowSpan=2;name.scope='col';top.append(name);
+    var actions=node('th','equipment-table-actions-head',tr('Actions','Acciones'));actions.rowSpan=2;actions.scope='col';top.append(actions);
+    groups.forEach(g=>{
+      var th=node('th','equipment-table-group',tr(g.en,g.es));th.scope='colgroup';th.colSpan=g.columns.length;top.append(th);
+      g.columns.forEach(c=>{var h=node('th','equipment-table-column',tr(c.en,c.es));h.scope='col';h.dataset.column=c.id;bottom.append(h);});
+    });
+    head.append(top,bottom);table.append(head);
+    var body=node('tbody');
+    cards.forEach(card=>{
+      var row=node('tr');row.dataset.tableEquipmentId=card.dataset.equipmentId;
+      var identity=node('td','equipment-table-identity'),wrap=node('div','equipment-table-name'),index=node('span','equipment-table-position',String(Number(card.dataset.index)+1)),symbol=node('span','equipment-table-symbol');
+      symbol.innerHTML=window.STIcons?.equipment(type(card))||'';symbol.setAttribute('aria-hidden','true');
+      var original=source(card,'.equipment-name');wrap.append(index,symbol);
+      if(original)wrap.append(makeProxy(original,card,tr('Name','Nombre')).proxy);
+      else wrap.append(node('span','',card.dataset.equipmentId));
+      identity.append(wrap);row.append(identity);
+      var tools=node('td');actionCell(card,tools);row.append(tools);
+      groups.forEach(g=>g.columns.forEach(c=>{var td=node('td');td.dataset.column=c.id;cellContent(td,card,c);row.append(td);}));
+      body.append(row);
+    });
+    table.append(body);scroller.append(table);host.append(scroller);
+  }
+  function refresh(){
+    if(!active||updating)return;
+    var host=el('equipment-table-view'),list=el('equipment-list');if(!host||!list)return;
+    updating=true;
+    try{
+      var cards=Array.from(list.querySelectorAll('.equipment-card:not(.hidden)'));
+      var kinds=[cards.filter(c=>type(c)!=='CONVEYOR'),cards.filter(c=>type(c)==='CONVEYOR')];
+      var groups=kinds.map((group,i)=>columnGroups(group,i===1));
+      var next=JSON.stringify([document.documentElement.lang,cards.map(c=>[c.dataset.equipmentId,type(c)]),groups.map(gs=>gs.map(g=>g.columns.map(c=>c.id)))]);
+      var rebuild=next!==signature||renderedCards.length!==cards.length||cards.some((c,i)=>renderedCards[i]!==c);
+      if(rebuild){
+        var scrolls=Array.from(host.querySelectorAll('.equipment-table-scroll')).map(n=>n.scrollLeft);
+        var focused=document.activeElement,focusBinding=bindings.find(b=>b.proxy===focused);
+        signature=next;renderedCards=cards;bindings=[];rowActions=[];host.replaceChildren();
+        kinds.forEach((items,i)=>{if(items.length)renderTable(host,items,i===1,groups[i],!separate&&kinds.every(g=>g.length));});
+        if(!cards.length&&!list.querySelector('.equipment-card'))host.append(node('p','empty',list.querySelector('.empty')?.textContent||tr('No equipment.','Sin equipos.')));
+        host.querySelectorAll('.equipment-table-scroll').forEach((n,i)=>{n.scrollLeft=scrolls[i]||0;});
+        if(focusBinding)bindings.find(b=>b.original===focusBinding.original)?.proxy.focus({preventScroll:true});
+      }
+      bindings.forEach(syncControl);
+      host.querySelectorAll('[data-column]').forEach(cell=>{if(cell._tableBindings)cell._tableMissing.hidden=cell._tableBindings.some(b=>applicable(b.original,b.card));});
+      rowActions.forEach(entry=>syncActions(entry,cards));
+    }finally{updating=false;}
+  }
+  function scheduleRefresh(){
+    if(queued)return;queued=true;queueMicrotask(function(){queued=false;refresh();});
+  }
+  function select(mode){
+    if(!current||!['cards','table'].includes(mode))return;
+    labels[scope]=mode;window.STPreferences?.write('equipmentView.'+scope,mode);
+    // Reuse the existing editor layout coordinator. View changes alone do
+    // not invalidate results, mark the case dirty, or commit input values.
+    window.STBasicMode?.sync(current);
+  }
+  function sync(state,view,split){
+    current=state;section=view;separate=Boolean(split);scope=key(view,separate);
+    var tools=el('equipment-view-tools'),host=el('equipment-table-view'),container=el('equipment-section');
+    if(!tools||!host||!container)return;
+    if(!initialized){
+      initialized=true;
+      el('equipment-view-cards').addEventListener('click',()=>select('cards'));
+      el('equipment-view-table').addEventListener('click',()=>select('table'));
+      window.addEventListener('st-language-change',()=>{sync(current,section,separate);scheduleRefresh();});
+    }
+    var allowed=Boolean(state?.activeCase&&state.uiView==='editor'&&['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase()));
+    var next=allowed&&wantsTable(state,view,separate);
+    tools.hidden=!allowed;
+    tools.setAttribute('aria-label',tr('Equipment presentation','Vista de equipos'));
+    for(var [id,on,en,es] of [['equipment-view-cards',!next,'Card view','Vista de tarjetas'],['equipment-view-table',next,'Table view','Vista de tablas']]){
+      var b=el(id),label=tr(en,es);b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',label);b.title=label;
+    }
+    container.dataset.equipmentEditorView=next?'table':'cards';
+    host.hidden=!next;
+    if(next&&!active){
+      // Combined layouts may have moved the fields into the side inspector.
+      // Return them intact before hiding the original presentation.
+      var selection=window.STEquipmentInspector?.release();window.STEquipmentInspector?.hide();
+      if(selection)window.dispatchEvent(new Event('st:inspector'));
+    }
+    active=next;
+    if(active)refresh();
+    else{host.replaceChildren();signature='';renderedCards=[];bindings=[];rowActions=[];}
+  }
+  return {sync:sync,refresh:refresh,wantsTable:wantsTable};
+})();
+</script>

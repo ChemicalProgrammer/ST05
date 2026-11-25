@@ -207,7 +207,7 @@
           if(window.STBasicMode?.isSplit()&&state.uiView==='editor'){
             state.basicView=type==='CONVEYOR'?'conveyors':'equipment';
             window.STBasicMode.sync(state);
-            if(type==='CONVEYOR')STEquipmentInspector.select(owner,false);
+            if(type==='CONVEYOR'&&!window.STEquipmentTable?.wantsTable(state,'conveyors',true))STEquipmentInspector.select(owner,false);
           }
         }
         updateFormatZoneVisibility(owner);
@@ -940,6 +940,7 @@ function numericInputValue(input) {
           }
         });
       }catch(error){/* Incomplete editor inputs must not block editing. */}
+      window.STEquipmentTable?.refresh();
     }
     function refreshDesignGraph(){if(state.activeCase){var preview=basicEquipmentPreview();STLinePerformance.render(null,preview);refreshEquipmentReliabilityBadges(preview);}}
     window.addEventListener('st-language-change',function(){refreshEquipmentReliabilityBadges();});

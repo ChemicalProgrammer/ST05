@@ -90,7 +90,7 @@ window.STBasicMode=(function(){
       inspector.classList.toggle('hidden',!conveyor);
       if(!conveyor){STEquipmentInspector.release();STEquipmentInspector.hide();}
       STEquipmentFilter.set(conveyor?'conveyors':'equipment',true);
-      if(conveyor){
+      if(conveyor&&!window.STEquipmentTable?.wantsTable(state,section,separate)){
         var chosen=cards.find(function(c){return type(c)==='CONVEYOR'&&c.classList.contains('equipment-selected');})||cards.find(function(c){return type(c)==='CONVEYOR';});
         if(chosen&&!chosen.classList.contains('equipment-selected'))STEquipmentInspector.select(chosen,false);
         title.textContent=chosen?STEquipmentInspector.name():__ST_TEXT__('filter.empty');
@@ -108,6 +108,7 @@ window.STBasicMode=(function(){
     }
     basicMounted=enabled;
     refreshData();
+    window.STEquipmentTable?.sync(state,section,separate);
     STIcons.decorate(nav);STIcons.decorate(tools);
   }
   function prepareWorksheet(card){

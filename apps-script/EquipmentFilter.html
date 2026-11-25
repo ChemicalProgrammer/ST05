@@ -30,6 +30,7 @@ window.STEquipmentFilter=(function(){
       button.title=(shown?'Hide ':'Show ')+spec[0];
     });
     if(selectionHidden)window.dispatchEvent(new Event('st:inspector'));
+    window.STEquipmentTable?.refresh();
   }
   function set(value,separate){current=['all','equipment','conveyors','none'].includes(value)?value:'all';split=Boolean(separate);apply();}
   document.addEventListener('DOMContentLoaded',function(){

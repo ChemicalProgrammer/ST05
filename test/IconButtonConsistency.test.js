@@ -8,7 +8,9 @@ test('icon button owns shared normal, menu, disabled, active and destructive sty
  const css=read('Styles');
  assert.match(css,/:is\(button,summary\)\.icon-button\s*\{[\s\S]*?border:var\(--border-width\) solid var\(--line-strong\)[\s\S]*?background:var\(--surface\)/);
  assert.match(css,/button\.secondary:not\(\.icon-button\)/);
- assert.match(css,/button\.ghost:not\(\.icon-button\)/);
+ assert.match(css,/button\.ghost:not\(\.icon-button\):not\(:disabled\)/);
+ assert.match(css,/button\.secondary:not\(\.icon-button\):not\(:disabled\)/);
+ assert.match(css,/\.icon-button:where\(:not\(:disabled\):not\(\[aria-disabled=true\]\)\):hover/);
  assert.match(css,/details\[open\] > summary\.icon-button:not\(\[aria-disabled=true\]\)/);
  assert.match(css,/\.icon-button:is\(:disabled,\[aria-disabled=true\]\)\s*\{[^}]*background:var\(--disabled-bg\);color:var\(--disabled\)/);
  assert.match(css,/\.icon-button\.icon-button--retain-active\[aria-pressed=true\]/);

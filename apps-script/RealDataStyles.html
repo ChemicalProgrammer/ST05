@@ -78,14 +78,21 @@
 /* Comparison categories reuse the header tabs, not the registration tree's
    link styles. Keep the data table as the dominant content area. */
 #realdata-panel .real-data-comparison-explorer {
-  grid-template-columns:minmax(210px,min(28%,300px)) minmax(0,1fr);
+  grid-template-columns:fit-content(32%) minmax(0,1fr);
 }
 #realdata-panel .real-data-comparison-nav {
-  display:grid;align-content:start;gap:var(--space-1);min-width:0;
+  display:grid;align-content:start;justify-items:start;gap:var(--space-1);min-width:0;
 }
 #realdata-panel .real-data-comparison-tab {
-  width:100%;min-width:0;justify-content:flex-start;text-align:start;
+  width:fit-content;max-width:100%;min-width:0;justify-self:start;
+  justify-content:flex-start;text-align:start;
   white-space:normal;line-height:var(--leading-tight);
+  transition:background-color var(--duration-normal) var(--ease),
+    color var(--duration-normal) var(--ease),box-shadow var(--duration-normal) var(--ease);
+}
+#realdata-panel .real-data-explorer-content {min-width:0;}
+@media(prefers-reduced-motion:reduce){
+  #realdata-panel .real-data-comparison-tab {transition:none;}
 }
 #realdata-panel .real-data-comparison-tab > span {min-width:0;overflow-wrap:anywhere;}
 #realdata-panel .real-data-comparison-panel > .real-data-comparison-heading {
@@ -98,7 +105,7 @@
 #realdata-panel .real-data-comparison-heading > .subsection-description {margin:0;}
 @media(max-width:700px){
   #realdata-panel .real-data-comparison-explorer {grid-template-columns:minmax(0,1fr);}
-  #realdata-panel .real-data-comparison-nav {grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));}
+  #realdata-panel .real-data-comparison-nav {display:flex;flex-wrap:wrap;align-items:center;}
 }
 #realdata-panel .real-data-explorer-value { display:flex;justify-content:flex-end;align-items:center;margin-block:var(--space-3); }
 #realdata-panel .real-data-explorer-value > label { display:flex;gap:var(--space-3);align-items:center; }

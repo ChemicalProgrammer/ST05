@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {JSDOM} from 'jsdom';import {setup,fixture,mount,setUnplannedMinutes} from './helpers/RealDataHarness.js';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {JSDOM} from 'jsdom';import {setup,fixture,mount,setUnplannedMinutes} from './helpers/RealDataHarness.js';
 test('comparison and report share exact formulas and reported values without permanent explanation columns',()=>{
  const w=setup();try{const f=fixture();mount(w,f);
  const table=w.document.querySelector('#real-data-comparison table');assert.equal(table.tHead.rows[0].cells.length,5);
@@ -59,5 +59,43 @@ test('comparison categories use shared header tabs, separate secondary headings 
   assert.equal(target.querySelector('[data-comparison-group="losses"] h3').textContent,'Runtime losses and effective runtime');
   assert.equal(JSON.stringify(owner.metadata.realData),snapshot);assert.equal(changes(),0);
   assert.equal(JSON.stringify(f.result),original);assert.equal(JSON.stringify(w.STRealData.compare(f.record,f.simulation,f.result,'average',{}).rows),recorded);
+ }finally{w.close();}
+});
+
+test('comparison tabs size to their own content and animate category changes without animating data refreshes',()=>{
+ const w=setup('en');try{
+  const calls=[],cancelled=[],heights={calendar:180,losses:220,production:330};
+  let reduced=false;
+  w.STMotion={reduced:()=>reduced,duration:()=>220,cancel:el=>cancelled.push(el),
+    play:(el,frames,options)=>calls.push({kind:'height',el,frames,options}),
+    reveal:el=>calls.push({kind:'reveal',el})};
+  const f=fixture(),{owner,changes}=mount(w,f);
+  const snapshot=JSON.stringify(owner.metadata.realData);
+  const target=w.document.getElementById('real-data-comparison');
+  const content=target.querySelector('.real-data-explorer-content');
+  content.getBoundingClientRect=()=>({height:heights[content.querySelector('article:not([hidden])')?.dataset.comparisonGroup]||250});
+  const select=id=>target.querySelector('[data-comparison-select="'+id+'"]').click();
+  assert.equal(calls.length,0,'Initial rendering is not animated');
+  select('losses');
+  assert.equal(calls.length,2);
+  assert.equal(calls[0].el,content);
+  assert.deepEqual(Array.from(calls[0].frames,frame=>frame.height),['180px','220px']);
+  assert.equal(calls[1].el.dataset.comparisonGroup,'losses');
+  assert.equal(content.querySelectorAll('article:not([hidden])').length,1);
+  select('losses');assert.equal(calls.length,2,'Selecting the same category is a no-op');
+  select('production');assert.equal(calls.length,4);
+  assert(cancelled.includes(content),'A subsequent switch cancels the preceding height animation');
+  reduced=true;select('calendar');assert.equal(calls.length,4,'Reduced motion is respected');
+  reduced=false;
+  w.document.documentElement.lang='es';w.dispatchEvent(new w.Event('st-language-change'));
+  assert.equal(calls.length,4,'Rebuilding the tables does not replay the transition');
+  assert.equal(target.querySelector('[data-comparison-select="calendar"]').getAttribute('aria-current'),'page');
+  assert.equal(JSON.stringify(owner.metadata.realData),snapshot);assert.equal(changes(),0);
+  const css=fs.readFileSync('apps-script/RealDataStyles.html','utf8');
+  assert.match(css,/\.real-data-comparison-explorer\s*\{[^}]*grid-template-columns:fit-content\(32%\) minmax\(0,1fr\)/);
+  assert.match(css,/\.real-data-comparison-nav\s*\{[^}]*justify-items:start/);
+  assert.match(css,/\.real-data-comparison-tab\s*\{[^}]*width:fit-content;max-width:100%;/);
+  assert.match(css,/\.real-data-comparison-tab\s*\{[^}]*transition:background-color/);
+  assert.match(css,/prefers-reduced-motion:reduce[\s\S]*?\.real-data-comparison-tab\s*\{transition:none/);
  }finally{w.close();}
 });

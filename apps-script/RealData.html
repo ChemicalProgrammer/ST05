@@ -535,10 +535,29 @@ window.STRealData=(function(){
     };
     const content=el('div',null,'real-data-explorer-content');
     const buttons=new Map();
+    let activeId=null;
     function select(id){
+      const next=buttons.get(id);
+      if(!next||id===activeId)return;
+      const motion=window.STMotion,previous=buttons.get(activeId);
+      const animate=!!previous&&layout.isConnected&&!!motion&&!motion.reduced?.();
+      // Keep the current visible height if the user switches during a transition.
+      const before=animate?content.getBoundingClientRect().height:0;
+      motion?.cancel(content);
+      if(previous)motion?.cancel(previous.panel);
       for(const [key,{button,panel}] of buttons){
         button.setAttribute('aria-current',key===id?'page':'false');
         panel.hidden=key!==id;
+      }
+      activeId=id;
+      if(animate){
+        const after=content.getBoundingClientRect().height;
+        if(before>0&&after>0&&Math.abs(after-before)>1){
+          motion.play(content,[{height:before+'px',boxSizing:'border-box',overflow:'hidden'},
+            {height:after+'px',boxSizing:'border-box',overflow:'hidden'}],
+            {duration:motion.duration('card-update',220),easing:'ease-out'});
+        }
+        motion.reveal(next.panel);
       }
     }
     for(const group of groups){

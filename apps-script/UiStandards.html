@@ -173,21 +173,25 @@ html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > h4.sce
 #run-panel > .section-heading > div:first-child { display:none; }
 html[data-ui-mode=basic] #run-panel > .section-heading { display:none; }
 #basic-run-options-title { justify-content:space-between; gap:var(--space-3); }
-/* Shared dual execution progress: two independent native tracks, followed
-   by calculation / visualization percentages and the existing real clock. */
+/* Shared dual execution progress: two independent native values painted in
+   the same track. Primary visualization covers secondary calculation wherever
+   they overlap; only the shared outer track is rounded, so no seam remains. */
 .execution-progress-tracks {
-  display:inline-grid; grid-template-rows:repeat(2,var(--size-4)); gap:var(--size-2);
-  width:clamp(96px,11vw,152px); flex:0 0 auto; align-self:center;
+  display:inline-grid; grid-template:1fr / minmax(0,1fr);
+  width:clamp(96px,11vw,152px); height:var(--space-2); flex:0 0 auto; align-self:center;
+  background:var(--line); border-radius:var(--radius-pill); overflow:hidden; isolation:isolate;
 }
 .execution-progress-track {
+  grid-area:1 / 1;
   appearance:none; -webkit-appearance:none; accent-color:var(--execution-progress-color); display:block; width:100%;
-  height:var(--size-4); min-height:0; border:0; padding:0; margin:0;
-  border-radius:var(--radius-pill); overflow:hidden;
-  background:var(--line);
+  height:100%; min-height:0; border:0; padding:0; margin:0;
+  background:transparent; border-radius:0;
 }
-.execution-progress-track::-webkit-progress-bar {background:var(--line);border-radius:var(--radius-pill);}
-.execution-progress-track::-webkit-progress-value {background:var(--execution-progress-color);border-radius:var(--radius-pill);}
-.execution-progress-track::-moz-progress-bar {background:var(--execution-progress-color);border-radius:var(--radius-pill);}
+.execution-progress-track.execution-progress-calculation {z-index:0;}
+.execution-progress-track.execution-progress-visualization {z-index:1;}
+.execution-progress-track::-webkit-progress-bar {background:transparent;border-radius:0;}
+.execution-progress-track::-webkit-progress-value {background:var(--execution-progress-color);border-radius:0;}
+.execution-progress-track::-moz-progress-bar {background:var(--execution-progress-color);border-radius:0;}
 .execution-progress-calculation {--execution-progress-color:var(--secondary);color:var(--secondary-text,var(--secondary));}
 .execution-progress-visualization {--execution-progress-color:var(--accent);color:var(--accent);}
 .execution-progress-percentages {display:inline-flex;align-items:baseline;gap:var(--space-1);white-space:nowrap;flex:none;}

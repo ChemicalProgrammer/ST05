@@ -40,6 +40,17 @@ test('both progress headers render calculation then visualization, followed by t
   assert.match(ui,/\.execution-progress-visualization \{--execution-progress-color:var\(--accent\)/);
 });
 
+test('calculation and visualization occupy one clipped track with primary on top',()=>{
+  const ui=read('UiStandards');
+  assert.match(ui,/\.execution-progress-tracks\s*\{[^}]*grid-template:1fr\s*\/\s*minmax\(0,1fr\)[^}]*height:var\(--space-2\)[^}]*background:var\(--line\)[^}]*border-radius:var\(--radius-pill\)[^}]*overflow:hidden/);
+  assert.match(ui,/\.execution-progress-track\s*\{[^}]*grid-area:1\s*\/\s*1[^}]*height:100%[^}]*background:transparent/);
+  assert.match(ui,/\.execution-progress-track\.execution-progress-calculation\s*\{z-index:0;\}/);
+  assert.match(ui,/\.execution-progress-track\.execution-progress-visualization\s*\{z-index:1;\}/);
+  assert.match(ui,/\.execution-progress-track::-webkit-progress-bar\s*\{background:transparent;border-radius:0;\}/);
+  assert.match(ui,/\.execution-progress-track::-webkit-progress-value\s*\{background:var\(--execution-progress-color\);border-radius:0;\}/);
+  assert.match(ui,/\.execution-progress-track::-moz-progress-bar\s*\{background:var\(--execution-progress-color\);border-radius:0;\}/);
+});
+
 function nodes(){
   const elements=new Map();
   const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',value:0,classList:{toggle(){}}});return elements.get(id);};

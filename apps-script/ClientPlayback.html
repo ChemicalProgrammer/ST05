@@ -1432,6 +1432,7 @@
         ['Design speed',Number.isFinite(speed)?formatNumber(speed):'—',conveyor?'m/min':flowUnit],
         ['Flow',formatNumber((unit.actualRatePerSecond||0)*60),flowUnit],
         ['Processed',formatNumber(unit.processedUnits??unit.outputCount),flowUnits.count]];
+      if(!conveyor&&!window.STBasicMode?.isBasic())rows.push(['Scrap',formatNumber(unit.macroStopScrapBottles??0),'bottles']);
       if(conveyor){
         rows.push(['On belt',Number.isFinite(zone?.inventoryUnits)?formatNumber(zone.inventoryUnits):'—',
           playbackZoneFlowUnit({...zone,ownerEquipmentId:zone?.ownerEquipmentId||model.id},{equipment:[unit]})],
@@ -1448,7 +1449,6 @@
             model.processData?.downstream?.rampAfterRepair?'s':''],
           ['Own failures',formatNumber(unit.failureCount||0)]);
         if(!window.STBasicMode?.isBasic()){
-          rows.push(['Macrostop scrap',formatNumber(unit.macroStopScrapBottles??0),'bottles']);
           if(unit.macroStopScrapPendingBottles>0)rows.push(['Pending scrap',formatNumber(unit.macroStopScrapPendingBottles),'bottles']);
         }
       }

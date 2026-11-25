@@ -141,6 +141,8 @@ window.STSimulation2D=(function(){
   let shiftHours=8,shiftOutput=[],limitSeconds=3600,save,signature,lastSave=0;
   let seed=1,key,viewKey,definitions=[],model=null,frame,previous=0,lag=0,playbackRateAtFrame=null,drag,validation='',runState='Ready',lastMetrics=-Infinity;
   let representative=null,defaultRun=null,palletAnimation=null,palletFlow=null,dynamicBalancingRequested=false;
+  let scrapVisualModel=null,scrapVisualTime=-1,scrapVisualTimer=null;
+  const scrapVisualCounts=new Map(),scrapBursts=new Map(),scrapAnimationMs=800;
   let executionWallMs=null,executionStartedAt=null;
   function executionElapsed(){
     return executionWallMs===null?null:executionWallMs+(executionStartedAt===null?0:Math.max(0,performance.now()-executionStartedAt));
@@ -1184,6 +1186,7 @@ window.STSimulation2D=(function(){
     const extraState=(label,key,fallback)=>[label,num(accounting?(accounting.stateSeconds[key]??0):fallback),'s'];
     const summary=[['Design speed',num(belt?item.speed*.06:designSpeed*60),belt?'m/min':cases?'cpm':'bpm'],
       ['Flow',bottles(rate),'bpm'],['Processed',bottles(produced),'bottles']];
+    if(!belt&&!window.STBasicMode?.isBasic())summary.push(['Scrap',num(item.macroScrap?.actualBottles??0),'bottles']);
     if(cases)summary.push(['Case flow',num(rate),'cpm'],['Cases made',num(produced),'cases']);
     if(belt){
       summary.push(['On belt',num(item.items?.length??0),cases?'cases':'bottles']);
@@ -1213,10 +1216,7 @@ window.STSimulation2D=(function(){
       }
     }
     summary.push(['Own failures',belt?'N/A':num(item.failureCount??0),'']);
-    if(!belt&&!window.STBasicMode?.isBasic()){
-      summary.push(['Macrostop scrap',num(item.macroScrap?.actualBottles??0),'bottles']);
-      if(item.macroScrap?.pendingBottles>0)summary.push(['Pending scrap',num(item.macroScrap.pendingBottles),'bottles']);
-    }
+    if(!belt&&!window.STBasicMode?.isBasic()&&item.macroScrap?.pendingBottles>0)summary.push(['Pending scrap',num(item.macroScrap.pendingBottles),'bottles']);
     const states=belt
       ? [duration('Empty','empty'),duration('Flowing','flowing'),duration('Accumulating','accumulating'),
         ['Ramp up','N/A',''],['Ramp down','N/A','']]
@@ -1612,9 +1612,58 @@ window.STSimulation2D=(function(){
     }
     }finally{context.restore();}
   }
+  // Visualize actual rejected material, not the configured or pending quota.
+  // Coalesce losses at high playback rates: at most five sprites per machine.
+  function clearScrapVisuals(){
+    if(scrapVisualTimer!==null)window.clearTimeout(scrapVisualTimer);
+    scrapVisualTimer=null;scrapVisualModel=null;scrapVisualTime=-1;scrapVisualCounts.clear();scrapBursts.clear();
+  }
+  function collectScrapBursts(now){
+    if(!model||window.STBasicMode?.isBasic()||reducedMotion?.matches){clearScrapVisuals();return;}
+    const fresh=scrapVisualModel!==model||model.time<scrapVisualTime;
+    if(fresh){clearScrapVisuals();scrapVisualModel=model;}
+    for(const item of model.line){
+      if(item.kind!=='machine'||!item.macroScrap)continue;
+      const total=item.macroScrap.actualBottles||0,previous=scrapVisualCounts.get(item.id)??total;
+      scrapVisualCounts.set(item.id,total);
+      if(!fresh&&total>previous){
+        const existing=scrapBursts.get(item.id),active=existing&&now-existing.start<scrapAnimationMs;
+        if(active)existing.count+=total-previous;
+        else scrapBursts.set(item.id,{count:total-previous,start:now});
+      }
+    }
+    scrapVisualTime=model.time;
+    for(const [id,burst] of scrapBursts)if(now-burst.start>=scrapAnimationMs)scrapBursts.delete(id);
+  }
+  function drawScrapBurst(context,item,x,top,width,height,telemetryY,colors){
+    const burst=scrapBursts.get(item.id);if(!burst)return;
+    const progress=Math.max(0,Math.min(1,(performance.now()-burst.start)/scrapAnimationMs));
+    const floor=top+height*(machineDesign(item)?.floor??100)/100;
+    const travel=Math.max(8,Math.min(38,telemetryY-floor-5));
+    const cx=x+width*.72,caseFed=item.inputUnit==='CASES',factor=caseFed?Math.max(1,item.inputBottleFactor||1):1;
+    const count=Math.min(5,Math.max(1,Math.ceil(burst.count/factor)));
+    context.save();context.globalAlpha=Math.min(1,(1-progress)*4);
+    const palette={surface:colors.surface,belt:colors.belt,accent:colors.accent,liquid:appearance.liquid||colors.accent,
+      cap:appearance.cap||colors.accent,label:appearance.label||defaultLayoutColors.label,labelShape:appearance.labelShape,
+      caseColor:appearance.cases||defaultLayoutColors.cases,caseAccent:appearance.caseLabel||defaultLayoutColors.caseLabel,caseMarkShape:appearance.caseLabelShape};
+    for(let i=0;i<count;i++){
+      const p=Math.max(0,Math.min(1,(progress-i*.045)/.82));
+      const h=caseFed?9:14,w=caseFed?13:6;
+      const dx=(i-(count-1)/2)*10,dy=travel*p*p;
+      context.save();context.translate(cx+dx,floor-7+dy);
+      context.rotate((i%2?1:-1)*p*.45);
+      if(caseFed)window.STSimulation2DMachines.drawCase(context,-w/2,-h/2,w,h,palette);
+      else window.STSimulation2DMachines.drawBottle(context,-w/2,-h/2,w,h,palette,appearance.bottle,bottleStages.get(item.id)??0);
+      context.restore();
+    }
+    context.fillStyle=colors.danger;context.font='600 9px system-ui';context.textAlign='center';
+    context.fillText('−'+num(burst.count)+' '+localize2D('bottles'),cx,Math.min(telemetryY-2,floor+travel+10));
+    context.restore();
+  }
   function draw(){
     if(drawingViewports)return;
     drawingViewports=true;
+    collectScrapBursts(performance.now());
     viewports[activeViewport].camera=camera;
     let hitBoxes=[];
     try{
@@ -1636,6 +1685,9 @@ window.STSimulation2D=(function(){
     for(const value of sensorVisuals.values())if(value.fading&&performance.now()-value.fadeStart>=140){value.fading=false;value.ring=value.pending?value.progress:0;}
     if(sensorFadeTimer===null&&[...sensorVisuals.values()].some(value=>value.fading)&&!panel.classList.contains('hidden')){
       sensorFadeTimer=window.setTimeout(()=>{sensorFadeTimer=null;draw();},16);
+    }
+    if(scrapVisualTimer===null&&scrapBursts.size&&runState!=='Running'&&!panel.classList.contains('hidden')){
+      scrapVisualTimer=window.setTimeout(()=>{scrapVisualTimer=null;draw();},16);
     }
   }
   function drawScene(){
@@ -1811,6 +1863,7 @@ window.STSimulation2D=(function(){
         if(!detailed)window.STSimulation2DMachines.drawConveyor(context,x+width*.1,y+beltInset,width*.8,beltDepth,{belt:beltColor,surface});
         const sx=x+width/2;
         drawSignal(context,sx,top-14,signal,colors,factor);
+        drawScrapBurst(context,item,x,top,width,height,telemetryY,{surface,belt:beltColor,accent,danger:colors.badges.failure.foreground});
       }
     }
     for(let index=0;index<line.length;index++){
@@ -2012,7 +2065,7 @@ window.STSimulation2D=(function(){
     cancelFrame();runState='Paused';syncControls();draw();checkpoint();
   }
   function reset(){
-    cancelFrame();restoreExecutionClock(0);lag=0;lastMetrics=-Infinity;shiftOutput=[];lastMachineActions.clear();palletAnimation=null;palletFlow=null;validation=validate();
+    cancelFrame();clearScrapVisuals();restoreExecutionClock(0);lag=0;lastMetrics=-Infinity;shiftOutput=[];lastMachineActions.clear();palletAnimation=null;palletFlow=null;validation=validate();
     model=validation?null:STSimulation2DEngine.create(definitions,defaultRun?representative.seed:seed,undefined,schedule);
     configureModel();
     runState='Ready';syncControls();
@@ -2045,6 +2098,7 @@ window.STSimulation2D=(function(){
     playbackRateAtFrame=rate;
     if(previous)lag+=Math.max(0,now-previous)/1000*rate;
     previous=now;
+    if(scrapVisualModel!==model)collectScrapBursts(now);
     const output=model.line.at(-1);
     const deadline=performance.now()+12;
     for(let count=0;count<24000;count++){
@@ -2217,7 +2271,7 @@ window.STSimulation2D=(function(){
     draw();
   });
   return {pause,capture,isRunning:()=>runState==='Running',refreshRunLocks:syncControls,
-    hasState:()=>Boolean(viewKey&&model),syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
+    hasState:()=>Boolean(viewKey&&model),syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){clearScrapVisuals();window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
     dynamicBalancingRequested=config.dynamicLineBalancingEnabled===true||equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
     const configuredHours=config.shiftHours??config.durationOptions?.shiftHours??config.shiftSeconds/3600;
     const hours=Number.isFinite(configuredHours)&&configuredHours>0?configuredHours:8;

@@ -183,7 +183,7 @@ test('pending and rerun results keep empty summary cards visible and never retai
     h.render({...data,result:null});
     assert.equal(h.node('results-body').classList.contains('hidden'),false);
     assert.equal(h.node('results-empty').classList.contains('hidden'),true);
-    const cards=[...h.node('results-kpis').children];assert.equal(cards.length,9);
+    const cards=[...h.node('results-kpis').children];assert.equal(cards.length,10);
     const lossCards=[...h.node('results-rate-loss-highlights').querySelectorAll('article')];
     assert.equal(lossCards.length,3,'Rate-loss summary cards remain visible while results are pending');
     lossCards.forEach(card=>assert.equal(card.querySelector('.metric-number').textContent,'—'));
@@ -225,7 +225,7 @@ test('pending and rerun results keep empty summary cards visible and never retai
       ['oee','throughput','production','failure-downtime','effective-runtime']);
     h.w.STBasicMode.isBasic=()=>false;h.render({...data,result:null});
     assert.deepEqual([...h.node('results-kpis').children].map(card=>card.dataset.metric),
-      ['oee','throughput','production','rate-loss','equipment-downtime','starved','blocked','failure-downtime','effective-runtime']);
+      ['oee','throughput','production','scrap','effective-runtime','rate-loss','equipment-downtime','failure-downtime','starved','blocked']);
   }finally{h.close();}
 });
 
@@ -317,7 +317,7 @@ test('real navigation and invalidation refresh Results without removing its summ
     const shell=w.STShell(state,{assistant(){}});shell.sync();
     state.uiView='results';shell.sync();
     assert.equal(h.node('results-panel').classList.contains('hidden'),false);
-    const cards=[...h.node('results-kpis').children];assert.equal(cards.length,9);
+    const cards=[...h.node('results-kpis').children];assert.equal(cards.length,10);
     assert.equal(cardMetric(h,'production').value.textContent,'—');
     state.run.result=data.simulation.results=data.result;shell.sync();
     assert.equal(cardMetric(h,'production').value.textContent,'960');
@@ -334,4 +334,16 @@ test('real navigation and invalidation refresh Results without removing its summ
     assert.equal(h.node('results-table').children.length,0);
     cards.forEach((card,index)=>assert.equal(h.node('results-kpis').children[index],card));
   }finally{h.close();}
+});
+
+test('Advance results show only actual scrap',()=>{
+ const h=harness(),data=fixture('bottles');try{
+  data.result.summary.totalMacroStopScrapBottles=21;data.result.summary.totalMacroStopScrapPendingBottles=13;data.result.equipmentMetrics.machine.macroStopScrapBottles=21;
+  h.render(data);assert.equal(cardMetric(h,'scrap').value.textContent,'21');assert.equal(cardMetric(h,'scrap').unit.textContent,'bottles');
+  const table=h.node('results-table').querySelector('table'),headers=[...table.tHead.rows[0].cells].map(cell=>cell.textContent);
+  assert.equal(table.tBodies[0].rows[0].cells[headers.indexOf('Scrap (bottles)')].textContent,'21');
+  assert.equal(h.node('results-insight').textContent,'');
+  for(const heading of h.node('results-equipment-operation').querySelectorAll('h3,h4'))assert.ok(heading.classList.contains('subsection-title'));
+  h.w.STBasicMode.isBasic=()=>true;h.render(data);assert.equal(h.node('results-kpis').querySelector('[data-metric="scrap"]'),null);assert(!h.node('results-table').textContent.includes('Scrap (bottles)'));
+ }finally{h.close();}
 });

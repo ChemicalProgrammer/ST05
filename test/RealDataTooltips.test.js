@@ -62,7 +62,7 @@ test('comparison categories use shared header tabs, separate secondary headings 
  }finally{w.close();}
 });
 
-test('comparison tabs size to their own content and animate category changes without animating data refreshes',()=>{
+test('comparison tabs share the longest label's intrinsic width and animate category changes without animating data refreshes',()=>{
  const w=setup('en');try{
   const calls=[],cancelled=[],heights={calendar:180,losses:220,production:330};
   let reduced=false;
@@ -93,8 +93,9 @@ test('comparison tabs size to their own content and animate category changes wit
   assert.equal(JSON.stringify(owner.metadata.realData),snapshot);assert.equal(changes(),0);
   const css=fs.readFileSync('apps-script/RealDataStyles.html','utf8');
   assert.match(css,/\.real-data-comparison-explorer\s*\{[^}]*grid-template-columns:fit-content\(32%\) minmax\(0,1fr\)/);
-  assert.match(css,/\.real-data-comparison-nav\s*\{[^}]*justify-items:start/);
-  assert.match(css,/\.real-data-comparison-tab\s*\{[^}]*width:fit-content;max-width:100%;/);
+  assert.match(css,/\.real-data-comparison-nav\s*\{[^}]*grid-template-columns:minmax\(0,1fr\)[^}]*justify-items:stretch/);
+  assert.match(css,/\.real-data-comparison-tab\s*\{[^}]*width:auto;max-width:100%;min-width:0;justify-self:stretch;box-sizing:border-box/);
+  assert.match(css,/\.real-data-comparison-nav\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)[^}]*width:max-content;max-width:100%/);
   assert.match(css,/\.real-data-comparison-tab\s*\{[^}]*transition:background-color/);
   assert.match(css,/prefers-reduced-motion:reduce[\s\S]*?\.real-data-comparison-tab\s*\{transition:none/);
  }finally{w.close();}

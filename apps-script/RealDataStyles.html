@@ -81,10 +81,13 @@
   grid-template-columns:fit-content(32%) minmax(0,1fr);
 }
 #realdata-panel .real-data-comparison-nav {
-  display:grid;align-content:start;justify-items:start;gap:var(--space-1);min-width:0;
+  /* The longest label determines the intrinsic track width. Every tab
+     stretches to that common width instead of stretching the sidebar. */
+  display:grid;grid-template-columns:minmax(0,1fr);
+  align-content:start;justify-items:stretch;gap:var(--space-1);min-width:0;
 }
 #realdata-panel .real-data-comparison-tab {
-  width:fit-content;max-width:100%;min-width:0;justify-self:start;
+  width:auto;max-width:100%;min-width:0;justify-self:stretch;box-sizing:border-box;
   justify-content:flex-start;text-align:start;
   white-space:normal;line-height:var(--leading-tight);
   transition:background-color var(--duration-normal) var(--ease),
@@ -105,7 +108,13 @@
 #realdata-panel .real-data-comparison-heading > .subsection-description {margin:0;}
 @media(max-width:700px){
   #realdata-panel .real-data-comparison-explorer {grid-template-columns:minmax(0,1fr);}
-  #realdata-panel .real-data-comparison-nav {display:flex;flex-wrap:wrap;align-items:center;}
+  #realdata-panel .real-data-comparison-nav {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:max-content;max-width:100%;justify-self:start;
+  }
+}
+@media(max-width:360px){
+  #realdata-panel .real-data-comparison-nav {grid-template-columns:minmax(0,1fr);}
 }
 #realdata-panel .real-data-explorer-value { display:flex;justify-content:flex-end;align-items:center;margin-block:var(--space-3); }
 #realdata-panel .real-data-explorer-value > label { display:flex;gap:var(--space-3);align-items:center; }

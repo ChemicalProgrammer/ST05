@@ -65,11 +65,13 @@
 #equipment-analysis-body .intervention-chart .chart-grid { stroke:var(--line); stroke-width:1; opacity:.75; }
 #equipment-analysis-body .intervention-chart .chart-boundary { stroke:var(--ink); stroke-width:1.3; opacity:.6; }
 #equipment-analysis-body .intervention-chart .availability-line { stroke:var(--secondary-text,var(--ink)); stroke-width:2; stroke-dasharray:6 5; }
-#equipment-analysis-body .matrix-status-pass { --matrix-point-color:var(--success); }
-#equipment-analysis-body .matrix-status-review { --matrix-point-color:var(--warning); }
-#equipment-analysis-body .matrix-status-fail { --matrix-point-color:var(--danger); }
+/* Vivid traffic-light colors for chart markers and their matching legends.
+   Keep semantic text/badge colors elsewhere in the app unchanged. */
+#equipment-analysis-body .matrix-status-pass { --matrix-point-color:#22c55e; }
+#equipment-analysis-body .matrix-status-review { --matrix-point-color:#f97316; }
+#equipment-analysis-body .matrix-status-fail { --matrix-point-color:#ef4444; }
 #equipment-analysis-body .matrix-status-unknown { --matrix-point-color:var(--muted); }
-#equipment-analysis-body .intervention-chart .equipment-point { fill:var(--matrix-point-color); stroke:var(--surface); stroke-width:1.5; opacity:.72; }
+#equipment-analysis-body .intervention-chart .equipment-point { fill:var(--matrix-point-color); stroke:var(--surface); stroke-width:1.5; opacity:.90; }
 #equipment-analysis-body .intervention-chart .equipment-point[data-current-equipment=true] { opacity:1;stroke-width:2; }
 #equipment-analysis-body .intervention-chart .equipment-point {cursor:default;}
 #equipment-analysis-body .intervention-chart .equipment-point-ring { fill:none; stroke:var(--ink); stroke-width:1.5; pointer-events:none; }
@@ -447,9 +449,6 @@ window.STEquipmentAnalysis=(function(){
       make(unknown,'span').className='intervention-dot is-unplotted';
       make(unknown,'span',statusText('NOT EVALUATED'));
     }
-    const key=make(legend,'li');key.className='intervention-legend-item';
-    make(key,'span').className='intervention-dot is-current';
-    make(key,'span',t('Current equipment','Equipo actual'));
     const equipmentKey=legendColumn(t('Equipment','Equipos'),'machine','intervention-equipment-key');
     // A named entry for every machine also makes overlapping points and
     // machines without plottable reliability data explicit.

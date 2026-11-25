@@ -336,7 +336,7 @@ test('matrix uses two vertical legend lists, passive markers and icons before ev
   assert(columns.every(c=>c.querySelector('.intervention-key-heading > svg.icon')));
   const legend=columns[0].querySelector('ul.intervention-legend');
   const equipment=columns[1].querySelector('ul.intervention-equipment-key');
-  assert.deepEqual([...legend.children].map(el=>el.textContent),['Ai target 95%','PASS','REVIEW','FAIL','NOT EVALUATED','Current equipment']);
+  assert.deepEqual([...legend.children].map(el=>el.textContent),['Ai target 95%','PASS','REVIEW','FAIL','NOT EVALUATED']);
   assert.deepEqual([...equipment.children].map(el=>el.textContent),['Scrambler · FAIL','Palletizer · REVIEW','Missing inputs · NOT EVALUATED']);
   const markers=[...matrix.querySelectorAll('[data-equipment-marker]')];
   assert.equal(markers.length,2);
@@ -353,12 +353,21 @@ test('matrix uses two vertical legend lists, passive markers and icons before ev
    assert.equal(title.firstElementChild.querySelector('path').getAttribute('d'),holder.querySelector('path').getAttribute('d'));
   }
   const style=h.w.document.querySelector('style').textContent;
+  for(const [status,color] of [['pass','#22c55e'],['review','#f97316'],['fail','#ef4444']]){
+   assert(style.includes('.matrix-status-'+status+' { --matrix-point-color:'+color+'; }'));
+   assert(legend.querySelector('.matrix-status-'+status+' .intervention-dot'));
+  }
+  assert(matrix.querySelector('[data-current-equipment="true"].equipment-point').classList.contains('matrix-status-fail'));
+  assert(matrix.querySelector('.equipment-point-ring'));
+  assert(equipment.querySelector('[data-current-equipment="true"] .is-current'));
+  assert.doesNotMatch(legend.textContent,/Current equipment/);
   assert.match(style,/\.intervention-keys\s*\{[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,2fr\)/);
   assert.match(style,/\.intervention-legend,\.intervention-equipment-key\)\s*\{[^}]*display:grid/);
   h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
   matrix=readMatrix();
   assert.deepEqual([...matrix.querySelectorAll('.intervention-key-heading')].map(el=>el.textContent),['Leyenda','Equipos']);
   assert.deepEqual([...matrix.querySelectorAll('[data-zone-heading] .zone-title > span')].map(el=>el.textContent),['Intervención conjunta','Mantenibilidad','Confiabilidad','Conservar / monitorear']);
-  assert.match(matrix.querySelector('.intervention-legend').textContent,/Equipo actual/);
+  assert.doesNotMatch(matrix.querySelector('.intervention-legend').textContent,/Equipo actual|Current equipment/);
+  assert.equal(matrix.querySelector('.intervention-equipment-key .is-current').closest('li').dataset.matrixEquipmentId,'a');
  }finally{h.close();}
 });

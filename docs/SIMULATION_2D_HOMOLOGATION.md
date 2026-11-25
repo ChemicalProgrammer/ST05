@@ -19,7 +19,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Exposición a fallas | Implementado y evaluado (en conjunto con sensores) |
 | Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
 | Descarga y overflow | Implementado y evaluado (ambos motores; diferencias residuales pendientes) |
-| Contadores | Implementado (evaluación de corrida G pendiente) |
+| Contadores | Implementado y evaluado (balances cerrados; anomalías de clasificación pendientes) |
 | Resolución temporal | Pendiente |
 | Validación contra planta | Pendiente |
 
@@ -44,8 +44,9 @@ Datos históricos de la conversación y última evidencia del archivo de caso ex
 | Simulación 2D, posterior a etapas 2 y 3 (`PHYSICAL_FLOW_5`) | 152,376 | 105.82 | −10.56% |
 | Simulación numérica corregida, ronda 1 (ST_CURRENT 0.20.2) | 181,548 | 126.08 | +6.56% |
 | Simulación 2D, posterior a etapa 4 (`PHYSICAL_FLOW_6`) | 207,132 | 143.84 | +21.57% |
-| Simulación numérica, etapa 5 (ST_CURRENT 0.20.3) | Pendiente | Pendiente | Pendiente |
-| Simulación 2D, etapa 5 (`PHYSICAL_FLOW_7`) | Pendiente | Pendiente | Pendiente |
+| Simulación numérica, etapa 5 (ST_CURRENT 0.20.3, FAST) | 181,548 | 126.08 | +6.56% |
+| Simulación 2D, etapa 5 (`PHYSICAL_FLOW_7`) | 207,132 | 143.84 | +21.57% |
+| Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, PRECISE) | Pendiente | Pendiente | Pendiente |
 
 Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores. Tras evaluar ambos motores de la etapa 4, la diferencia 2D − numérica es +25,584 botellas. La numérica histórica de 136,764 se conserva y no se usa como referencia vigente.
 
@@ -207,7 +208,31 @@ Política 2D `PHYSICAL_FLOW_7`; ST_CURRENT 0.20.3 / cache:32. El contrato incorp
 - Fórmulas comunes para tarjetas y nuevo JSON: Availability = tiempo productivo/(tiempo productivo + fallas propias + microparos); Runtime Efficiency = salida nativa / integral de velocidad de diseño durante tiempo productivo (calidad 100% asumida, no hay modelo de rechazos); Operational Efficiency = Availability × Runtime Efficiency; Throughput = Operational Efficiency × velocidad de diseño media ponderada. Productivo incluye Running, Ramp up, Ramp down, Stop response y Discharging. El OEE intrínseco diagnóstico usa la convención histórica numérica de disponibilidad 1 − (fallas + microparos + STOP + emergencia + planificados)/tiempo observado, multiplicada por Runtime Efficiency. No capar las nuevas eficiencias a 100%; investigar valores mayores antes de aceptarlos. `stateAccounting.efficiency` es la base común de tarjetas; se conserva OEE global y campos históricos numéricos para compatibilidad. La salida de máquina incluye lo descargado aunque el conveyor registre overflow; no se modela rechazo de calidad.
 - Se conservan estilos, secciones y diseño de tarjetas; se muestran Discharging y Waiting for Prime por separado y los estados adicionales cuando se observan. La contabilidad de muestras y telemetría es compacta; diagnósticos detallados en métricas finales y snapshots completos. El reporte puede crecer moderadamente; no se altera el formato de exportación ni la compactación existente. Checkpoints antiguos sin el registro no generan contadores exclusivos ficticios. Las nuevas firmas requieren corridas nuevas.
 - Pruebas: 32/32 focalizadas pasaron en arnés JavaScript aislado (7 nuevos casos; 25 regresiones de descarga, sensores, reinicio, MTBF y resumen; ejecución del bundle numérico). Además, tres comprobaciones de paridad exacta de la trayectoria contra etapa 4: numérica sin fallas y con comandos, numérica con fallas y comandos, y 2D de 1,200 ticks con fallas y comandos. Coincidencia fuente/bundles comprobada. No se ejecutó la suite completa Node/npm, pruebas DOM completas ni la corrida G de 24 h.
-- Pendiente: evaluar G con ambos motores actualizados, conciliar diferencias en tiempos/producción y revisar especialmente Scrambler (185,812 vs 159,806.59 de salida/diseño histórico), Filler y Case Packer. No afirmar que las correcciones de contadores eliminan por sí solas las 25,584 botellas de diferencia entre motores. Mantener inputs y referencias históricas.
+- Evaluación G registrada a continuación. Pendiente conciliar diferencias en tiempos/producción y revisar especialmente Scrambler (185,812 vs 159,806.59 de salida/diseño histórico), Filler y Case Packer. No afirmar que las correcciones de contadores eliminan por sí solas las 25,584 botellas de diferencia entre motores. Mantener inputs y referencias históricas.
+
+### Evaluación de etapa 5 — G, revisión 61
+
+Fuente: exportación `G-complete (9).json`, 39,060,961 bytes, SHA-256 `a19a40ed71c62cc714fc6a148a23706e112dca771550919ef2770f29e19cdf6e`. Numérica ST_CURRENT 0.20.3/cache:32 y 2D PHYSICAL_FLOW_7; ambas con ST_EXCLUSIVE_STATES_V1, 86,400 s, semilla 20261124, formato S, 12 botellas/caja, residencia y fallas habilitadas, eventos/calendario deshabilitados. La firma numérica contiene exactamente la lista de equipos guardados. Configuración FAST, tick solicitado 0.25 s, efectivo 0.05 s. Paso 2D nominal 1/120 s. Tres rondas numéricas completas (181,548; 176,040; 178,188 botellas, semillas consecutivas); comparación emparejada solo ronda 1, no promedio ni ronda representativa. La captura 2D independiente está completa; sus opciones no demuestran por sí solas que no se cambiaron durante la corrida.
+
+**Paridad respecto a etapa 4:** producción numérica y 2D idénticas a sus respectivas referencias (181,548 y 207,132 botellas). Balances de material también idénticos: numérica 185,813 = 181,548 + 1,004 + 3,261 (clearout 0); 2D 212,424 = 207,132 + 941 + 4,351. Residual 0. Los nueve elementos de ambos motores tienen nuevo registro exclusivo; residual de salida por estado 0 para todos. Residual máximo absoluto de tiempo informado: 0.000002 s numérica (también en cada ronda), 0.000014 s 2D, compatible con error de punto flotante. La etapa se evalúa sin declarar equivalencia física ni exactitud de denominadores. Los conteos de fallas de ambas corridas coinciden con las referencias de etapa 4.
+
+| Máquina | Tiempo productivo num./2D (min) | Runtime Efficiency num./2D (%) | Blocked num./2D (min) | Discharging num./2D (min) | Salida en Discharging num./2D (unidades nativas) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scrambler | 626.69 / 826.22 | 116.27 / 100.81 | 147.53 / 28.44 | 7.26 / 14.81 | 2,177 / 4,570 |
+| Virtual inlet | 917.51 / 925.43 | 88.44 / 99.97 | 0.03 / 0 | 1.44 / 1.92 | 432 / 0 |
+| Filler | 765.44 / 928.45 | 108.67 / 102.17 | 150.64 / 57.09 | 1.81 / 8.42 | 1,084 / 1,956 |
+| Case Packer | 858.49 / 916.67 | 92.86 / 99.19 | 113.42 / 0 | 150.41 / 161.89 | 0 / 0 |
+| Palletizer | 852.33 / 941.65 | 93.42 / 96.48 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+Hallazgos:
+- Scrambler: salida sobre integral de diseño +26,005.412502 botellas numérica y +1,716.033306 en 2D; Filler +14,606.016669 y +4,440.083311 respectivamente. Velocidades calculadas sobre tiempo productivo: Scrambler 296.50/257.08 bpm frente a 255; Filler 239.08/224.78 frente a 220. No es prueba de velocidad física superior a diseño. Hipótesis a contrastar: créditos de trabajo acumulados en ticks clasificados como Blocked/Starved, asignación del estado al final del tick, cuantización y diferencias en transferencia. No capar al 100%.
+- Virtual inlet 2D contabiliza 491 botellas descargadas residualmente en BACKUP_STOP, no DISCHARGING; total por estado reconcilia, pero `outputOutsideProductiveUnits=491`. El código stepResident puede descargar la última unidad y asignar Back-up stop al mismo tick si se vacía el inventario; distinguir instante de descarga del estado al cierre del tick. Esto requiere una prueba focalizada; no prueba que la máquina produzca mientras está físicamente detenida. No cambiar el flujo para corregir solo la atribución. Se conserva esta anomalía como pendiente transversal de contadores.
+- Case Packer: 15,147/17,276 activaciones de B (num./2D), 15,147/17,245 episodios observados, 81/94 alcanzaron BACKUP_STOP, 15,065/17,150 terminaron sin observar ese estado y un episodio permanece abierto en cada motor. 150.41/161.89 min clasificados Discharging, cero cajas producidas en ese estado y cero descarga residual registrada. Discharging representa una fase de control que puede no completar paquete; no equiparar duración a flujo positivo ni al paro completo. Diferencias de clasificación y exposición todavía pendientes. El sensor B puede activarse con el paso normal de caja (310/541.5 s > 0.5 s), no modificar parámetros durante esta evaluación.
+- Scrambler y Filler concentran diferencias de Blocked de 119.09 y 93.54 min. Comparar a igual resolución y con trazas controladas antes de cambiar la física. La diferencia global sigue en 25,584 botellas, 2D +14.09% vs numérica. No atribuirla únicamente al paso temporal; también difieren las secuencias de fallas, orden de integración y las condiciones de créditos.
+
+### Inicio de etapa 6: protocolo de sensibilidad temporal
+
+La resolución numérica existente con residencia habilitada y tick solicitado 0.25 s permite FAST (1/20 s), BALANCED (1/60 s) y PRECISE (1/120 s). El motor 2D usa 1/120 s. Confirmado en `src/simulation/LineSimulationEngine.js` (`resolveSimulationNumerics`) y política 2D vigente. No confundir Playback speed ni sample interval con integración. Primera comparación: repetir únicamente numérica con PRECISE, duración 1,440 min, semilla 20261124, una ronda, mismos equipos/formatos, fallas habilitadas y eventos/calendario deshabilitados, residencia activa. Mantener numérica FAST y 2D política 7 como referencias; no repetir 2D. Se recomienda guardar exportación independiente. Este paso varía un solo factor: resolución numérica. No cambia código. A igual tick, no se garantiza misma trayectoria ni secuencia aleatoria. Después evaluar BALANCED si es necesario, y pruebas cortas deterministas sin fallas y con eventos controlados. Revisar conservación, producción, eficiencia sin tope, tiempos de estados y discrepancias de créditos, evitando elegir el tick únicamente por cercanía a planta.
 
 ## 5. Pendientes y criterios de revisión
 
@@ -216,7 +241,7 @@ Política 2D `PHYSICAL_FLOW_7`; ST_CURRENT 0.20.3 / cache:32. El contrato incorp
 | Exposición a fallas | Evaluación conjunta registrada; queda pendiente aislar etapa 2 y conciliar clasificación de exposición y secuencias aleatorias. |
 | Sensores | Evaluación conjunta registrada; revisar las diferencias de disparos, especialmente PAC-PAL, sin cambiar los inputs durante la homologación. |
 | Descarga y overflow | Evaluación de ambos motores registrada y balances cerrados; revisar equivalencia de eventos de descarga/parada y máximo visual como diagnóstico transversal. |
-| Contadores | Evaluar ST_EXCLUSIVE_STATES_V1 en ambas corridas G; conciliar estados, salida por estado, episodios Back-up, exposición/carga MTBF y capacidad de diseño sin recortar discrepancias. |
+| Contadores | Evaluación G registrada; balances cerrados. Pendiente conciliar sobreproducción aparente, atribución de última descarga a Back-up stop y duración de fases sin salida. |
 | Resolución temporal | Medir sensibilidad al paso de integración y a los límites de tick; distinguir velocidad de reproducción de resolución del modelo. |
 | Validación contra planta | Comparar resultados con datos reales, revisar por equipo y por turno si existen datos, y evaluar variación entre réplicas. |
 
@@ -224,11 +249,11 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 
 ## 6. Punto de continuación
 
-1. Conservar referencias de etapa 4: numérica 0.20.2 (181,548 botellas, ronda 1) y 2D política 6 (207,132). No sobrescribir las exportaciones históricas.
-2. Actualizar Apps Script a ST_CURRENT 0.20.3 y PHYSICAL_FLOW_7. Ejecutar ambas simulaciones G desde cero (1,440 min, semilla 20261124, formato S, residencia y fallas habilitadas, eventos/calendario deshabilitados, FAST). Una ronda numérica basta para la comparación emparejada.
-3. Exportar ambos resultados en el mismo JSON. Comparar producción contra etapa 4, validar residual de tiempo/salida por equipo y analizar discrepancias de estados y eficiencia sin ajustar inputs. Las pruebas controladas conservan la trayectoria; no se espera cambio de producción por contabilidad, pero verificar G.
-4. Después de evaluar etapa 5, continuar con resolución temporal: comparación 2D/numérica a igual tick y análisis de sensibilidad. No ajustar parámetros para forzar coincidencia.
-5. Para aislar etapas 2 y 3 falta política 4; validación de planta sigue pendiente.
+1. Conservar referencias etapa 5: numérica 0.20.3 FAST (181,548 botellas, ronda 1) y 2D PHYSICAL_FLOW_7 (207,132 botellas). No sobrescribir exportaciones.
+2. Ejecutar únicamente una nueva numérica ST_CURRENT 0.20.3, PRECISE (paso efectivo 1/120 s), G, 1,440 min, semilla 20261124, una ronda, formato S, residencia/fallas habilitadas, eventos/calendario deshabilitados. No se requiere cambio de código ni repetición 2D.
+3. Exportar resultados y contrastar con FAST y 2D. Verificar si cambian Blocked, eficiencia sobre diseño, salida por estado, exposición, paros efectivos y balance. Si procede, completar BALANCED y pruebas deterministas cortas con fallas deshabilitadas.
+4. Resolver los defectos físicos o de clasificación que se demuestren y documentar sus versiones, sin ajustar entradas para forzar coincidencia.
+5. Validación contra planta y evaluación aislada de etapa 2 siguen pendientes.
 
 La evaluación conjunta no equivale a homologación completa ni validación de planta.
 

@@ -321,3 +321,44 @@ test('line matrix applies the same custom screening policy and active failure ca
   assert.match(h.body.querySelector('[data-equipment-marker][data-equipment-id="b"] title').textContent,/NO CUMPLE/);
  }finally{h.close();}
 });
+
+test('matrix uses two vertical legend lists, passive markers and icons before every quadrant title',()=>{
+ const h=harness();try{
+  const machines=[{id:'a',name:'Scrambler',type:'CUSTOM',noiseProfile:{reliability:{mtbfMinutes:37.6,mttrMinutes:17.26}}},
+    {id:'b',name:'Palletizer',type:'PALLETIZER',noiseProfile:{reliability:{mtbfMinutes:38.2,mttrMinutes:1.2}}},
+    {id:'c',name:'Missing inputs',type:'CUSTOM'}];
+  h.w.STEquipmentAnalysis.open({equipment:machines},'a',{audits:[]});
+  const readMatrix=()=>h.body.querySelector('[data-analysis-group="matrix"]');
+  let matrix=readMatrix(),columns=[...matrix.querySelectorAll('.intervention-keys > .intervention-key-column')];
+  assert.equal(columns.length,2);
+  assert.equal(columns[0].querySelector('.intervention-key-heading').textContent,'Legend');
+  assert.equal(columns[1].querySelector('.intervention-key-heading').textContent,'Equipment');
+  assert(columns.every(c=>c.querySelector('.intervention-key-heading > svg.icon')));
+  const legend=columns[0].querySelector('ul.intervention-legend');
+  const equipment=columns[1].querySelector('ul.intervention-equipment-key');
+  assert.deepEqual([...legend.children].map(el=>el.textContent),['Ai target 95%','PASS','REVIEW','FAIL','NOT EVALUATED','Current equipment']);
+  assert.deepEqual([...equipment.children].map(el=>el.textContent),['Scrambler · FAIL','Palletizer · REVIEW','Missing inputs · NOT EVALUATED']);
+  const markers=[...matrix.querySelectorAll('[data-equipment-marker]')];
+  assert.equal(markers.length,2);
+  assert(markers.every(el=>!el.hasAttribute('tabindex')&&!el.hasAttribute('onclick')&&el.querySelector('title')));
+  assert([...equipment.children].every(el=>!el.hasAttribute('tabindex')&&el.title));
+  assert.equal(matrix.querySelector('[data-equipment-marker][data-current-equipment="true"]').dataset.equipmentId,'a');
+  const zones=[...matrix.querySelectorAll('[data-zone-heading]')];
+  assert.deepEqual(zones.map(el=>el.getAttribute('data-zone-heading')),['JOINT','MTTR','MTBF','KEEP']);
+  assert.deepEqual(zones.map(el=>el.querySelector('.zone-title > span').textContent),['Joint intervention','Maintainability','Reliability','Keep / monitor']);
+  for(const [i,icon] of ['warning','settings','pulse','check'].entries()){
+   const holder=h.w.document.createElement('div');holder.innerHTML=h.w.STIcons.svg(icon);
+   const title=zones[i].querySelector('.zone-title');
+   assert.equal(title.firstElementChild.localName,'svg');
+   assert.equal(title.firstElementChild.querySelector('path').getAttribute('d'),holder.querySelector('path').getAttribute('d'));
+  }
+  const style=h.w.document.querySelector('style').textContent;
+  assert.match(style,/\.intervention-keys\s*\{[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,2fr\)/);
+  assert.match(style,/\.intervention-legend,\.intervention-equipment-key\)\s*\{[^}]*display:grid/);
+  h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+  matrix=readMatrix();
+  assert.deepEqual([...matrix.querySelectorAll('.intervention-key-heading')].map(el=>el.textContent),['Leyenda','Equipos']);
+  assert.deepEqual([...matrix.querySelectorAll('[data-zone-heading] .zone-title > span')].map(el=>el.textContent),['Intervención conjunta','Mantenibilidad','Confiabilidad','Conservar / monitorear']);
+  assert.match(matrix.querySelector('.intervention-legend').textContent,/Equipo actual/);
+ }finally{h.close();}
+});

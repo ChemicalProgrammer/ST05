@@ -50,7 +50,15 @@
   --matrix-keep-fill:color-mix(in srgb,#35b578 29%,var(--surface));
 }
 #equipment-analysis-body .intervention-chart text { fill:currentColor; }
-#equipment-analysis-body .intervention-chart .zone-title { font-size:14px; font-weight:600; }
+#equipment-analysis-body .intervention-chart .zone-title {
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  width:100%;height:100%;font-size:14px;font-weight:var(--weight-semibold);line-height:1.15;
+  color:var(--ink);white-space:nowrap;pointer-events:none;
+}
+#equipment-analysis-body .intervention-chart .zone-title .icon {
+  width:16px;height:16px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
+}
 #equipment-analysis-body .intervention-chart .zone-detail { font-size:11px; }
 #equipment-analysis-body .intervention-chart .axis-text { font-size:11px; }
 #equipment-analysis-body .intervention-chart .axis-title { font-size:13px; font-weight:600; }
@@ -63,19 +71,39 @@
 #equipment-analysis-body .matrix-status-unknown { --matrix-point-color:var(--muted); }
 #equipment-analysis-body .intervention-chart .equipment-point { fill:var(--matrix-point-color); stroke:var(--surface); stroke-width:1.5; opacity:.72; }
 #equipment-analysis-body .intervention-chart .equipment-point[data-current-equipment=true] { opacity:1;stroke-width:2; }
-#equipment-analysis-body .intervention-chart .equipment-point:is(:hover,:focus-visible) {opacity:1;stroke:var(--ink);stroke-width:2;}
+#equipment-analysis-body .intervention-chart .equipment-point {cursor:default;}
 #equipment-analysis-body .intervention-chart .equipment-point-ring { fill:none; stroke:var(--ink); stroke-width:1.5; pointer-events:none; }
 #equipment-analysis-body .intervention-chart .equipment-point-label {
   font-size:12px;font-weight:var(--weight-semibold);stroke:var(--surface);stroke-width:3;
   paint-order:stroke fill;stroke-linejoin:round;pointer-events:none;
 }
-#equipment-analysis-body .intervention-legend { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-4); font-size:var(--font-secondary); }
-#equipment-analysis-body .intervention-legend-item { display:inline-flex; align-items:center; gap:var(--space-2); }
+#equipment-analysis-body .intervention-keys {
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);
+  align-items:start;gap:var(--space-4);min-width:0;
+}
+#equipment-analysis-body .intervention-key-column {display:grid;align-content:start;gap:var(--space-2);min-width:0;}
+#equipment-analysis-body .intervention-key-heading {
+  display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-secondary);
+  font-weight:var(--weight-semibold);color:var(--secondary-text,var(--ink));
+}
+#equipment-analysis-body .intervention-key-heading .icon {width:var(--font-body);height:var(--font-body);}
+#equipment-analysis-body :is(.intervention-legend,.intervention-equipment-key) {
+  display:grid;align-content:start;gap:var(--space-1);list-style:none;
+  margin:0;padding:0;min-width:0;font-size:var(--font-secondary);
+}
+#equipment-analysis-body .intervention-legend-item {
+  display:grid;grid-template-columns:24px minmax(0,1fr);align-items:start;
+  gap:var(--space-2);min-width:0;overflow-wrap:anywhere;line-height:1.5;
+}
+#equipment-analysis-body .intervention-legend-item > :first-child {justify-self:center;}
+#equipment-analysis-body .intervention-legend-item .intervention-dot {margin-block-start:.28em;}
+#equipment-analysis-body .intervention-legend-item .intervention-line {margin-block-start:.65em;}
+@media (max-width:420px) {
+  #equipment-analysis-body .intervention-keys {grid-template-columns:minmax(0,1fr);}
+}
 #equipment-analysis-body .intervention-dot { display:inline-block; width:10px; height:10px; background:var(--matrix-point-color,var(--muted)); border:1px solid var(--ink); border-radius:50%; flex:none; }
 #equipment-analysis-body .intervention-dot.is-current {width:12px;height:12px;outline:1px solid var(--ink);outline-offset:2px;}
 #equipment-analysis-body .intervention-dot.is-unplotted {background:transparent;border:1px dashed var(--muted);}
-#equipment-analysis-body .intervention-equipment-key {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-4);font-size:var(--font-secondary);min-width:0;}
-#equipment-analysis-body .intervention-equipment-key .intervention-legend-item {min-width:0;max-width:100%;overflow-wrap:anywhere;}
 #equipment-analysis-body .intervention-equipment-key [data-current-equipment=true] {font-weight:var(--weight-semibold);}
 #equipment-analysis-body .intervention-line { display:inline-block; width:24px; border-top:2px dashed var(--secondary-text,var(--ink)); flex:none; }
 #equipment-analysis-body .intervention-current {
@@ -340,10 +368,10 @@ window.STEquipmentAnalysis=(function(){
     const svg=svgNode(scroll,'svg',{class:'intervention-chart',viewBox:'0 0 735 374',role:'img','aria-label':t('Line equipment intervention matrix: MTBF versus MTTR, logarithmic axes','Matriz de intervención de equipos de línea: MTBF frente a MTTR, ejes logarítmicos')});
     svgNode(svg,'title',{},t('Equipment reliability and intervention matrix','Matriz de confiabilidad e intervención del equipo'));
     const zones=[
-      {key:'JOINT',x:left,y:top,w:midX-left,h:midY-top,color:'var(--matrix-joint-fill)',title:t('Joint intervention','Intervención conjunta'),detail:[t('Frequent and long failures','Fallas frecuentes y prolongadas'),t('Review rebuild / replace if Ai is low','Evaluar reconstrucción / reemplazo si Ai es baja')]},
-      {key:'MTTR',x:midX,y:top,w:right-midX,h:midY-top,color:'var(--matrix-mttr-fill)',title:t('Maintainability','Mantenibilidad'),detail:[t('Long repairs','Reparaciones prolongadas'),t('Reduce MTTR','Reducir MTTR')]},
-      {key:'MTBF',x:left,y:midY,w:midX-left,h:bottom-midY,color:'var(--matrix-mtbf-fill)',title:t('Reliability','Confiabilidad'),detail:[t('Frequent failures','Fallas frecuentes'),t('Increase MTBF','Aumentar MTBF')]},
-      {key:'KEEP',x:midX,y:midY,w:right-midX,h:bottom-midY,color:'var(--matrix-keep-fill)',title:t('Keep / monitor','Conservar / monitorear'),detail:[t('Infrequent and short failures','Fallas poco frecuentes y cortas'),t('If availability target is met','Si cumple la meta de disponibilidad')]}
+      {key:'JOINT',icon:'warning',x:left,y:top,w:midX-left,h:midY-top,color:'var(--matrix-joint-fill)',title:t('Joint intervention','Intervención conjunta'),detail:[t('Frequent and long failures','Fallas frecuentes y prolongadas'),t('Review rebuild / replace if Ai is low','Evaluar reconstrucción / reemplazo si Ai es baja')]},
+      {key:'MTTR',icon:'settings',x:midX,y:top,w:right-midX,h:midY-top,color:'var(--matrix-mttr-fill)',title:t('Maintainability','Mantenibilidad'),detail:[t('Long repairs','Reparaciones prolongadas'),t('Reduce MTTR','Reducir MTTR')]},
+      {key:'MTBF',icon:'pulse',x:left,y:midY,w:midX-left,h:bottom-midY,color:'var(--matrix-mtbf-fill)',title:t('Reliability','Confiabilidad'),detail:[t('Frequent failures','Fallas frecuentes'),t('Increase MTBF','Aumentar MTBF')]},
+      {key:'KEEP',icon:'check',x:midX,y:midY,w:right-midX,h:bottom-midY,color:'var(--matrix-keep-fill)',title:t('Keep / monitor','Conservar / monitorear'),detail:[t('Infrequent and short failures','Fallas poco frecuentes y cortas'),t('If availability target is met','Si cumple la meta de disponibilidad')]}
     ];
     for(const z of zones)svgNode(svg,'rect',{x:z.x,y:z.y,width:z.w,height:z.h,fill:z.color,'data-intervention-zone':z.key});
     const tickText=v=>v>=1e6||v<.01?v.toExponential(1):fmt(v,Math.min(6,Math.max(2,Math.ceil(-Math.log10(v))+1)));
@@ -362,7 +390,12 @@ window.STEquipmentAnalysis=(function(){
     if(g.target)svgNode(svg,'line',{...g.target,class:'availability-line','data-availability-target':r.thresholds.availabilityTarget});
     for(const z of zones){
       const x=z.x+z.w/2,y=z.y+34;
-      svgNode(svg,'text',{x,y,'text-anchor':'middle',class:'zone-title'},z.title);
+      // An HTML flex heading inside the SVG keeps the shared icon and its
+      // translated title centered as one unit, without measuring hidden text.
+      const heading=svgNode(svg,'foreignObject',{x:z.x+8,y:y-17,width:z.w-16,height:24,'data-zone-heading':z.key,'pointer-events':'none'});
+      const title=make(heading,'div');title.className='zone-title';
+      window.STIcons.button(title,z.icon);
+      make(title,'span',z.title);
       z.detail.forEach((label,i)=>svgNode(svg,'text',{x,y:y+20+i*16,'text-anchor':'middle',class:'zone-detail'},label));
     }
     // Draw peers first so the selected marker is never hidden underneath them.
@@ -375,7 +408,7 @@ window.STEquipmentAnalysis=(function(){
       const dot=svgNode(layer,'circle',{cx:x,cy:y,r:item.isCurrent?7:4.8,
         class:'equipment-point '+matrixStatusClass(p.status),'data-equipment-marker':'true','data-equipment-id':item.id,
         'data-current-equipment':String(item.isCurrent),'data-evaluation':p.status,'data-mtbf':p.mtbfMinutes,'data-mttr':p.mttrMinutes,
-        'data-availability':p.availability,tabindex:0,'aria-label':tip});
+        'data-availability':p.availability,'aria-label':tip});
       svgNode(dot,'title',{},tip);
     }
     if(g.point){
@@ -392,27 +425,40 @@ window.STEquipmentAnalysis=(function(){
     }
     svgNode(svg,'text',{x:(left+right)/2,y:bottom+43,'text-anchor':'middle',class:'axis-title'},'MTBF (min) →');
     svgNode(svg,'text',{x:18,y:midY,transform:'rotate(-90 18 '+midY+')','text-anchor':'middle',class:'axis-title'},'MTTR (min) →');
-    const legend=make(host,'div');legend.className='intervention-legend';
-    const target=make(legend,'span');target.className='intervention-legend-item';
+    const keys=make(host,'div');keys.className='intervention-keys';
+    function legendColumn(label,icon,listClass){
+      const column=make(keys,'div');column.className='intervention-key-column';
+      const heading=make(column,'div');heading.className='intervention-key-heading';
+      window.STIcons.button(heading,icon);make(heading,'span',label);
+      const list=make(column,'ul');list.className=listClass;list.setAttribute('aria-label',label);
+      return list;
+    }
+    const legend=legendColumn(t('Legend','Leyenda'),'list','intervention-legend');
+    const target=make(legend,'li');target.className='intervention-legend-item';
     make(target,'span').className='intervention-line';
     make(target,'span',t('Ai target','Meta de Ai')+' '+fmt(pct(r.thresholds.availabilityTarget))+'%');
     for(const status of ['PASS','REVIEW','FAIL']){
-      const key=make(legend,'span');key.className='intervention-legend-item '+matrixStatusClass(status);
+      const key=make(legend,'li');key.className='intervention-legend-item '+matrixStatusClass(status);
       make(key,'span').className='intervention-dot';
       make(key,'span',statusText(status));
     }
-    const key=make(legend,'span');key.className='intervention-legend-item';
+    if(plotted.length<dataset.length){
+      const unknown=make(legend,'li');unknown.className='intervention-legend-item matrix-status-unknown';
+      make(unknown,'span').className='intervention-dot is-unplotted';
+      make(unknown,'span',statusText('NOT EVALUATED'));
+    }
+    const key=make(legend,'li');key.className='intervention-legend-item';
     make(key,'span').className='intervention-dot is-current';
-    make(key,'span',t('Selected equipment','Equipo seleccionado'));
-    const equipmentKey=make(host,'div');equipmentKey.className='intervention-equipment-key';
+    make(key,'span',t('Current equipment','Equipo actual'));
+    const equipmentKey=legendColumn(t('Equipment','Equipos'),'machine','intervention-equipment-key');
     // A named entry for every machine also makes overlapping points and
     // machines without plottable reliability data explicit.
     for(const e of dataset){
       const valid=validMatrixPoint(e.report);
-      const item=make(equipmentKey,'span');item.className='intervention-legend-item '+matrixStatusClass(e.report.status);
+      const item=make(equipmentKey,'li');item.className='intervention-legend-item '+matrixStatusClass(e.report.status);
       item.dataset.matrixEquipmentId=e.id;item.dataset.currentEquipment=String(e.isCurrent);
-      item.dataset.evaluation=e.report.status;item.title=matrixTooltip(e);item.tabIndex=0;
-      item.setAttribute('aria-label',item.title+(e.isCurrent?' · '+t('Selected equipment','Equipo seleccionado'):''));
+      item.dataset.evaluation=e.report.status;item.title=matrixTooltip(e);
+      item.setAttribute('aria-label',item.title+(e.isCurrent?' · '+t('Current equipment','Equipo actual'):''));
       make(item,'span').className='intervention-dot'+(e.isCurrent?' is-current':'')+(!valid?' is-unplotted':'');
       make(item,'span',e.name+' · '+statusText(e.report.status));
     }

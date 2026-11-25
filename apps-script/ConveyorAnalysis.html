@@ -680,7 +680,6 @@ window.STConveyorAnalysis=(function(){
     {key:'infeed',title:['Recommended Downstream Infeed Speed','Velocidad recomendada de entrada'],description:['Minimum recommended belt speed from downstream input rate, infeed pitch and overspeed margin.','Velocidad mínima recomendada a partir del flujo de entrada siguiente, pitch y margen de sobrevelocidad.']}
   ];
   const commonSection={key:'geometry',title:['Common Geometry','Geometría común'],description:['Installed geometry, required overflow, selected sensor positions and recovery margin across applicable formats.','Geometría instalada, overflow requerido, posiciones de sensores seleccionadas y margen de recuperación entre formatos.']};
-  const notesSection={key:'notes',title:['Calculation notes','Notas de cálculo'],description:['Input definitions and engineering assumptions.','Definiciones de entradas y supuestos de ingeniería.']};
   const localized=(pair,language)=>pair[language==='es'?1:0];
   function notApplicableReason(worksheet,key,value,profile){
     if(Number.isFinite(value))return null;
@@ -717,16 +716,15 @@ window.STConveyorAnalysis=(function(){
       }));
       return {...spec,progress:summarizeSectionValues(cells,noApplicable?'NOT_APPLICABLE':'MISSING')};
     });
-    return [{...commonSection,progress:summarizeSectionValues(geometryCells)},...sections,
-      {...notesSection,progress:{status:'INFORMATION',total:0,resolved:0,partial:0,unresolved:0,notApplicable:0,pending:[]}}];
+    return [{...commonSection,progress:summarizeSectionValues(geometryCells)},...sections];
   }
   function createSectionStatus(progress,language){
     const es=language==='es',tr=(a,b)=>es?b:a;
     const labels={
       COMPLETE:tr('Complete','Completo'),PENDING:tr('Pending','Pendiente'),MISSING:tr('Missing','Sin datos'),
-      NOT_APPLICABLE:tr('Not applicable','No aplica'),INFORMATION:tr('Information','Información')
+      NOT_APPLICABLE:tr('Not applicable','No aplica')
     };
-    const states={COMPLETE:['ok','check','✓'],PENDING:['warning','warning','!'],MISSING:['error','x','×'],NOT_APPLICABLE:['info','info','i'],INFORMATION:['info','info','i']};
+    const states={COMPLETE:['ok','check','✓'],PENDING:['warning','warning','!'],MISSING:['error','x','×'],NOT_APPLICABLE:['info','info','i']};
     const [tone,icon,fallback]=states[progress.status];
     const host=document.createElement('span');host.className='analysis-section-status';
     host.dataset.completeness=progress.status;
@@ -747,7 +745,7 @@ window.STConveyorAnalysis=(function(){
       progress.pending.slice(0,limit).forEach(item=>message.push('• '+(item.format?item.format+' · ':'')+item.parameter+(item.partial?tr(' (partial)',' (parcial)'):'')));
       if(progress.pending.length>limit)message.push(tr('Additional unresolved values: ','Otros valores pendientes: ')+(progress.pending.length-limit));
     }
-    if(progress.status!=='INFORMATION')message.push(tr('Calculation completeness only; separate engineering PASS/FAIL is unchanged.','Solo indica datos calculados; la evaluación técnica PASS/FAIL es independiente.'));
+    message.push(tr('Calculation completeness only; separate engineering PASS/FAIL is unchanged.','Solo indica datos calculados; la evaluación técnica PASS/FAIL es independiente.'));
     host.title=message.join('\n');host.setAttribute('aria-label',host.title);host.append(marker,label);
     return host;
   }
@@ -788,7 +786,10 @@ window.STConveyorAnalysis=(function(){
         tools.push(badge);
       }
       tools.push(createSectionStatus(spec.progress,language));
-      const group=window.STSubsection.create({title:localized(spec.title,language),description:localized(spec.description,language),variant:'B',native:true,open:true,tools});
+      const geometryModeLabels={AUTOMATIC:['Automatic design','Diseño automático'],MANUAL_LBA:['Manual LBA','LBA manual'],MANUAL_BACKUP:['Manual Back-up','Back-up manual']};
+      const mode=geometryModeLabels[worksheet.geometry.geometryMode];
+      const description=localized(spec.description,language)+(spec.key==='geometry'&&mode?' · '+localized(mode,language):'');
+      const group=window.STSubsection.create({title:localized(spec.title,language),description,variant:'B',native:true,open:true,tools});
       group.section.dataset.analysisGroup=spec.key;
       group.section.dataset.completeness=spec.progress.status;
       body.append(group.section);
@@ -887,13 +888,6 @@ window.STConveyorAnalysis=(function(){
         make(element,'td',unit).className='analysis-table-unit';
       }
     }
-    const noteSpec=sections[sections.length-1];
-    const notes=window.STSubsection.create({title:localized(noteSpec.title,language),description:localized(noteSpec.description,language),variant:'B',native:true,open:true,tools:[createSectionStatus(noteSpec.progress,language)]});
-    notes.section.dataset.analysisGroup=noteSpec.key;notes.section.dataset.completeness=noteSpec.progress.status;
-    body.append(notes.section);
-    make(notes.body,'p','Time to First Package After Restart is configured on the conveyor card. Positions are measured from the conveyor entry.').className='chart-note';
-    make(notes.body,'p','Upstream Discharge Velocity (AF) is an optional measured value. Otherwise it is calculated from nominal machine output and discharge pitch. Overflow requires conveyor population below 100%.').className='chart-note';
-    make(notes.body,'p','Selected geometry: ' + ({AUTOMATIC:'Automatic design',MANUAL_LBA:'Manual LBA',MANUAL_BACKUP:'Manual Back-up'}[worksheet.geometry.geometryMode]||worksheet.geometry.geometryMode) + '. LBA = Prime position − Back-up position. Required overflow is evaluated independently from the selected reserve. The engine operating positions are also shown separately. L (min needed) is the length required for zero recovery margin at the selected reserve.').className='chart-note';
     body.scrollTop=0;
     dialog.showModal();
   }

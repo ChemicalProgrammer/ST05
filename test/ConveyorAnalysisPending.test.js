@@ -225,7 +225,8 @@ test('subsection completeness is independent of the engineering verdict and visi
     assert.equal(specs.find(s=>s.key==='geometry').progress.status,'COMPLETE');
     h.api.open('belt',ctx);
     const groups=[...h.body.querySelectorAll('details[data-analysis-group]')];
-    assert.equal(groups.length,11);
+    assert.equal(groups.length,10);
+    assert.equal(h.body.querySelector('[data-analysis-group="notes"]'),null);
     assert(groups.every(group=>group.querySelector('summary .analysis-section-status .sheet-import-row-status svg')));
     assert.equal(groups[0].querySelector('.conveyor-analysis-verdict').textContent,'FAIL');
     assert.equal(groups[0].dataset.completeness,'COMPLETE');
@@ -240,6 +241,8 @@ test('subsection completeness is independent of the engineering verdict and visi
     assert.equal(h.body.querySelector('.worksheet-format-name'),null);
     const report=h.api.buildEvaluationExport(ctx);
     assert.equal(report.evaluations[0].sectionProgress.find(s=>s.section==='geometry').status,'COMPLETE');
+    assert.equal(report.evaluations[0].sectionProgress.length,10);
+    assert(!report.evaluations[0].sectionProgress.some(s=>s.section==='notes'));
   }finally{h.close();}
 });
 test('pending and missing sections identify their unresolved parameters and formats',()=>{
@@ -259,7 +262,7 @@ test('pending and missing sections identify their unresolved parameters and form
     assert.equal(h.body.querySelector('[data-analysis-group="package"]').dataset.completeness,'MISSING');
     assert.equal(h.body.querySelector('[data-analysis-group="package"] .sheet-import-row-status').dataset.status,'error');
     h.api.open('belt',{...context([full]),designProfiles:[]});
-    assert.equal(h.body.querySelectorAll('details[data-analysis-group]').length,11);
+    assert.equal(h.body.querySelectorAll('details[data-analysis-group]').length,10);
     assert.equal(h.body.querySelector('[data-analysis-group="package"]').dataset.completeness,'MISSING');
     const excluded=fixture('Excluded');excluded.models[1].processData.productApplies=false;
     h.api.open('belt',context([excluded]));

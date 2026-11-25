@@ -191,6 +191,9 @@
       STEquipmentInspector.decorate?.(card);card._helpReady=true;
 
       STEquipmentDrag.bind(card,index,moveEquipment);
+      card._moveTableRow=function(target,group){
+        moveEquipment(Number(card.dataset.index),Number(target.dataset.index),undefined,group);
+      };
       var remove=equipmentField(card, '.remove-equipment');remove.innerHTML=STIcons.svg('trash');remove.classList.add('icon-button');remove.title=__ST_TEXT__('client.delete_equipment');remove.setAttribute('aria-label',__ST_TEXT__('client.delete_equipment'));
       equipmentField(card, '.remove-equipment').addEventListener('click', function() { removeEquipment(Number(card.dataset.index)); });
       card.tabIndex=0;
@@ -698,7 +701,7 @@ function numericInputValue(input) {
         card.dataset.index=String(index);
       });
     }
-    function moveEquipment(index, targetIndex, before){
+    function moveEquipment(index, targetIndex, before, tableGroup){
       if(!state.activeCase||!STEquipmentFilter.canReorder()||index===targetIndex)return;
       var line=state.activeCase.equipment,cards=equipmentDraftCards();
       if(!cards||!Number.isInteger(index)||!Number.isInteger(targetIndex)||!line[index]||!line[targetIndex])return;
@@ -710,7 +713,17 @@ function numericInputValue(input) {
         return {model:model,card:card,conveyor:type==='CONVEYOR'};
       });
       var mode=STEquipmentFilter.reorderMode(),ordered;
-      if(mode==='equipment'||mode==='conveyors'){
+      if(tableGroup&&(!['equipment','conveyors'].includes(tableGroup)||mode!=='all'&&mode!==tableGroup))return;
+      if(tableGroup&&mode==='all'){
+        // The combined table has one row set per kind. Reorder only that
+        // kind in its existing physical slots; never move a machine across
+        // a conveyor slot or silently repair a partially imported topology.
+        var isBelt=tableGroup==='conveyors',sameKind=entries.filter(entry=>entry.conveyor===isBelt);
+        var sourceIndex=sameKind.indexOf(entries[index]),destinationIndex=sameKind.indexOf(entries[targetIndex]);
+        if(sourceIndex<0||destinationIndex<0)return;
+        sameKind.splice(destinationIndex,0,sameKind.splice(sourceIndex,1)[0]);
+        var cursor=0;ordered=entries.map(entry=>entry.conveyor===isBelt?sameKind[cursor++]:entry);
+      }else if(mode==='equipment'||mode==='conveyors'){
         // In a single-group view only that group's relative order changes.
         // Rebuild the physical line as M1, C1, M2, C2, ... starting with a
         // machine. Retain any unmatched trailing items; never invent or drop

@@ -39,6 +39,7 @@ function fixture(){
     const c=node('article','equipment-card');c.dataset.equipmentId=id;c.dataset.index=String(index);
     const drag=node('button','equipment-drag'),remove=node('button','remove-equipment');
     drag.addEventListener('keydown',()=>calls.reorder++);remove.addEventListener('click',()=>calls.delete++);
+    c._moveTableRow=(target,group)=>{calls.reorder++;calls.lastMove=[c.dataset.equipmentId,target.dataset.equipmentId,group];};
     const verdict=node('button','equipment-analysis-pill','PASS');verdict.addEventListener('click',()=>calls.evaluation++);
     const fields=node('div','equipment-fields');c.append(drag,remove,verdict,fields);c._fields=fields;
     c._equipmentReliabilityVerdict=type==='CONVEYOR'?null:verdict;c._editorConveyorVerdict=type==='CONVEYOR'?verdict:null;
@@ -105,7 +106,8 @@ test('Advance tables share one header per input, keep original cards and edit th
    const other=h.cell('Capper','critical').querySelector('input');other.checked=true;emit(h,other,'change');
    assert.equal(next.checked,false);assert.equal(h.c._fields.querySelector('.equipment-pacemaker').checked,true);
    h.row('Filler').querySelector('.equipment-table-verdict').click();assert.equal(h.calls.evaluation,1);
-   h.row('Filler').querySelector('[aria-label="Move down"]').click();assert.equal(h.calls.reorder,1);
+   h.row('Filler').querySelector('.equipment-table-symbol').dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+   assert.equal(h.calls.reorder,1);assert.deepEqual(h.calls.lastMove,['Filler','Capper','equipment']);
    h.cardsButton.click();assert.equal(h.host.hidden,true);assert.equal(h.list.querySelectorAll('.equipment-card').length,3);
    assert.equal(h.a._fields.querySelector('.equipment-rate'),original);assert.equal(original.value,'525');
    assert.equal(h.calls.dirty,3,'view buttons do not dirty the case');
@@ -153,10 +155,63 @@ test('table preferences are separate by section, respect filters, Basic, languag
    h.state.bootstrap.uiMode='ADVANCE';h.sync('equipment',true);assert.equal(h.host.hidden,false);
    h.d.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
    assert.equal(h.tableButton.title,'Vista de tablas');
-   assert.equal(h.host.querySelector('th[data-column="rate"]').textContent,'Velocidad (bpm / cajas/min)');
+   assert.equal(h.host.querySelector('th[data-column="rate"]').textContent,'Velocidad');
+   assert.equal(h.host.querySelector('th[data-unit-for="rate"]').textContent,'bpm / cajas/min');
    h.a.remove();const replacement=h.card('Filler','FILLER',0);h.w.STEquipmentTable.refresh();
    const proxy=h.cell('Filler','rate').querySelector('input');proxy.value='700';emit(h,proxy);
    assert.equal(replacement._fields.querySelector('.equipment-rate').value,'700');
    assert.equal(original.value,'480','old draft control is not edited');
+ }finally{h.close();}
+});
+
+test('two header rows, one evaluation column, deletion last, and resizable columns retain minimums',()=>{
+ const h=fixture();
+ try{
+   h.tableButton.click();
+   const table=h.row('Filler').closest('table'),head=table.querySelector('thead');
+   assert.equal(head.querySelectorAll('tr').length,2);
+   assert.equal(head.querySelectorAll('th[data-column="evaluation"]').length,1);
+   assert.equal(head.querySelector('th[data-column="rate"]').textContent,'Speed');
+   assert.equal(head.querySelector('th[data-unit-for="rate"]').textContent,'bpm / cases/min');
+   assert.equal(h.row('Filler').lastElementChild.dataset.column,'delete');
+   h.row('Filler').lastElementChild.querySelector('button').click();assert.equal(h.calls.delete,1);
+   const handle=head.querySelector('th[data-column="rate"] .equipment-table-resize');
+   const width=()=>Number(handle.getAttribute('aria-valuenow')),minimum=Number(handle.getAttribute('aria-valuemin'));
+   const initial=width();assert(initial>=minimum&&minimum>=68);
+   const press=key=>handle.dispatchEvent(new h.w.KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
+   press('ArrowRight');assert.equal(width(),initial+8);
+   for(let i=0;i<100;i++)press('ArrowLeft');assert.equal(width(),minimum);
+   press('Home');assert.equal(width(),initial);
+   // Pointer resize uses the exact same clamp and double-click resets.
+   const send=(target,type,x)=>{
+     const ev=new h.w.MouseEvent(type,{button:0,clientX:x,clientY:80,bubbles:true,cancelable:true});
+     Object.defineProperty(ev,'pointerId',{value:2});target.dispatchEvent(ev);
+   };
+   send(handle,'pointerdown',100);send(h.w,'pointermove',140);send(h.w,'pointerup',140);assert.equal(width(),initial+40);
+   handle.dispatchEvent(new h.w.MouseEvent('dblclick',{bubbles:true,cancelable:true}));assert.equal(width(),initial);
+   press('ArrowRight');const custom=width();h.cardsButton.click();h.tableButton.click();
+   assert.equal(Number(h.row('Filler').closest('table').querySelector('th[data-column="rate"] .equipment-table-resize').getAttribute('aria-valuenow')),custom);
+ }finally{h.close();}
+});
+
+test('dragging from the existing equipment icon calls the canonical group reorder and Escape cancels',()=>{
+ const h=fixture();
+ try{
+   h.tableButton.click();
+   const first=h.row('Filler'),last=h.row('Capper'),icon=first.querySelector('.equipment-table-symbol');
+   const scroller=first.closest('.equipment-table-scroll');
+   const rect=(top,height)=>({top,bottom:top+height,height,left:0,right:500,width:500});
+   first.getBoundingClientRect=()=>rect(100,40);last.getBoundingClientRect=()=>rect(140,40);scroller.getBoundingClientRect=()=>rect(70,110);
+   const send=(target,type,x,y)=>{
+     const ev=new h.w.MouseEvent(type,{button:0,clientX:x,clientY:y,bubbles:true,cancelable:true});
+     Object.defineProperty(ev,'pointerId',{value:1});target.dispatchEvent(ev);
+   };
+   send(icon,'pointerdown',10,120);send(h.w,'pointermove',10,160);
+   assert(last.classList.contains('equipment-table-drop-after'));
+   h.w.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+   assert.equal(h.calls.reorder,0);assert(!last.classList.contains('equipment-table-drop-after'));
+   send(icon,'pointerdown',10,120);send(h.w,'pointermove',10,160);send(h.w,'pointerup',10,160);
+   assert.equal(h.calls.reorder,1);assert.deepEqual(h.calls.lastMove,['Filler','Capper','equipment']);
+   assert(!first.classList.contains('equipment-table-dragging'));
  }finally{h.close();}
 });

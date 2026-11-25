@@ -111,3 +111,20 @@ test('separate layouts explicitly expose the existing equipment type and name fi
   assert.match(css,/\.basic-machine \.equipment-grid:not\(\.reliability-controls\) > label:not\(:has\(> \.equipment-type, > \.equipment-name,/);
   assert.match(css,/#basic-conveyor-panel \.equipment-grid:not\(\.reliability-controls\) > label:not\(:has\(> \.equipment-type, > \.equipment-name,/);
 });
+
+test('combined table reorder moves only the selected kind in its existing physical slots',()=>{
+  const h=harness();
+  try{
+    const card=h.list.lastElementChild,blank=card.querySelector('.reliability-mtbfMinutes');
+    h.w.moveEquipment(4,0,undefined,'equipment');
+    assert.deepEqual(h.ids(),['new','c1','m1','c2','m2']);
+    assert.deepEqual(h.line.map(e=>e.id),h.ids());
+    assert.equal(h.list.firstElementChild,card);
+    assert.equal(card.querySelector('.reliability-mtbfMinutes'),blank);
+    h.w.moveEquipment(3,1,undefined,'conveyors');
+    assert.deepEqual(h.ids(),['new','c2','m1','c1','m2']);
+    h.w.moveEquipment(0,1,undefined,'equipment');
+    assert.deepEqual(h.ids(),['new','c2','m1','c1','m2'],'cannot drop across kinds');
+    assert.equal(h.calls.invalidated,2);assert.equal(h.calls.save,2);
+  }finally{h.close();}
+});

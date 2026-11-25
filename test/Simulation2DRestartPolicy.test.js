@@ -1,0 +1,62 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const script=fs.readFileSync('apps-script/Simulation2DEngine.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const w={};new Function('window',script)(w);
+const create=w.STSimulation2DEngine.create;
+const machine={id:'m',kind:'machine',rate:2,batch:1,startDelay:0,rampSeconds:0,capacityBottles:30,residenceSeconds:0,inputBottleFactor:1,bottlesPerUnit:1};
+const belt={id:'belt',kind:'belt',length:5000,speed:100,packageLength:20,pitch:25,packedGap:0,prime:null,backup:null,blockDelay:.5,clearDelay:Infinity,responseDelay:0,residual:0};
+test('completed Back-up uses outgoing conveyor start delay and ramp, and survives checkpoint restore',()=>{
+ const defs=[machine,{...belt,upstreamRestartDelaySeconds:2,upstreamRestartRampUpSeconds:1}];
+ let model=create(defs);model.configure({failures:false});
+ model.line[1].backupBlocked=true;model.step(.25);
+ assert.equal(model.line[0].state,'Back-up stop');
+ model.line[1].backupBlocked=false;
+ model.step(.25);assert.equal(model.line[0].state,'Starting');
+ model=create(defs,1,model.snapshot());model.configure({failures:false});
+ for(let i=0;i<7;i++)model.step(.25);
+ const m=model.line[0];assert.equal(m.durations.starting,2);assert.equal(m.startingSecondsByCause.BACKUP_CLEAR,2);
+ assert.equal(m.restartRequests.BACKUP_CLEAR,1);
+ for(let i=0;i<4;i++)model.step(.25);
+ assert.equal(m.rampUpSecondsByCause.BACKUP_CLEAR,1);
+ assert.equal(m.durations.acceleration,1);assert.equal(m.startDelay,0);
+ model.step(.25);assert.equal(m.state,'Running');
+});
+test('an interrupted Back-up response does not trigger startup or ramp',()=>{
+ const model=create([machine,{...belt,responseDelay:2,upstreamRestartDelaySeconds:4,upstreamRestartRampUpSeconds:3}]);
+ model.line[1].backupBlocked=true;model.step(.25);
+ assert.equal(model.line[0].state,'Ramp down');
+ model.line[1].backupBlocked=false;model.step(.25);
+ assert.equal(model.line[0].restartRequests.BACKUP_CLEAR,undefined);
+ assert.equal(model.line[0].durations.starting,0);
+ assert.equal(model.line[0].durations.acceleration,0);
+});
+test('repair does not repeat startup or a non-opt-in ramp',()=>{
+ const defs=[{...machine,startDelay:4,rampSeconds:2},{...belt,upstreamRestartDelaySeconds:5}];
+ const model=create(defs);const m=model.line[0];m.failureRemaining=.25;
+ model.step(.25);model.step(.25);
+ assert.equal(m.restartRequests.REPAIR_COMPLETED,1);assert.equal(m.activeStartDelaySeconds,0);assert.equal(m.activeRampSeconds,0);
+ assert.equal(m.durations.starting,0);assert.equal(m.durations.acceleration,0);
+});
+test('real depletion rearms Prime and schedules the incoming ramp, but waiting is not another request',()=>{
+ const upstream={...machine,id:'up'},downstream={...machine,id:'down',primeRampSeconds:1};
+ const model=create([upstream,{...belt,prime:4960},downstream]);
+ model.control('up','STOP');
+ const [,b,m]=model.line;
+ m.awaitPrime=false;m.rampElapsed=1;
+ model.step(.25);assert(m.awaitPrime);assert.equal(m.restartRequests.PRIME_RECOVERY,1);
+ model.step(.25);assert.equal(m.state,'Waiting for Prime');assert.equal(m.waitingForPrimeSeconds,.25);
+ assert.equal(m.restartRequests.PRIME_RECOVERY,1);assert.equal(m.durations.starving,.5);
+ b.items=[{x:4990},{x:4970}];
+ for(let i=0;i<4;i++)model.step(.25);
+ assert.equal(m.rampUpSecondsByCause.PRIME_RECOVERY,1);
+});
+test('unchanged Back-up debounce requires sustained occupancy and sustained clear time',()=>{
+ const model=create([machine,{...belt,backup:100,blockDelay:.5,clearDelay:.5,responseDelay:0}]);
+ model.control('m','STOP');const b=model.line[1];
+ b.items=[{x:80}];model.step(.25);assert.equal(b.backupBeam,true);assert.equal(b.backupBlocked,false);
+ b.items=[];model.step(.25);assert.equal(b.backupBlocked,false);assert.equal(b.backupElapsed,0);
+ b.items=[{x:80}];model.step(.25);b.items=[{x:80}];model.step(.25);assert.equal(b.backupBlocked,true);
+ b.items=[];model.step(.25);assert.equal(b.backupBlocked,true);
+ model.step(.25);assert.equal(b.backupBlocked,false);
+});

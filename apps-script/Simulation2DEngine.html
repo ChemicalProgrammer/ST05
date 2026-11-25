@@ -12,6 +12,8 @@ window.STSimulation2DEngine=(function(){
         durations:{empty:0,flowing:0,accumulating:0},recentOutput:[],ratePerMinute:0}
       : {...definition,input:0,remaining:null,ready:false,started:0,produced:0,backupSince:null,residual:0,state:'Waiting',
         resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
+        activeStartDelaySeconds:definition.startDelay??0,startCause:'INITIAL',repairRecoveryPending:false,
+        restartRequests:{INITIAL:1},startingSecondsByCause:{},rampUpSecondsByCause:{},waitingForPrimeSeconds:0,
         awaitPrime:definitions[index-1]?.kind==='belt'&&definitions[index-1].prime!=null,
         randomState:(Math.trunc(seed)+Math.imul(index+1,2654435761))>>>0,
         durations:{starting:0,running:0,starving:0,acceleration:0,deceleration:0,blocked:0,backupStop:0,failure:0,paused:0,stopped:0,emergencyStop:0,plannedStop:0},
@@ -26,12 +28,17 @@ window.STSimulation2DEngine=(function(){
       const upstream=line[line.indexOf(item)-1];
       item.awaitPrime=upstream?.kind==='belt'&&upstream.prime!=null;
     }
-    function restart(item){
+    // Keep configured machine defaults immutable. The outgoing conveyor
+    // may override the restart profile after a completed Back-up stop.
+    function restart(item,cause='COMMAND',delay=item.startDelay??0,ramp=item.rampSeconds??0){
       if(item.kind==='belt')return;
       rearmPrime(item);
       item.started=0;
+      item.activeStartDelaySeconds=Math.max(0,delay);
       item.rampElapsed=0;
-      item.activeRampSeconds=item.rampSeconds||0;
+      item.activeRampSeconds=Math.max(0,ramp);
+      item.startCause=cause;
+      item.restartRequests[cause]=(item.restartRequests[cause]||0)+1;
     }
     function control(id,action){
       const item=byId.get(id);
@@ -117,7 +124,7 @@ window.STSimulation2DEngine=(function(){
         downstream.items.push({x:entry});
       }else if(downstream?.capacityBottles!=null){
         if(downstream.resident.length>=Math.floor(downstream.capacityBottles/downstream.inputBottleFactor)||
-          downstream.failureRemaining>0||downstream.started<downstream.startDelay||downstream.backupSince!==null)return false;
+          downstream.failureRemaining>0||downstream.started<downstream.activeStartDelaySeconds||downstream.backupSince!==null)return false;
         downstream.resident.push(downstream.residenceClock+downstream.residenceSeconds);
         if(downstream.occupancyMode==='POSITIONS')downstream.positionDue.push(downstream.positionClock+
           Math.floor(downstream.capacityBottles/downstream.inputBottleFactor));
@@ -142,10 +149,10 @@ window.STSimulation2DEngine=(function(){
     function updateFailure(machine,seconds){
       if(machine.failureRemaining>0){
         machine.failureRemaining=Math.max(0,machine.failureRemaining-seconds);
-        if(machine.failureRemaining===0)rearmPrime(machine);
-        if(machine.failureRemaining===0&&machine.rampAfterRepair){
-          machine.rampElapsed=0;
-          machine.activeRampSeconds=machine.rampSeconds||0;
+        if(machine.failureRemaining===0){
+          // Repair has no extra startup delay; post-repair ramps are opt-in.
+          restart(machine,'REPAIR_COMPLETED',0,machine.rampAfterRepair?machine.rampSeconds??0:0);
+          machine.repairRecoveryPending=true;
         }
         return true;
       }
@@ -182,19 +189,26 @@ window.STSimulation2DEngine=(function(){
             Math.min(Math.floor(downstream.residual/(machine.bottlesPerUnit||1)),Math.floor(machine.resident.length/machine.batch));
         }
       }else if(machine.backupSince!==null){
-        if(machine.backupStopped){rearmPrime(machine);machine.started=0;}
+        // Do not restart after a short pulse that clears before the stop.
+        // Once a stop or its last residual discharge occurred, a restart
+        // is required. A pending repair recovery takes precedence.
+        const completed=machine.backupStopped||(machine.residual<=0&&machine.state==='Discharging');
         machine.backupStopped=false;
         machine.backupSince=null;
-        machine.rampElapsed=0;
-        machine.activeRampSeconds=machine.rampSeconds||0;
+        if(completed&&!machine.repairRecoveryPending)restart(machine,'BACKUP_CLEAR',
+          downstream.upstreamRestartDelaySeconds??machine.startDelay??0,
+          downstream.upstreamRestartRampUpSeconds??machine.rampSeconds??0);
       }
       const braking=machine.backupSince!==null&&time-machine.backupSince+epsilon>=downstream.responseDelay;
-      if(machine.residual<=0&&braking){machine.state='Back-up stop';return;}
+      if((machine.repairRecoveryPending&&machine.backupSince!==null)||(machine.residual<=0&&braking)){machine.state='Back-up stop';return;}
       if(machine.awaitPrime){
         if(!available(upstream)||!primeReady(upstream)){machine.state='Waiting for Prime';return;}
         machine.awaitPrime=false;
       }
-      if(machine.started<machine.startDelay){machine.started+=seconds;machine.state='Starting';return;}
+      machine.repairRecoveryPending=false;
+      if(machine.started+epsilon<machine.activeStartDelaySeconds){
+        machine.started=Math.min(machine.activeStartDelaySeconds,machine.started+seconds);machine.state='Starting';return;
+      }
       const decelerating=machine.backupSince!==null&&!braking;
       const accelerating=!decelerating&&!braking&&machine.rampElapsed<machine.activeRampSeconds;
       const factor=decelerating?Math.max(0,1-(time-machine.backupSince)/downstream.responseDelay)
@@ -279,7 +293,7 @@ window.STSimulation2DEngine=(function(){
       if(activeStop&&activeStop!==nextStop){
         for(const item of line){
           if(item.kind!=='machine')continue;
-          if(activeStop.restartPolicy==='RESTART')restart(item);
+          if(activeStop.restartPolicy==='RESTART')restart(item,'CALENDAR_RESTART');
           else rearmPrime(item);
         }
       }
@@ -293,11 +307,18 @@ window.STSimulation2DEngine=(function(){
         else item.state=haltState(item);
         const category=durationKey[item.state];
         if(category)item.durations[category]+=seconds;
+        // Prime waiting remains a subset of the historical starving counter.
+        // Keep per-cause counters separately so no state time is counted twice.
+        if(item.state==='Waiting for Prime')item.waitingForPrimeSeconds+=seconds;
+        if(category==='starting'||category==='acceleration'){
+          const byCause=category==='starting'?item.startingSecondsByCause:item.rampUpSecondsByCause;
+          byCause[item.startCause]=(byCause[item.startCause]||0)+seconds;
+        }
         if(item.state==='Back-up stop')item.backupStopped=true;
         const upstream=line[index-1];
-        if(item.state==='Starved'&&!(item.resident?.length>0)&&upstream?.kind==='belt'&&
+        if(item.state==='Starved'&&!(item.resident?.length>0)&&upstream?.kind==='belt'&&upstream.prime!=null&&
           (!upstream.items[0]||upstream.items[0].x+upstream.packageLength/2<upstream.length-epsilon)){
-          rearmPrime(item);
+          restart(item,'PRIME_RECOVERY',item.startDelay??0,item.primeRampSeconds??item.rampSeconds??0);
         }
       }
       for(const item of line){

@@ -623,7 +623,9 @@ window.STSimulation2D=(function(){
         prime:zone.primeSensorPositionMm??null,backup:zone.backupSensorPositionMm??null,
         configuredBackupRelease:zone.backupRestartPositionMm,
         blockDelay:zone.blockedTimeDelaySeconds??.5,clearDelay:zone.clearTimeDelaySeconds??.5,
-        responseDelay:zone.upstreamStopResponseSeconds??0,residual:Math.max(0,Math.floor(zone.bottlesDischargedAtStop??0))};
+        responseDelay:zone.upstreamStopResponseSeconds??0,residual:Math.max(0,Math.floor(zone.bottlesDischargedAtStop??0)),
+        upstreamRestartDelaySeconds:zone.upstreamRestartDelaySeconds??null,
+        upstreamRestartRampUpSeconds:zone.upstreamRestartRampUpSeconds??null};
     });
   }
   function validate(){
@@ -1854,11 +1856,14 @@ window.STSimulation2D=(function(){
         bottlesPerUnit:factor,producedUnits:count,producedBottles:count!==null&&factor>0?count*factor:null,
         state:item.state,failureCount:item.kind==='machine'?finite(item.failureCount):null,
         durationsSeconds:Object.fromEntries(Object.entries(item.durations||{}).map(([key,value])=>[key,finite(value)])),
+        ...(item.kind==='machine'?{waitingForPrimeSeconds:finite(item.waitingForPrimeSeconds),
+          restartRequests:{...item.restartRequests},startingSecondsByCause:{...item.startingSecondsByCause},
+          rampUpSecondsByCause:{...item.rampUpSecondsByCause}}:{}),
         inventoryUnits:item.kind==='belt'?(Array.isArray(item.items)?item.items.length:null):
           Array.isArray(item.resident)?item.resident.length:null};
     });
     const output=equipment.at(-1),bottles=output?.producedBottles??null;
-    return {schema:'st-simulation2d-summary-v1',source,seed:finite(runSeed),round:round??null,
+    return {schema:'st-simulation2d-summary-v1',controlPolicy:'PHYSICAL_FLOW_3',source,seed:finite(runSeed),round:round??null,
       runState,durationSeconds:run.time,targetDurationSeconds:finite(limit),
       complete:runState==='Completed'&&Number.isFinite(limit)&&run.time>=limit-1e-8,
       outputEquipmentId:output?.equipmentId??null,outputUnit:output?.outputUnit??null,
@@ -2106,7 +2111,7 @@ window.STSimulation2D=(function(){
     scheduleError='';
     try{nextSchedule=resolveSchedule(config);}catch(error){scheduleError=error.message;}
     const omitZone=(key,value)=>key==='zoneId'?undefined:value;
-    const nextSignature=JSON.stringify(['physical-flow-2',next,revised,nextSchedule,scheduleError],omitZone);
+    const nextSignature=JSON.stringify(['physical-flow-3',next,revised,nextSchedule,scheduleError],omitZone);
     const nextRepresentative=Number.isFinite(source?.seed)?source:null;
     const sameCase=next===key&&nextSignature===signature;
     if(sameCase&&nextRepresentative?.round===representative?.round&&nextRepresentative?.seed===representative?.seed){

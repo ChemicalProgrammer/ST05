@@ -13,6 +13,7 @@ window.STSimulation2DEngine=(function(){
       : {...definition,input:0,remaining:null,ready:false,started:0,produced:0,backupSince:null,residual:0,state:'Waiting',
         resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
         activeStartDelaySeconds:definition.startDelay??0,startCause:'INITIAL',repairRecoveryPending:false,
+        reliabilityExposureSeconds:0,reliabilityChargedSeconds:0,
         restartRequests:{INITIAL:1},startingSecondsByCause:{},rampUpSecondsByCause:{},waitingForPrimeSeconds:0,
         awaitPrime:definitions[index-1]?.kind==='belt'&&definitions[index-1].prime!=null,
         randomState:(Math.trunc(seed)+Math.imul(index+1,2654435761))>>>0,
@@ -146,6 +147,22 @@ window.STSimulation2DEngine=(function(){
       machine.randomState=(Math.imul(machine.randomState,1664525)+1013904223)>>>0;
       return (machine.randomState+.5)/4294967296;
     }
+    // Match the numerical engine's productive-state eligibility, rather
+    // than treating retained material as proof of operation. Keep a separate
+    // counter of time actually charged while the reliability process is on.
+    function chargeReliability(machine,seconds){
+      if(!['Running','Ramp up','Ramp down','Discharging'].includes(machine.state))return;
+      machine.reliabilityExposureSeconds+=seconds;
+      const profiles=machine.failures||[];
+      if(!options.failures||!profiles.length)return;
+      if(machine.exposure===null){
+        const total=profiles.reduce((sum,profile)=>sum+profile.rate,0);
+        if(!(total>0))return;
+        machine.exposure=-Math.log(random(machine))/total;
+      }
+      machine.exposure-=seconds;
+      machine.reliabilityChargedSeconds+=seconds;
+    }
     function updateFailure(machine,seconds){
       if(machine.failureRemaining>0){
         machine.failureRemaining=Math.max(0,machine.failureRemaining-seconds);
@@ -157,11 +174,11 @@ window.STSimulation2DEngine=(function(){
         return true;
       }
       const profiles=machine.failures||[];
-      if(!profiles.length||(machine.capacityBottles==null?machine.remaining===null:!machine.resident.length))return false;
+      // A threshold reached during a productive tick causes a failure at
+      // the next tick boundary. Do not sample or consume time while parked.
+      if(!profiles.length||machine.exposure===null||machine.exposure>0)return false;
       const total=profiles.reduce((sum,profile)=>sum+profile.rate,0);
-      if(machine.exposure===null)machine.exposure=-Math.log(random(machine))/total;
-      machine.exposure-=seconds;
-      if(machine.exposure>0)return false;
+      if(!(total>0))return false;
       let pick=random(machine)*total;
       const profile=profiles.find(item=>(pick-=item.rate)<=0)||profiles.at(-1);
       machine.failureRemaining=profile.repairSeconds;
@@ -307,6 +324,7 @@ window.STSimulation2DEngine=(function(){
         else item.state=haltState(item);
         const category=durationKey[item.state];
         if(category)item.durations[category]+=seconds;
+        chargeReliability(item,seconds);
         // Prime waiting remains a subset of the historical starving counter.
         // Keep per-cause counters separately so no state time is counted twice.
         if(item.state==='Waiting for Prime')item.waitingForPrimeSeconds+=seconds;

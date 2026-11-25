@@ -18,7 +18,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Startup, Prime y rampas | Implementado y evaluado |
 | Exposición a fallas | Implementado y evaluado (en conjunto con sensores) |
 | Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
-| Descarga y overflow | Implementado |
+| Descarga y overflow | Implementado y evaluado (2D; comparación numérica actual pendiente) |
 | Contadores | Parcialmente implementado |
 | Resolución temporal | Pendiente |
 | Validación contra planta | Pendiente |
@@ -43,7 +43,7 @@ Datos históricos de la conversación y última evidencia del archivo de caso ex
 | Simulación 2D, posterior a etapa 2 (`PHYSICAL_FLOW_4`) | Pendiente | Pendiente | Pendiente |
 | Simulación 2D, posterior a etapas 2 y 3 (`PHYSICAL_FLOW_5`) | 152,376 | 105.82 | −10.56% |
 | Simulación numérica corregida (ST_CURRENT 0.20.2) | Pendiente | Pendiente | Pendiente |
-| Simulación 2D, posterior a etapa 4 (`PHYSICAL_FLOW_6`) | Pendiente | Pendiente | Pendiente |
+| Simulación 2D, posterior a etapa 4 (`PHYSICAL_FLOW_6`) | 207,132 | 143.84 | +21.57% |
 
 Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores.
 
@@ -132,13 +132,34 @@ Política 2D `PHYSICAL_FLOW_6`; versión numérica ST_CURRENT 0.20.2, provenance
 - Pruebas: 25/25 casos superados en arnés JavaScript aislado (incluye ejecución real del bundle numérico, balance material, spill residual, cajas, checkpoint, sensores, reinicios y reloj MTBF). Se verificó coincidencia textual del fuente numérico y procedencia con sus bundles generados. No se ejecutó la suite completa de Node/npm ni el caso G de 24 h. Validar con la exportación de las siguientes corridas.
 - Limitación: se homologa el manejo de descarga residual en conveyors físicos; las diferencias de política de transición/temporización, contadores y otras topologías siguen sujetas a revisión en las etapas correspondientes.
 
+### Evidencia de corrida G — etapa 4 (24 de noviembre de 2026)
+
+Fuente: `G-complete (7).json`, revisión 51, SHA-256 `31029a55b8c7ed1e86f8aa478679caeaf1bcfc2b405bdf0866e1c00c7a19e439`. Corrida 2D completa e independiente, política `PHYSICAL_FLOW_6`, semilla 20261124, duración 86,400 s, formato S (12 botellas/caja), fallas habilitadas y eventos/calendario deshabilitados en la captura. La firma de equipos de la numérica guardada coincide con los equipos de Simulation A, pero su replay sigue siendo ST_CURRENT 0.20.1, procedencia cache:30, resolución FAST, salida 136,764. **No se recibió todavía la corrida numérica corregida 0.20.2.** No tratar los dos resultados como comparación de versiones homologadas.
+
+La salida 2D fue de 17,261 cajas = 207,132 botellas, 143.8417 bpm; +54,756 (+35.93%) respecto a política 5 y +36,756 (+21.57%) respecto a planta. La distancia frente a la numérica histórica aumentó a 70,368 botellas. El mayor flujo no demuestra mayor exactitud. La diferencia de etapas se observa, pero no constituye atribución causal aislada de cada ajuste.
+
+Balance exportado 2D (botellas equivalentes): entrada 212,424 = salida 207,132 + inventario 941 + overflow 4,351; residual 0. Comparación aritmética respecto a política 5 (cuya entrada se reconstruyó, no se registró explícitamente): +59,076 entrada −4,351 overflow +31 reducción de inventario = +54,756 salida. No confundir un balance conservado con validación física de toda la lógica.
+
+| Conveyor | Back-up activaciones / liberaciones | Overflow (botellas equiv.) | Inventario final (botellas equiv.) | Descarga residual de máquina anterior (unidad nativa) |
+| --- | ---: | ---: | ---: | ---: |
+| US-LAB | 1,525 / 1,524 | 3,047 | 259 | 4,570 botellas |
+| LAB-FIL | 492 / 492 | 0 | 364 | 491 botellas |
+| FIL-CAS | 656 / 656 | 1,304 | 68 | 1,956 botellas |
+| PAC-PAL | 17,276 / 17,275 | 0 | 180 | 0 cajas |
+
+Hallazgo: PAC-PAL sigue registrando aproximadamente una activación de Back-up por cada caja producida (17,276). Sin embargo, Case Packer registró solo 94 solicitudes BACKUP_CLEAR y 188 s de Starting por esa causa, contra 12,666 solicitudes y 25,332 s (422.2 min) en política 5. La corrección permite que un pulso termine antes de completar la descarga/parada y no necesariamente reinicie la máquina. Es una hipótesis explicativa importante de la subida de producción; falta comparar la numérica corregida y separar pulsos, descarga real y paros completos mediante eventos individuales. El contador de descarga residual del Case Packer es cero al final de esta corrida, aunque su configuración es dos cajas y al cierre tiene una unidad residual pendiente. No asumir que todas las activaciones son paros completos o que necesariamente se descarga el máximo configurado.
+
+Revisión visual del video aportado `Recording 2026-11-24 233317.mp4` (13.25 s): Running, Discharging cerca de 6.5 s, Back-up stop cerca de 7–8 s, Starting cerca de 8.5–10 s y Running cerca de 10.5 s. Tiempos de grabación, no tiempos virtuales certificados; el icono B refleja el control filtrado por temporizadores, no exclusivamente el haz bruto. No se identifica inequívocamente la máquina ni se certifica el conteo individual de botellas. El usuario indica que contará la descarga residual.
+
+**Secuencia de rearranque vigente (commit f3eb930):** B de salida debe permanecer desocupado durante Clear Time Delay (reiniciado si se vuelve a ocupar). Tras paro completo y liberación, se rearma Prime de entrada si existe y se autoriza al alcanzar la reserva de cola compacta. Luego Startup Time y ramp-up solo si el perfil de rearranque los requiere, sin fallas ni comandos externos que impidan operar. Un pulso que termina antes de completar el paro no necesariamente dispara un nuevo startup. El Recovery Point no es una segunda fotocelda de liberación en el modelo discreto. Parámetros G resueltos: blocked/clear delay 0.5 s en los cuatro conveyors; restart delay 2/2/4/2 s (Scrambler/Virtual inlet/Filler/Case Packer); residual 3/2/3 botellas y 2 cajas; stop-response 0 s. Los perfiles Back-up de G no tienen ramp-up adicional (override nulo y ramp de máquina 0); el ramp-up de Prime es otro perfil. Código: `apps-script/Simulation2DEngine.html` (moveBelt, restart, stepMachine) y `src/simulation/LineSimulationEngine.js` (updateBackupSensorSegment, requestEquipmentStart). Se documenta la política vigente, sin modificarla ni afirmar que reproduzca un PLC de planta.
+
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |
 | --- | --- |
 | Exposición a fallas | Evaluación conjunta registrada; queda pendiente aislar etapa 2 y conciliar clasificación de exposición y secuencias aleatorias. |
 | Sensores | Evaluación conjunta registrada; revisar las diferencias de disparos, especialmente PAC-PAL, sin cambiar los inputs durante la homologación. |
-| Descarga y overflow | Comparar las corridas nuevas con las históricas y verificar overflow e inventarios por conveyor, así como cierre del balance. |
+| Descarga y overflow | Balance 2D comprobado con política 6; falta nueva numérica 0.20.2, comparar descarga/overflow y explicar diferencias de paros completos frente a pulsos. |
 | Contadores | Homologar definiciones, unidades y exclusividad de estados; distinguir pérdidas internas y externas, y evitar doble conteo (Waiting for Prime ya forma parte de starving en el resumen 2D). |
 | Resolución temporal | Medir sensibilidad al paso de integración y a los límites de tick; distinguir velocidad de reproducción de resolución del modelo. |
 | Validación contra planta | Comparar resultados con datos reales, revisar por equipo y por turno si existen datos, y evaluar variación entre réplicas. |
@@ -147,9 +168,9 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 
 ## 6. Punto de continuación
 
-1. Actualizar Apps Script con política 6 y motor ST_CURRENT 0.20.2; iniciar corridas nuevas, sin restaurar el checkpoint de política 5.
-2. Ejecutar 2D y numérica con los mismos datos G, 1,440 min, semilla 20261124, formato S, fallas habilitadas y sin eventos/calendario; conservar configuración numérica FAST y paso 2D nominal 1/120 s. Mantener histórico separado.
-3. Exportar los resultados numéricos y Simulation 2D; registrar producción, balance de material, overflow por conveyor, descargas residuales, inventarios, tiempos y fallas. Solo entonces marcar etapa 4 evaluada.
+1. Conservar corrida 2D política 6 de 207,132 botellas; no es necesario repetirla si no se cambia el modelo.
+2. Ejecutar nuevamente solo numérica ST_CURRENT 0.20.2 (no reutilizar resultados 0.20.1), con los mismos datos G, 1,440 min, semilla 20261124, formato S, fallas habilitadas y sin eventos/calendario, resolución FAST.
+3. Exportar ambos resultados; verificar versión y comparar con la 2D política 6. Registrar diferencias de producción, balance, descarga residual y paros efectivos. Confirmar la cantidad descargada por paro mediante revisión visual o eventos; no confundir activación del sensor con paro completo.
 4. Siguiente etapa de implementación: Contadores; luego resolución temporal. No corregir parámetros para forzar coincidencia con planta.
 5. Para aislar etapas 2 y 3, aún falta política 4 (`7ae1681`). Para aislar estrictamente el efecto de cambio de unidad numérica y el resto de la política 6, conservar resultados de cada versión y comparar con mismo input.
 

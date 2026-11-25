@@ -88,22 +88,57 @@ test('equipment section status uses actual evidence and distinguishes a technica
  }finally{h.close();}
 });
 
-test('equipment analysis tables fill the subsection with automatic column sizing and normal recommendation typography',()=>{
+test('equipment analysis tables fill the subsection with shared column sizing and normal recommendation typography',()=>{
  const h=harness();try{
   h.open(20,12);
   const style=h.w.document.querySelector('style').textContent;
-  assert.match(style,/#equipment-analysis-body table\s*\{\s*width:100%;\s*max-width:100%;\s*table-layout:auto;/);
+  assert.match(style,/#equipment-analysis-body table\s*\{\s*width:100%;\s*max-width:100%;\s*table-layout:fixed;/);
   assert.match(style,/#equipment-analysis-body \.table-scroll\s*\{[^}]*justify-self:stretch;[^}]*width:100%;[^}]*max-width:100%;[^}]*overflow-x:auto/);
-  assert.match(style,/\.analysis-table-unit\s*\{[^}]*width:1%;[^}]*white-space:nowrap/);
+  assert.match(style,/col\.analysis-table-parameter-col\s*\{width:42%;/);
+  assert.match(style,/col\.analysis-table-value-col\s*\{width:46%;/);
+  assert.match(style,/col\.analysis-table-unit-col\s*\{width:12%;/);
+  assert.match(style,/\.analysis-table-value\s*\{[^}]*text-align:start/);
+  assert.match(style,/\.analysis-table-value\.numeric\s*\{[^}]*text-align:right/);
+  assert.match(style,/\.analysis-table-unit\s*\{[^}]*text-align:center/);
   assert.match(style,/--intervention-chart-width:735px/);
   assert.match(style,/\.intervention-current\s*\{[^}]*font-size:var\(--font-body\)[^}]*font-weight:var\(--weight-regular\)/);
   assert.equal(h.body.querySelector('.intervention-current').tagName,'P');
   const tables=[...h.body.querySelectorAll('table')];
   assert(tables.length>0);
   for(const table of tables){
+   assert.deepEqual([...table.querySelectorAll('colgroup > col')].map(col=>col.className),
+     ['analysis-table-parameter-col','analysis-table-value-col','analysis-table-unit-col']);
    const values=[...table.querySelectorAll('tbody td:nth-child(2)')];
    assert(values.length>0&&values.every(cell=>cell.classList.contains('analysis-table-value')));
    assert([...table.querySelectorAll('tbody td:last-child')].every(cell=>cell.classList.contains('analysis-table-unit')));
   }
+ }finally{h.close();}
+});
+
+test('buffer coverage displays connected conveyor names instead of internal IDs in either language',()=>{
+ const h=harness();try{
+  const machine={id:'e',name:'Machine',type:'FILLER',nominalRatePerSecond:2,noiseProfile:{reliability:{mtbfMinutes:20,mttrMinutes:.5}}};
+  const upstream={id:'private-upstream-id',name:'Conveyor to filler',type:'CONVEYOR'};
+  const downstream={id:'private-downstream-id',name:'Filler discharge conveyor',type:'CONVEYOR'};
+  const unnamed={id:'private-unnamed-id',name:'  ',type:'CONVEYOR'};
+  const simulation={equipment:[upstream,machine,downstream,unnamed]};
+  const audits=[
+    {equipmentId:upstream.id,downstreamId:'e',engineering:{calculated:{antiBlockSeconds:24}}},
+    {equipmentId:downstream.id,upstreamId:'e',engineering:{calculated:{antiStarveSeconds:43}}},
+    {equipmentId:unnamed.id,upstreamId:'e',engineering:{calculated:{antiStarveSeconds:45}}}
+  ];
+  h.w.STEquipmentAnalysis.open(simulation,'e',{audits});
+  const readBuffer=()=>[...h.body.querySelectorAll('[data-analysis-group="buffer"] table')];
+  let tables=readBuffer();
+  assert.equal(tables.length,2);
+  assert.equal(tables[0].querySelector('tbody tr:nth-child(2) td').textContent,upstream.name);
+  assert.equal(tables[1].querySelector('tbody tr:nth-child(2) td').textContent,downstream.name+', Unnamed conveyor');
+  assert(!tables.some(table=>table.textContent.includes('private-')));
+  assert.equal(tables[0].querySelector('tbody tr:first-child td').textContent,'FAIL');
+  assert.equal(tables[1].querySelector('tbody tr:first-child td').textContent,'PASS');
+  h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+  tables=readBuffer();
+  assert.equal(tables[0].querySelector('tbody tr:nth-child(2) td').textContent,upstream.name);
+  assert.equal(tables[1].querySelector('tbody tr:nth-child(2) td').textContent,downstream.name+', Conveyor sin nombre');
  }finally{h.close();}
 });

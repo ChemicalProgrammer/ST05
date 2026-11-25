@@ -23,8 +23,8 @@
 #equipment-analysis-body > .st-subsection:not([open]) > .fold-content {display:none;}
 #equipment-analysis-body > .st-subsection:not([open]) > summary.st-subsection-header {border-block-end:0;border-radius:calc(var(--radius-md) - var(--border-width));}
 #equipment-analysis-body .chart-note { margin:0; }
-/* Tables fill the subsection without determining the dialog width. Keep
-   automatic column sizing and compact units; scroll on narrow viewports. */
+/* Tables fill the subsection; shared column widths keep all tables aligned
+   regardless of the length of their labels, values or conveyor names. */
 #equipment-analysis-body .table-scroll {
   justify-self:stretch;width:100%;min-width:0;max-width:100%;
   box-sizing:border-box;overflow-x:auto;margin:0;
@@ -55,17 +55,21 @@
   margin:0;font-size:var(--font-body);font-weight:var(--weight-regular);
   line-height:var(--leading-body);color:var(--ink);overflow-wrap:anywhere;
 }
-#equipment-analysis-body table { width:100%; max-width:100%; table-layout:auto; }
+#equipment-analysis-body table { width:100%; max-width:100%; table-layout:fixed; }
+#equipment-analysis-body col.analysis-table-parameter-col {width:42%;}
+#equipment-analysis-body col.analysis-table-value-col {width:46%;}
+#equipment-analysis-body col.analysis-table-unit-col {width:12%;}
 #equipment-analysis-body :is(td,th) {
   padding:var(--space-2);overflow-wrap:anywhere;vertical-align:middle;
 }
-#equipment-analysis-body tbody th[scope=row] {max-width:44ch;white-space:normal;}
-#equipment-analysis-body thead th:not(:first-child) { text-align:center;white-space:nowrap; }
+#equipment-analysis-body tbody th[scope=row] {text-align:start;white-space:normal;}
+#equipment-analysis-body thead th {white-space:normal;}
+#equipment-analysis-body thead th:not(:first-child) { text-align:center; }
 #equipment-analysis-body thead th:nth-child(2) {text-align:end;}
-#equipment-analysis-body td.analysis-table-value {max-width:36ch;white-space:normal;overflow-wrap:anywhere;}
+#equipment-analysis-body td.analysis-table-value {text-align:start;white-space:normal;overflow-wrap:anywhere;}
 #equipment-analysis-body td.analysis-table-value.numeric { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 #equipment-analysis-body td.analysis-table-unit {
-  display:table-cell;width:1%;white-space:nowrap;text-align:center;vertical-align:middle;
+  display:table-cell;white-space:normal;overflow-wrap:anywhere;text-align:center;vertical-align:middle;
   line-height:inherit;font-size:inherit;font-weight:inherit;color:var(--unit-color);margin:0;
 }
 .equipment-analysis-pill.st-status-pill { position:static; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); background:var(--stopped-soft); width:max-content; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -341,7 +345,9 @@ window.STEquipmentAnalysis=(function(){
   }
   function table(host,rows){
     const wrapper=make(host,'div');wrapper.className='table-scroll';
-    const tbl=make(wrapper,'table'),headers=make(make(tbl,'thead'),'tr');
+    const tbl=make(wrapper,'table'),columns=make(tbl,'colgroup');
+    ['parameter','value','unit'].forEach(key=>make(columns,'col').className='analysis-table-'+key+'-col');
+    const headers=make(make(tbl,'thead'),'tr');
     [t('Parameter','Parámetro'),t('Value','Valor'),t('Unit','Unidad')].forEach(label=>make(headers,'th',label).scope='col');
     const tbody=make(tbl,'tbody');
     for(const [label,value,unit='',help] of rows){
@@ -406,9 +412,11 @@ window.STEquipmentAnalysis=(function(){
     }else note(host,reasonText(r.reason)||t('No resolved active failure categories.','No hay categorías de falla activas resueltas.'));
     host=section('buffer',t('Buffer coverage — Failure Coverage Ratio','Cobertura de acumulación — Failure Coverage Ratio'),t('Estimate how long the connected conveyors can absorb a repair.','Estima cuánto tiempo los conveyors conectados pueden absorber una reparación.'));
     if(!r.bufferCoverage.length)note(host,t('Not evaluated: active MTTR and connected conveyor geometry are required.','No evaluado: se necesitan MTTR activo y geometría de conveyors conectados.'));
+    const conveyorNames=new Map((current.simulation?.equipment||[]).map(e=>[e.id,typeof e.name==='string'?e.name.trim():'']));
     for(const c of r.bufferCoverage){
+      const connectedNames=c.conveyorIds.map(id=>conveyorNames.get(id)||t('Unnamed conveyor','Conveyor sin nombre')).join(', ')||'—';
       const direction=c.direction==='UPSTREAM'?t('Upstream — anti-block','Aguas arriba — anti-block'):t('Downstream — anti-starve','Aguas abajo — anti-starve');
-      table(host,[[direction,statusText(c.status)],[t('Connected conveyors','Conveyors conectados'),c.conveyorIds.join(', ')||'—'],
+      table(host,[[direction,statusText(c.status)],[t('Connected conveyors','Conveyors conectados'),connectedNames],
         [t('Design coverage time','Tiempo de cobertura de diseño'),c.seconds,'s'],['FCR (Tbuffer / MTTR)',c.ratio,'×'],
         ...c.classCoverage.map(v=>['FCR · '+classText(v.kind),v.ratio,'×'])]);
     }

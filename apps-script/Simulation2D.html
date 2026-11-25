@@ -179,7 +179,10 @@ window.STSimulation2D=(function(){
     let stage=(labeling?0:1)|(filling?0:2)|(!capping&&!filling?4:0);
     const stages=new Map();
     for(const item of line){
-      if(item.kind==='belt'){stages.set(item.id,stage);continue;}
+      // Belts display the current stage; machines reject the product at
+      // their inlet, before their own filling, capping or labeling operation.
+      stages.set(item.id,stage);
+      if(item.kind==='belt')continue;
       const type=types.get(item.id),operation=operations.get(item.id);
       if(type==='PUCKER')stage|=8;
       if(type==='DEPUCKER')stage&=~8;
@@ -1657,23 +1660,6 @@ window.STSimulation2D=(function(){
     scrapVisualTime=model.time;
     for(const [id,burst] of scrapBursts)if(now-burst.start>=scrapAnimationMs)scrapBursts.delete(id);
   }
-  // Schematic occupancy; for large machines the twenty cells are proportional.
-  function drawInternalOccupancy(context,item,x,top,width,height,colors){
-    if(!item.capacityBottles||!item.inputBottleFactor||!Array.isArray(item.resident))return;
-    const capacity=Math.floor(item.capacityBottles/item.inputBottleFactor);
-    if(capacity<1)return;
-    const slots=Math.min(capacity,20),occupied=Math.min(capacity,item.resident.length);
-    const left=x+width*.12,right=x+width*.88,cell=(right-left)/slots,y=top+height*.79,h=5;
-    context.save();
-    context.fillStyle=colors.surface;context.fillRect(left-2,y-2,right-left+4,h+4);
-    for(let i=0;i<slots;i++){
-      context.strokeStyle=colors.ink;context.globalAlpha=.42;
-      context.strokeRect(left+i*cell,y,Math.max(1,cell-1),h);
-      const fill=Math.max(0,Math.min(1,occupied*slots/capacity-i));
-      if(fill){context.globalAlpha=.9;context.fillStyle=colors.accent;context.fillRect(left+i*cell,y,Math.max(0,(cell-1)*fill),h);}
-    }
-    context.restore();
-  }
   function drawScrapBurst(context,item,x,top,width,height,telemetryY,colors){
     const burst=scrapBursts.get(item.id);if(!burst)return;
     const progress=Math.max(0,Math.min(1,(performance.now()-burst.start)/scrapAnimationMs));
@@ -1683,7 +1669,7 @@ window.STSimulation2D=(function(){
     const count=Math.min(5,Math.max(1,Math.ceil(burst.count/factor)));
     context.save();context.globalAlpha=Math.min(1,(1-progress)*4);
     const palette={surface:colors.surface,belt:colors.belt,accent:colors.accent,liquid:appearance.liquid||colors.accent,
-      cap:appearance.cap||colors.accent,label:appearance.label||defaultLayoutColors.label,labelShape:appearance.labelShape,
+      cap:appearance.cap||colors.cap,label:appearance.label||defaultLayoutColors.label,labelShape:appearance.labelShape,
       caseColor:appearance.cases||defaultLayoutColors.cases,caseAccent:appearance.caseLabel||defaultLayoutColors.caseLabel,caseMarkShape:appearance.caseLabelShape};
     for(let i=0;i<count;i++){
       const p=Math.max(0,Math.min(1,(progress-i*.045)/.82));
@@ -1896,8 +1882,7 @@ window.STSimulation2D=(function(){
         if(!detailed)window.STSimulation2DMachines.drawConveyor(context,x+width*.1,y+beltInset,width*.8,beltDepth,{belt:beltColor,surface});
         const sx=x+width/2;
         drawSignal(context,sx,top-14,signal,colors,factor);
-        drawInternalOccupancy(context,item,x,top,width,height,{surface,ink,accent});
-        drawScrapBurst(context,item,x,top,width,height,telemetryY,{surface,belt:beltColor,accent,danger:colors.badges.failure.foreground});
+        drawScrapBurst(context,item,x,top,width,height,telemetryY,{surface,belt:beltColor,accent,cap:secondary,danger:colors.badges.failure.foreground});
       }
     }
     for(let index=0;index<line.length;index++){

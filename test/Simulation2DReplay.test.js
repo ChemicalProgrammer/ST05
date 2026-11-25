@@ -1308,7 +1308,9 @@ test('bottle presentation infers omitted preparation steps and honors explicit m
      const [type,name]=Array.isArray(entry)?entry:[entry,''];const id='machine'+index;
      line.push({id,kind:'machine',name},{id:'out'+index,kind:'belt'});types.set(id,type);
    });
-   return Array.from(context.resolveBottleStages(line,types).values());
+   const stages=context.resolveBottleStages(line,types);
+   for(let i=1;i<line.length;i+=2)assert.equal(stages.get(line[i].id),stages.get(line[i-1].id),'machine scrap matches incoming belt');
+   return line.filter(item=>item.kind==='belt').map(item=>stages.get(item.id));
  }
  assert.deepEqual(stages(['FILLER','CASE_PACKER']),[1,7,7],'labeled input becomes filled, labeled and capped after the filler');
  assert.deepEqual(stages(['FILLER','CAPPER','CASE_PACKER']),[1,3,7,7],'an explicit capper keeps the filler discharge uncapped');
@@ -1323,6 +1325,34 @@ test('bottle presentation infers omitted preparation steps and honors explicit m
  assert.deepEqual(stages(['PUCKER','FILLER','DEPUCKER']),[1,9,15,7],'puck handling stays independent from bottle preparation');
 });
 
+
+test('scrap uses incoming product preparation including the first machine, the selected bottle and closure colors, without an occupancy overlay',()=>{
+ const source=script('Simulation2D'),calls=[];
+ const appearance={bottle:'softener',liquid:'#123456',cap:null,label:'#345678',labelShape:'sleeve',cases:'#aa8855',caseLabel:'#456789',caseLabelShape:'tape'};
+ const context=vm.createContext({appearance,defaultLayoutColors:{label:'#abcdef'},performance:{now:()=>100},
+   scrapAnimationMs:800,scrapBursts:new Map(),bottleStages:new Map(),
+   machineDesign:()=>null,localize2D:s=>s,num:String,
+   window:{STSimulation2DMachines:{drawBottle(...args){calls.push(['bottle',...args.slice(5)]);},drawCase(...args){calls.push(['case',args[5]]);}}}});
+ vm.runInContext(source.slice(source.indexOf('  function resolveBottleStages('),source.indexOf('  const machineStyle=')),context);
+ vm.runInContext(source.slice(source.indexOf('  function drawScrapBurst('),source.indexOf('  function draw(){')),context);
+ const line=[{id:'fill',kind:'machine',inputUnit:'BOTTLES'},{id:'b1',kind:'belt'},{id:'cap',kind:'machine',inputUnit:'BOTTLES'},{id:'b2',kind:'belt'},
+  {id:'label',kind:'machine',inputUnit:'BOTTLES'},{id:'b3',kind:'belt'},{id:'pack',kind:'machine',inputUnit:'BOTTLES'},{id:'b4',kind:'belt'},{id:'pal',kind:'machine',inputUnit:'CASES',inputBottleFactor:12}];
+ const types=new Map([['fill','FILLER'],['cap','CAPPER'],['label','SLEEVER'],['pack','CASE_PACKER'],['pal','PALLETIZER']]);
+ context.bottleStages=context.resolveBottleStages(line,types);
+ const ctx=new Proxy({},{get:(o,k)=>o[k]??(()=>{})}),colors={surface:'#ffffff',belt:'#333333',accent:'#111111',cap:'#222222',danger:'#ff0000'};
+ for(const [id,stage] of [['fill',0],['cap',2],['label',6],['pack',7]]){
+   calls.length=0;context.scrapBursts.set(id,{count:1,start:0});
+   context.drawScrapBurst(ctx,line.find(x=>x.id===id),0,0,100,100,150,colors);
+   assert.equal(calls.length,1);assert.equal(calls[0][0],'bottle');
+   assert.equal(calls[0][2],'softener');assert.equal(calls[0][3],stage);
+   assert.equal(calls[0][1].cap,colors.cap);assert.equal(calls[0][1].liquid,appearance.liquid);
+   assert.equal(calls[0][1].label,appearance.label);assert.equal(calls[0][1].labelShape,'sleeve');
+ }
+ calls.length=0;context.scrapBursts.set('pal',{count:24,start:0});
+ context.drawScrapBurst(ctx,line.at(-1),0,0,100,100,150,colors);
+ assert.equal(calls.length,2);assert(calls.every(c=>c[0]==='case'&&c[1].caseColor===appearance.cases));
+ assert(!source.includes('drawInternalOccupancy'));
+});
 
 test('fork contact precedes load lift and departure continues past the nominal exit',()=>{
  const window={};vm.runInNewContext(script('Simulation2DMachines'),{window});

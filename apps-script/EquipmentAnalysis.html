@@ -6,7 +6,15 @@
   <div id="equipment-analysis-body" class="dialog-body"></div>
 </dialog>
 <style>
-#equipment-analysis-dialog { --dialog-width:min(64rem,calc(100vw - 24px)); width:var(--dialog-width); max-height:calc(100dvh - 24px); box-sizing:border-box; }
+/* The diagram's natural width defines the desktop dialog, not the tables. */
+#equipment-analysis-dialog {
+  --intervention-chart-width:735px;
+  --dialog-width:calc(var(--intervention-chart-width) + 2 * var(--space-5) + 2 * var(--subsection-padding) + var(--space-6));
+  width:min(var(--dialog-width),calc(100vw - var(--space-6)));
+  max-height:calc(100dvh - var(--space-6));box-sizing:border-box;
+}
+#equipment-analysis-dialog .dialog-heading {gap:var(--space-3);}
+#equipment-analysis-dialog .dialog-heading h2 {min-width:0;overflow-wrap:anywhere;}
 #equipment-analysis-dialog[open] { overflow:hidden; }
 #equipment-analysis-body { min-width:0; overflow:auto; display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:var(--subsection-gap,var(--space-4)); }
 #equipment-analysis-body > .st-subsection { min-width:0; margin:0; padding:var(--subsection-padding); }
@@ -15,9 +23,14 @@
 #equipment-analysis-body > .st-subsection:not([open]) > .fold-content {display:none;}
 #equipment-analysis-body > .st-subsection:not([open]) > summary.st-subsection-header {border-block-end:0;border-radius:calc(var(--radius-md) - var(--border-width));}
 #equipment-analysis-body .chart-note { margin:0; }
-#equipment-analysis-body .table-scroll { min-width:0; max-width:100%; overflow-x:auto; }
+/* Keep each table at its natural content width. Only the chart needs the
+   full available panel width; the surrounding subsection still spans it. */
+#equipment-analysis-body .table-scroll {
+  justify-self:start;width:fit-content;min-width:0;max-width:100%;
+  box-sizing:border-box;overflow-x:auto;margin:0;
+}
 #equipment-analysis-body .intervention-chart-scroll { overflow-x:auto; min-width:0; }
-#equipment-analysis-body .intervention-chart { display:block; width:100%; min-width:480px; max-width:780px; height:auto; margin-inline:auto; font-family:inherit; color:var(--ink); }
+#equipment-analysis-body .intervention-chart { display:block; width:100%; min-width:480px; max-width:var(--intervention-chart-width); height:auto; margin-inline:auto; font-family:inherit; color:var(--ink); }
 #equipment-analysis-body .intervention-chart {
   --matrix-joint-fill:color-mix(in srgb,#e34c59 30%,var(--surface));
   --matrix-mttr-fill:color-mix(in srgb,#ef9836 29%,var(--surface));
@@ -38,13 +51,23 @@
 #equipment-analysis-body .intervention-legend-item { display:inline-flex; align-items:center; gap:var(--space-2); }
 #equipment-analysis-body .intervention-dot { display:inline-block; width:10px; height:10px; background:var(--accent); border:1px solid var(--ink); border-radius:50%; flex:none; }
 #equipment-analysis-body .intervention-line { display:inline-block; width:24px; border-top:2px dashed var(--secondary-text,var(--ink)); flex:none; }
-#equipment-analysis-body .intervention-current { font-weight:var(--weight-semibold); }
-#equipment-analysis-body table { width:100%; table-layout:auto; }
-#equipment-analysis-body :is(td,th) { padding:var(--space-2) var(--space-3); overflow-wrap:anywhere; }
-#equipment-analysis-body thead th:not(:first-child) { text-align:center; }
+#equipment-analysis-body .intervention-current {
+  margin:0;font-size:var(--font-body);font-weight:var(--weight-regular);
+  line-height:var(--leading-body);color:var(--ink);overflow-wrap:anywhere;
+}
+#equipment-analysis-body table { width:auto; max-width:100%; table-layout:auto; }
+#equipment-analysis-body :is(td,th) {
+  padding:var(--space-2);overflow-wrap:anywhere;vertical-align:middle;
+}
+#equipment-analysis-body tbody th[scope=row] {max-width:44ch;white-space:normal;}
+#equipment-analysis-body thead th:not(:first-child) { text-align:center;white-space:nowrap; }
 #equipment-analysis-body thead th:nth-child(2) {text-align:end;}
-#equipment-analysis-body td.numeric { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-#equipment-analysis-body td.analysis-table-unit {display:table-cell;width:1%;white-space:nowrap;text-align:center;vertical-align:middle;line-height:inherit;font-size:inherit;font-weight:inherit;color:var(--unit-color);margin:0;}
+#equipment-analysis-body td.analysis-table-value {max-width:36ch;white-space:normal;overflow-wrap:anywhere;}
+#equipment-analysis-body td.analysis-table-value.numeric { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#equipment-analysis-body td.analysis-table-unit {
+  display:table-cell;white-space:nowrap;text-align:center;vertical-align:middle;
+  line-height:inherit;font-size:inherit;font-weight:inherit;color:var(--unit-color);margin:0;
+}
 .equipment-analysis-pill.st-status-pill { position:static; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); background:var(--stopped-soft); width:max-content; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .equipment-analysis-pill.st-status-pill.is-pass { background:var(--success-soft); color:var(--success); }
 .equipment-analysis-pill.st-status-pill.is-fail { background:var(--failure-soft); color:var(--danger); }
@@ -324,7 +347,8 @@ window.STEquipmentAnalysis=(function(){
     for(const [label,value,unit='',help] of rows){
       const row=make(tbody,'tr'),tip=parameterHelp(label)+(help?'\n'+help:'');row.title=tip;
       const heading=make(row,'th',label);heading.scope='row';heading.title=tip;
-      const cell=make(row,'td',typeof value==='string'?value:fmt(value));cell.title=tip;if(typeof value!=='string')cell.className='numeric';
+      const cell=make(row,'td',typeof value==='string'?value:fmt(value));cell.title=tip;
+      cell.className='analysis-table-value'+(typeof value==='string'?'':' numeric');
       make(row,'td',unit).className='analysis-table-unit';
     }
   }

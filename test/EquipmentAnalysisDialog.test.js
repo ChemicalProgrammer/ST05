@@ -87,3 +87,22 @@ test('equipment section status uses actual evidence and distinguishes a technica
   assert.deepEqual(fills,['var(--matrix-joint-fill)','var(--matrix-mttr-fill)','var(--matrix-mtbf-fill)','var(--matrix-keep-fill)']);
  }finally{h.close();}
 });
+
+test('equipment analysis tables use intrinsic column widths and normal recommendation typography',()=>{
+ const h=harness();try{
+  h.open(20,12);
+  const style=h.w.document.querySelector('style').textContent;
+  assert.match(style,/#equipment-analysis-body table\s*\{\s*width:auto;\s*max-width:100%;\s*table-layout:auto;/);
+  assert.match(style,/\.table-scroll\s*\{[^}]*width:fit-content/);
+  assert.match(style,/--intervention-chart-width:735px/);
+  assert.match(style,/\.intervention-current\s*\{[^}]*font-size:var\(--font-body\)[^}]*font-weight:var\(--weight-regular\)/);
+  assert.equal(h.body.querySelector('.intervention-current').tagName,'P');
+  const tables=[...h.body.querySelectorAll('table')];
+  assert(tables.length>0);
+  for(const table of tables){
+   const values=[...table.querySelectorAll('tbody td:nth-child(2)')];
+   assert(values.length>0&&values.every(cell=>cell.classList.contains('analysis-table-value')));
+   assert([...table.querySelectorAll('tbody td:last-child')].every(cell=>cell.classList.contains('analysis-table-unit')));
+  }
+ }finally{h.close();}
+});

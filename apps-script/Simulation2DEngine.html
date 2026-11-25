@@ -6,6 +6,96 @@ window.STSimulation2DEngine=(function(){
     'Ramp up':'acceleration','Ramp down':'deceleration',Blocked:'blocked','Back-up stop':'backupStop',Failed:'failure',
     Paused:'paused',Stopped:'stopped','Emergency stop':'emergencyStop','Planned stop':'plannedStop'
   };
+  // ST_EXCLUSIVE_STATES_V1: observe, never feed counters back into physics.
+  function createStateAccounting(){
+    return {schema:'ST_EXCLUSIVE_STATES_V1',stateSeconds:{},outputUnitsByState:{},
+      accountedSeconds:0,outputUnits:0,productiveSeconds:0,productiveDesignOutputUnits:0,
+      positiveOutputSeconds:0,productiveNoOutputSeconds:0,outputOutsideProductiveUnits:0,
+      backupActive:false,backupEpisodes:0,observedBackupStops:0,episodeStopped:false,
+      endedAfterObservedStop:0,endedWithoutObservedStop:0};
+  }
+  function accountStateTick(ledger,state,seconds,output,designRate,machine,backupActive){
+    if(!ledger)return;
+    const flow=output-ledger.outputUnits;
+    ledger.outputUnits=output;
+    ledger.accountedSeconds+=seconds;
+    ledger.stateSeconds[state]=(ledger.stateSeconds[state]||0)+seconds;
+    if(flow>0){
+      ledger.positiveOutputSeconds+=seconds;
+      ledger.outputUnitsByState[state]=(ledger.outputUnitsByState[state]||0)+flow;
+    }
+    if(!machine)return;
+    const productive=state==='RUNNING'||state==='RAMP_UP'||state==='RAMP_DOWN'||state==='STOP_RESPONSE'||state==='DISCHARGING';
+    if(productive){
+      ledger.productiveSeconds+=seconds;
+      ledger.productiveDesignOutputUnits+=designRate*seconds;
+      if(!(flow>0))ledger.productiveNoOutputSeconds+=seconds;
+    }else if(flow>0)ledger.outputOutsideProductiveUnits+=flow;
+    if(backupActive&&!ledger.backupActive){
+      ledger.backupEpisodes++;ledger.episodeStopped=false;
+    }
+    if(backupActive&&state==='BACKUP_STOP'&&!ledger.episodeStopped){
+      ledger.observedBackupStops++;ledger.episodeStopped=true;
+    }
+    if(!backupActive&&ledger.backupActive){
+      if(ledger.episodeStopped)ledger.endedAfterObservedStop++;
+      else ledger.endedWithoutObservedStop++;
+      ledger.episodeStopped=false;
+    }
+    ledger.backupActive=backupActive;
+  }
+  function stateAccountingSnapshot(ledger,elapsed,output,designRate,machine,exposure,charged,detail=true){
+    if(!ledger)return null;
+    const tidy=value=>Number.isFinite(value)?Number(value.toFixed(6)):null;
+    const states=ledger.stateSeconds,time=name=>states[name]||0;
+    const ownDowntime=time('FAILURE')+time('MICRO_STOP');
+    const productive=ledger.productiveSeconds,ideal=ledger.productiveDesignOutputUnits;
+    let efficiency=null;
+    if(machine){
+      const availability=productive+ownDowntime>0?productive/(productive+ownDowntime):null;
+      const runtimeEfficiency=ideal>0?output/ideal:null;
+      const operationalEfficiency=availability!==null&&runtimeEfficiency!==null?availability*runtimeEfficiency:null;
+      const weightedDesign=productive>0?ideal/productive:designRate;
+      const intrinsicAvailability=elapsed>0?1-(ownDowntime+time('STOPPED')+time('EMERGENCY_STOP')+time('PLANNED_STOP'))/elapsed:null;
+      const intrinsicOee=intrinsicAvailability!==null&&runtimeEfficiency!==null?intrinsicAvailability*runtimeEfficiency:null;
+      // No reject stream. Keep above-design discrepancies visible, not capped.
+      efficiency={availability:tidy(availability),runtimeEfficiency:tidy(runtimeEfficiency),
+        operationalEfficiency:tidy(operationalEfficiency),throughput:tidy(operationalEfficiency===null?null:operationalEfficiency*weightedDesign),
+        productionSpeed:tidy(productive>0?output/productive:null),designSpeed:tidy(weightedDesign),
+        quality:1,intrinsicAvailability:tidy(intrinsicAvailability),intrinsicOee:tidy(intrinsicOee)};
+    }
+    const result={schema:ledger.schema,stateSeconds:Object.fromEntries(Object.entries(states).map(([k,v])=>[k,tidy(v)])),
+      productiveSeconds:machine?tidy(productive):null,productiveDesignOutputUnits:machine?tidy(ideal):null,
+      ownDowntimeSeconds:machine?tidy(ownDowntime):null,efficiency};
+    if(detail){
+      const byState=ledger.outputUnitsByState;
+      Object.assign(result,{accountedSeconds:tidy(ledger.accountedSeconds),
+        timeResidualSeconds:tidy(elapsed-Object.values(states).reduce((a,b)=>a+b,0)),
+        outputUnitsByState:Object.fromEntries(Object.entries(byState).map(([k,v])=>[k,tidy(v)])),
+        outputResidualUnits:tidy(output-Object.values(byState).reduce((a,b)=>a+b,0)),
+        positiveOutputSeconds:tidy(ledger.positiveOutputSeconds),
+        productiveNoOutputSeconds:machine?tidy(ledger.productiveNoOutputSeconds):null,
+        outputOutsideProductiveUnits:machine?tidy(ledger.outputOutsideProductiveUnits):null,
+        outputAboveDesignUnits:machine?tidy(Math.max(0,output-ideal)):null,
+        exceedsDesignBeyondOnePackage:machine?output-ideal>1+1e-6:null,
+        reliabilityExposureSeconds:machine?tidy(exposure):null,reliabilityChargedSeconds:machine?tidy(charged):null,
+        backup:machine?{observedEpisodes:ledger.backupEpisodes,observedStops:ledger.observedBackupStops,
+          endedAfterObservedStop:ledger.endedAfterObservedStop,endedWithoutObservedStop:ledger.endedWithoutObservedStop,
+          open:ledger.backupActive,openReachedStop:ledger.backupActive&&ledger.episodeStopped}:null});
+    }
+    return result;
+  }
+  const canonicalState={
+    Running:'RUNNING',Starting:'STARTING',Discharging:'DISCHARGING',Starved:'STARVED',
+    'Waiting for Prime':'WAITING_FOR_PRIME','Ramp up':'RAMP_UP','Ramp down':'RAMP_DOWN',
+    Blocked:'BLOCKED','Back-up stop':'BACKUP_STOP',Failed:'FAILURE',Paused:'PAUSED',
+    Stopped:'STOPPED','Emergency stop':'EMERGENCY_STOP','Planned stop':'PLANNED_STOP',
+    Empty:'EMPTY',Flowing:'FLOWING',Accumulating:'ACCUMULATING',Waiting:'IDLE'
+  };
+  function accountingSnapshot(item,elapsed=item.stateAccounting?.accountedSeconds,detail=true){
+    return stateAccountingSnapshot(item.stateAccounting,elapsed,item.produced,item.designSpeedPerSecond??item.rate,
+      item.kind==='machine',item.reliabilityExposureSeconds,item.reliabilityChargedSeconds,detail);
+  }
   // Match LineSimulationEngine.resolvePhysicalZone: reserve is a whole
   // number of packages in the packed outlet queue, not a raw beam pulse.
   function primeThresholdUnits(belt){
@@ -19,10 +109,10 @@ window.STSimulation2DEngine=(function(){
       ? {...definition,items:[],backupBlocked:false,backupElapsed:0,primeSeen:false,backupBeam:false,primeBeam:false,
         primeThresholdUnits:primeThresholdUnits(definition),primeQueueUnits:0,primeTriggerCount:0,
         backupOccupied:false,backupTriggerCount:0,backupClearCount:0,produced:0,state:'Empty',
-        receivedUnits:0,overflowUnits:0,overflowEvents:0,blockedEntryAttempts:0,
+        receivedUnits:0,overflowUnits:0,overflowEvents:0,blockedEntryAttempts:0,stateAccounting:createStateAccounting(),
         durations:{empty:0,flowing:0,accumulating:0},recentOutput:[],ratePerMinute:0}
       : {...definition,input:0,remaining:null,ready:false,started:0,produced:0,backupSince:null,residual:0,state:'Waiting',
-        admittedInputUnits:0,stopDischargedUnits:0,residualDischargedUnits:0,dischargeOverflowUnits:0,
+        admittedInputUnits:0,stopDischargedUnits:0,residualDischargedUnits:0,dischargeOverflowUnits:0,stateAccounting:createStateAccounting(),
         residualAtTrigger:0,resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
         activeStartDelaySeconds:definition.startDelay??0,startCause:'INITIAL',repairRecoveryPending:false,
         reliabilityExposureSeconds:0,reliabilityChargedSeconds:0,
@@ -31,7 +121,7 @@ window.STSimulation2DEngine=(function(){
         randomState:(Math.trunc(seed)+Math.imul(index+1,2654435761))>>>0,
         durations:{starting:0,running:0,starving:0,acceleration:0,deceleration:0,blocked:0,backupStop:0,failure:0,paused:0,stopped:0,emergencyStop:0,plannedStop:0},
         recentOutput:[],ratePerMinute:0});
-    let time=0,commandIndex=0,stopIndex=0,activeStop=null,materialAccountingComplete=true;
+    let time=0,commandIndex=0,stopIndex=0,activeStop=null,materialAccountingComplete=true,counterAccountingComplete=true;
     const commands=schedule.commands||[],stops=schedule.stops||[];
     const byId=new Map(line.map(item=>[item.id,item]));
     const options={failures:true,events:true,calendar:true};
@@ -86,6 +176,7 @@ window.STSimulation2DEngine=(function(){
       // Older checkpoints do not contain the input and loss counters needed
       // to reconstruct a lifetime balance. Do not report a fabricated zero.
       materialAccountingComplete=checkpoint.materialAccountingComplete===true;
+      counterAccountingComplete=checkpoint.counterAccountingComplete===true&&checkpoint.line.every(item=>item.stateAccounting?.schema==='ST_EXCLUSIVE_STATES_V1');
       commandIndex=checkpoint.commandIndex??0;
       stopIndex=checkpoint.stopIndex??0;
       activeStop=stops[checkpoint.activeStopIndex]??null;
@@ -93,10 +184,11 @@ window.STSimulation2DEngine=(function(){
         const saved=JSON.parse(JSON.stringify(checkpoint.line[index]));
         saved.durations={...item.durations,...saved.durations};
         Object.assign(item,saved);
+        if(!counterAccountingComplete)item.stateAccounting=null;
       });
     }
     function snapshot(){
-      return JSON.parse(JSON.stringify({time,commandIndex,stopIndex,materialAccountingComplete,activeStopIndex:activeStop?stops.indexOf(activeStop):-1,line:line.map((item,index)=>Object.fromEntries(
+      return JSON.parse(JSON.stringify({time,commandIndex,stopIndex,materialAccountingComplete,counterAccountingComplete,activeStopIndex:activeStop?stops.indexOf(activeStop):-1,line:line.map((item,index)=>Object.fromEntries(
         Object.entries(item).filter(([key])=>!Object.hasOwn(definitions[index],key))
       ))}));
     }
@@ -358,7 +450,7 @@ window.STSimulation2DEngine=(function(){
         admitted>0||machine.produced>beforeOutput||machine.resident.some(due=>due>machine.residenceClock+epsilon)||ready&&machine.outletCredit>0||accelerating||motionState==='Ramp down'?motionState:
         'Starved';
     }
-    return {line,snapshot,configure,control,get time(){return time;},get materialAccountingComplete(){return materialAccountingComplete;},step(seconds){
+    return {line,snapshot,configure,control,accountingSnapshot:(item,detail=true)=>accountingSnapshot(item,time,detail),get time(){return time;},get materialAccountingComplete(){return materialAccountingComplete;},step(seconds){
       while(commandIndex<commands.length&&commands[commandIndex].atVirtualSecond<=time+epsilon){
         const event=commands[commandIndex++];
         if(options.events)control(event.equipmentId,event.action);
@@ -407,11 +499,13 @@ window.STSimulation2DEngine=(function(){
           item.state=!head?'Empty':accumulating?'Accumulating':'Flowing';
           item.durations[category]+=seconds;
         }
+        accountStateTick(item.stateAccounting,canonicalState[item.state]||'UNKNOWN',seconds,item.produced,
+          item.kind==='machine'?(item.designSpeedPerSecond??item.rate):0,item.kind==='machine',item.kind==='machine'&&item.backupSince!==null);
         while(item.recentOutput.length&&item.recentOutput[0]<=time-5)item.recentOutput.shift();
         item.ratePerMinute=item.recentOutput.length*60/Math.min(time,5);
       }
     }};
   }
-  return {create};
+  return {create,accountingSnapshot};
 })();
 </script>

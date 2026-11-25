@@ -301,6 +301,86 @@ function createRuntime(input) {
   return runtime;
 }
 
+// ST_EXCLUSIVE_STATES_V1: observe, never feed counters back into physics.
+function createStateAccounting(){
+  return {schema:'ST_EXCLUSIVE_STATES_V1',stateSeconds:{},outputUnitsByState:{},
+    accountedSeconds:0,outputUnits:0,productiveSeconds:0,productiveDesignOutputUnits:0,
+    positiveOutputSeconds:0,productiveNoOutputSeconds:0,outputOutsideProductiveUnits:0,
+    backupActive:false,backupEpisodes:0,observedBackupStops:0,episodeStopped:false,
+    endedAfterObservedStop:0,endedWithoutObservedStop:0};
+}
+function accountStateTick(ledger,state,seconds,output,designRate,machine,backupActive){
+  if(!ledger)return;
+  const flow=output-ledger.outputUnits;
+  ledger.outputUnits=output;
+  ledger.accountedSeconds+=seconds;
+  ledger.stateSeconds[state]=(ledger.stateSeconds[state]||0)+seconds;
+  if(flow>0){
+    ledger.positiveOutputSeconds+=seconds;
+    ledger.outputUnitsByState[state]=(ledger.outputUnitsByState[state]||0)+flow;
+  }
+  if(!machine)return;
+  const productive=state==='RUNNING'||state==='RAMP_UP'||state==='RAMP_DOWN'||state==='STOP_RESPONSE'||state==='DISCHARGING';
+  if(productive){
+    ledger.productiveSeconds+=seconds;
+    ledger.productiveDesignOutputUnits+=designRate*seconds;
+    if(!(flow>0))ledger.productiveNoOutputSeconds+=seconds;
+  }else if(flow>0)ledger.outputOutsideProductiveUnits+=flow;
+  if(backupActive&&!ledger.backupActive){
+    ledger.backupEpisodes++;ledger.episodeStopped=false;
+  }
+  if(backupActive&&state==='BACKUP_STOP'&&!ledger.episodeStopped){
+    ledger.observedBackupStops++;ledger.episodeStopped=true;
+  }
+  if(!backupActive&&ledger.backupActive){
+    if(ledger.episodeStopped)ledger.endedAfterObservedStop++;
+    else ledger.endedWithoutObservedStop++;
+    ledger.episodeStopped=false;
+  }
+  ledger.backupActive=backupActive;
+}
+function stateAccountingSnapshot(ledger,elapsed,output,designRate,machine,exposure,charged,detail=true){
+  if(!ledger)return null;
+  const tidy=value=>Number.isFinite(value)?Number(value.toFixed(6)):null;
+  const states=ledger.stateSeconds,time=name=>states[name]||0;
+  const ownDowntime=time('FAILURE')+time('MICRO_STOP');
+  const productive=ledger.productiveSeconds,ideal=ledger.productiveDesignOutputUnits;
+  let efficiency=null;
+  if(machine){
+    const availability=productive+ownDowntime>0?productive/(productive+ownDowntime):null;
+    const runtimeEfficiency=ideal>0?output/ideal:null;
+    const operationalEfficiency=availability!==null&&runtimeEfficiency!==null?availability*runtimeEfficiency:null;
+    const weightedDesign=productive>0?ideal/productive:designRate;
+    const intrinsicAvailability=elapsed>0?1-(ownDowntime+time('STOPPED')+time('EMERGENCY_STOP')+time('PLANNED_STOP'))/elapsed:null;
+    const intrinsicOee=intrinsicAvailability!==null&&runtimeEfficiency!==null?intrinsicAvailability*runtimeEfficiency:null;
+    // No reject stream. Keep above-design discrepancies visible, not capped.
+    efficiency={availability:tidy(availability),runtimeEfficiency:tidy(runtimeEfficiency),
+      operationalEfficiency:tidy(operationalEfficiency),throughput:tidy(operationalEfficiency===null?null:operationalEfficiency*weightedDesign),
+      productionSpeed:tidy(productive>0?output/productive:null),designSpeed:tidy(weightedDesign),
+      quality:1,intrinsicAvailability:tidy(intrinsicAvailability),intrinsicOee:tidy(intrinsicOee)};
+  }
+  const result={schema:ledger.schema,stateSeconds:Object.fromEntries(Object.entries(states).map(([k,v])=>[k,tidy(v)])),
+    productiveSeconds:machine?tidy(productive):null,productiveDesignOutputUnits:machine?tidy(ideal):null,
+    ownDowntimeSeconds:machine?tidy(ownDowntime):null,efficiency};
+  if(detail){
+    const byState=ledger.outputUnitsByState;
+    Object.assign(result,{accountedSeconds:tidy(ledger.accountedSeconds),
+      timeResidualSeconds:tidy(elapsed-Object.values(states).reduce((a,b)=>a+b,0)),
+      outputUnitsByState:Object.fromEntries(Object.entries(byState).map(([k,v])=>[k,tidy(v)])),
+      outputResidualUnits:tidy(output-Object.values(byState).reduce((a,b)=>a+b,0)),
+      positiveOutputSeconds:tidy(ledger.positiveOutputSeconds),
+      productiveNoOutputSeconds:machine?tidy(ledger.productiveNoOutputSeconds):null,
+      outputOutsideProductiveUnits:machine?tidy(ledger.outputOutsideProductiveUnits):null,
+      outputAboveDesignUnits:machine?tidy(Math.max(0,output-ideal)):null,
+      exceedsDesignBeyondOnePackage:machine?output-ideal>1+1e-6:null,
+      reliabilityExposureSeconds:machine?tidy(exposure):null,reliabilityChargedSeconds:machine?tidy(charged):null,
+      backup:machine?{observedEpisodes:ledger.backupEpisodes,observedStops:ledger.observedBackupStops,
+        endedAfterObservedStop:ledger.endedAfterObservedStop,endedWithoutObservedStop:ledger.endedWithoutObservedStop,
+        open:ledger.backupActive,openReachedStop:ledger.backupActive&&ledger.episodeStopped}:null});
+  }
+  return result;
+}
+
 function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabilityCategories, residenceEnabled) {
   const failureRandom=createEquipmentRandom(seed,model.id,"failure");
   const microStopRandom=createEquipmentRandom(seed,model.id,"microstop-occurrence");
@@ -325,6 +405,8 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
     minorFailureCount:0,majorFailureCount:0,generalFailureCount:0,
     minorFailureSeconds:0,majorFailureSeconds:0,generalFailureSeconds:0,
     reliabilityExposureSeconds: 0,
+    reliabilityChargedSeconds: 0,
+    stateAccounting: createStateAccounting(),
     repairRestartPending: false,
     repairRestartCount: 0,
     emergencyStopLatched: false,
@@ -533,7 +615,8 @@ function executeTicks(runtime, until = runtime.run.durationSeconds, limits) {
       const row=currentProductRow(runtime);row.durationSeconds+=runtime.run.tickSeconds;row.idealBottleOutput+=ideal;
       runtime.equipment.forEach(e=>{e.idealNativeOutput=(e.idealNativeOutput||0)+e.nominalRatePerSecond*runtime.run.tickSeconds;});
     }
-    runtime.equipment.forEach((item) => {
+    runtime.equipment.forEach((item,index) => {
+      accountNumericalState(runtime,item,index);
       item.stateSeconds[item.availabilityState] = (item.stateSeconds[item.availabilityState] || 0) + runtime.run.tickSeconds;
       if(!runtime.summaryOnly&&!runtime.playbackOnly){const rate=item.actualRatePerSecond||0;item.historySum=(item.historySum||0)+rate;item.historyMin=Math.min(item.historyMin??rate,rate);item.historyMax=Math.max(item.historyMax??rate,rate);}
     });
@@ -551,6 +634,41 @@ function executeTicks(runtime, until = runtime.run.durationSeconds, limits) {
       if(completed>=limits.maxTicks||completed%16===0&&simulationClockNow()>=limits.deadline)break;
     }
   }
+}
+
+// Keep legacy availability states and rate-loss accounting untouched.
+function accountNumericalState(runtime,item,index){
+  const machine=!isConveyorEquipment(item),control=activeBackupControl(item);
+  let state=item.availabilityState;
+  if(state==='RAMPING_UP')state='RAMP_UP';
+  else if(state==='RAMPING_DOWN')state='RAMP_DOWN';
+  else if(state==='BACKUP_STOPPING'){
+    // Response delay is not evidence of a physical linear ramp-down.
+    state=control?.responseRemainingSeconds>0?'STOP_RESPONSE':'DISCHARGING';
+  }
+  if(!machine&&['RUNNING','STARVED','IDLE'].includes(state)){
+    const zone=runtime.zones[index];
+    if(zone?.physicalModelEnabled&&zone.ownerEquipmentId===item.id){
+      const items=zone.discreteItems;
+      if(items){
+        const head=items[0],tail=items.at(-1),previous=items.at(-2);
+        const packedTail=previous&&zone.accumulatedPitchMm+1e-6<zone.productPitchMm&&previous.x-tail.x<=zone.accumulatedPitchMm+1e-6;
+        state=!head?'EMPTY':head.x+zone.productLengthMm/2>=zone.usableLengthMm-1e-6||
+          (zone.accountingPackedPairIndex??-1)>=1||packedTail?'ACCUMULATING':'FLOWING';
+      }else state=getZoneInventory(zone)<=1e-8?'EMPTY':zone.waitingUnits>1e-8?'ACCUMULATING':'FLOWING';
+    }
+  }
+  accountStateTick(item.stateAccounting,state||'UNKNOWN',runtime.run.tickSeconds,item.outputCount,
+    machine?machineDesignRatePerSecond(item):0,machine,Boolean(control));
+}
+function numericalAccountingSnapshot(item,elapsed,detail=true){
+  const value=stateAccountingSnapshot(item.stateAccounting,elapsed,item.outputCount,machineDesignRatePerSecond(item),
+    !isConveyorEquipment(item),item.reliabilityExposureSeconds,item.reliabilityChargedSeconds,detail);
+  if(detail&&value&&!isConveyorEquipment(item)){
+    value.legacyRunningSeconds=round(item.runningSeconds);
+    value.legacyRunningDesignOutputUnits=round(item.runningDesignOutput||0);
+  }
+  return value;
 }
 
 function recordZoneStatistics(runtime) {
@@ -620,11 +738,12 @@ function advanceDiscreteConveyor(runtime,zone,stopped){
     // positions or sensor crossings change, but debounce/start timers still
     // receive every physical tick. Format changes build new zone runtimes.
     zone.waitingUnits=items.length;zone.physicalPrimeReady=items.length>=zone.primeTriggerWaitingUnits;
+    zone.accountingPackedPairIndex=canPack?items.length-1:-1;
     updatePrimeSensorSignal(runtime,zone);
     updateBackupSensorSegment(runtime,zone,tick,stationary.occupied,endSecond);
     return;
   }
-  let limit=end,previousCenter,queued=0,beam=false,packed=false,unmoved=true;
+  let limit=end,previousCenter,queued=0,beam=false,packed=false,unmoved=true,packedPairIndex=-1;
   // Packages remain ordered downstream-to-upstream. Fuse the position, queue
   // and sensor passes without changing the integration step or crossing rules.
   // Keeping the previous center in a local also avoids an array per belt/tick.
@@ -643,10 +762,13 @@ function advanceDiscreteConveyor(runtime,zone,stopped){
       zone.primePassedUnits++;zone.primeLastPassAtVirtualSecond=endSecond;
     }
     if(backup&&!beam&&Math.abs(item.x-backupPosition)<=half+1e-6)beam=true;
-    if(canPack&&!packed&&index>0&&previousCenter-item.x<=pitch+1e-6
-      &&backupPosition>=item.x&&backupPosition<=previousCenter)packed=true;
+    if(canPack&&index>0&&previousCenter-item.x<=pitch+1e-6){
+      packedPairIndex=index;
+      if(!packed&&backupPosition>=item.x&&backupPosition<=previousCenter)packed=true;
+    }
     previousCenter=item.x;
   }
+  zone.accountingPackedPairIndex=packedPairIndex;
   zone.waitingUnits=queued;
   zone.transit=items.slice(queued);
   zone.physicalPrimeReady=queued>=zone.primeTriggerWaitingUnits;
@@ -1068,6 +1190,7 @@ function processEquipment(runtime, index) {
     equipment.reliabilityExposureSeconds+=runtime.run.tickSeconds;
     if(runtime.run.reliabilityEnabled!==false&&equipment.noiseProfile?.reliability&&equipment.timeToFailureRemainingSeconds!==null){
       equipment.timeToFailureRemainingSeconds-=runtime.run.tickSeconds;
+      equipment.reliabilityChargedSeconds+=runtime.run.tickSeconds;
     }
   }
   if(!phase)return;
@@ -1377,6 +1500,7 @@ function consumeFlow(runtime,index,flow) {
     const consumed=flow*(runtime.equipment[index].inputPerOutput||1);
     if(incoming.discreteItems){
       incoming.discreteItems.splice(0,Math.round(consumed));
+      incoming.accountingPackedPairIndex=Math.max(-1,(incoming.accountingPackedPairIndex??-1)-Math.round(consumed));
       const owner=runtime.equipmentById.get(incoming.ownerEquipmentId);
       if(owner){owner.outputCount+=consumed;owner.actualRatePerSecond+=consumed/runtime.run.tickSeconds;}
     }
@@ -1653,6 +1777,7 @@ function recordLiveTelemetry(runtime) {
     equipment:runtime.equipment.map(item=>({
       id:item.id,unitOfFlow:item.unitOfFlow,mode:item.mode,
       availabilityState:item.availabilityState,
+      stateAccounting:numericalAccountingSnapshot(item,runtime.virtualSecond,false),
       processedUnits:round(item.outputCount),outputCount:round(item.outputCount),
       actualRatePerSecond:round(item.actualRatePerSecond),
       internalInventoryBottles:equipmentInventoryBottles(item),
@@ -1707,7 +1832,7 @@ function createSample(runtime,complete=false) {
     equipment: runtime.equipment.map((item) => {
       const effectiveness = createEquipmentEffectiveness(item, runtime.virtualSecond);
       return {
-        ...(complete?createEquipmentMetrics(item,runtime.virtualSecond):{}),
+        ...(complete?createEquipmentMetrics(item,runtime.virtualSecond):{stateAccounting:numericalAccountingSnapshot(item,runtime.virtualSecond,false)}),
         id: item.id,
         mode: item.mode,
         availabilityState: item.availabilityState,
@@ -1864,7 +1989,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: '0.20.2',
+    engineVersion: '0.20.3',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -1874,7 +1999,7 @@ function createResult(runtime,partial=false) {
     seed: runtime.run.seed,
     durationSeconds: duration,
     summary: createSummary(runtime),
-    equipmentMetrics: Object.fromEntries(runtime.equipment.map((item) => [item.id, createEquipmentMetrics(item, duration)])),
+    equipmentMetrics: Object.fromEntries(runtime.equipment.map((item) => [item.id, createEquipmentMetrics(item, duration, runtime.virtualSecond)])),
     accumulationZoneMetrics: Object.fromEntries(runtime.zones.filter((zone) => zone.visible).map((zone) => [
       zone.id,
       createZoneMetrics(zone, duration)
@@ -1945,7 +2070,7 @@ function createSummary(runtime) {
     lineOeeReference: runtime.product?'PRODUCT_WEIGHTED_IDEAL_OUTPUT':lineEffectiveness.referenceMethod,
     idealBottleOutput:runtime.product?runtime.idealBottleOutput:undefined,
     repairRestartPolicy: 'MTTR_STOP_TO_REPAIR_END_REPAIR_RAMP_OPT_IN',
-    reliabilityClockBasis: 'POSITIVE_PROCESSED_FLOW_TICKS',
+    reliabilityClockBasis: 'PRODUCTIVE_STATE_TICKS',
     qualityAssumption: 'NO_REJECT_MODEL_ASSUMES_100_PERCENT'
   };
 }
@@ -1965,7 +2090,7 @@ function materialInventory(runtime) {
   return sum(runtime.zones.map(zone=>getZoneInventory(zone)*(zone.bottleFactor||1)))+
     sum(runtime.equipment.map(item=>(item.residence?.inventory||0)*(item.outputBottleFactor||1)));
 }
-function createEquipmentMetrics(equipment, durationSeconds) {
+function createEquipmentMetrics(equipment, durationSeconds, accountingElapsedSeconds=durationSeconds) {
   const effectiveness = createEquipmentEffectiveness(equipment, durationSeconds);
   return {
     internalInventoryBottles:equipmentInventoryBottles(equipment),
@@ -1973,7 +2098,9 @@ function createEquipmentMetrics(equipment, durationSeconds) {
     internalInputBottleFactor:equipment.residence?(equipment.outputBottleFactor||1)/(equipment.inputPerOutput||1):undefined,
     internalInputUnit:equipment.processData?.flowUnits?.input==='CASES'?'cases':'bottles',
     estimatedResidenceSeconds:equipment.residence?round(estimateResidence(equipment)):undefined,
-    reliabilityClockBasis: 'POSITIVE_PROCESSED_FLOW_TICKS',
+    stateAccounting:numericalAccountingSnapshot(equipment,accountingElapsedSeconds),
+    reliabilityClockBasis: 'PRODUCTIVE_STATE_TICKS',
+    reliabilityChargedSeconds: round(equipment.reliabilityChargedSeconds),
     reliabilityExposureSeconds: round(equipment.reliabilityExposureSeconds),
     startRampSeconds: round(equipment.startRampSeconds),
     startRampOutputUnits: round(equipment.startRampOutputUnits),

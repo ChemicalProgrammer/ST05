@@ -1141,7 +1141,13 @@ window.STSimulation2D=(function(){
     const measuredRate=item.ratePerMinute??0;
     const rate=belt?measuredRate:Math.min(measuredRate,designSpeed*60);
     const bottles=value=>num(item.bottlesPerUnit>0?value*item.bottlesPerUnit:NaN);
-    const duration=(label,key)=>[label,num(item.durations?.[key]??0),'s'];
+    const accounting=window.STSimulation2DEngine?.accountingSnapshot?.(item,undefined,false)??null;
+    const stateKeys={running:'RUNNING',starving:'STARVED',starting:'STARTING',acceleration:'RAMP_UP',deceleration:'RAMP_DOWN',
+      blocked:'BLOCKED',backupStop:'BACKUP_STOP',failure:'FAILURE',paused:'PAUSED',stopped:'STOPPED',emergencyStop:'EMERGENCY_STOP',
+      plannedStop:'PLANNED_STOP',empty:'EMPTY',flowing:'FLOWING',accumulating:'ACCUMULATING'};
+    const duration=(label,key)=>[label,num(accounting?(accounting.stateSeconds[stateKeys[key]]??0):
+      key==='starving'?Math.max(0,(item.durations?.starving??0)-(item.waitingForPrimeSeconds??0)):item.durations?.[key]??0),'s'];
+    const extraState=(label,key,fallback)=>[label,num(accounting?(accounting.stateSeconds[key]??0):fallback),'s'];
     const summary=[['Design speed',num(belt?item.speed*.06:designSpeed*60),belt?'m/min':cases?'cpm':'bpm'],
       ['Flow',bottles(rate),'bpm'],['Processed',bottles(produced),'bottles']];
     if(cases)summary.push(['Case flow',num(rate),'cpm'],['Cases made',num(produced),'cases']);
@@ -1180,7 +1186,13 @@ window.STSimulation2D=(function(){
         duration('Faulted','failure'),duration('Stopped','stopped'),duration('Starting','starting'),
         duration('Ramp up','acceleration'),duration('Ramp down','deceleration'),
         duration('Paused','paused'),duration('Emergency stop','emergencyStop'),duration('Planned stop','plannedStop'),
-        duration('Back-up stop','backupStop')];
+        duration('Back-up stop','backupStop'),
+        extraState('Discharging','DISCHARGING',NaN),extraState('Waiting for Prime','WAITING_FOR_PRIME',item.waitingForPrimeSeconds)];
+    if(accounting){
+      const extra=belt?[['Stopped','STOPPED'],['Paused','PAUSED'],['Emergency stop','EMERGENCY_STOP'],['Planned stop','PLANNED_STOP'],['Faulted','FAILURE'],['Starting','STARTING']]:
+        [['Stop response','STOP_RESPONSE'],['Micro stop','MICRO_STOP'],['Idle','IDLE']];
+      for(const [label,key] of [...extra,['Unknown','UNKNOWN']])if(accounting.stateSeconds[key]>0)states.push(extraState(label,key,NaN));
+    }
     if(belt)return [
       {column:0,title:item.name,rows:summary,showSignal:true},
       {column:1,title:'States',rows:states},
@@ -1188,7 +1200,7 @@ window.STSimulation2D=(function(){
     ];
     const efficiency=window.STEquipmentEfficiency;
     const runningSeconds=(item.durations?.running??0)+(item.durations?.acceleration??0)+(item.durations?.deceleration??0);
-    const metrics=efficiency.calculate({
+    const metrics=accounting?.efficiency??efficiency.calculate({
       runningSeconds,internalDowntimeSeconds:item.durations?.failure??0,goodProducts:produced,designSpeed
     });
     const durations=Object.values(item.durations||{}).reduce((total,value)=>total+(Number(value)||0),0);
@@ -1202,7 +1214,7 @@ window.STSimulation2D=(function(){
       ?Math.max(0,Math.min(1,produced/idealRunningOutput)):null;
     // 2D has no reject stream: quality is currently 100%, matching the
     // numerical engine's explicit quality assumption.
-    const intrinsicOee=intrinsicAvailability!==null&&intrinsicPerformance!==null
+    const intrinsicOee=accounting?accounting.efficiency?.intrinsicOee??null:intrinsicAvailability!==null&&intrinsicPerformance!==null
       ?intrinsicAvailability*intrinsicPerformance:null;
     const performance=[['OEE',num(intrinsicOee===null?NaN:intrinsicOee*100),'%']];
     performance.push(...efficiency.fields.map(([key,label])=>{
@@ -1859,6 +1871,7 @@ window.STSimulation2D=(function(){
       return {equipmentId:item.id,name:item.name,kind:item.kind,outputUnit:item.unit,
         bottlesPerUnit:factor,producedUnits:count,producedBottles:count!==null&&factor>0?count*factor:null,
         state:item.state,failureCount:item.kind==='machine'?finite(item.failureCount):null,
+        stateAccounting:run.accountingSnapshot?.(item)??null,
         durationsSeconds:Object.fromEntries(Object.entries(item.durations||{}).map(([key,value])=>[key,finite(value)])),
         ...(item.kind==='machine'?{waitingForPrimeSeconds:finite(item.waitingForPrimeSeconds),
           reliabilityClockBasis:'PRODUCTIVE_STATE_TICKS',
@@ -1897,7 +1910,7 @@ window.STSimulation2D=(function(){
     const overflowBottles=valid?losses.reduce((a,b)=>a+b,0):null;
     const materialBalance=valid?{unit:'BOTTLES',inputBottles:input,outputBottles:bottles,inventoryBottles,overflowBottles,
       residualBottles:input-bottles-inventoryBottles-overflowBottles}:null;
-    return {schema:'st-simulation2d-summary-v1',controlPolicy:'PHYSICAL_FLOW_6',source,seed:finite(runSeed),round:round??null,
+    return {schema:'st-simulation2d-summary-v1',controlPolicy:'PHYSICAL_FLOW_7',counterPolicy:'ST_EXCLUSIVE_STATES_V1',source,seed:finite(runSeed),round:round??null,
       runState,durationSeconds:run.time,targetDurationSeconds:finite(limit),
       complete:runState==='Completed'&&Number.isFinite(limit)&&run.time>=limit-1e-8,
       outputEquipmentId:output?.equipmentId??null,outputUnit:output?.outputUnit??null,
@@ -1905,7 +1918,7 @@ window.STSimulation2D=(function(){
       throughputBpm:run.time>0&&bottles!==null?bottles*60/run.time:null,
       shiftOutputUnits:[...(shifts||[])].map(finite),equipment,materialBalance,
       notes:['Counts are actual discrete outputs; bottle counts use each equipment output pack factor.',
-        'The 2D model holds the selected format through changeovers. Its state counters differ from the numerical engine; Waiting for Prime is included in starving.',
+        'The 2D model holds the selected format through changeovers. Legacy durations include Waiting for Prime in starving and Discharging in running; stateAccounting contains exclusive states and uncapped diagnostic equipment efficiency.',
         'Reliability exposure counts Running, Ramp up, Ramp down and Discharging ticks. Charged time excludes intervals with failures disabled or without a configured failure profile.',
         'Sensor signals and outlet queue units are sampled after conveyor motion and before machine handoffs. Prime triggers count actual authorizations; Back-up triggers and clears count debounced transitions. The configured release position is diagnostic only in discrete transport.',
         'Normal blocked entry attempts retain product; only unavoidable residual discharge after the stop response can overflow at a physical conveyor. Machine outputs include spilled packages; conveyor inputs count accepted packages only.',
@@ -2149,7 +2162,7 @@ window.STSimulation2D=(function(){
     scheduleError='';
     try{nextSchedule=resolveSchedule(config);}catch(error){scheduleError=error.message;}
     const omitZone=(key,value)=>key==='zoneId'?undefined:value;
-    const nextSignature=JSON.stringify(['physical-flow-6',next,revised,nextSchedule,scheduleError],omitZone);
+    const nextSignature=JSON.stringify(['physical-flow-7',next,revised,nextSchedule,scheduleError],omitZone);
     const nextRepresentative=Number.isFinite(source?.seed)?source:null;
     const sameCase=next===key&&nextSignature===signature;
     if(sameCase&&nextRepresentative?.round===representative?.round&&nextRepresentative?.seed===representative?.seed){

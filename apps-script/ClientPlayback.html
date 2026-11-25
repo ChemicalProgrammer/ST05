@@ -531,8 +531,9 @@
         updateNumericalSummaryRows(card,unit,model,zone,belt,status);
         var oee=card.querySelector('.live-oee');
         var isConveyor=model.type==='CONVEYOR'||model.processData?.role==='CONVEYOR';
-        if(oee)oee.textContent=isConveyor?'':sample.virtualSecond>0&&Number.isFinite(unit.oeePercent)
-          ?formatPercent(unit.oeePercent/100):'—';
+        var oeeValue=unit.stateAccounting?unit.stateAccounting.efficiency?.intrinsicOee:unit.oeePercent/100;
+        if(oee)oee.textContent=isConveyor?'':sample.virtualSecond>0&&Number.isFinite(oeeValue)
+          ?formatPercent(oeeValue):'—';
         card._lastOverviewSample=sample;
       });
     }
@@ -1206,7 +1207,8 @@
       residence.classList.toggle('hidden',!Number.isFinite(unit.internalInventoryBottles));residence.hidden=false;
       residence.textContent=Number.isFinite(unit.internalInventoryBottles)?
         formatNumber(unit.internalInventoryBottles/capacityFactor)+' / '+formatNumber(unit.internalCapacityBottles!=null?unit.internalCapacityBottles/capacityFactor:design?.internalCapacityBottles??30)+' '+capacityUnit+' inside':'';
-      card.querySelector('.live-oee').textContent = isConveyor?'':sample.virtualSecond > 0 && Number.isFinite(unit.oeePercent) ? formatPercent(unit.oeePercent / 100) : '—';
+      var oeeValue=unit.stateAccounting?unit.stateAccounting.efficiency?.intrinsicOee:unit.oeePercent/100;
+      card.querySelector('.live-oee').textContent = isConveyor?'':sample.virtualSecond > 0 && Number.isFinite(oeeValue) ? formatPercent(oeeValue) : '—';
       var zone = sample.accumulationZones ? sample.accumulationZones.find(function(candidate) {
         return (candidate.ownerEquipmentId||state.run.result?.zoneDefinitions?.[candidate.id]?.ownerEquipmentId) === unit.id;
       }) : null;
@@ -1271,9 +1273,10 @@
 
       // State durations remain available in every numerical equipment card.
       var stateDetails=card.querySelector('.live-equipment-state-grid');
-      var durations=unit.stateSeconds||{},lookup={};
+      var canonical=unit.stateAccounting?.schema==='ST_EXCLUSIVE_STATES_V1'?unit.stateAccounting.stateSeconds:null;
+      var durations=canonical||unit.stateSeconds||{},lookup={};
       Object.keys(durations).forEach(function(key){lookup[key.toUpperCase()]=Number(durations[key])||0;});
-      function seconds(keys,fall){for(var i=0;i<keys.length;i++)if(Object.prototype.hasOwnProperty.call(lookup,keys[i]))return lookup[keys[i]];return Number.isFinite(fall)?fall:null;}
+      function seconds(keys,fall){for(var i=0;i<keys.length;i++)if(Object.prototype.hasOwnProperty.call(lookup,keys[i]))return lookup[keys[i]];return canonical?0:Number.isFinite(fall)?fall:null;}
       var rows=isConveyor?[
         ['Empty',seconds(['EMPTY'])],['Flowing',seconds(['FLOWING'])],['Accumulating',seconds(['ACCUMULATING'])],
         ['Ramp up',null],['Ramp down',null]
@@ -1284,12 +1287,17 @@
         ['Faulted',seconds(['FAULTED','FAILURE','FAILED'],unit.failureSeconds)],
         ['Stopped',seconds(['STOPPED'],unit.stoppedSeconds)],
         ['Starting',seconds(['STARTING'])],
-        ['Ramp up',seconds(['RAMPING_UP'])],['Ramp down',seconds(['RAMPING_DOWN'])],
+        ['Ramp up',seconds(['RAMP_UP','RAMPING_UP'])],['Ramp down',seconds(['RAMP_DOWN','RAMPING_DOWN'])],
         ['Paused',seconds(['PAUSED'],unit.pausedSeconds)],
         ['Emergency stop',seconds(['EMERGENCY_STOP'],unit.emergencyStopSeconds)],
         ['Planned stop',seconds(['PLANNED_STOP'],unit.plannedStopSeconds)],
-        ['Back-up stop',seconds(['BACKUP_STOP'],unit.backupStopSeconds)]
+        ['Back-up stop',seconds(['BACKUP_STOP'],unit.backupStopSeconds)],
+        ['Discharging',seconds(['DISCHARGING'])],['Waiting for Prime',seconds(['WAITING_FOR_PRIME'],unit.waitingForPrimeSeconds)]
       ];
+      if(canonical){
+        var extra=isConveyor?[['Stopped','STOPPED'],['Paused','PAUSED'],['Emergency stop','EMERGENCY_STOP'],['Planned stop','PLANNED_STOP'],['Faulted','FAILURE'],['Starting','STARTING']]:[['Stop response','STOP_RESPONSE'],['Micro stop','MICRO_STOP'],['Idle','IDLE']];
+        extra.concat([['Unknown','UNKNOWN']]).forEach(function(pair){if(lookup[pair[1]]>0)rows.push([pair[0],seconds([pair[1]])]);});
+      }else if(lookup.BACKUP_STOPPING>0)rows.push(['Stop transition (legacy)',lookup.BACKUP_STOPPING]);
       updateNumerical2DRows(stateDetails,rows,'states',card);
       // The duplicate legacy loss counters are hidden permanently.
       // Their durations remain available in the States group and raw samples.

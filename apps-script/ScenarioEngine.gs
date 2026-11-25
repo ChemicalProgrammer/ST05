@@ -1,7 +1,7 @@
 var STScenarioEngine_ = (function(){
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
-const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.2/DES:0.5.0/cache:31';
+const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.3/DES:0.5.0/cache:32';
 
 function canonicalSimulationInputSignature(input) {
   function canonical(value) {

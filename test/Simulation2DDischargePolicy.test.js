@@ -55,7 +55,7 @@ test('partial case inventory is conserved as bottles, and legacy checkpoints can
  const defs=[machine('source'),belt('b',{length:1000,backup:null,residual:0}),machine('packer',{unit:'CASES',bottlesPerUnit:12,batch:12,rate:1/3,inputUnit:'BOTTLES'}),belt('cases',{unit:'CASES',bottlesPerUnit:12,length:200,backup:null,residual:0}),machine('sink',{unit:'CASES',bottlesPerUnit:12,inputBottleFactor:12,capacityBottles:360,rate:1/3})];
  const model=create(defs);
  for(let i=0;i<1000;i++)model.step(.05);
- const s=summarize(model);assert.equal(s.controlPolicy,'PHYSICAL_FLOW_6');assert(s.outputBottles>0);
+ const s=summarize(model);assert.equal(s.controlPolicy,'PHYSICAL_FLOW_7');assert(s.outputBottles>0);
  assert.equal(s.materialBalance.residualBottles,0);
  assert.equal(s.equipment[2].inventoryBottles,model.line[2].resident.length);
  assert.equal(s.equipment[4].inventoryBottles,model.line[4].resident.length*12);

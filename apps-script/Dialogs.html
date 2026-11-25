@@ -1,6 +1,6 @@
 <script>
 window.STDialog = (function() {
-  var queue = [], active = false;
+  var queue = [], active = false, errorReporting = null;
   var activities=new Map();
   function notifyActivity(){window.dispatchEvent(new Event('st-dialog-activity'));}
   function beginActivity(dialog,counted){
@@ -17,6 +17,62 @@ window.STDialog = (function() {
     return function(){if(finished)return;finished=true;entry.count--;if(counted)entry.counted--;if(!entry.count){entry.observer.disconnect();entry.bar.remove();activities.delete(dialog);}notifyActivity();};
   }
   function localizedRequests(){var total=0;activities.forEach(function(entry,dialog){if(dialog.open&&dialog.isConnected)total+=entry.counted;});return total;}
+  function connectErrorReporting(provider){errorReporting=provider||null;}
+  function errorReportRecipient(){
+    var value=String(document.querySelector('meta[name="st-error-report-email"]')?.content||'').trim();
+    return /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(value)?value:'';
+  }
+  function errorReportText(key){var text=__ST_TEXT__(key);return window.STLanguage?.translate(text)||text;}
+  function errorReportCompose(options){
+    var subject='SimuLine · '+String(options.title||errorReportText('errors.title')).replace(/[\r\n]+/g,' ').slice(0,180);
+    var text=[options.title,options.message,options.details].filter(Boolean).join('\n\n');
+    // A compose link cannot transport attachments. Keep the URL comfortably
+    // bounded; the existing Copy error action retains all the diagnostic text.
+    var recipient=errorReportRecipient(),make=function(body){
+      var params=new URLSearchParams({view:'cm',fs:'1',to:recipient,su:subject,body:body});
+      return 'https://mail.google.com/mail/?'+params.toString();
+    };
+    var url=make(text),truncated=url.length>7500;
+    if(truncated){
+      var suffix='\n\n'+errorReportText('errors.report_long_body'),chars=Array.from(text),lo=0,hi=chars.length;
+      while(lo<hi){var mid=Math.ceil((lo+hi)/2);if(make(chars.slice(0,mid).join('')+suffix).length<=7500)lo=mid;else hi=mid-1;}
+      url=make(chars.slice(0,lo).join('')+suffix);
+    }
+    return {url:url,truncated:truncated,recipient:recipient};
+  }
+  function mountErrorReport(options,dialog,body,footer){
+    var section=document.createElement('section');section.className='error-report-options';
+    var label=document.createElement('label');label.className='checkbox-label st-checkbox-card';
+    var attach=document.createElement('input');attach.type='checkbox';attach.className='error-report-attach';attach.checked=false;
+    attach.disabled=!errorReporting?.hasCase?.();label.append(attach,document.createTextNode(__ST_TEXT__('errors.report_attach')));section.append(label);
+    var note=document.createElement('p');note.className='error-report-note';
+    function updateNote(){note.textContent=attach.disabled?__ST_TEXT__('errors.report_no_case'):attach.checked?__ST_TEXT__('errors.report_attachment_help'):__ST_TEXT__('errors.report_review');}
+    attach.onchange=updateNote;updateNote();section.append(note);
+    if(!errorReportRecipient()){
+      var recipientNote=document.createElement('p');recipientNote.className='error-report-note';recipientNote.textContent=__ST_TEXT__('errors.report_no_recipient');section.append(recipientNote);
+    }
+    var status=document.createElement('p');status.className='error-report-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
+    var retry=document.createElement('a');retry.className='error-report-retry';retry.target='_blank';retry.rel='noopener noreferrer';retry.textContent=__ST_TEXT__('errors.report_open_gmail');retry.hidden=true;
+    section.append(status,retry);body.append(section);
+    var report=document.createElement('button');report.type='button';report.className='secondary error-report-button';report.innerHTML=STIcons.svg('send');report.append(document.createTextNode(__ST_TEXT__('errors.report_email')));footer.append(report);
+    report.onclick=function(){
+      status.hidden=false;status.textContent='';retry.hidden=true;retry.removeAttribute('href');
+      var prepared=null;
+      if(attach.checked){
+        if(!errorReporting?.hasCase?.()){attach.checked=false;attach.disabled=true;updateNote();status.textContent=__ST_TEXT__('errors.report_no_case');return;}
+        try{prepared=errorReporting.downloadCase();if(!prepared)throw Error('No case snapshot');}
+        catch(error){status.textContent=__ST_TEXT__('errors.report_attachment_failed');return;}
+      }
+      var compose=errorReportCompose(options),messages=[];
+      if(prepared)messages.push(errorReportText(prepared.partial?'errors.report_attachment_partial':'errors.report_attachment_ready'));
+      if(compose.truncated)messages.push(errorReportText('errors.report_long_help'));
+      messages.push(errorReportText('errors.report_review'));
+      status.textContent=messages.join(' ');retry.href=compose.url;retry.hidden=false;
+      // Open on the explicit click. Keep a real link as a popup-blocker fallback.
+      // No Gmail/Drive upload, draft API, or send operation is performed.
+      try{window.open(compose.url,'_blank','noopener,noreferrer');}catch(ignore){}
+    };
+  }
   function open(options) {
     return new Promise(function(resolve) { queue.push({options:options,resolve:resolve}); next(); });
   }
@@ -57,6 +113,7 @@ window.STDialog = (function() {
         try{try{if(!navigator.clipboard?.writeText)throw Error('Clipboard unavailable');await navigator.clipboard.writeText(text);}catch(_){var area=document.createElement('textarea');area.value=text;area.className='clipboard-fallback';dialog.append(area);area.focus();area.select();try{if(!document.execCommand?.('copy'))throw Error('Copy unavailable');}finally{area.remove();copy.focus();}}copied.textContent=__ST_TEXT__('errors.copied');}
         catch(_){copied.textContent=__ST_TEXT__('errors.copy_failed');}finally{copy.disabled=false;if(dialog.isConnected)copy.focus();}
       };
+      mountErrorReport(options,dialog,body,footer);
     }
     var buttons = options.buttons || [{id:'ok',label:__ST_TEXT__('dialog.ok')}];
     if(options.error)buttons=[{id:'clear-error',label:__ST_TEXT__('errors.clear')},...buttons];
@@ -86,7 +143,7 @@ window.STDialog = (function() {
     if(input){input.focus();input.select();}else{(options.destructive ? footer.querySelector('.ghost') : footer.lastElementChild)?.focus();}
   }
   function confirm(title,message,destructive){return open({title:title,message:message,destructive:destructive,buttons:[{id:'cancel',label:__ST_TEXT__('view.cancel')},{id:'ok',label:destructive?__ST_TEXT__('dialog.delete'):__ST_TEXT__('dialog.ok'),destructive:destructive}]}).then(function(r){return r.action==='ok';});}
-  return {open:open,confirm:confirm,beginActivity:beginActivity,localizedRequests:localizedRequests,alert:function(title,message){return open({title:title,message:message});}};
+  return {open:open,confirm:confirm,beginActivity:beginActivity,localizedRequests:localizedRequests,connectErrorReporting:connectErrorReporting,alert:function(title,message){return open({title:title,message:message});}};
 })();
 // Shared compact error notices. Existing message nodes remain the source of truth.
 window.STErrors=(function(){

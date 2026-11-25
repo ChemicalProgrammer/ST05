@@ -28,6 +28,8 @@
       }
     };
 
+    STDialog.connectErrorReporting({hasCase:function(){return !!state.activeCase;},downloadCase:downloadErrorReportCase});
+
     var roundSession=null;
     var runGeneration=0;
     // Shared read-only execution lock for numerical and 2D engines.

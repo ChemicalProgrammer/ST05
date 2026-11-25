@@ -31,3 +31,12 @@ the JSON viewer serializes a bounded aggregate summary, not the full result or
 replay. All preview update paths use the same 64,000-character helper. Coverage
 reports omitted replay/events and equipment. Engine calculations, live frames,
 round statistics and persisted replay are unchanged by this preview reduction.
+
+
+## Report an error by email
+
+Set `ST_ERROR_REPORT_EMAIL` in `apps-script/DeveloperConfig.gs` to the approved support mailbox, then deploy the updated app. The checked-in value is intentionally empty; the application opens Gmail without a recipient and shows a prompt to enter one until configured. Invalid or multiple addresses are rejected.
+
+Every error-details dialog offers **Report by email**. It opens Gmail with the error title, message, code, details and available trace. No automatic sending, new Gmail OAuth scope or server-side draft creation is performed. The user reviews and sends the message. For long errors, the compose URL is bounded and the existing Copy error action provides the full diagnostic to paste into Gmail.
+
+**Attach complete case (JSON)** is unchecked by default and disabled when no case is open. Selecting it requests a local download of the detached current case snapshot, enriched with compatible live numerical recording and 2D checkpoint when available. This is a diagnostic snapshot, not a new calculation or cloud save; uncommitted invalid editor fields are not forced into the case. The user must attach the downloaded file manually in Gmail, which cannot accept attachments in a compose URL. It may contain confidential saved case data, including observations and conversations. Review before attaching; no case data is uploaded automatically. Large files are subject to the user's Gmail/Workspace attachment limits.

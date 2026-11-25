@@ -159,6 +159,12 @@ button.error-details-trigger:focus-visible, #header-error-button.error-details-t
 .error-notice:not(.error-local) { display:none !important; }
 #header-errors { display:inline-flex; align-items:center; }
 .error-copy-status { margin-right:auto; font-size:var(--font-secondary); color:var(--muted); }
+.error-details-dialog .dialog-actions { flex-wrap:wrap; }
+.error-report-options { display:grid; gap:var(--space-2); margin-top:var(--space-4); padding-top:var(--space-3); border-top:var(--border-width) solid var(--line); }
+.error-report-options > .st-checkbox-card { width:fit-content; max-width:100%; margin:0; }
+.error-report-note,.error-report-status { margin:0; font-size:var(--font-secondary); color:var(--muted); overflow-wrap:anywhere; }
+.error-report-retry { width:fit-content; font-size:var(--font-secondary); }
+.error-report-status[hidden],.error-report-retry[hidden] { display:none!important; }
 .clipboard-fallback { position:fixed; left:-9999px; width:1px; height:1px; }
 #series-color-map { height:180px; position:relative; background-image:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,transparent); border-radius:var(--radius-sm); touch-action:none; cursor:crosshair; margin-bottom:var(--space-3); }
 #series-color-marker { position:absolute; width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #000; transform:translate(-50%,-50%); pointer-events:none; }

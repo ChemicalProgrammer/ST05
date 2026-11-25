@@ -19,3 +19,14 @@ function getAppDevelopers_() {
     return {name:String(developer.name || ''),email:String(developer.email || '').trim()};
   });
 }
+
+
+// Set a single approved support mailbox before deployment.
+// Leave empty to let the user enter a recipient in Gmail; never use a fake
+// developer address or send a report automatically.
+var ST_ERROR_REPORT_EMAIL = '';
+
+function getErrorReportEmail_() {
+  var email=String(ST_ERROR_REPORT_EMAIL||'').trim();
+  return /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(email)?email:'';
+}

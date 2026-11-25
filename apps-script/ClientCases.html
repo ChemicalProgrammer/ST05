@@ -383,6 +383,18 @@ async function openCase(caseId, initialView) {
       refreshDesignGraph();
       if(document.getElementById('simulation2d-event-editor').contains(document.getElementById('simulation-event-section'))&&syncPersistentSimulation())syncSimulation2D(true);
     }
+    // Error reporting must work even when the editor is invalid. Capture a
+    // detached copy of the last available in-memory case, not a forced save
+    // or a validation pass that could reproduce the original error.
+    function downloadErrorReportCase(){
+      if(!state.activeCase)return null;
+      var draft=cloneJson(state.activeCase),partial=false;
+      draft.activeSimulationId=state.activeSimulationId;delete draft.expectedRevision;
+      try{captureCaseNumerical(draft);}catch(ignore){partial=true;}
+      try{captureCase2D(draft);}catch(ignore){partial=true;}
+      STReports.exportCompleteCase(draft);
+      return {partial:partial};
+    }
     async function exportCompleteCase(){
       if(!state.activeCase)return;var button=document.getElementById('export-complete-case');button.disabled=true;
       try{

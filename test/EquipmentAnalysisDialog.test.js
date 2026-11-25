@@ -196,3 +196,54 @@ test('buffer coverage differentiates unresolved geometry, missing MTTR and inapp
   assert.match(buffer().textContent,/Not applicable: Reliability failures are disabled/);
  }finally{h.close();}
 });
+
+test('reliability quadrant and technical verdict are independent; export retains both',()=>{
+ const h=harness();try{
+  const makeMachine=(id,name,mttr)=>({id,name,type:'FILLER',nominalRatePerSecond:2,noiseProfile:{reliability:{mtbfMinutes:40,mttrMinutes:mttr}}});
+  const a=makeMachine('a','A',1),b=makeMachine('b','B',5),belt={id:'c',name:'Connection',type:'CONVEYOR'};
+  const simulation={id:'case-a',name:'Line A',equipment:[a,belt,b],dynamicConfig:{initialFormatId:'f'}};
+  const audits=[{equipmentId:'c',upstreamId:'a',downstreamId:'b',engineering:{calculated:{antiStarveSeconds:90,antiBlockSeconds:120}}}];
+  const evidence=(count,seconds)=>({basis:'NUMERICAL_FRAME',durationSeconds:600,failureCount:count,failureSeconds:seconds});
+  const observationsByEquipmentId={a:evidence(1,20),b:evidence(3,120)};
+  const api=h.w.STEquipmentAnalysis;
+  api.open(simulation,'a',{audits,observed:observationsByEquipmentId.a,observationsByEquipmentId,origin:'NUMERICAL_FRAME'});
+  b.noiseProfile.reliability.mttrMinutes=1;observationsByEquipmentId.b.failureCount=99;
+  const single=api.buildEvaluationExport(),all=api.buildEvaluationExport('ALL');
+  assert.equal(single.schema,'st-equipment-analysis-v1');assert.equal(single.scope,'SINGLE');
+  assert.equal(single.evaluations.length,1);assert.equal(all.evaluations.length,2);
+  assert.equal(all.source.origin,'NUMERICAL_FRAME');assert.equal(all.source.activeFormatId,'f');
+  assert.deepEqual(JSON.parse(JSON.stringify(all.summary.statusCounts)),{PASS:0,REVIEW:1,FAIL:1,'NOT EVALUATED':0});
+  assert.deepEqual(JSON.parse(JSON.stringify(single.evaluations[0])),JSON.parse(JSON.stringify(all.evaluations[0])));
+  assert.equal(all.evaluations[0].interventionRegion,'RELIABILITY');assert.equal(all.evaluations[1].interventionRegion,'RELIABILITY');
+  assert.equal(all.evaluations[0].report.observed.failureCount,1);assert.equal(all.evaluations[1].report.observed.failureCount,3);
+  assert.equal(all.evaluations[1].report.mttrMinutes,5);
+  assert.equal(all.evaluations[0].report.bufferCoverage[0].status,'NOT_APPLICABLE');
+  assert.equal(all.evaluations[0].report.bufferCoverage[1].connectedConveyors[0].name,'Connection');
+  assert.equal(all.evaluations[1].report.bufferCoverage[0].status,'FAIL');
+  assert.equal(all.evaluations[1].completeness.buffer.status,'COMPLETE');
+  assert.equal(all.policy.availabilityTarget,.95);
+  api.open(simulation,'a',{audits,observed:evidence(1,20),origin:'NUMERICAL_FRAME'});
+  assert.equal(api.buildEvaluationExport('ALL').evaluations[1].report.observed,null);
+  api.open({...simulation,dynamicConfig:{reliabilityEnabled:false}},'a',{audits});
+  assert.equal(api.buildEvaluationExport('ALL').summary.statusCounts['NOT EVALUATED'],2);
+  h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+  assert.equal(h.w.document.getElementById('equipment-analysis-export-one').textContent,'Este equipo (JSON)');
+  assert.equal(h.w.document.getElementById('equipment-analysis-export-all').textContent,'Todos los equipos (JSON)');
+ }finally{h.close();}
+});
+
+test('equipment JSON menu downloads individual and all-machine reports',()=>{
+ const h=harness();try{
+  h.open(40,1);
+  const downloads=[],blobs=[];
+  h.w.URL.createObjectURL=blob=>{blobs.push(blob);return 'blob:test';};
+  h.w.URL.revokeObjectURL=()=>{};
+  h.w.HTMLAnchorElement.prototype.click=function(){downloads.push(this.download);};
+  const menu=h.w.document.getElementById('equipment-analysis-export-menu');
+  menu.open=true;h.w.document.getElementById('equipment-analysis-export-one').click();
+  assert.equal(menu.open,false);assert.equal(downloads[0],'equipment-analysis-Test-machine.json');
+  menu.open=true;h.w.document.getElementById('equipment-analysis-export-all').click();
+  assert.equal(menu.open,false);assert.equal(downloads[1],'equipment-analysis-all-equipment.json');
+  assert.equal(blobs.length,2);assert(blobs.every(b=>b.type==='application/json'));
+ }finally{h.close();}
+});

@@ -1093,8 +1093,12 @@
         if(!snapshot)return;
         var tab=activePersistentSimulation(),simulation={...tab,equipment:state.activeCase?.equipment||[],
           unitOfFlow:state.activeCase?.unitOfFlow,dynamicConfig:snapshot.config};
-        var evidence=snapshot.sample.virtualSecond>0?{...snapshot.unit,durationSeconds:snapshot.sample.virtualSecond,basis:'NUMERICAL_FRAME'}:null;
-        window.STEquipmentAnalysis.open(simulation,equipmentId,{observed:evidence});
+        var duration=snapshot.sample.virtualSecond;
+        var observationsByEquipmentId=Object.fromEntries((snapshot.sample.equipment||[]).map(function(unit){
+          return [unit.id,duration>0?{...unit,durationSeconds:duration,basis:'NUMERICAL_FRAME'}:null];
+        }));
+        var evidence=observationsByEquipmentId[equipmentId]??null;
+        window.STEquipmentAnalysis.open(simulation,equipmentId,{observed:evidence,observationsByEquipmentId,origin:'NUMERICAL_FRAME'});
       });
       geometryVerdict.after(equipmentVerdict);card._numericEquipmentVerdict=equipmentVerdict;
       equipmentVerdict.hidden=true;

@@ -541,12 +541,14 @@ window.STSimulation2D=(function(){
       if(window.STEquipmentAnalysis){
       const reliabilityButton=window.STEquipmentAnalysis.createButton(()=>{
         if(!equipmentAnalysisContext)return;
-        const live=model?.line?.find(x=>x.id===item.id),duration=model?.time||0;
-        const observed=live&&duration>0?{basis:'SPATIAL_RUN',durationSeconds:duration,failureSeconds:live.durations?.failure,
+        const duration=model?.time||0;
+        const observationsByEquipmentId=Object.fromEntries((model?.line||[]).map(live=>[live.id,duration>0?{
+          basis:'SPATIAL_RUN',durationSeconds:duration,failureSeconds:live.durations?.failure,
           failureCount:live.failureCount,starvedSeconds:live.durations?.starving,blockedSeconds:live.durations?.blocked,
-          backupStopSeconds:live.durations?.backupStop}:null;
+          backupStopSeconds:live.durations?.backupStop}:null]));
+        const observed=observationsByEquipmentId[item.id]??null;
         const simulation={...equipmentAnalysisContext,dynamicConfig:{...equipmentAnalysisContext.dynamicConfig,reliabilityEnabled:scheduleOptions.failures.checked}};
-        window.STEquipmentAnalysis.open(simulation,item.id,{observed});
+        window.STEquipmentAnalysis.open(simulation,item.id,{observed,observationsByEquipmentId,origin:'SPATIAL_RUN'});
       });
       reliabilityButton.classList.add('simulation2d-analysis-action');
       target.append(reliabilityButton);analysisButtons.set(item.id,reliabilityButton);

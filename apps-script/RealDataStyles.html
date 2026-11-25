@@ -12,7 +12,6 @@
   flex:0 0 auto;min-width:0;max-width:none;margin-inline-start:0;
 }
 #realdata-panel .real-data-toolbar .button-row > :is(button,details) {flex:0 0 auto;}
-#realdata-panel #real-data-save.has-changes:not(:disabled) {color:var(--accent);background:var(--selected);opacity:1;}
 @media(max-width:900px){
   #realdata-panel .real-data-toolbar {justify-content:flex-start;overflow-x:auto;}
 }
@@ -73,6 +72,31 @@
 #realdata-panel .real-data-explorer-children { padding-left:var(--space-3);border-left:var(--border-width) solid var(--line);margin-left:var(--space-2); }
 #realdata-panel .real-data-explorer-link { display:inline-block;max-width:calc(100% - 20px);text-align:left;white-space:normal;background:transparent;color:inherit;border:0;border-radius:var(--radius-md);padding:var(--space-2);font-weight:inherit; }
 #realdata-panel .real-data-explorer-link[aria-current="page"] { background:var(--surface-soft);color:var(--accent);font-weight:var(--weight-semibold); }
+#realdata-panel .real-data-registration-explorer .real-data-explorer-link {
+  transition:background-color var(--duration-normal) var(--ease),color var(--duration-normal) var(--ease);
+}
+#realdata-panel .real-data-registration-explorer .real-data-explorer-entry > summary::before {
+  transition:transform var(--duration-normal) var(--ease);
+}
+/* Modern browsers can animate native details without replacing their
+   keyboard semantics or persisted open/closed state. */
+@supports selector(details::details-content) and (interpolate-size: allow-keywords) {
+  #realdata-panel .real-data-registration-explorer details.real-data-explorer-entry::details-content {
+    interpolate-size:allow-keywords;block-size:0;opacity:0;overflow:clip;
+    transition:block-size var(--duration-normal) var(--ease),opacity var(--duration-normal) var(--ease),
+      content-visibility var(--duration-normal) allow-discrete;
+  }
+  #realdata-panel .real-data-registration-explorer details.real-data-explorer-entry[open]::details-content {
+    block-size:auto;opacity:1;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  #realdata-panel .real-data-registration-explorer .real-data-explorer-link,
+  #realdata-panel .real-data-registration-explorer .real-data-explorer-entry > summary::before {transition:none;}
+  @supports selector(details::details-content) {
+    #realdata-panel .real-data-registration-explorer details.real-data-explorer-entry::details-content {transition:none;}
+  }
+}
 #realdata-panel .real-data-explorer-panel { border:var(--border-width) solid var(--line);border-radius:var(--radius-md);padding:var(--space-4);margin:0;min-width:0; }
 #realdata-panel .real-data-explorer-panel[hidden] { display:none !important; }
 /* Comparison categories reuse the header tabs, not the registration tree's
@@ -101,10 +125,12 @@
 #realdata-panel .real-data-comparison-panel > .real-data-comparison-heading {
   display:grid;gap:var(--subsection-description-gap);margin:0 0 var(--space-3);
 }
-#realdata-panel .real-data-comparison-panel > .real-data-comparison-heading > h3 {
-  margin:0;color:var(--subsection-b-text);font-size:var(--font-card);
+/* Shared secondary title treatment for registration and comparison panels. */
+#realdata-panel .real-data-explorer-panel h3.real-data-panel-title {
+  color:var(--subsection-b-text);font-size:var(--font-card);
   font-weight:var(--weight-semibold);line-height:var(--leading-tight);
 }
+#realdata-panel .real-data-comparison-panel > .real-data-comparison-heading > h3 {margin:0;}
 #realdata-panel .real-data-comparison-heading > .subsection-description {margin:0;}
 @media(max-width:700px){
   #realdata-panel .real-data-comparison-explorer {grid-template-columns:minmax(0,1fr);}

@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {setup,fixture,mount} from './helpers/RealDataHarness.js';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {setup,fixture,mount} from './helpers/RealDataHarness.js';
 const choose=(w,id)=>{const button=w.document.querySelector('[data-explorer-select="'+id+'"]');assert(button,id);button.click();return w.document.querySelector('[data-explorer-panel="'+id+'"]');};
 const visible=w=>[...w.document.querySelectorAll('[data-explorer-panel]')].filter(p=>!p.hidden);
 test('explorer shows a collapsible navigation and exactly one content panel with unique input controls',()=>{
@@ -52,5 +52,47 @@ test('editing unplanned downtime breakdown restores calculated mode and keeps th
   toggle.checked=true;
   toggle.dispatchEvent(new w.Event('change'));
   assert.equal(panel.querySelector('[data-time-value="unplanned"]').value,'512');
+ }finally{w.close();}
+});
+
+test('record tree reuses comparison panel transitions and secondary titles without altering observations',()=>{
+ const w=setup('en');try{
+  const calls=[],cancelled=[],heights={total:180,runtime:220,losses:320,effective:260};
+  let reduced=false;
+  w.STMotion={reduced:()=>reduced,duration:()=>220,cancel:el=>cancelled.push(el),
+    play:(el,frames,options)=>calls.push({kind:'height',el,frames,options}),
+    reveal:el=>calls.push({kind:'reveal',el})};
+  const f=fixture(),{owner,changes}=mount(w,f);
+  const snapshot=JSON.stringify(owner.metadata.realData),saved=JSON.stringify(f.result);
+  const content=w.document.querySelector('#real-data-editor .real-data-explorer-content');
+  content.getBoundingClientRect=()=>({height:heights[content.querySelector('article:not([hidden])')?.dataset.explorerPanel]||250});
+  assert.equal(calls.length,0,'Initial mounting is not animated');
+  assert.equal(w.document.getElementById('real-data-save'),null);
+  assert([...content.querySelectorAll('article h3')].every(h=>h.classList.contains('real-data-panel-title')));
+  assert(w.document.querySelector('#real-data-comparison h3.real-data-panel-title'));
+  const runtime=choose(w,'runtime');
+  assert.equal(calls.length,2);
+  assert.deepEqual(Array.from(calls[0].frames,frame=>frame.height),['180px','220px']);
+  assert.equal(calls[1].el,runtime);
+  choose(w,'runtime');assert.equal(calls.length,2);
+  runtime.querySelector('[data-explorer-shortcut="losses"]').click();
+  assert.equal(calls.length,4);
+  assert.equal(visible(w)[0].dataset.explorerPanel,'losses');
+  assert.equal(w.document.activeElement,visible(w)[0].querySelector('h3'));
+  assert(cancelled.includes(content));
+  const rate=visible(w)[0].querySelector('[data-real-field="rateLossSeconds"]');
+  assert(rate&&rate.isConnected);
+  reduced=true;choose(w,'effective');assert.equal(calls.length,4);
+  reduced=false;choose(w,'losses');assert.equal(calls.length,6);
+  assert.equal(visible(w)[0].querySelector('[data-real-field="rateLossSeconds"]'),rate,'Input nodes are reused');
+  w.document.documentElement.lang='es';w.dispatchEvent(new w.Event('st-language-change'));
+  assert.equal(calls.length,6,'Language rebuild is not animated');
+  assert.equal(visible(w)[0].dataset.explorerPanel,'losses');
+  assert.equal(JSON.stringify(owner.metadata.realData),snapshot);
+  assert.equal(JSON.stringify(f.result),saved);assert.equal(changes(),0);
+  const css=fs.readFileSync('apps-script/RealDataStyles.html','utf8');
+  assert.match(css,/\.real-data-explorer-panel h3\.real-data-panel-title\s*\{[^}]*color:var\(--subsection-b-text\)/);
+  assert.match(css,/\.real-data-registration-explorer \.real-data-explorer-link\s*\{[^}]*transition:background-color/);
+  assert.match(css,/details\.real-data-explorer-entry::details-content\s*\{[^}]*transition:block-size/);
  }finally{w.close();}
 });

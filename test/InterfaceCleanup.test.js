@@ -59,8 +59,10 @@ test('Case saving is exclusively manual and the JSON fields preference was remov
   assert.match(shell,/actions\.syncSaveButton\(\)/);
   assert.match(core,/syncSaveButton:syncSaveButton/);
   assert.match(core,/STRealData\.init\(state,\{changed:queueCaseEvidenceSave\}\)/);
-  assert.match(core,/\['save-case','real-data-save'\]\.forEach/);
-  assert.match(real,/id="real-data-save"[^>]*data-icon="save"/);
+  assert.match(core,/var saveButton=document\.getElementById\('save-case'\)/);
+  assert.doesNotMatch(real,/id="real-data-save"/);
+  assert.doesNotMatch(core,/real-data-save/);
+  assert.doesNotMatch(cases,/real-data-save/);
 });
 
 test('Real Data and Comparison are Advance-only in navigation and workspace tabs',()=>{

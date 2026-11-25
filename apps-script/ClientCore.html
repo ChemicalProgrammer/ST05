@@ -190,10 +190,8 @@
       STSettings.connectModels(function(done){callServer('listGeminiModels',[],done);});
       STSettings.connectRemoval(function(done){callServer('deleteGeminiApiKey',[],function(response){if(response.ok){state.bootstrap.gemini=response.data;STSettings.configureGemini(response.data);}done(response);});});
       document.getElementById('retry-autosave').onclick = retryAutosave;
-      ['save-case','real-data-save'].forEach(function(id){
-        var button=document.getElementById(id);
-        if(button)button.onclick=function(){if(!button.disabled&&state.activeCase)saveActiveCase();};
-      });
+      var saveButton=document.getElementById('save-case');
+      if(saveButton)saveButton.onclick=function(){if(!saveButton.disabled&&state.activeCase)saveActiveCase();};
       document.getElementById('new-case-form').addEventListener('submit', createDraftCase);
       document.getElementById('create-demo-case').addEventListener('click', createDemoCase);
       document.getElementById('clone-case').addEventListener('click', cloneActiveSimulation);

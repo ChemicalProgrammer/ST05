@@ -365,13 +365,45 @@ window.STRealData=(function(){
     }
     target.append(details);
   }
+  // Both explorers use the same selection transition. Initial mounting and
+  // data refreshes are deliberately not animated; never remount the inputs
+  // simply because the selected concept changes.
+  function explorerSelection(layout,content,entries){
+    let activeId=null;
+    return function select(id){
+      const next=entries.get(id);
+      if(!next||id===activeId)return false;
+      const motion=window.STMotion,previous=entries.get(activeId);
+      const animate=!!previous&&layout.isConnected&&!!motion&&!motion.reduced?.();
+      // Start from the currently visible height when switching rapidly.
+      const before=animate?content.getBoundingClientRect().height:0;
+      motion?.cancel(content);
+      if(previous)motion?.cancel(previous.panel);
+      for(const [key,{button,panel}] of entries){
+        button.setAttribute('aria-current',key===id?'page':'false');
+        panel.hidden=key!==id;
+      }
+      activeId=id;
+      if(animate){
+        const after=content.getBoundingClientRect().height;
+        if(before>0&&after>0&&Math.abs(after-before)>1){
+          motion.play(content,[{height:before+'px',boxSizing:'border-box',overflow:'hidden'},
+            {height:after+'px',boxSizing:'border-box',overflow:'hidden'}],
+            {duration:motion.duration('card-update',220),easing:'ease-out'});
+        }
+        motion.reveal(next.panel);
+      }
+      return true;
+    };
+  }
   function installRegistrationExplorer(target){
     const key=String(state.activeCase.id)+'/'+String(current().id),previous=editorFolders.get(key)||new Map(),all=new Map();
-    const explorer=el('div',null,'real-data-explorer'),nav=el('nav',null,'real-data-explorer-nav'),content=el('div',null,'real-data-explorer-content');nav.setAttribute('aria-label',ui('Conceptos del registro'));
+    const explorer=el('div',null,'real-data-explorer real-data-registration-explorer'),nav=el('nav',null,'real-data-explorer-nav'),content=el('div',null,'real-data-explorer-content');nav.setAttribute('aria-label',ui('Conceptos del registro'));
+    const select=explorerSelection(explorer,content,all);
     explorer.dataset.editorKey=key;
     let serial=0;
     function section(id,label){
-      const panel=el('article',null,'real-data-explorer-panel'),heading=el('h3',label),body=el('div',null,'real-data-explorer-body');
+      const panel=el('article',null,'real-data-explorer-panel'),heading=el('h3',label,'real-data-panel-title'),body=el('div',null,'real-data-explorer-body');
       panel.dataset.explorerPanel=id;panel.hidden=true;
       const descriptor={id,label,panel,body,heading,children:[],parent:null};panel.append(heading,body);all.set(id,descriptor);content.append(panel);return descriptor;
     }
@@ -437,7 +469,7 @@ window.STRealData=(function(){
     }
     function choose(id,focus=false){
       const d=all.get(id);if(!d)return;editorSelections.set(key,id);
-      for(const item of all.values()){item.panel.hidden=item!==d;item.button.setAttribute('aria-current',item===d?'page':'false');}
+      select(id);
       for(let parent=d.parent;parent;parent=parent.parent)if(parent.folder)parent.folder.open=true;
       if(focus){d.heading.tabIndex=-1;d.heading.focus();}
     }
@@ -534,32 +566,7 @@ window.STRealData=(function(){
       'equipment-downtime':['machine','Equipment downtime','Downtime por equipo']
     };
     const content=el('div',null,'real-data-explorer-content');
-    const buttons=new Map();
-    let activeId=null;
-    function select(id){
-      const next=buttons.get(id);
-      if(!next||id===activeId)return;
-      const motion=window.STMotion,previous=buttons.get(activeId);
-      const animate=!!previous&&layout.isConnected&&!!motion&&!motion.reduced?.();
-      // Keep the current visible height if the user switches during a transition.
-      const before=animate?content.getBoundingClientRect().height:0;
-      motion?.cancel(content);
-      if(previous)motion?.cancel(previous.panel);
-      for(const [key,{button,panel}] of buttons){
-        button.setAttribute('aria-current',key===id?'page':'false');
-        panel.hidden=key!==id;
-      }
-      activeId=id;
-      if(animate){
-        const after=content.getBoundingClientRect().height;
-        if(before>0&&after>0&&Math.abs(after-before)>1){
-          motion.play(content,[{height:before+'px',boxSizing:'border-box',overflow:'hidden'},
-            {height:after+'px',boxSizing:'border-box',overflow:'hidden'}],
-            {duration:motion.duration('card-update',220),easing:'ease-out'});
-        }
-        motion.reveal(next.panel);
-      }
-    }
+    const buttons=new Map(),select=explorerSelection(layout,content,buttons);
     for(const group of groups){
       const id=group.dataset.comparisonGroup;
       const label=group.querySelector('.subsection-native-title').textContent;
@@ -577,7 +584,7 @@ window.STRealData=(function(){
       panel.id='real-data-comparison-'+id;
       panel.dataset.comparisonGroup=id;
       const heading=el('div',null,'real-data-comparison-heading');
-      const title=el('h3',label,'real-data-comparison-title');title.id=panel.id+'-title';
+      const title=el('h3',label,'real-data-panel-title real-data-comparison-title');title.id=panel.id+'-title';
       heading.append(title);
       if(description)heading.append(el('p',description,'subsection-description'));
       panel.setAttribute('aria-labelledby',title.id);

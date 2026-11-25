@@ -61,12 +61,12 @@ test('manual Save flushes the request even when automatic saving is disabled',as
  sent[0].done({ok:true,data:{id:'c',revision:2}});await saving;assert.equal(finished,true);assert(!context.autosave.pending());
 });
 
-test('Real Data metadata changes use the shared manual Save controls without invalidating the completed simulation',async()=>{
+test('Real Data metadata changes enable the header Save control without invalidating the completed simulation',async()=>{
  const equipment=[{id:'filler',name:'Filler',type:'FILLER',nominalRatePerSecond:4,noiseProfile:{reliability:{mtbfMinutes:20,mttrMinutes:1}}}];
  const simulation={id:'s',equipment:clone(equipment),dynamicConfig:{durationSeconds:86400,rounds:3},results:{summary:{outputCount:180000,lineOeePercent:65},inputSignature:'complete-inputs',replicationStatus:{state:'COMPLETE'}}};
  const state={activeCase:{id:'c',name:'Line G',revision:4,equipment:clone(equipment),metadata:{consoleOptions:{autosaveEnabled:true}},simulations:[simulation]},activeSimulationId:'s',run:{result:simulation.results},isDirty:false,saving:false};
  const makeButton=()=>({disabled:true,classList:{values:new Set(['hidden']),toggle(key,flag){if(flag)this.values.add(key);else this.values.delete(key);},contains(key){return this.values.has(key);}}});
- const buttons={'save-case':makeButton(),'real-data-save':makeButton()},sent=[],errors=[];
+ const buttons={'save-case':makeButton()},sent=[],errors=[];
  const context=vm.createContext({window:{},state,setTimeout,clearTimeout,Date,__ST_TEXT__:key=>key,
   document:{getElementById:id=>buttons[id]},STProducts:{validateForSave(){}},
   whatIfOnlySave:false,activePersistentSimulation:()=>simulation,cloneJson:clone,

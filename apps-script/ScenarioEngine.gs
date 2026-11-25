@@ -18,10 +18,14 @@ function canonicalSimulationInputSignature(input) {
   // PRECISE preserves the historical step. Explicitly choosing it must not
   // invalidate an otherwise identical completed simulation.
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
+  if(run.dynamicLineBalancingEnabled!==true)delete run.dynamicLineBalancingEnabled;
   return JSON.stringify(canonical({
-    version: SIMULATION_PROVENANCE_VERSION,
+    version: SIMULATION_PROVENANCE_VERSION+(run.dynamicLineBalancingEnabled===true?'/DLB:1':''),
     unitOfFlow: input.case.unitOfFlow || 'units',
-    equipment: input.case.equipment,
+    equipment: input.case.equipment.map(item=>{
+      if(!item.processData?.dynamicLineBalancing||run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true)return item;
+      const processData={...item.processData};delete processData.dynamicLineBalancing;return {...item,processData};
+    }),
     run: {
       durationSeconds: 300, tickSeconds: .25, sampleEverySeconds: 5,
       seed: 1, commands: [], rounds: 1, engineId: 'ST_CURRENT', ...run
@@ -1158,9 +1162,54 @@ function isFiniteNumber(value) {
 
 
 
+// Dynamic balancing phase 1: one independently driven belt, two virtual
+// contiguous-queue thresholds. All distances are mm; native flow is packages/s.
+function resolveDynamicBeltSettings(zone, config, downstream) {
+  if(!config || config.enabled!==true)return null;
+  const nominal=zone?.conveyorSpeedMmPerSecond, length=zone?.usableLengthMm;
+  const packed=zone?.accumulatedPitchMm??zone?.productLengthMm;
+  const configured=downstream?.nominalRatePerSecond;
+  const maximum=downstream?.processData?.equipment?.maximumSpeedBpm;
+  const rate=(downstream?.processData?.productInputRatePerSecond??configured)*
+    (maximum>0&&configured>0?Math.min(1,maximum/60/configured):1);
+  const low=config.lowReserveSeconds, high=config.highReserveSeconds;
+  const max=config.maxSpeedMPerMinute/0.06, boost=config.boostPercent;
+  const up=config.accelerationSeconds, down=config.decelerationSeconds;
+  const debounce=config.confirmSeconds, dwell=config.minDwellSeconds;
+  const positive=x=>Number.isFinite(x)&&x>0;
+  const nonnegative=x=>Number.isFinite(x)&&x>=0;
+  if(![nominal,length,packed,rate].every(positive))throw Error('Resolve belt geometry and downstream native input rate first.');
+  if(!positive(config.maxSpeedMPerMinute)||!(max>nominal))throw Error('Maximum belt speed must exceed nominal speed (m/min).');
+  if(!positive(boost)||boost>1000)throw Error('Boost must be greater than 0 and at most 1000%.');
+  if(!positive(low)||!positive(high)||high<=low)throw Error('High reserve must exceed positive low reserve.');
+  if(![up,down].every(positive)||![debounce,dwell].every(nonnegative))throw Error('Use positive ramp times and nonnegative confirmation and dwell times.');
+  const lowUnits=Math.ceil(rate*low),highUnits=Math.ceil(rate*high);
+  const lowPositionMm=length-lowUnits*packed,highPositionMm=length-highUnits*packed;
+  if(!Number.isFinite(zone.backupSensorPositionMm)||!Number.isFinite(zone.primeSensorPositionMm)||
+    highUnits<=lowUnits||!(zone.backupSensorPositionMm<highPositionMm&&highPositionMm<lowPositionMm&&lowPositionMm<zone.primeSensorPositionMm))
+    throw Error('Both balancing sensors must fit strictly between Back-up and Prime; adjust reserve thresholds.');
+  const highSpeed=Math.min(max,nominal*(1+boost/100));
+  return {nominalSpeedMmPerSecond:nominal,highSpeedMmPerSecond:highSpeed,maxSpeedMmPerSecond:max,
+    lowUnits,highUnits,lowPositionMm,highPositionMm,lowReserveSeconds:low,highReserveSeconds:high,
+    accelerationSeconds:up,decelerationSeconds:down,confirmSeconds:debounce,minDwellSeconds:dwell};
+}
+
+function validateDynamicBalancing(equipment,run,details){
+  if(run?.dynamicLineBalancingEnabled!==true||!Array.isArray(equipment))return;
+  let active=0;
+  equipment.forEach((item,index)=>{
+    const config=item?.processData?.dynamicLineBalancing;
+    if(!isConveyorEquipment(item)||config?.enabled!==true)return;
+    active++;
+    try{resolveDynamicBeltSettings(resolveAccumulationZoneDefinition(equipment,index).definition,config,equipment[index+1]);}
+    catch(error){details.push(invalid('case.equipment['+index+'].processData.dynamicLineBalancing',(item.name||item.id)+': '+error.message));}
+  });
+  if(!active)details.push(invalid('run.dynamicLineBalancingEnabled','Enable and configure at least one conveyor in Dynamic balancing.'));
+}
+
 function validateSimulationInput(input) {
   const details = [];
-  try { const resolvedProducts=validateProductSetup(input);if(resolvedProducts.length){for(const resolved of resolvedProducts)validateCase({...input.case,equipment:resolved.equipment},details,resolved.product);}else validateCase(input?.case, details); } catch(error) { details.push(invalid('run.productCatalog',error.message)); }
+  try { const resolvedProducts=validateProductSetup(input);if(resolvedProducts.length){for(const resolved of resolvedProducts){validateCase({...input.case,equipment:resolved.equipment},details,resolved.product);validateDynamicBalancing(resolved.equipment,input.run,details);}}else {validateCase(input?.case, details);validateDynamicBalancing(input?.case?.equipment,input?.run,details);} } catch(error) { details.push(invalid('run.productCatalog',error.message)); }
   validateRun(input?.run, details);
   try { if(input?.run?.tickSeconds>0)resolvePlannedStops(input.run);if(input?.run?.eventsEnabled!==false&&(input?.run?.plannedStops?.length||input?.run?.plantCalendar?.enabled&&input.run.plantCalendar.mode==='SCHEDULED')&&input.run.engineId==='DES_SIMPY_EXPERIMENTAL')throw new Error('Scheduled plant stops currently require the ST engine.'); } catch(error){details.push(invalid('run.plantCalendar',error.message));}
   if(input?.run?.eventsEnabled!==false)validateCommands(input?.run?.commands, input?.case?.equipment, details);
@@ -1387,6 +1436,8 @@ function validateRun(run, details) {
     details.push(required('run'));
     return;
   }
+  if(run.dynamicLineBalancingEnabled!==undefined&&typeof run.dynamicLineBalancingEnabled!=='boolean')details.push(invalid('run.dynamicLineBalancingEnabled','must be a boolean'));
+  if(run.dynamicLineBalancingEnabled===true&&(run.engineId==='DES_SIMPY_EXPERIMENTAL'||run.machineResidenceEnabled!==true))details.push(invalid('run.dynamicLineBalancingEnabled','Dynamic balancing requires the ST discrete physical engine (machine residence enabled).'));
   if (run.eventsEnabled !== undefined && typeof run.eventsEnabled !== 'boolean') details.push(invalid('run.eventsEnabled','must be a boolean'));
   if(run.discretePackages!==undefined&&typeof run.discretePackages!=='boolean')details.push(invalid('run.discretePackages','must be a boolean'));
   if(run.discretePackages&&(run.engineId==='DES_SIMPY_EXPERIMENTAL'||(run.rounds??1)!==1))details.push(invalid('run.discretePackages','Bottle Live requires the ST engine and one round'));

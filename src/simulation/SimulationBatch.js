@@ -41,6 +41,7 @@ export async function simulateBatch(input, options={}) {
     const conveyorRows=Object.values(result.accumulationZoneMetrics||{}).filter(zone=>Number.isFinite(zone.conveyorSpeedMmPerSecond));
     if(conveyorRows.length)rows[index].conveyorResults=conveyorRows.map(zone=>({
       id:zone.id,ownerEquipmentId:zone.ownerEquipmentId,conveyorSpeedMmPerSecond:zone.conveyorSpeedMmPerSecond,
+      ...(zone.dynamicLineBalancing?{dynamicLineBalancing:zone.dynamicLineBalancing}:{}),
       movingPitchMm:zone.movingPitchMm,accumulatedPitchMm:zone.accumulatedPitchMm,
       averageInventoryUnits:zone.averageInventoryUnits,maximumInventoryUnits:zone.maximumInventoryUnits
     }));

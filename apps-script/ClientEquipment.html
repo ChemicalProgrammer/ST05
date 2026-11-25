@@ -58,6 +58,57 @@
     function equipmentField(card, selector) { return card.querySelector(selector) || card._fields?.querySelector(selector); }
     function equipmentFields(card, selector) { return card.contains(card._fields) ? card.querySelectorAll(selector) : Array.from(card.querySelectorAll(selector)).concat(Array.from(card._fields?.querySelectorAll(selector)||[])); }
 
+    function attachDynamicBalancing(card,equipment){
+      var saved=equipment.processData?.dynamicLineBalancing, fields=card._fields;
+      var section=document.createElement('section');section.className='dynamic-balancing-panel';section.hidden=equipment.type!=='CONVEYOR';
+      section.dataset.configured=String(Boolean(saved));
+      var title=document.createElement('h4');title.textContent='Dynamic balancing';
+      var note=document.createElement('p');note.className='chart-note';note.textContent='Experimental numerical control. Use measured VFD limits; sensor positions are calculated from compact queue reserves.';
+      var toggle=document.createElement('label');toggle.className='checkbox-label st-checkbox-card';
+      var enable=document.createElement('input');enable.type='checkbox';enable.className='dynamic-balancing-enabled';enable.checked=saved?.enabled===true;
+      var caption=document.createElement('span');caption.textContent='Enable for this conveyor';toggle.append(enable,caption);
+      var grid=document.createElement('div');grid.className='dynamic-balancing-grid';
+      var specs=[['maxSpeedMPerMinute','Maximum belt speed (m/min)',null,0],['boostPercent','Recovery boost (%)',20,0],
+        ['lowReserveSeconds','Low reserve (s)',12,0],['highReserveSeconds','High reserve (s)',25,0],
+        ['accelerationSeconds','Acceleration time (s)',2,0],['decelerationSeconds','Deceleration time (s)',2,0],
+        ['confirmSeconds','Sensor confirmation (s)',0.5,0],['minDwellSeconds','Minimum dwell (s)',2,0]];
+      specs.forEach(function(spec){var label=document.createElement('label'),input=document.createElement('input');
+        label.textContent=spec[1];input.type='number';input.min=String(spec[3]);input.step='any';input.dataset.balancingField=spec[0];
+        input.value=saved?.[spec[0]]??spec[2]??'';label.append(input);grid.append(label);
+      });
+      var preview=document.createElement('p');preview.className='chart-note dynamic-balancing-preview';preview.setAttribute('role','status');
+      section.append(title,note,toggle,grid,preview);fields.append(section);
+      section.addEventListener('input',function(){section.dataset.configured='true';});
+      section.addEventListener('change',function(){section.dataset.configured='true';});
+    }
+    function readDynamicBalancing(card){
+      var section=equipmentField(card,'.dynamic-balancing-panel');
+      if(!section)return undefined;
+      var enabled=section.querySelector('.dynamic-balancing-enabled').checked;
+      if(!enabled&&section.dataset.configured!=='true')return undefined;
+      var config={enabled:enabled};section.querySelectorAll('[data-balancing-field]').forEach(function(input){
+        var value=input.value.trim();if(value!==''&&Number.isFinite(Number(value)))config[input.dataset.balancingField]=Number(value);
+      });
+      return config;
+    }
+    function refreshDynamicBalancing(card,models,index,zone){
+      var section=equipmentField(card,'.dynamic-balancing-panel');
+      if(!section)return;
+      section.hidden=equipmentField(card,'.equipment-type').value!=='CONVEYOR';
+      if(section.hidden)return;
+      var locked=typeof runControlsLocked==='function'&&runControlsLocked();
+      section.querySelectorAll('input').forEach(function(input){input.disabled=locked;});
+      var config=readDynamicBalancing(card),preview=section.querySelector('.dynamic-balancing-preview'),es=document.documentElement.lang==='es';
+      var nominal=zone?.conveyorSpeedMmPerSecond*.06;
+      var format=function(value){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:2}):'—';};
+      var prefix=(es?'Velocidad nominal: ':'Nominal speed: ')+format(nominal)+' m/min. ';
+      if(!config?.enabled){preview.textContent=prefix+(es?'Control local desactivado.':'Local control disabled.');return;}
+      try{
+        var result=window.SimulatorEngine.resolveDynamicBeltSettings(zone,config,models[index+1]);
+        preview.textContent=prefix+(es?'Recuperación: ':'Recovery: ')+format(result.highSpeedMmPerSecond*.06)+' m/min · S Low: '+format(result.lowPositionMm/1000)+' m ('+result.lowUnits+') · S High: '+format(result.highPositionMm/1000)+' m ('+result.highUnits+')';
+      }catch(error){preview.textContent=prefix+error.message;}
+    }
+
     function createEquipmentCard(equipment, index) {
       var card = document.createElement('article');
       card.className = 'equipment-card';
@@ -128,6 +179,7 @@
       card.appendChild(fields); card._fields = fields; fields._owner = card; card._refreshFormatPreview = function(){ updateFormatZoneVisibility(card); renderFormatZonePreview(card); };
       STReliabilityControls(card);
       STEquipmentRoles.attach(card,equipment);
+      attachDynamicBalancing(card,equipment);
       for (var segment of ['discharge-runout','reject-runout']) {
         equipmentField(card,'.format-zone-'+segment).placeholder='0';
       }
@@ -357,6 +409,7 @@ function populateFormatZoneInputs(card, equipment) {
 function updateFormatZoneVisibility(card) {
       var isConveyor = equipmentField(card, '.equipment-type').value === 'CONVEYOR';
       equipmentField(card, '.format-zone-setup').classList.toggle('hidden', !isConveyor);
+      var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!isConveyor;
       equipmentField(card, '.equipment-rate').readOnly = isConveyor;
       equipmentField(card, '.equipment-rate').closest('label').classList.toggle('hidden', isConveyor);
       if (isConveyor) equipmentField(card, '.equipment-rate').title = __ST_TEXT__('conveyor.help_belt_speed');
@@ -460,6 +513,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
       var storedSpeed=manualFieldValue('belt-speed');
       if(basic){if(beltSpeed!==undefined)beltSpeed=Number((beltSpeed/.06).toPrecision(15));if(storedSpeed!==undefined)storedSpeed=Number((storedSpeed/.06).toPrecision(15));}
       return {
+        dynamicLineBalancing:readDynamicBalancing(card),
         inputValues:{populationPercent:manualFieldValue('population'),lbaMm:manualFieldValue('lba'),overspeedPercent:manualFieldValue('overspeed'),backupPositionMm:manualFieldValue('backup'),beltSpeedMmPerSecond:storedSpeed,movingGapMm:manualFieldValue('moving-gap'),accFactorPercent:manualFieldValue('acc-factor')},
         targetOverspeedPercent:equipmentField(card,'.format-zone-overspeed-enabled').checked?numericInputValue(equipmentField(card,'.format-zone-overspeed')):undefined,
         targetPopulationPercent: equipmentField(card,'.format-zone-population-enabled').checked ? numericInputValue(equipmentField(card,'.format-zone-population')) : undefined,
@@ -495,6 +549,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
     function mergeFormatZoneData(processData, values) {
       var result = Object.assign({}, processData);
       var oldAcc=processData.accumulation||{};
+      if(values.dynamicLineBalancing!==undefined)result.dynamicLineBalancing=values.dynamicLineBalancing;
       result.geometry = Object.assign({}, result.geometry || {}, {
         lactMm: values.lactMm,
         lpPrimeMm: values.lpPrimeMm,
@@ -832,6 +887,8 @@ function numericInputValue(input) {
               try{
                 var worksheet=editorConveyorWorksheet(e.id,simulation,resolved);
                 var result=worksheet?window.STConveyorAnalysis.calculate(worksheet):null;
+                var beltIndex=resolved?.models?.findIndex(item=>item.id===e.id)??-1;
+                if(beltIndex>=0)refreshDynamicBalancing(card,resolved.models,beltIndex,resolved.zones[beltIndex]);
                 if(worksheet?.zone?.engineering?.calculated)applyConveyorOutputs(card,worksheet.zone.engineering.calculated,readFormatZoneInputs(card),worksheet.zone,result?.profiles?.find(p=>p.formatId===worksheet.source?.activeProfile?.format?.id)||result?.profiles?.[0]);
                 window.STConveyorAnalysis.paintEvaluationButton(conveyorButton,result?.geometry||null);
               }catch(_){window.STConveyorAnalysis.paintEvaluationButton(conveyorButton,null);}
@@ -897,7 +954,7 @@ function numericInputValue(input) {
           }
           processData = mergeFormatZoneData(processData, conveyorValues);
         } else {
-          delete processData.accumulation;
+          delete processData.accumulation;delete processData.dynamicLineBalancing;
         }
         var outputUnit=equipmentField(card,'.equipment-unit').value,inputUnit=equipmentField(card,'.equipment-input-unit').value;
         var baseEquipment=state.activeCase.equipment.find(function(e){return e.id===card.dataset.equipmentId;}),profileProduct=card.dataset.productProfileId?STProducts.currentFormat?.():null;

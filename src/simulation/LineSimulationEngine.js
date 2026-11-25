@@ -3,7 +3,7 @@ import { stopReliabilityProfile, selectReliabilityStop, createFailureHistory, st
 import { applyProductProfile, productUnitFactor, productFlowUnit, productPackSize } from './ProductProfiles.js';
 import { plantCalendarSchedule, resolvePlannedStops } from './PlantCalendarSchedule.js';
 import { createEquipmentRandom } from './SeededRandom.js';
-import { validateSimulationInput } from './SimulationValidation.js';
+import { validateSimulationInput, resolveDynamicBeltSettings } from './SimulationValidation.js';
 import { isConveyorEquipment, resolveAccumulationZoneDefinition } from './FormatGeometryAdapter.js';
 
 // Prepare field names once rather than concatenate them for every packet/tick.
@@ -239,7 +239,7 @@ function createRuntime(input) {
     input.case.equipment[index + 1],
     input.case.equipment,
     index,
-    input.run.tickSeconds
+    input.run.tickSeconds, input.run
   ));
 
   equipment.forEach((equipment, index) => {
@@ -443,7 +443,7 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
   };
 }
 
-function createAccumulationZoneRuntime(owner, downstreamModel, allEquipment, ownerIndex, tickSeconds) {
+function createAccumulationZoneRuntime(owner, downstreamModel, allEquipment, ownerIndex, tickSeconds, run) {
   const resolvedDefinition = resolveAccumulationZoneDefinition(allEquipment, ownerIndex);
   const definition = resolvedDefinition.definition;
   const isInternalHandoff = definition?.kind === 'INTERNAL_HANDOFF';
@@ -453,8 +453,11 @@ function createAccumulationZoneRuntime(owner, downstreamModel, allEquipment, own
     : physical?.capacityUnits;
   const upstreamControlEquipmentId = definition?.upstreamControlEquipmentId || owner.id;
   const downstreamControlEquipmentId = definition?.downstreamControlEquipmentId || downstreamModel.id;
+  const dynamic=physical&&run?.dynamicLineBalancingEnabled===true&&owner.processData?.dynamicLineBalancing?.enabled===true
+    ?createDynamicBeltRuntime(resolveDynamicBeltSettings(definition,owner.processData.dynamicLineBalancing,downstreamModel)):null;
 
   return {
+    ...(dynamic?{dynamic}:{}),
     id: definition?.id || owner.id + '--to--' + downstreamModel.id,
     name: definition?.name || owner.name + ' to ' + downstreamModel.name,
     ownerEquipmentId: owner.id,
@@ -721,6 +724,70 @@ function initializeInitialMaterialStates(runtime) {
 
 // Whole packages keep their physical positions, including a packed queue. Sensors and
 // entry space must observe the same geometry, rather than a fluid transit band.
+function createDynamicBeltRuntime(settings){
+  return {...settings,actualSpeedMmPerSecond:settings.nominalSpeedMmPerSecond,targetSpeedMmPerSecond:settings.nominalSpeedMmPerSecond,
+    mode:'NOMINAL',boost:false,confirmedSeconds:0,candidate:null,dwellSeconds:0,boostRequests:0,
+    boostSeconds:0,nominalSeconds:0,stoppedSeconds:0,rampSeconds:0,speedIntegral:0,observedSeconds:0,peakSpeedMmPerSecond:0};
+}
+// Update from the previous completed physical tick, before belt motion.
+// S Low/High observe an outlet-anchored compact queue, not passing beam pulses.
+function updateDynamicBelt(runtime,zone,stopped){
+  const c=zone.dynamic,dt=runtime.run.tickSeconds,nominal=c.nominalSpeedMmPerSecond,high=c.highSpeedMmPerSecond;
+  const downstream=getEquipment(runtime,zone.downstreamControlEquipmentId);
+  const lowCovered=zone.waitingUnits>=c.lowUnits,highCovered=zone.waitingUnits>=c.highUnits;
+  const permitted=!stopped&&!zone.backupActive&&downstream&&isAvailable(downstream)&&!activeBackupControl(downstream);
+  const supply=getTransitUnits(zone)>0;
+  c.lowCovered=lowCovered;c.highCovered=highCovered;
+  c.dwellSeconds+=dt;
+  if(!permitted||!supply){
+    if(c.boost)c.dwellSeconds=0;
+    c.boost=false;c.confirmedSeconds=0;c.candidate=null;
+  }else{
+    const desired=c.boost?!highCovered:!lowCovered;
+    if(desired===c.boost){c.confirmedSeconds=0;c.candidate=null;}
+    else{
+      if(c.candidate!==desired){c.candidate=desired;c.confirmedSeconds=0;}
+      c.confirmedSeconds+=dt;
+      if(c.confirmedSeconds+1e-8>=c.confirmSeconds&&c.dwellSeconds+1e-8>=c.minDwellSeconds){
+        c.boost=desired;c.dwellSeconds=0;c.confirmedSeconds=0;c.candidate=null;
+        if(desired)c.boostRequests++;
+      }
+    }
+  }
+  c.observedSeconds+=dt;
+  if(stopped){
+    // Existing machine/belt interlocks retain priority. No motion or boost
+    // while stopped; normal restart is the historical instantaneous nominal.
+    c.actualSpeedMmPerSecond=0;c.targetSpeedMmPerSecond=0;c.mode='STOPPED';
+    c.stoppedSeconds+=dt;zone.conveyorSpeedMmPerSecond=nominal;return;
+  }
+  const target=c.boost?high:nominal;
+  const previous=Math.max(nominal,c.actualSpeedMmPerSecond);
+  const slope=(high-nominal)/(target>previous?c.accelerationSeconds:c.decelerationSeconds);
+  const speed=target>previous?Math.min(target,previous+slope*dt):Math.max(target,previous-slope*dt);
+  c.actualSpeedMmPerSecond=speed;c.targetSpeedMmPerSecond=target;
+  // A piecewise-linear ramp uses the mean speed over this integration tick.
+  // All transport and intake paths consume the same effective belt speed.
+  zone.conveyorSpeedMmPerSecond=(previous+speed)/2;
+  c.mode=speed<target-1e-8?'RAMP_UP':speed>target+1e-8?'RAMP_DOWN':c.boost?'BOOST':'NOMINAL';
+  if(Math.abs(speed-previous)>1e-8)c.rampSeconds+=dt;
+  if(zone.conveyorSpeedMmPerSecond>nominal+1e-8)c.boostSeconds+=dt;else c.nominalSeconds+=dt;
+  c.speedIntegral+=zone.conveyorSpeedMmPerSecond*dt;
+  c.peakSpeedMmPerSecond=Math.max(c.peakSpeedMmPerSecond,speed);
+}
+function dynamicBeltSnapshot(c){
+  return {schema:'ST_DYNAMIC_BELT_V1',mode:c.mode,boostRequested:c.boost,
+    lowSensorPositionMm:c.lowPositionMm,highSensorPositionMm:c.highPositionMm,
+    lowThresholdUnits:c.lowUnits,highThresholdUnits:c.highUnits,
+    lowCovered:c.lowCovered??false,highCovered:c.highCovered??false,
+    nominalSpeedMmPerSecond:c.nominalSpeedMmPerSecond,highSpeedMmPerSecond:c.highSpeedMmPerSecond,
+    maxSpeedMmPerSecond:c.maxSpeedMmPerSecond,actualSpeedMmPerSecond:round(c.actualSpeedMmPerSecond),
+    targetSpeedMmPerSecond:round(c.targetSpeedMmPerSecond),peakSpeedMmPerSecond:round(c.peakSpeedMmPerSecond),
+    averageSpeedMmPerSecond:c.observedSeconds>0?round(c.speedIntegral/c.observedSeconds):null,
+    boostRequests:c.boostRequests,boostSeconds:round(c.boostSeconds),nominalSeconds:round(c.nominalSeconds),
+    rampSeconds:round(c.rampSeconds),stoppedSeconds:round(c.stoppedSeconds),observedSeconds:round(c.observedSeconds)};
+}
+
 function advanceDiscreteConveyor(runtime,zone,stopped){
   zone.discreteItems??=[];
   const items=zone.discreteItems,tick=runtime.run.tickSeconds;
@@ -788,7 +855,10 @@ function advanceAccumulationZones(runtime) {
     if(!zone.physicalModelEnabled)return;
     const owner = getEquipment(runtime, zone.ownerEquipmentId);
     const conveyorStopped = zone.physicalModelEnabled && owner && (!isAvailable(owner) || isStartDelayed(owner));
-    if(runtime.run.discretePackages&&zone.physicalModelEnabled){advanceDiscreteConveyor(runtime,zone,conveyorStopped);return;}
+    if(runtime.run.discretePackages&&zone.physicalModelEnabled){
+      if(zone.dynamic)updateDynamicBelt(runtime,zone,conveyorStopped);
+      advanceDiscreteConveyor(runtime,zone,conveyorStopped);return;
+    }
     if (conveyorStopped) {
       zone.transit.forEach((packet) => {
         delayTransitPacket(packet, runtime.run.tickSeconds);
@@ -1912,7 +1982,7 @@ function createRecordedZoneSample(runtime,zone,compact=true){
       frame.transitPositionsMm=[];
       for(let index=0;index<zone.transit.length;index+=stride){
         const packet=zone.transit[index];
-        frame.transitPositionsMm.push(Math.round(Math.max(0,Math.min(zone.usableLengthMm,zone.usableLengthMm+(runtime.virtualSecond-packet.arrivesAtVirtualSecond)*zone.conveyorSpeedMmPerSecond))));
+        frame.transitPositionsMm.push(Math.round(Math.max(0,Math.min(zone.usableLengthMm,zone.dynamic?packet.x:zone.usableLengthMm+(runtime.virtualSecond-packet.arrivesAtVirtualSecond)*zone.conveyorSpeedMmPerSecond))));
       }
       frame.transitPositionsMm.reverse();
     }
@@ -1940,7 +2010,9 @@ function recordTransitBands(zone, time){
 
 function createZoneSample(zone) {
   const inventoryUnits = getZoneInventory(zone);
+  const nominal=zone.dynamic?.nominalSpeedMmPerSecond??zone.conveyorSpeedMmPerSecond;
   return {
+    ...(zone.dynamic?{dynamicLineBalancing:dynamicBeltSnapshot(zone.dynamic)}:{}),
     id: zone.id,
     name: zone.name,
     ownerEquipmentId: zone.ownerEquipmentId,
@@ -1954,10 +2026,10 @@ function createZoneSample(zone) {
       usableLengthMm: zone.usableLengthMm,
       productPitchMm: zone.productPitchMm,
       accumulatedPitchMm: zone.accumulatedPitchMm,
-      transferCapacityPerSecond: zone.conveyorSpeedMmPerSecond / zone.productPitchMm,
+      transferCapacityPerSecond: nominal / zone.productPitchMm,
       productLengthMm: zone.productLengthMm,
       gapMm: zone.gapMm,
-      conveyorSpeedMmPerSecond: zone.conveyorSpeedMmPerSecond,
+      conveyorSpeedMmPerSecond: nominal,
       travelSeconds: round(zone.travelSeconds),
       packagePassSensorSeconds: zone.packagePassSensorSeconds,
       sensorClearGapSeconds: zone.sensorClearGapSeconds,
@@ -2021,7 +2093,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: '0.20.4',
+    engineVersion: runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -2232,7 +2304,9 @@ function clampUnit(value) {
 }
 
 function createZoneMetrics(zone, durationSeconds) {
+  const nominal=zone.dynamic?.nominalSpeedMmPerSecond??zone.conveyorSpeedMmPerSecond;
   return {
+    ...(zone.dynamic?{dynamicLineBalancing:dynamicBeltSnapshot(zone.dynamic)}:{}),
     id: zone.id,
     name: zone.name,
     ownerEquipmentId: zone.ownerEquipmentId,
@@ -2241,8 +2315,8 @@ function createZoneMetrics(zone, durationSeconds) {
     capacityUnits: round(zone.capacityUnits),
     movingPitchMm: zone.productPitchMm,
     accumulatedPitchMm: zone.accumulatedPitchMm,
-    conveyorSpeedMmPerSecond: zone.conveyorSpeedMmPerSecond,
-    transferCapacityPerSecond: zone.conveyorSpeedMmPerSecond / zone.productPitchMm,
+    conveyorSpeedMmPerSecond: nominal,
+    transferCapacityPerSecond: nominal / zone.productPitchMm,
     modelOrigin: zone.modelOrigin,
     geometrySources: zone.geometrySources,
     blockingEquivalentSeconds: round(zone.blockingEquivalentSeconds),
@@ -2326,7 +2400,8 @@ function switchRuntimeProduct(runtime,id){
     e.startupDelaySeconds=model.startupDelaySeconds;e.restartRampUpSeconds=model.restartRampUpSeconds;e.backupControl=null;e.startupDelaySeconds=resolveStartupDelaySeconds(e);e.restartRampUpSeconds=resolveRestartRampUpSeconds(e);
   });
   runtime.zones=runtime.equipment.slice(0,-1).map((owner,i)=>{
-    const next=createAccumulationZoneRuntime(owner,models[i+1],models,i,runtime.run.tickSeconds),old=runtime.zones[i];
+    const next=createAccumulationZoneRuntime(owner,models[i+1],models,i,runtime.run.tickSeconds,runtime.run),old=runtime.zones[i];
+    if(next.dynamic&&old.dynamic)for(const key of ['boostRequests','boostSeconds','nominalSeconds','stoppedSeconds','rampSeconds','speedIntegral','observedSeconds','peakSpeedMmPerSecond'])next.dynamic[key]=old.dynamic[key];
     for(const key of ['overflowUnits','overflowEvents','blockingEquivalentSeconds','starvingEquivalentSeconds','constraintLossEquivalentSeconds','inventoryIntegralUnitSeconds','maximumInventoryUnits','emptyInventorySeconds','backupSignalBlockedSeconds','backupSignalPulsingSeconds','backupSignalClearSeconds','primeTriggerCount','backupTriggerCount'])next[key]=old[key];
     next.lastPartialBlockingSeconds=runtime.equipmentById.get(next.upstreamControlEquipmentId)?.partialBlockingLossSeconds||0;
     next.lastPartialStarvingSeconds=runtime.equipmentById.get(next.downstreamControlEquipmentId)?.partialStarvationLossSeconds||0;

@@ -222,5 +222,15 @@ html[data-ui-mode=advance][data-header-view=vgraph] #results-body > :not(#line-p
 html[data-ui-mode=advance][data-header-view=vgraph] #line-performance > :not(#vgraph-profile) { display:none; }
 html[data-ui-mode=advance][data-header-view=results] #line-performance { display:none; }
 
+/* Third conveyor inspector tab uses the existing field instances, not clones. */
+html[data-equipment-layout=split] .equipment-fields > .dynamic-balancing-panel {display:none;}
+html[data-equipment-layout=split] .equipment-fields[data-balancing-view=true] > :not(.dynamic-balancing-panel) {display:none!important;}
+html[data-equipment-layout=split] .equipment-fields[data-balancing-view=true] > .dynamic-balancing-panel:not([hidden]) {display:block;}
+.dynamic-balancing-panel[hidden] {display:none!important;}
+.dynamic-balancing-panel .dynamic-balancing-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr));gap:var(--space-3);}
+.dynamic-balancing-panel .dynamic-balancing-grid label {min-width:0;display:flex;flex-direction:column;gap:var(--space-1);}
+.dynamic-balancing-panel .dynamic-balancing-grid input {min-width:0;width:100%;}
+.dynamic-balancing-panel .dynamic-balancing-preview {margin-block:var(--space-2);font-variant-numeric:tabular-nums;}
+html[data-equipment-layout=split] .basic-conveyor-heading .basic-conveyor-tabs {flex-wrap:wrap;flex-shrink:1;}
 </style>
 

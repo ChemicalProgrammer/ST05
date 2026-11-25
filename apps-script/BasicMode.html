@@ -26,7 +26,7 @@ window.STBasicMode=(function(){
     panel=document.createElement('aside');panel.id='basic-conveyor-panel';panel.setAttribute('aria-label',__ST_TEXT__('basic.conveyor_configuration'));
     var heading=document.createElement('div');heading.className='basic-conveyor-heading';panel.appendChild(heading);title=document.createElement('h3');heading.appendChild(title);layout.appendChild(panel);
     conveyorTabs=document.createElement('div');conveyorTabs.className='button-row basic-conveyor-tabs';
-    ['inputs','results'].forEach(function(view){var b=button(view==='inputs'?'Inputs':'Results',view==='inputs'?'settings':'chart',function(){conveyorView=view;refreshData();});b.classList.add('app-section-tab');STIcons.button(b,b.dataset.icon);b.dataset.conveyorView=view;conveyorTabs.appendChild(b);});heading.appendChild(conveyorTabs);
+    ['inputs','results','balancing'].forEach(function(view){var b=button(view==='inputs'?'Inputs':view==='results'?'Results':'Dynamic balancing',view==='inputs'?'settings':view==='results'?'chart':'settings',function(){conveyorView=view;refreshData();});b.classList.add('app-section-tab');STIcons.button(b,b.dataset.icon);b.dataset.conveyorView=view;conveyorTabs.appendChild(b);});heading.appendChild(conveyorTabs);
     conveyorSummary=document.createElement('section');conveyorSummary.id='basic-conveyor-summary';panel.appendChild(conveyorSummary);
     var optionsSection=STSubsection.create({id:'basic-run-options',titleId:'basic-run-options-title',contentId:'basic-efficiencies',
       title:__ST_TEXT__('ui.simulation_settings'),description:'Review the current line efficiency and simulation settings.',native:false});
@@ -83,6 +83,7 @@ window.STBasicMode=(function(){
     cards.forEach(function(card){card.classList.toggle('basic-machine',separate&&type(card)!=='CONVEYOR');
       if(separate&&type(card)==='CONVEYOR')prepareWorksheet(card);
       else restoreWorksheet(card);
+      if(card._fields)card._fields.dataset.balancingView=String(separate&&conveyorView==='balancing'&&card.classList.contains('equipment-selected'));
       STEquipmentInspector.refreshTitle(card);});
     if(active&&view==='editor'&&separate){
       var conveyor=section==='conveyors';
@@ -234,7 +235,8 @@ window.STBasicMode=(function(){
     metric(right,'Lost starving/hr (s)',number(duration>0?zone?.starvingEquivalentSeconds/duration*3600:undefined));
     right.title='Observed equivalent loss seconds per hour; concurrent upstream blocking and downstream starving count once in Conv Loss.';
     conveyorSummary.classList.toggle('hidden',conveyorView!=='results');
-    inspector.classList.toggle('hidden',state.uiView!=='editor'||state.basicView!=='conveyors'||conveyorView!=='inputs');
+    Array.from(list.querySelectorAll('.equipment-card')).forEach(function(card){if(card._fields)card._fields.dataset.balancingView=String(card===chosen&&conveyorView==='balancing');});
+    inspector.classList.toggle('hidden',state.uiView!=='editor'||state.basicView!=='conveyors'||conveyorView==='results');
     conveyorTabs.querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.conveyorView===conveyorView));b.disabled=false;});
   }
   return {init:init,sync:sync,inline:inline,isBasic:basic,isSplit:split,unitLabel:function(unit){return unit||'units';},newType:function(){return split()&&state.basicView==='conveyors'?'CONVEYOR':null;}};

@@ -1437,6 +1437,8 @@
           playbackZoneFlowUnit({...zone,ownerEquipmentId:zone?.ownerEquipmentId||model.id},{equipment:[unit]})],
           ['Back-up',zone?.backup?.controlActive?'Active':zone?.backup?.configured?'Clear':'—'],
           ['Own failures','N/A']);
+        var balance=zone?.dynamicLineBalancing;
+        if(balance){rows.push(['Belt speed',formatNumber(balance.actualSpeedMmPerSecond*.06),'m/min'],['Target belt speed',formatNumber(balance.targetSpeedMmPerSecond*.06),'m/min'],['Dynamic balancing',balance.mode],['S Low',balance.lowCovered?'Covered':'Clear'],['S High',balance.highCovered?'Covered':'Clear'],['Boost requests',formatNumber(balance.boostRequests)],['Boost time',formatNumber(balance.boostSeconds),'s']);}
       }else{
         var inside=Number.isFinite(unit.internalInventoryBottles)?formatNumber(unit.internalInventoryBottles/factor):'—';
         var cap=Number.isFinite(capacity)?formatNumber(capacity/factor):'—';

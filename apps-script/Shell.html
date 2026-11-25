@@ -1,6 +1,8 @@
 <script>
 window.STShell = function(state,actions) {
   var collapsed=STPreferences.read('sidebar')==='collapsed', toastTimer,lastMotionView;
+  // Keep visibility and the entry transition on the same panel mapping.
+  var viewPanels={cases:'cases',editor:'editor',products:'products',simulation:'run',simulation2d:'simulation2d',results:'results',realdata:'realdata',whatif:'whatif',comparison:'comparison'};
   var simulationToolbar=document.getElementById('simulation-toolbar');
   var caseTitle=document.getElementById('breadcrumb-case'), titleInput=document.getElementById('header-case-name');
   var editingCase=null;
@@ -37,7 +39,8 @@ window.STShell = function(state,actions) {
     var active=Boolean(state.activeCase);if(active&&state.uiView==='realdata'&&!STPreferences.caseOptions().showRealData){state.uiView=state.run.result?.summary?'results':'simulation';state.basicView=state.uiView;}var view=active?(state.uiView||'simulation'):'cases';
     if(active)actions.rememberView?.(view);
     var connected=Boolean(state.bootstrap?.settings?.workspaceRootFolderId);
-    ['cases','editor','products','run','simulation2d','results','realdata','whatif','comparison'].forEach(function(name){var visible=(name==='cases'&&view==='cases')||(name==='editor'&&view==='editor')||(name==='products'&&view==='products')||(name==='run'&&view==='simulation')||(name==='simulation2d'&&view==='simulation2d')||(name==='results'&&view==='results')||(name==='realdata'&&view==='realdata')||(name==='whatif'&&view==='whatif')||(name==='comparison'&&view==='comparison');document.getElementById(name+'-panel').classList.toggle('hidden',!visible);});
+    var panelName=viewPanels[view];
+    Object.values(viewPanels).forEach(function(name){document.getElementById(name+'-panel').classList.toggle('hidden',name!==panelName);});
     document.getElementById('application').classList.toggle('case-open',active);
     document.getElementById('case-sidebar').classList.toggle('hidden',!active);
     document.getElementById('cases-top-actions').classList.toggle('hidden',active);
@@ -73,7 +76,10 @@ window.STShell = function(state,actions) {
     window.STBasicMode?.sync(state);
     STSettings.syncMode();
     var motionView=view+':'+(document.documentElement.dataset.headerView||'');
-    if(motionView!==lastMotionView){lastMotionView=motionView;STMotion.reveal(document.getElementById(({simulation:'run',editor:'editor',products:'products',results:'results',realdata:'realdata',whatif:'whatif',comparison:'comparison',cases:'cases'}[view]||'run')+'-panel'));}
+    if(motionView!==lastMotionView){
+      lastMotionView=motionView;
+      if(panelName)STMotion.reveal(document.getElementById(panelName+'-panel'));
+    }
     var engineNotice=document.getElementById('simulation-engine-notice'),simulation=(state.activeCase?.simulations||[]).find(function(s){return s.id===state.activeSimulationId;});
     engineNotice.classList.toggle('hidden',simulation?.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL');
   }

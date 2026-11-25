@@ -250,3 +250,34 @@ test('Basic printable report includes ramp/stop phase totals without inventing o
   const old=h.w.STReports.rampRows({...h.result,equipmentMetrics:{}},h.sim.equipment);assert.equal(old[0][1],null);assert.equal(old[0][2],null);
  }finally{h.w.close();}
 });
+
+test('additional case information is the last shared export section, only in Advance',async()=>{
+ const h=setup();try{
+  const w=h.w;w.STIcons={svg:()=>'<svg></svg>'};
+  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+  w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  w.STDialog={beginActivity(){return ()=>{};}};
+  const record={activeSimulationId:'a',simulations:[{id:'a',name:'A',equipment:[]},{id:'b',name:'B',equipment:[]}]};
+  w.document.documentElement.dataset.uiMode='advance';
+  const pending=w.STReports.requestCaseExport(record),dialog=w.document.querySelector('.case-export-dialog');
+  const list=dialog.querySelector('.case-export-list'),last=list.lastElementChild;
+  assert.equal(list.children.length,3);
+  assert(last.matches('fieldset.case-export-section.case-export-additional'));
+  assert.equal(last.querySelector('legend').textContent,'Additional case information');
+  assert.equal(list.querySelectorAll('fieldset.case-export-section.case-export-simulation').length,2);
+  assert.equal(last.querySelectorAll('.case-export-controls input[type=checkbox]').length,3);
+  assert.equal(list.nextElementSibling,dialog.querySelector('.case-export-preview'));
+  const config=[...dialog.querySelectorAll('.case-export-presets button')].find(b=>b.textContent==='Configuration only');
+  config.click();
+  assert.equal(list.lastElementChild.querySelectorAll('[data-export-extra]:checked').length,0);
+  const real=list.lastElementChild.querySelector('[data-export-extra="realData"]');
+  real.checked=true;real.onchange();
+  assert(real.checked);
+  dialog.querySelector('.dialog-heading button').click();assert.equal(await pending,false);
+  w.document.documentElement.dataset.uiMode='basic';
+  const basic=w.STReports.requestCaseExport(record),basicDialog=w.document.querySelector('.case-export-dialog');
+  assert.equal(basicDialog.querySelectorAll('.case-export-additional,[data-export-extra]').length,0);
+  assert.equal(basicDialog.querySelectorAll('.case-export-section').length,2);
+  basicDialog.querySelector('.dialog-heading button').click();assert.equal(await basic,false);
+ }finally{h.dom.window.close();}
+});

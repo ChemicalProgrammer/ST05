@@ -1,7 +1,8 @@
 import fs from 'node:fs';import {JSDOM} from 'jsdom';
-export function setup(){
+export function setup(language='es'){
  const w=new JSDOM(fs.readFileSync('apps-script/RealDataPanel.html','utf8'),{runScripts:'outside-only'}).window;
- for(const name of ['Subsection','AemComparison','RealDataModel','RealData'])w.eval(fs.readFileSync('apps-script/'+name+'.html','utf8').replace(/^<script>|<\/script>\s*$/g,''));
+ w.document.documentElement.lang=language;
+ for(const name of ['Icons','Subsection','AemComparison','RealDataModel','RealData'])w.eval(fs.readFileSync('apps-script/'+name+'.html','utf8').replace(/^<script>|<\/script>\s*$/g,''));
  return w;
 }
 export function fixture(){

@@ -1,24 +1,24 @@
-<section id="realdata-panel" class="card hidden" aria-labelledby="real-data-title">
+<section id="realdata-panel" data-st-no-translate class="card hidden" aria-labelledby="real-data-title">
   <h2 id="real-data-title" class="sr-only">Real Data</h2>
   <section class="real-data-block fold-card" aria-labelledby="real-data-register-title">
     <!-- Encabezado de Registro, selector de observación y acciones de intercambio. -->
     <div class="real-data-block-heading fold-heading">
-      <div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-register-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-register-content">Registro</button></h3><p class="subsection-description">Captura los tiempos, paradas y valores observados para compararlos con el modelo.</p></div>
-      <div class="real-data-toolbar fold-tools" role="group" aria-label="Registro tools">
-        <select id="real-data-record" aria-label="Seleccionar registro"></select>
+      <div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-register-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-register-content" data-real-text="Registro">Record</button></h3><p class="subsection-description" data-real-text="Captura los tiempos, paradas y valores observados para compararlos con el modelo.">Record observed times, downtime and values for comparison with the model.</p></div>
+      <div class="real-data-toolbar fold-tools" role="group" aria-label="Record tools" data-real-aria="Registro tools">
+        <select id="real-data-record" aria-label="Select record" data-real-aria="Seleccionar registro"></select>
         <div class="button-row">
-          <button id="real-data-new" type="button" class="secondary icon-button" data-icon="plus" aria-label="Nuevo registro" title="Nuevo registro"></button>
-          <button id="real-data-import" type="button" class="secondary icon-button" data-icon="download" aria-label="Importar JSON" title="Importar JSON"></button>
-          <button id="real-data-save" type="button" class="secondary icon-button" data-icon="save" aria-label="Save case" title="Save case" disabled></button>
+          <button id="real-data-new" type="button" class="secondary icon-button" data-icon="plus" aria-label="New record" data-real-aria="Nuevo registro" title="New record" data-real-title="Nuevo registro"></button>
+          <button id="real-data-import" type="button" class="secondary icon-button" data-icon="download" aria-label="Import JSON" data-real-aria="Importar JSON" title="Import JSON" data-real-title="Importar JSON"></button>
+          <button id="real-data-save" type="button" class="secondary icon-button" data-icon="save" aria-label="Save case" data-real-aria="Guardar caso" title="Save case" data-real-title="Save case" data-real-title="Guardar caso" disabled></button>
           <details class="export-menu">
-            <summary class="icon-button" data-icon="upload" aria-label="Exportar" title="Exportar"></summary>
+            <summary class="icon-button" data-icon="upload" aria-label="Export" data-real-aria="Exportar" title="Export" data-real-title="Exportar"></summary>
             <div>
-              <button id="real-data-template" type="button" class="ghost">Plantilla (JSON)</button>
-              <button id="real-data-export-json" type="button" class="ghost" disabled>Comparación (JSON)</button>
-              <button id="real-data-export-html" type="button" class="ghost" disabled>Reporte HTML</button>
+              <button id="real-data-template" type="button" class="ghost" data-real-text="Plantilla (JSON)">Template (JSON)</button>
+              <button id="real-data-export-json" type="button" class="ghost" disabled data-real-text="Comparación (JSON)">Comparison (JSON)</button>
+              <button id="real-data-export-html" type="button" class="ghost" disabled data-real-text="Reporte HTML">HTML report</button>
             </div>
           </details>
-          <button id="real-data-delete" type="button" class="ghost icon-button" data-icon="trash" aria-label="Eliminar registro" title="Eliminar registro" disabled></button>
+          <button id="real-data-delete" type="button" class="ghost icon-button" data-icon="trash" aria-label="Delete record" data-real-aria="Eliminar registro" title="Delete record" data-real-title="Eliminar registro" disabled></button>
           <input id="real-data-file" type="file" accept=".json,application/json" hidden>
         </div>
       </div>
@@ -27,20 +27,20 @@
     <p id="real-data-simulation" class="chart-note"></p>
     <p id="real-data-status" class="chart-note" role="status" aria-live="polite"></p>
     <!-- El controlador monta aquí el árbol y los campos de captura. -->
-    <div id="real-data-editor"><p>Selecciona o crea un registro para capturar los datos de planta.</p></div>
+    <div id="real-data-editor"><p data-real-text="Selecciona o crea un registro para capturar los datos de planta.">Select or create a record to enter plant data.</p></div>
     </div>
   </section>
   <!-- Comparación de la observación seleccionada con los resultados de la ronda o del lote. -->
   <section class="real-data-block fold-card" aria-labelledby="real-data-compare-title">
     <div class="real-data-block-heading fold-heading">
-      <div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-compare-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-comparison">Comparación de parámetros</button></h3><p class="subsection-description">Compara los parámetros reportados con los resultados de simulación seleccionados.</p></div>
-      <select id="real-data-view" aria-label="Resultados guardados"><option value="average">Promedio de rondas</option></select>
+      <div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-compare-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-comparison" data-real-text="Comparación de parámetros">Parameter comparison</button></h3><p class="subsection-description" data-real-text="Compara los parámetros reportados con los resultados de simulación seleccionados.">Compare the reported parameters with the selected simulation results.</p></div>
+      <select id="real-data-view" aria-label="Saved results" data-real-aria="Resultados guardados"><option value="average" data-real-text="Promedio de rondas">Average of rounds</option></select>
     </div>
     <div id="real-data-comparison" class="fold-content"></div>
   </section>
   <!-- Ajuste de Rate Loss calculado a partir de los datos disponibles. -->
   <section class="real-data-block fold-card" aria-labelledby="real-data-calibration-title">
-    <div class="real-data-block-heading fold-heading"><div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-calibration-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-calibration">Ajuste calibrado de rate loss</button></h3><p class="subsection-description">Consulta las diferencias de velocidad y el tiempo efectivo de ejecución calibrado.</p></div></div>
+    <div class="real-data-block-heading fold-heading"><div class="subsection-heading-copy"><h3 class="real-data-section-title subsection-heading-title" id="real-data-calibration-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="real-data-calibration" data-real-text="Ajuste calibrado de rate loss">Calibrated rate-loss adjustment</button></h3><p class="subsection-description" data-real-text="Consulta las diferencias de velocidad y el tiempo efectivo de ejecución calibrado.">Review rate-loss differences and calibrated effective runtime.</p></div></div>
     <div id="real-data-calibration" class="fold-content"></div>
   </section>
 </section>

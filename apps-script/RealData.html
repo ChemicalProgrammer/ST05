@@ -2,6 +2,213 @@
 window.STRealData=(function(){
   'use strict';
   const M=window.STRealDataModel,finite=Number.isFinite;
+  // Keep model identifiers, recorded names, quantities and JSON evidence intact.
+  // Localize the presentation only; English is the default UI language.
+  const english={
+    "Registro": "Record",
+    "Captura los tiempos, paradas y valores observados para compararlos con el modelo.": "Record observed times, downtime and values for comparison with the model.",
+    "Registro tools": "Record tools",
+    "Seleccionar registro": "Select record",
+    "Nuevo registro": "New record",
+    "Importar JSON": "Import JSON",
+    "Guardar caso": "Save case",
+    "Exportar": "Export",
+    "Plantilla (JSON)": "Template (JSON)",
+    "Comparación (JSON)": "Comparison (JSON)",
+    "Reporte HTML": "HTML report",
+    "Eliminar registro": "Delete record",
+    "Selecciona o crea un registro para capturar los datos de planta.": "Select or create a record to enter plant data.",
+    "Comparación de parámetros": "Parameter comparison",
+    "Compara los parámetros reportados con los resultados de simulación seleccionados.": "Compare the reported parameters with the selected simulation results.",
+    "Resultados guardados": "Saved results",
+    "Promedio de rondas": "Average of rounds",
+    "Ronda representativa": "Representative round",
+    "Ajuste calibrado de rate loss": "Calibrated rate-loss adjustment",
+    "Consulta las diferencias de velocidad y el tiempo efectivo de ejecución calibrado.": "Review rate-loss differences and calibrated effective runtime.",
+    "Calendario y disponibilidad de planta": "Calendar and plant availability",
+    "Paradas planificadas y tiempo disponible para producción": "Planned downtime and production available time",
+    "Paradas no planificadas y tiempo de marcha": "Unplanned downtime and runtime",
+    "Pérdidas durante la marcha y tiempo efectivo": "Runtime losses and effective runtime",
+    "Producción": "Production",
+    "Parámetros de referencia": "Reference parameters",
+    "Indicadores de desempeño": "Performance indicators",
+    "Downtime por equipo": "Equipment downtime",
+    "Desglosa el tiempo total, las exclusiones externas y la disponibilidad de planta.": "Break down total time, external exclusions and plant availability.",
+    "Compara las paradas planificadas y el tiempo disponible para producir.": "Compare planned downtime and production available time.",
+    "Analiza paradas no planificadas y tiempo real de operación.": "Analyze unplanned downtime and runtime.",
+    "Muestra las pérdidas de velocidad y el tiempo efectivo.": "Review rate losses and effective runtime.",
+    "Compara unidades producidas y resultados de la línea.": "Compare production quantities and line results.",
+    "Revisa los parámetros base empleados para la comparación.": "Review the reference parameters used in the comparison.",
+    "Compara los indicadores calculados de desempeño.": "Compare the calculated performance indicators.",
+    "Compara los valores reales y simulados.": "Compare real and simulated values.",
+    "Compara los minutos de parada por equipo y su contribución a las diferencias.": "Compare equipment downtime and its contribution to the differences.",
+    "Rubros de comparación": "Comparison categories",
+    "Parámetro": "Parameter",
+    "Unidad": "Unit",
+    "Real": "Real",
+    "Simulado": "Simulated",
+    "Diferencia": "Difference",
+    "Equipo": "Equipment",
+    "Total de equipos": "Equipment total",
+    "Tabla de downtime por equipo": "Equipment downtime table",
+    "Hoja de cálculo de rate loss calibrado": "Calibrated rate-loss worksheet",
+    "Sin equipos para comparar.": "No equipment to compare.",
+    "Sin registro seleccionado.": "No record selected.",
+    "Crea o importa un registro.": "Create or import a record.",
+    "capturado manualmente": "manually entered",
+    "calculado": "calculated",
+    "reportado": "reported",
+    "pendiente": "pending",
+    "botellas": "bottles",
+    "cajas": "cases",
+    "botellas/caja": "bottles/case",
+    "fallas": "failures",
+    "Producción total": "Total production",
+    "Producción conforme": "Good production",
+    "Botellas por caja": "Bottles per case",
+    "Calidad": "Quality",
+    "OEE global guardado": "Saved global OEE",
+    "Production Rate Losses (neto)": "Production Rate Losses (net)",
+    "Production Rate Losses (bruto)": "Production Rate Losses (gross)",
+    "Scrap (tiempo equivalente)": "Scrap (equivalent time)",
+    "Rework (tiempo equivalente)": "Rework (equivalent time)",
+    "Turno 1": "Shift 1",
+    "Turno 2": "Shift 2",
+    "Turno 3": "Shift 3",
+    "Paro total": "Total downtime",
+    "Fallas por MTTR/MTBF": "MTBF/MTTR failures",
+    "Número de fallas": "Failure count",
+    "Espera de Prime": "Waiting for prime",
+    "Paro planificado": "Planned downtime",
+    "Microparos": "Microstops",
+    "Pausa": "Paused",
+    "Otros sin producción": "Other non-producing time",
+    "Paro reportado sin desglose comparable": "Reported downtime without comparable breakdown",
+    "Identificación": "Identification",
+    "Nombre del registro": "Record name",
+    "Línea": "Line",
+    "Fecha": "Date",
+    "Fuente / referencia": "Source / reference",
+    "Estado de los datos": "Data status",
+    "Pendiente": "Pending",
+    "Medido": "Measured",
+    "Derivado": "Derived",
+    "Estimado": "Estimated",
+    "Tiempos del período (min)": "Period times (min)",
+    "Plant Available Time reportado": "Reported Plant Available Time",
+    "Production Available Time reportado": "Reported Production Available Time",
+    "Unplanned Downtime de línea": "Line Unplanned Downtime",
+    "Runtime reportado (opcional)": "Reported Runtime (optional)",
+    "Effective Runtime reportado (opcional)": "Reported Effective Runtime (optional)",
+    "Effective Runtime reportado (min)": "Reported Effective Runtime (min)",
+    "Definición del rate loss": "Rate-loss definition",
+    "Pendiente (ajuste bruto provisional)": "Pending (provisional gross adjustment)",
+    "Pérdida bruta": "Gross loss",
+    "Balance neto": "Net balance",
+    "Producción y calidad": "Production and quality",
+    "Producción total (botellas)": "Total production (bottles)",
+    "Producción total (cajas)": "Total production (cases)",
+    "Turno 1 (cajas)": "Shift 1 (cases)",
+    "Turno 2 (cajas)": "Shift 2 (cases)",
+    "Turno 3 (cajas)": "Shift 3 (cases)",
+    "Producción conforme (botellas)": "Good production (bottles)",
+    "Scrap (min equivalentes)": "Scrap (equivalent min)",
+    "Scrap (botellas)": "Scrap (bottles)",
+    "Rework (min equivalentes)": "Rework (equivalent min)",
+    "Rework (botellas)": "Rework (bottles)",
+    "Calidad reportada (%)": "Reported quality (%)",
+    "Base de producción": "Production basis",
+    "Conforme": "Good",
+    "Bruta": "Gross",
+    "Indicadores reportados": "Reported indicators",
+    "AU reportado (%)": "Reported AU (%)",
+    "UPDT reportado (%)": "Reported UPDT (%)",
+    "UPDT tiempo reportado (min)": "Reported UPDT time (min)",
+    "Definición del tiempo UPDT": "UPDT time definition",
+    "Parada no programada": "Unplanned downtime",
+    "Pérdida equivalente total": "Total equivalent loss",
+    "Eficiencia Opera reportada (%)": "Reported Opera efficiency (%)",
+    "Notas": "Notes",
+    "Conceptos del registro": "Record concepts",
+    "Captura de paros por equipo": "Equipment downtime entry",
+    "Captura los valores reales por máquina. Deja en blanco los datos faltantes y usa cero solo para un valor confirmado. El paro reportado sin desglose se conserva por separado.": "Enter the actual values for each machine. Leave missing data blank and use zero only for a confirmed value. Reported downtime without a breakdown is retained separately.",
+    "Al editar el desglose, el total pasa a modo calculado. El valor manual se conserva.": "Editing the breakdown switches the total to calculated mode. The manual value is retained.",
+    "Downtime anterior del equipo. Solo se usa como falla propia cuando su clase es FAILURES. Se conserva sin reclasificarlo automáticamente.": "Previous equipment downtime. It is used as internal failure time only when its class is FAILURES. The original classification is retained.",
+    "Minutos de falla propia del equipo, asociados a reparación. No incluye starving, blocking, pausas programadas ni rampas posteriores.": "Equipment internal failure minutes associated with repair. Excludes starving, blocking, planned pauses and subsequent ramps.",
+    "Tiempo operativo interno medido, no el período calendario. Se usa para calcular MTBF = tiempo operativo / número de fallas.": "Measured internal operating time, not calendar time. MTBF = operating time / failure count.",
+    "Período de observación del equipo. Debe coincidir con el período de la simulación para una comparación equivalente.": "Equipment observation period. It must match the simulation period for a like-for-like comparison.",
+    "La pérdida bruta no resta recuperación. El balance neto es pérdida bruta − recuperación. La selección solo cambia la comparación, no el motor.": "Gross loss does not subtract recovery. Net balance = gross loss − recovery. The selection changes only the comparison, not the engine.",
+    "Marcado: entrada manual. Desmarcado: salida calculada a partir de sus conceptos.": "Checked: manual input. Unchecked: calculated output from its components.",
+    "Duración total del período observado.": "Total duration of the observed period.",
+    "Production Rate Losses + Scrap + Rework, en minutos equivalentes.": "Production Rate Losses + Scrap + Rework, in equivalent minutes.",
+    "Effective Runtime calculado en minutos": "Calculated Effective Runtime in minutes",
+    "Effective Runtime calculado = Runtime − Runtime Losses. Runtime Losses = Production Rate Losses + Scrap + Rework, salvo total capturado manualmente.": "Calculated Effective Runtime = Runtime − Runtime Losses. Runtime Losses = Production Rate Losses + Scrap + Rework, unless entered manually.",
+    "Valor reportado por planta. Es el único Effective Runtime real utilizado en las comparaciones y sus indicadores derivados. Si está vacío, queda pendiente; cero es un valor válido.": "Plant-reported value. This is the only real Effective Runtime used for comparisons and derived indicators. If blank, it remains pending; zero is valid.",
+    "Datos actualizados. Se guardan con el caso.": "Data updated. Save the case to persist the changes.",
+    "Modo de captura actualizado.": "Entry mode updated.",
+    "Registro importado.": "Record imported. Save the case to persist it.",
+    "Límite de registros alcanzado.": "Record limit reached.",
+    "Los registros exceden 512 KB. Exporta los registros antes de eliminar los que no necesites.": "Records exceed 512 KB. Export them before deleting unneeded records.",
+    "El JSON excede 2 MB.": "JSON exceeds 2 MB.",
+    "Los registros exceden 512 KB.": "Records exceed 512 KB.",
+    "Cancelar": "Cancel",
+    "Eliminar": "Delete",
+    "Comparación de datos reales": "Real data comparison",
+    "Datos de equipos capturados": "Recorded equipment data",
+    "T1 = duración calendario del período. Minutos = segundos / 60.": "T1 = calendar duration of the period. Minutes = seconds / 60.",
+    "Exclusiones de negocio o externas capturadas. No se deducen de fallas de equipos.": "Recorded business or external exclusions. They are not derived from equipment failures.",
+    "Suma de paradas planificadas de planta: mantenimiento, changeovers, limpieza, reuniones y descansos. Se reutiliza el total capturado.": "Sum of planned plant downtime: maintenance, changeovers, cleaning, meetings and breaks. Uses the recorded total.",
+    "UPDT = T3 − Runtime. No es la suma de tiempos de equipos; incluye las causas no programadas que detienen la línea.": "UPDT = T3 − Runtime. It is not the sum of equipment downtime; it includes unplanned causes that stop the line.",
+    "T4 = T3 − Unplanned Downtime. En planta se mide con la señal de marcha; en el simulador se usa flujo positivo en la salida. Son bases distintas que deben revisarse.": "T4 = T3 − Unplanned Downtime. The plant uses the running signal; the simulator uses positive output flow. These different measurement bases must be reviewed.",
+    "Scrap = unidades desechadas / Standard Rate en unidades/min. Si se capturan minutos, se usan directamente; no se suma nuevamente al volumen conforme.": "Scrap = rejected units / Standard Rate in units/min. Entered minutes are used directly; they are not added again to good output.",
+    "Rework = unidades reprocesadas / Standard Rate en unidades/min. Si se capturan minutos, se usan directamente.": "Rework = reprocessed units / Standard Rate in units/min. Entered minutes are used directly.",
+    "Rate Loss real capturado frente a las categorías incluidas en Settings. En base neta se resta la recuperación. — indica que faltan contadores para aplicar el filtro.": "Recorded real Rate Loss versus the categories included in Settings. Net loss subtracts recovery. — means the counters needed to apply the filter are missing.",
+    "Rate Loss real capturado. Simulado: pérdida bruta o balance neto según la definición elegida. Las paradas completas se contabilizan aparte.": "Recorded real Rate Loss. Simulated: gross loss or net balance according to the selected definition. Full stops are counted separately.",
+    "Real: Effective Runtime reportado, capturado en el registro. No se sustituye por el balance ni por producción / velocidad estándar. Simulado: tiempo equivalente de la producción simulada.": "Real: reported Effective Runtime entered in the record. It is not replaced by a balance or production / standard rate. Simulated: equivalent time of the simulated production.",
+    "Salida final del período. Cajas × botellas por caja cuando se requiere conversión.": "Final output for the period. Cases × bottles per case when conversion is required.",
+    "Cajas = botellas / botellas por caja. No se suman conteos de equipos sucesivos.": "Cases = bottles / bottles per case. Counts from consecutive machines are not added.",
+    "Producción de los límites del turno guardado. No se divide el total diario entre turnos.": "Production within the saved shift boundaries. The daily total is not divided between shifts.",
+    "Velocidad estándar del cuello de botella para el producto. En múltiples formatos no se inventa una velocidad global media.": "Standard bottleneck rate for the product. No average global rate is assumed across formats.",
+    "Factor de conversión declarado para el formato.": "Declared conversion factor for the format.",
+    "Producción conforme de planta. La simulación continua supone calidad del 100 %.": "Good plant production. The continuous simulation assumes 100% quality.",
+    "Scrap capturado en botellas; el simulador continuo no modela rechazos y supone cero.": "Scrap entered in bottles; the continuous simulator does not model rejects and assumes zero.",
+    "Retrabajo capturado en botellas; cero simulado es una hipótesis, no una validación de planta.": "Rework entered in bottles; simulated zero is an assumption, not plant validation.",
+    "Calidad reportada frente a la hipótesis del 100 % en simulación continua.": "Reported quality versus the 100% quality assumption in continuous simulation.",
+    "Real: AU reportado (%) capturado en Registro. Simulado: 100 × Effective Runtime / Plant Available Time.": "Real: reported AU (%) entered in Record. Simulated: 100 × Effective Runtime / Plant Available Time.",
+    "OE = 100 × Effective Runtime / Production Available Time. No equivale automáticamente al OEE global.": "OE = 100 × Effective Runtime / Production Available Time. It is not automatically equivalent to global OEE.",
+    "Real: UPDT reportado (%) capturado en Registro. Simulado: 100 × Unplanned Downtime / (Runtime + Unplanned Downtime).": "Real: reported UPDT (%) entered in Record. Simulated: 100 × Unplanned Downtime / (Runtime + Unplanned Downtime).",
+    "Indicador guardado: producción / producción ideal de toda la simulación × 100. Se distingue de OE y AU por su base.": "Saved indicator: production / ideal production over the entire simulation × 100. Its denominator differs from OE and AU.",
+    "Línea capturada en Registro.": "Line entered in Record.",
+    "Fecha capturada en Registro.": "Date entered in Record.",
+    "Runtime calculado del registro = Production Available Time − Unplanned Downtime. Si Runtime está en modo manual en el árbol, se usa ese valor. Se actualiza al editar sus inputs. El tiempo efectivo del ajuste se calcula con Production Available Time − Unplanned Downtime − Production Rate Losses.": "Calculated record Runtime = Production Available Time − Unplanned Downtime. If Runtime is in manual mode, that value is used. Updates as inputs change. The adjusted effective time uses Production Available Time − Unplanned Downtime − Production Rate Losses.",
+    "Tiempo disponible para producción real (T3).": "Real Production Available Time (T3).",
+    "Paros no planificados reales capturados.": "Recorded real unplanned downtime.",
+    "Pérdida de velocidad real capturada, en minutos equivalentes.": "Recorded real rate loss, in equivalent minutes.",
+    "Solo en esta sección: Effective Runtime = Production Available Time − Unplanned Downtime − Production Rate Losses (G = D − E − F). Se requieren los tres datos; Runtime reportado, Scrap y Rework no intervienen.": "In this section only: Effective Runtime = Production Available Time − Unplanned Downtime − Production Rate Losses (G = D − E − F). All three inputs are required; reported Runtime, Scrap and Rework are not included.",
+    "OEE de Opera capturado en Registro. Si falta, queda pendiente.": "Opera OEE entered in Record. If missing, it remains pending.",
+    "OEE Simulador": "Simulator OEE",
+    "Rate Loss Simulado": "Simulated Rate Loss",
+    "Rate Loss Opera - Simulador": "Opera − Simulator Rate Loss",
+    "OEE Calibrado": "Calibrated OEE",
+    "OEE Simulador Calibrado - OEE Opera": "Calibrated Simulator OEE − Opera OEE",
+    "J = tiempo efectivo simulado / tiempo disponible para producción simulado × 100.": "J = simulated effective runtime / simulated production available time × 100.",
+    "K = rate loss bruto simulado / tiempo disponible para producción simulado × 100. Se utiliza la pérdida bruta, sin descontar recuperaciones.": "K = simulated gross rate loss / simulated production available time × 100. Uses gross loss without subtracting recovery.",
+    "L = I − K. Diferencia en puntos porcentuales.": "L = I − K. Difference in percentage points.",
+    "M = J − L. OEE simulado ajustado por la diferencia de rate loss.": "M = J − L. Simulated OEE adjusted by the rate-loss difference.",
+    "N = M − H. Diferencia residual en puntos porcentuales.": "N = M − H. Residual difference in percentage points.",
+    "M = J − (I − K). N = M − H. K utiliza rate loss bruto. Cálculo automático con precisión completa; se muestran dos decimales. El ajuste no modifica la simulación.": "M = J − (I − K). N = M − H. K uses gross rate loss. Calculated automatically at full precision; displayed to two decimals. The adjustment does not change the simulation.",
+    "Difference [%] = (Simulated − Real) ÷ Real × 100. Si Real es cero o falta un dato, se muestra —. La suma de minutos entre equipos puede incluir paros simultáneos. El paro reportado sin desglose comparable se conserva como referencia.": "Difference [%] = (Simulated − Real) ÷ Real × 100. If Real is zero or a value is missing, — is displayed. Summed equipment downtime may include simultaneous stops. Reported downtime without a comparable breakdown is retained for reference."
+  };
+  const isSpanish=()=>document.documentElement.lang==='es';
+  const tr=(en,es)=>isSpanish()?es:en;
+  const ui=value=>isSpanish()?String(value??''):english[value]??String(value??'');
+  function syncStaticLabels(){
+    const panel=document.getElementById('realdata-panel');if(!panel)return;
+    for(const e of panel.querySelectorAll('[data-real-text]'))e.textContent=ui(e.dataset.realText);
+    for(const e of panel.querySelectorAll('[data-real-title]'))e.title=ui(e.dataset.realTitle);
+    for(const e of panel.querySelectorAll('[data-real-aria]'))e.setAttribute('aria-label',ui(e.dataset.realAria));
+  }
+  let lastStatus=null;
   let state,actions,context,owner='',selection='average',data=null,revision=0;
   const editorSelections=new Map(),editorFolders=new Map();
   const selected=new Map(),fmt=v=>finite(v)?v.toLocaleString(undefined,{maximumFractionDigits:2}):'—';
@@ -10,8 +217,8 @@ window.STRealData=(function(){
   const records=()=>state?.activeCase?.metadata?.realData?.records||[];
   const current=()=>records().find(r=>r.id===selected.get(state?.activeCase?.id))||records()[0]||null;
   const source=()=>context?.simulation?.results||context?.live||null;
-  function tip(element,text){element.title=text;element.setAttribute('aria-description',text);element.tabIndex=0;}
-  function status(text,error){const e=document.getElementById('real-data-status');e.textContent=text;e.classList.toggle('real-data-error',!!error);}
+  function tip(element,text){text=ui(text);element.title=text;element.setAttribute('aria-description',text);element.tabIndex=0;}
+  function status(text,error){lastStatus={text,error};const e=document.getElementById('real-data-status');e.textContent=ui(text);e.classList.toggle('real-data-error',!!error);}
   function persist(record){
     const c=state.activeCase,list=records().slice(),index=list.findIndex(r=>r.id===record.id);
     if(index<0&&list.length>=M.MAX_RECORDS)throw Error('Límite de registros alcanzado.');
@@ -45,10 +252,10 @@ window.STRealData=(function(){
     }catch(error){status(error.message,true);}
   }
   function control(parent,field,record,equipmentId){
-    const [path,label,type,scale=1,options]=field,wrapper=el('label',label),input=el(type==='select'?'select':type==='textarea'?'textarea':'input');
+    const [path,label,type,scale=1,options]=field,wrapper=el('label',ui(label)),input=el(type==='select'?'select':type==='textarea'?'textarea':'input');
     let value=M.at(record,path);
     const zeroDefault=type==='number'&&(path.startsWith('timeBreakdown.')||path.startsWith('timeOverrides.')||['durationSeconds','rateLossSeconds','aem.scrapSeconds','aem.reworkSeconds'].includes(path)||equipmentId&&['failureSeconds','failureCount'].includes(path));
-    if(type==='select')for(const [v,text] of options){const option=el('option',text);option.value=v;input.append(option);}
+    if(type==='select')for(const [v,text] of options){const option=el('option',ui(text));option.value=v;input.append(option);}
     else if(type!=='textarea')input.type=type;
     input.dataset.realField=path;if(equipmentId){input.dataset.equipmentId=equipmentId;input.dataset.realEquipmentField=path;}
     if(path.startsWith('aem.')||path==='referenceSpeedBpm')input.dataset.aemField=path;
@@ -64,7 +271,7 @@ window.STRealData=(function(){
     if(path==='operatingSeconds')tip(input,'Tiempo operativo interno medido, no el período calendario. Se usa para calcular MTBF = tiempo operativo / número de fallas.');
     if(path==='exposureSeconds')tip(input,'Período de observación del equipo. Debe coincidir con el período de la simulación para una comparación equivalente.');
     if(path==='validation.rateLossBasis')tip(input,'La pérdida bruta no resta recuperación. El balance neto es pérdida bruta − recuperación. La selección solo cambia la comparación, no el motor.');
-    input.oninput=()=>{if(input.readOnly||input.disabled)return;if(!input.checkValidity()){status('Revisa el valor de '+label+'.',true);return;}edit(path,type==='number'?(input.value===''?null:Number(input.value)*scale):input.value,equipmentId);};
+    input.oninput=()=>{if(input.readOnly||input.disabled)return;if(!input.checkValidity()){status(tr('Check the value of ','Revisa el valor de ')+ui(label)+'.',true);return;}edit(path,type==='number'?(input.value===''?null:Number(input.value)*scale):input.value,equipmentId);};
     wrapper.append(input);parent.append(wrapper);
     if(parent.tagName==='SUMMARY'){input.addEventListener('click',e=>e.stopPropagation());input.addEventListener('keydown',e=>e.stopPropagation());}
     return input;
@@ -74,8 +281,8 @@ window.STRealData=(function(){
       const details=el('details',null,'real-data-time-node'),summary=el('summary'),body=el('div',null,'real-data-time-children');details.dataset.timeNode=id;
       const title=el('span',label);summary.append(title);
       if(M.timeSectionIds.includes(id)){
-        const group=el('span',null,'switchable-value real-data-time-switch'),toggle=el('input'),value=el('input');toggle.type='checkbox';toggle.dataset.timeToggle=id;toggle.setAttribute('aria-label','Capturar '+label+' manualmente');toggle.title='Marcado: entrada manual. Desmarcado: salida calculada a partir de sus conceptos.';
-        value.type='number';value.min='0';value.step='any';value.dataset.timeValue=id;value.dataset.realField='timeOverrides.'+id+'.valueSeconds';value.setAttribute('aria-label',label+' (min)');tip(value,formula+' Marcado: valor manual. Desmarcado: valor calculado.');
+        const group=el('span',null,'switchable-value real-data-time-switch'),toggle=el('input'),value=el('input');toggle.type='checkbox';toggle.dataset.timeToggle=id;toggle.setAttribute('aria-label',tr('Enter '+label+' manually','Capturar '+label+' manualmente'));toggle.title=ui('Marcado: entrada manual. Desmarcado: salida calculada a partir de sus conceptos.');
+        value.type='number';value.min='0';value.step='any';value.dataset.timeValue=id;value.dataset.realField='timeOverrides.'+id+'.valueSeconds';value.setAttribute('aria-label',label+' (min)');tip(value,ui(formula)+tr(' Checked: manual value. Unchecked: calculated value.',' Marcado: valor manual. Desmarcado: valor calculado.'));
         for(const input of [toggle,value]){input.addEventListener('click',e=>e.stopPropagation());input.addEventListener('keydown',e=>e.stopPropagation());}
         toggle.onchange=()=>{
           try{const draft=M.normalize(current()),h=M.timeHierarchy(draft,true),previous=draft.timeOverrides[id];draft.timeOverrides[id]={enabled:toggle.checked,valueSeconds:previous?.valueSeconds??(finite(h.values[id])?Math.max(0,h.values[id]):null)};draft.timeHierarchyEnabled=true;if(M.timeCategories[id])draft.timeBreakdown[id].enabled=!toggle.checked;persist(M.normalize(draft));refresh();status('Modo de captura actualizado.');}catch(error){status(error.message,true);}
@@ -90,7 +297,7 @@ window.STRealData=(function(){
     control(root.summary,['durationSeconds','Total Time (min)','number',60],record);
     const totalInput=root.summary.querySelector('input');totalInput.addEventListener('click',e=>e.stopPropagation());totalInput.addEventListener('keydown',e=>e.stopPropagation());
     function branch(parent,id){
-      const c=M.timeCategories[id],n=node(parent,id,c.label,'Suma de los conceptos de '+c.label+'. Los campos vacíos cuentan como cero.');
+      const c=M.timeCategories[id],n=node(parent,id,c.label,tr('Sum of the '+c.label+' components. Empty fields count as zero.','Suma de los conceptos de '+c.label+'. Los campos vacíos cuentan como cero.'));
       const grid=el('div',null,'real-data-fields');n.body.append(grid);
       for(const [key,label] of c.fields){
         if(id==='unplanned'&&key==='unscheduledMaintenanceSeconds'){
@@ -107,7 +314,7 @@ window.STRealData=(function(){
     const losses=node(runtime.body,'losses','Runtime Losses','Production Rate Losses + Scrap + Rework, en minutos equivalentes.');
     const grid=el('div',null,'real-data-fields');losses.body.append(grid);
     for(const field of [['rateLossSeconds','Production Rate Losses (min)','number',60],['aem.scrapSeconds','Scrap (min equivalentes)','number',60],['aem.reworkSeconds','Rework (min equivalentes)','number',60],['validation.rateLossBasis','Definición del rate loss','select',1,[['UNCONFIRMED','Pendiente'],['GROSS','Pérdida bruta'],['NET','Balance neto']]]])control(grid,field,record);
-    const effective=el('div',null,'real-data-time-node real-data-time-result'),effectiveValue=el('output',null,'numeric metric-value');effective.dataset.timeNode='effective';effectiveValue.dataset.timeValue='effective';effectiveValue.setAttribute('aria-label','Effective Runtime calculado en minutos');tip(effectiveValue,'Effective Runtime calculado = Runtime − Runtime Losses. Runtime Losses = Production Rate Losses + Scrap + Rework, salvo total capturado manualmente.');effectiveValue.append(el('b','—','metric-number'),document.createTextNode(' '),el('span','min','metric-unit'));effective.append(el('span','Effective Runtime'),effectiveValue);
+    const effective=el('div',null,'real-data-time-node real-data-time-result'),effectiveValue=el('output',null,'numeric metric-value');effective.dataset.timeNode='effective';effectiveValue.dataset.timeValue='effective';effectiveValue.setAttribute('aria-label',ui('Effective Runtime calculado en minutos'));tip(effectiveValue,'Effective Runtime calculado = Runtime − Runtime Losses. Runtime Losses = Production Rate Losses + Scrap + Rework, salvo total capturado manualmente.');effectiveValue.append(el('b','—','metric-number'),document.createTextNode(' '),el('span','min','metric-unit'));effective.append(el('span','Effective Runtime'),effectiveValue);
     const reported=el('div',null,'real-data-fields');
     const reportedInput=control(reported,['effectiveRuntimeSeconds','Effective Runtime reportado (min)','number',60],record);
     tip(reportedInput,'Valor reportado por planta. Es el único Effective Runtime real utilizado en las comparaciones y sus indicadores derivados. Si está vacío, queda pendiente; cero es un valor válido.');
@@ -135,7 +342,7 @@ window.STRealData=(function(){
   function register(){
     const target=document.getElementById('real-data-editor'),oldExplorer=target.querySelector('.real-data-explorer');
     if(oldExplorer){const folders=new Map([...oldExplorer.querySelectorAll('[data-explorer-folder]')].map(e=>[e.dataset.explorerFolder,e.open]));editorFolders.set(oldExplorer.dataset.editorKey,folders);}
-    target.replaceChildren();const record=current();if(!record){target.append(el('p','Crea o importa un registro.','empty'));return;}
+    target.replaceChildren();const record=current();if(!record){target.append(el('p',ui('Crea o importa un registro.'),'empty'));return;}
     const r=M.normalize(record);
     if(r.reportedProductionUnits==null&&r.productionUnit==='BOTTLES')r.reportedProductionUnits=r.production;
     if(r.reportedProductionCases==null&&r.productionUnit==='CASES')r.reportedProductionCases=r.production;
@@ -143,13 +350,13 @@ window.STRealData=(function(){
     for(const group of M.fieldGroups){
       if(group.id==='times'){timeTree(target,r);continue;}
       const fields=group.fields.filter(([path])=>!capturedInTree.has(path));if(!fields.length)continue;
-      const details=el('details',null,'real-data-input-group'),summary=el('summary',group.label),grid=el('div',null,'real-data-fields');details.dataset.editorGroup=group.id;details.open=!!group.open;details.append(summary,grid);
+      const details=el('details',null,'real-data-input-group'),summary=el('summary',ui(group.label)),grid=el('div',null,'real-data-fields');details.dataset.editorGroup=group.id;details.open=!!group.open;details.append(summary,grid);
       for(const field of fields)control(grid,field,r);target.append(details);
     }
     installRegistrationExplorer(target);
   }
   function registerEquipment(target,r){
-    const details=el('details',null,'real-data-input-group'),summary=el('summary','Downtime por equipo'),note=el('p','Captura los valores reales por máquina. Deja en blanco los datos faltantes y usa cero solo para un valor confirmado. El paro reportado sin desglose se conserva por separado.','chart-note');details.append(summary,note);
+    const details=el('details',null,'real-data-input-group'),summary=el('summary',ui('Downtime por equipo')),note=el('p',ui('Captura los valores reales por máquina. Deja en blanco los datos faltantes y usa cero solo para un valor confirmado. El paro reportado sin desglose se conserva por separado.'),'chart-note');details.append(summary,note);
     const models=M.equipmentModels(context.simulation?.equipment,r.equipment);
     for(const e of models){
       const item={...(r.equipment.find(o=>o.equipmentId===e.id)||{})},sub=el('details'),heading=el('summary',e.name||e.id),grid=el('div',null,'real-data-fields');sub.dataset.equipmentEditor=e.id;sub.append(heading,grid);
@@ -160,7 +367,7 @@ window.STRealData=(function(){
   }
   function installRegistrationExplorer(target){
     const key=String(state.activeCase.id)+'/'+String(current().id),previous=editorFolders.get(key)||new Map(),all=new Map();
-    const explorer=el('div',null,'real-data-explorer'),nav=el('nav',null,'real-data-explorer-nav'),content=el('div',null,'real-data-explorer-content');nav.setAttribute('aria-label','Conceptos del registro');
+    const explorer=el('div',null,'real-data-explorer'),nav=el('nav',null,'real-data-explorer-nav'),content=el('div',null,'real-data-explorer-content');nav.setAttribute('aria-label',ui('Conceptos del registro'));
     explorer.dataset.editorKey=key;
     let serial=0;
     function section(id,label){
@@ -174,9 +381,9 @@ window.STRealData=(function(){
       const equipment=element.querySelector('.real-data-input-group');
       if(!equipment)return d;
       const scroll=el('div',null,'real-data-comparison-scroll'),table=el('table',null,'real-data-equipment-table');
-      scroll.setAttribute('role','region');scroll.setAttribute('aria-label','Captura de paros por equipo');scroll.tabIndex=0;
+      scroll.setAttribute('role','region');scroll.setAttribute('aria-label',ui('Captura de paros por equipo'));scroll.tabIndex=0;
       const header=table.createTHead().insertRow();
-      for(const label of ['Equipo',...M.equipmentFields.map(({label,unit})=>label+' ['+unit+']')]){
+      for(const label of [ui('Equipo'),...M.equipmentFields.map(({label,unit})=>ui(label)+' ['+ui(unit)+']')]){
         const column=el('th',label);column.scope='col';header.append(column);
       }
       const body=table.createTBody();
@@ -215,7 +422,7 @@ window.STRealData=(function(){
           if(grid.children.length){
             d.body.append(grid);
             d.panel.dataset.timeOwner=id;
-            if(id==='unplanned')d.body.append(el('p','Al editar el desglose, el total pasa a modo calculado. El valor manual se conserva.','chart-note'));
+            if(id==='unplanned')d.body.append(el('p',ui('Al editar el desglose, el total pasa a modo calculado. El valor manual se conserva.'),'chart-note'));
           }
         }
       }
@@ -254,8 +461,8 @@ window.STRealData=(function(){
     for(const root of roots)nav.append(navigation(root,null));explorer.append(nav,content);target.replaceChildren(...(identification?[identification,explorer]:[explorer]));choose(all.has(editorSelections.get(key))?editorSelections.get(key):all.has('total')?'total':roots[0]?.id);
   }
   function displayText(value){
-    const names={T1:'tiempo total',T2:'tiempo disponible de planta',T3:'tiempo disponible para producción',T4:'tiempo de marcha',T5:'tiempo efectivo'};
-    return String(value??'').replace(/\s*\(T[1-5]\)/g,'').replace(/\bAEM\b\s*/g,'').replace(/\bT[1-5]\b/g,key=>names[key]).replace(/\s{2,}/g,' ').trim();
+    const names=isSpanish()?{T1:'tiempo total',T2:'tiempo disponible de planta',T3:'tiempo disponible para producción',T4:'tiempo de marcha',T5:'tiempo efectivo'}:{T1:'total time',T2:'plant available time',T3:'production available time',T4:'runtime',T5:'effective runtime'};
+    return ui(value).replace(/\s*\(T[1-5]\)/g,'').replace(/\bAEM\b\s*/g,'').replace(/\bT[1-5]\b/g,key=>names[key]).replace(/\s{2,}/g,' ').trim();
   }
   function comparisonHtml(result){
     const groups=[
@@ -281,40 +488,51 @@ window.STRealData=(function(){
         inputs:'Revisa los parámetros base empleados para la comparación.',
         indicators:'Compara los indicadores calculados de desempeño.'
       };
-      return '<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="'+g.id+'" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title">'+esc(g.label)+'</span><span class="subsection-description">'+esc(guidance[g.id]||'Compara los valores reales y simulados.')+'</span></span></summary><div class="real-data-comparison-scroll"><table class="real-data-main-table"><thead><tr><th>Parámetro</th><th>Unidad</th><th class="numeric">Real</th><th class="numeric">Simulado</th><th class="numeric">Diferencia</th></tr></thead><tbody>'+g.rows.map(r=>{
-        const text=displayText(r.formula)+' Real mostrado: '+r.realSource+'. '+(r.reported!=null?' Reportado en planta: '+fmt(r.reported)+' '+r.unit+'.':'')+' Diferencia = simulado − real.'+(r.unit==='%'?' La diferencia se expresa en pp.':'');
+      return '<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="'+g.id+'" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title">'+esc(ui(g.label))+'</span><span class="subsection-description">'+esc(ui(guidance[g.id]||'Compara los valores reales y simulados.'))+'</span></span></summary><div class="real-data-comparison-scroll"><table class="real-data-main-table"><thead><tr><th>'+esc(ui('Parámetro'))+'</th><th>'+esc(ui('Unidad'))+'</th><th class="numeric">'+esc(ui('Real'))+'</th><th class="numeric">'+esc(ui('Simulado'))+'</th><th class="numeric">'+esc(ui('Diferencia'))+'</th></tr></thead><tbody>'+g.rows.map(r=>{
+        const text=displayText(r.formula)+tr(' Displayed real value: ',' Real mostrado: ')+ui(r.realSource)+'. '+(r.reported!=null?tr(' Reported by plant: ',' Reportado en planta: ')+fmt(r.reported)+' '+ui(r.unit)+'.':'')+tr(' Difference = simulated − real.',' Diferencia = simulado − real.')+(r.unit==='%'?tr(' Difference is in percentage points.',' La diferencia se expresa en pp.'):'');
         const attrs=' title="'+esc(text)+'" aria-description="'+esc(text)+'" tabindex="0"';
-        return '<tr data-metric="'+esc(r.id)+'"><th scope="row"'+attrs+'>'+esc(displayText(r.metric))+(r.reported!=null&&r.realSource!=='reportado'?'<small class="real-data-reported">Reportado: '+fmt(r.reported)+' '+esc(r.unit)+'</small>':'')+'</th><td>'+esc(r.unit)+'</td>'+[r.real,r.simulated,r.delta].map(v=>'<td class="numeric"'+attrs+'>'+fmt(v)+'</td>').join('')+'</tr>';
+        return '<tr data-metric="'+esc(r.id)+'"><th scope="row"'+attrs+'>'+esc(displayText(r.metric))+(r.reported!=null&&r.realSource!=='reportado'?'<small class="real-data-reported">'+tr('Reported: ','Reportado: ')+fmt(r.reported)+' '+esc(ui(r.unit))+'</small>':'')+'</th><td>'+esc(ui(r.unit))+'</td>'+[r.real,r.simulated,r.delta].map(v=>'<td class="numeric"'+attrs+'>'+fmt(v)+'</td>').join('')+'</tr>';
       }).join('')+'</tbody></table></div></details>';
-    }).join('')+'<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="equipment-downtime" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title">Downtime por equipo</span><span class="subsection-description">Compara los minutos de parada por equipo y su contribución a las diferencias.</span></span></summary><div class="real-data-comparison-scroll" role="region" aria-label="Tabla de downtime por equipo" tabindex="0">'+downtimeHtml(result.downtime)+'</div></details>';
+    }).join('')+'<details class="real-data-comparison-group fold-card fold-native" data-comparison-group="equipment-downtime" open><summary><span class="subsection-heading-copy"><span class="subsection-native-title">'+esc(ui('Downtime por equipo'))+'</span><span class="subsection-description">'+esc(ui('Compara los minutos de parada por equipo y su contribución a las diferencias.'))+'</span></span></summary><div class="real-data-comparison-scroll" role="region" aria-label="'+esc(ui('Tabla de downtime por equipo'))+'" tabindex="0">'+downtimeHtml(result.downtime)+'</div></details>';
   }
   function calibrationHtml(result){
     const columns=result.calibration.columns;
     const attrs=c=>' title="'+esc(displayText(c.formula))+'" aria-description="'+esc(displayText(c.formula))+'" tabindex="0"';
-    return '<div class="real-data-calibration-scroll" role="region" aria-label="Hoja de cálculo de rate loss calibrado" tabindex="0"><table class="real-data-calibration-table"><thead><tr>'+columns.map(c=>'<th scope="col"'+attrs(c)+'>'+esc(c.label)+(c.unit?'<small>['+esc(c.unit==='pp'?'%':c.unit)+']</small>':'')+'</th>').join('')+'</tr></thead><tbody><tr>'+columns.map(c=>'<td data-calibration="'+esc(c.id)+'" class="'+(c.letter==='A'||c.letter==='B'?'':'numeric')+'"'+attrs(c)+'>'+((c.letter==='A'||c.letter==='B')?esc(c.value||'—'):fmt(c.value))+(c.unit==='%'?' %':'')+'</td>').join('')+'</tr></tbody></table></div><p class="chart-note">'+esc(result.calibration.note)+'</p>';
+    return '<div class="real-data-calibration-scroll" role="region" aria-label="'+esc(ui('Hoja de cálculo de rate loss calibrado'))+'" tabindex="0"><table class="real-data-calibration-table"><thead><tr>'+columns.map(c=>'<th scope="col"'+attrs(c)+'>'+esc(ui(c.label))+(c.unit?'<small>['+esc(c.unit==='pp'?'%':c.unit)+']</small>':'')+'</th>').join('')+'</tr></thead><tbody><tr>'+columns.map(c=>'<td data-calibration="'+esc(c.id)+'" class="'+(c.letter==='A'||c.letter==='B'?'':'numeric')+'"'+attrs(c)+'>'+((c.letter==='A'||c.letter==='B')?esc(c.value||'—'):fmt(c.value))+(c.unit==='%'?' %':'')+'</td>').join('')+'</tr></tbody></table></div><p class="chart-note">'+esc(ui(result.calibration.note))+'</p>';
 
   }
   function downtimeHtml(d){
     const rows=d.rows;
-    if(!rows.length)return '<p class="empty">Sin equipos para comparar.</p>';
+    if(!rows.length)return '<p class="empty">'+esc(ui('Sin equipos para comparar.'))+'</p>';
     const columns=M.equipmentFields;
     const cells=comparison=>columns.map(({id})=>{
       const values=comparison[id];
       return [values.real,values.simulated,values.difference].map(value=>'<td class="numeric">'+fmt(value)+'</td>').join('');
     }).join('');
     const subhead=['Real','Simulated','Difference [%]'].map(label=>'<th scope="col" class="numeric">'+label+'</th>').join('');
-    return '<p class="chart-note">Difference [%] = (Simulated − Real) ÷ Real × 100. Si Real es cero o falta un dato, se muestra —. La suma de minutos entre equipos puede incluir paros simultáneos. El paro reportado sin desglose comparable se conserva como referencia.</p>'+
-      '<table class="real-data-downtime-table"><colgroup span="1"></colgroup>'+columns.map(()=>'<colgroup span="3"></colgroup>').join('')+'<thead><tr><th scope="col" rowspan="2">Equipo</th>'+
-      columns.map(({label,unit})=>'<th scope="colgroup" colspan="3">'+esc(label)+' ['+esc(unit)+']</th>').join('')+'</tr><tr>'+columns.map(()=>subhead).join('')+'</tr></thead><tbody>'+
+    return '<p class="chart-note">'+esc(ui('Difference [%] = (Simulated − Real) ÷ Real × 100. Si Real es cero o falta un dato, se muestra —. La suma de minutos entre equipos puede incluir paros simultáneos. El paro reportado sin desglose comparable se conserva como referencia.'))+'</p>'+
+      '<table class="real-data-downtime-table"><colgroup span="1"></colgroup>'+columns.map(()=>'<colgroup span="3"></colgroup>').join('')+'<thead><tr><th scope="col" rowspan="2">'+esc(ui('Equipo'))+'</th>'+
+      columns.map(({label,unit})=>'<th scope="colgroup" colspan="3">'+esc(ui(label))+' ['+esc(ui(unit))+']</th>').join('')+'</tr><tr>'+columns.map(()=>subhead).join('')+'</tr></thead><tbody>'+
       rows.map(row=>'<tr><th scope="row">'+esc(row.name)+'</th>'+cells(row.comparison)+'</tr>').join('')+
-      '</tbody><tfoot><tr><th scope="row">Total de equipos</th>'+cells(d.comparisonTotals)+'</tr></tfoot></table>';
+      '</tbody><tfoot><tr><th scope="row">'+esc(ui('Total de equipos'))+'</th>'+cells(d.comparisonTotals)+'</tr></tfoot></table>';
   }
   function showComparisonExplorer(target,selectedGroup){
     const groups=[...target.querySelectorAll('[data-comparison-group]')];
     if(!groups.length)return;
-    const layout=el('div',null,'real-data-explorer');
-    const nav=el('nav',null,'real-data-explorer-nav');
-    nav.setAttribute('aria-label','Rubros de comparación');
+    const layout=el('div',null,'real-data-explorer real-data-comparison-explorer');
+    const nav=el('nav',null,'real-data-explorer-nav real-data-comparison-nav');
+    nav.setAttribute('aria-label',ui('Rubros de comparación'));
+    // Same icon-and-label navigation component used by the application header.
+    const tabs={
+      calendar:['calendar','Calendar','Calendario'],
+      planned:['settings','Planned downtime','Paradas planificadas'],
+      operation:['warning','Unplanned downtime','Paradas no planificadas'],
+      losses:['pulse','Runtime losses','Pérdidas durante la marcha'],
+      production:['box','Production','Producción'],
+      inputs:['filter','Reference parameters','Parámetros de referencia'],
+      indicators:['chart','Performance indicators','Indicadores de desempeño'],
+      'equipment-downtime':['machine','Equipment downtime','Downtime por equipo']
+    };
     const content=el('div',null,'real-data-explorer-content');
     const buttons=new Map();
     function select(id){
@@ -325,18 +543,28 @@ window.STRealData=(function(){
     }
     for(const group of groups){
       const id=group.dataset.comparisonGroup;
-      const label=group.querySelector('summary').textContent;
-      const button=el('button',label,'real-data-explorer-link');
-      button.type='button';
+      const label=group.querySelector('.subsection-native-title').textContent;
+      const description=group.querySelector('.subsection-description')?.textContent||'';
+      const [icon,en,es]=tabs[id]||['list',label,label];
+      const button=el('button',null,'app-section-tab real-data-comparison-tab');
+      button.type='button';button.dataset.icon=icon;
+      window.STIcons?.button(button,icon);
+      button.append(el('span',tr(en,es)));
       button.dataset.comparisonSelect=id;
       button.setAttribute('aria-controls','real-data-comparison-'+id);
+      button.setAttribute('aria-label',label);button.title=label;
       button.onclick=()=>select(id);
-      const panel=el('article',null,'real-data-explorer-panel');
+      const panel=el('article',null,'real-data-explorer-panel real-data-comparison-panel');
       panel.id='real-data-comparison-'+id;
       panel.dataset.comparisonGroup=id;
-      panel.append(el('h3',label),group.querySelector('.real-data-comparison-scroll'));
+      const heading=el('div',null,'real-data-comparison-heading');
+      const title=el('h3',label,'real-data-comparison-title');title.id=panel.id+'-title';
+      heading.append(title);
+      if(description)heading.append(el('p',description,'subsection-description'));
+      panel.setAttribute('aria-labelledby',title.id);
+      panel.append(heading,group.querySelector('.real-data-comparison-scroll'));
       buttons.set(id,{button,panel});
-      nav.append(el('div'));nav.lastChild.append(button);
+      nav.append(button);
       content.append(panel);
     }
     layout.append(nav,content);
@@ -349,7 +577,7 @@ window.STRealData=(function(){
     const selectedGroup=comparison.querySelector('[aria-current="page"]')?.dataset.comparisonSelect;
     const r=current();data=r?M.build(r,context.simulation,source(),selection,context.caseRecord):null;
     for(const id of ['real-data-export-json','real-data-export-html'])document.getElementById(id).disabled=!data;
-    for(const [id,html] of [['real-data-comparison',data?comparisonHtml(data):''],['real-data-calibration',data?calibrationHtml(data):'']])document.getElementById(id).innerHTML=html||'<p class="empty">Sin registro seleccionado.</p>';
+    for(const [id,html] of [['real-data-comparison',data?comparisonHtml(data):''],['real-data-calibration',data?calibrationHtml(data):'']])document.getElementById(id).innerHTML=html||'<p class="empty">'+esc(ui('Sin registro seleccionado.'))+'</p>';
     STSubsection.init(comparison);
     showComparisonExplorer(comparison,selectedGroup);
   }
@@ -361,27 +589,34 @@ window.STRealData=(function(){
     const selector=document.getElementById('real-data-record');selector.replaceChildren();for(const r of records()){const option=el('option',r.name+(r.date?' · '+r.date:''));option.value=r.id;selector.append(option);}selector.value=record?.id||'';
     if(owner!==key){owner=key;register();}
     document.getElementById('real-data-delete').disabled=!record;
-    const select=document.getElementById('real-data-view'),result=source(),options=[['average','Promedio de rondas']];
-    if(result?.batch?.rows?.length){options.push(['representative','Ronda representativa']);for(const r of result.batch.rows)options.push([String(r.round),'Ronda '+r.round+' · seed '+r.seed]);}
+    const select=document.getElementById('real-data-view'),result=source(),options=[['average',ui('Promedio de rondas')]];
+    if(result?.batch?.rows?.length){options.push(['representative',ui('Ronda representativa')]);for(const r of result.batch.rows)options.push([String(r.round),tr('Round ','Ronda ')+r.round+' · '+tr('seed ','semilla ')+r.seed]);}
     if(!options.some(([value])=>value===selection))selection='average';select.replaceChildren();for(const [value,text] of options){const o=el('option',text);o.value=value;select.append(o);}select.value=selection;
-    document.getElementById('real-data-simulation').textContent='Comparación con: '+(simulation?.name||'sin simulación seleccionada')+'. Los registros reales pertenecen al caso.';
+    document.getElementById('real-data-simulation').textContent=tr('Comparison with: ','Comparación con: ')+(simulation?.name||tr('no simulation selected','sin simulación seleccionada'))+tr('. Real records belong to the case.','. Los registros reales pertenecen al caso.');
     refresh();
   }
   function download(text,name,type){const url=URL.createObjectURL(new Blob([text],{type})),a=el('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function reportHtml(result){
-    const fields=M.fieldGroups.flatMap(g=>g.fields.map(([path,label,type,scale=1])=>({label,value:M.at(result.observation,path),scale,type}))).filter(r=>r.value!=null&&r.value!=='');
+    const fields=M.fieldGroups.flatMap(g=>g.fields.map(([path,label,type,scale=1])=>({label:ui(label),value:M.at(result.observation,path),scale,type}))).filter(r=>r.value!=null&&r.value!=='');
     for(const [id,category] of Object.entries(M.timeCategories))for(const [key,label] of category.fields){const value=result.observation.timeBreakdown?.[id]?.[key];if(value!=null)fields.push({label:category.label+' / '+label+' (min)',value,scale:60,type:'number'});}
-    for(const [id,mode] of Object.entries(result.observation.timeOverrides||{}))if(mode.enabled)fields.push({label:(M.timeCategories[id]?.label||({plant:'Plant Available Time',production:'Production Available Time',runtime:'Runtime',losses:'Runtime Losses'})[id])+' (entrada manual, min)',value:mode.valueSeconds??0,scale:60,type:'number'});
-    if(result.observation.reportedProductionUnits==null&&result.observation.reportedProductionCases==null&&finite(result.observation.production))fields.push({label:'Producción original ('+result.observation.productionUnit+')',value:result.observation.production,scale:1});
+    for(const [id,mode] of Object.entries(result.observation.timeOverrides||{}))if(mode.enabled)fields.push({label:(M.timeCategories[id]?.label||({plant:'Plant Available Time',production:'Production Available Time',runtime:'Runtime',losses:'Runtime Losses'})[id])+tr(' (manual entry, min)',' (entrada manual, min)'),value:mode.valueSeconds??0,scale:60,type:'number'});
+    if(result.observation.reportedProductionUnits==null&&result.observation.reportedProductionCases==null&&finite(result.observation.production))fields.push({label:tr('Original production (','Producción original (')+result.observation.productionUnit+')',value:result.observation.production,scale:1});
     const registration='<table><tbody>'+fields.map(f=>'<tr><th>'+esc(f.label)+'</th><td>'+esc(typeof f.value==='number'?fmt(f.value/f.scale):f.value)+'</td></tr>').join('')+'</tbody></table>';
-    return '<!doctype html><html lang="es"><meta charset="utf-8"><title>Comparación de datos reales</title><style>body{font:14px system-ui;max-width:1200px;margin:24px auto;padding:16px;color:#213547}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{padding:8px;border-bottom:1px solid #ccd5dd;text-align:left}.real-data-calibration-scroll,.real-data-comparison-scroll{overflow-x:auto}.real-data-downtime-table thead th{white-space:nowrap}.real-data-calibration-table{min-width:1600px}.real-data-calibration-table thead{background:#24599a;color:white}.real-data-calibration-table th{text-align:center}.real-data-calibration-table small{display:block}.numeric{text-align:right;font-variant-numeric:tabular-nums}.real-data-reported{display:block;font-weight:400}.chart-note{color:#52616c}.real-data-group-row{background:#eef4f7}section{margin:24px 0}@media print{tr{break-inside:avoid}body{max-width:none;margin:0}}</style><h1>'+esc(result.observation.name)+'</h1><section><h2>Registro</h2>'+registration+'</section><section><h2>Comparación de parámetros</h2>'+comparisonHtml(result)+'</section><section><h2>Ajuste calibrado de rate loss</h2>'+calibrationHtml(result)+'</section><details><summary>Datos de equipos capturados</summary><pre>'+esc(JSON.stringify(result.observation.equipment,null,2))+'</pre></details></html>';
+    return '<!doctype html><html lang="'+tr('en','es')+'"><meta charset="utf-8"><title>'+esc(ui('Comparación de datos reales'))+'</title><style>body{font:14px system-ui;max-width:1200px;margin:24px auto;padding:16px;color:#213547}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{padding:8px;border-bottom:1px solid #ccd5dd;text-align:left}.real-data-calibration-scroll,.real-data-comparison-scroll{overflow-x:auto}.real-data-downtime-table thead th{white-space:nowrap}.real-data-calibration-table{min-width:1600px}.real-data-calibration-table thead{background:#24599a;color:white}.real-data-calibration-table th{text-align:center}.real-data-calibration-table small{display:block}.numeric{text-align:right;font-variant-numeric:tabular-nums}.real-data-reported{display:block;font-weight:400}.chart-note{color:#52616c}.real-data-group-row{background:#eef4f7}section{margin:24px 0}@media print{tr{break-inside:avoid}body{max-width:none;margin:0}}</style><h1>'+esc(result.observation.name)+'</h1><section><h2>'+esc(ui('Registro'))+'</h2>'+registration+'</section><section><h2>'+esc(ui('Comparación de parámetros'))+'</h2>'+comparisonHtml(result)+'</section><section><h2>'+esc(ui('Ajuste calibrado de rate loss'))+'</h2>'+calibrationHtml(result)+'</section><details><summary>'+esc(ui('Datos de equipos capturados'))+'</summary><pre>'+esc(JSON.stringify(result.observation.equipment,null,2))+'</pre></details></html>';
   }
   function init(currentState,callbacks){
-    state=currentState;actions=callbacks;
-    document.getElementById('real-data-new').onclick=()=>{try{const r=M.normalize(M.empty());r.name='Registro '+(records().length+1);persist(r);owner='';render(context.caseRecord,context.simulation,context.live);}catch(error){status(error.message,true);}};
+    state=currentState;actions=callbacks;syncStaticLabels();
+    window.addEventListener('st-language-change',()=>{
+      syncStaticLabels();
+      if(context?.caseRecord&&context.caseRecord===state.activeCase){
+        owner='';render(context.caseRecord,context.simulation,context.live);
+        if(lastStatus)status(lastStatus.text,lastStatus.error);
+      }
+    });
+    document.getElementById('real-data-new').onclick=()=>{try{const r=M.normalize(M.empty());r.name=tr('Record ','Registro ')+(records().length+1);persist(r);owner='';render(context.caseRecord,context.simulation,context.live);}catch(error){status(error.message,true);}};
     document.getElementById('real-data-record').onchange=e=>{selected.set(state.activeCase.id,e.target.value);owner='';render(context.caseRecord,context.simulation,context.live);};
     document.getElementById('real-data-view').onchange=e=>{selection=e.target.value;refresh();};
-    document.getElementById('real-data-delete').onclick=async()=>{const c=state.activeCase,r=current();if(!r)return;const answer=await STDialog.open({title:'Eliminar registro',message:'¿Eliminar '+r.name+'? Los resultados de simulación se conservan.',buttons:[{id:'cancel',label:'Cancelar'},{id:'delete',label:'Eliminar',destructive:true}]});if(answer.action!=='delete'||state.activeCase!==c)return;c.metadata.realData={schema:M.VERSION,records:records().filter(row=>row.id!==r.id)};selected.delete(c.id);actions.changed();owner='';render(c,context.simulation,context.live);};
+    document.getElementById('real-data-delete').onclick=async()=>{const c=state.activeCase,r=current();if(!r)return;const answer=await STDialog.open({title:ui('Eliminar registro'),message:tr('Delete '+r.name+'? Simulation results are retained.','¿Eliminar '+r.name+'? Los resultados de simulación se conservan.'),buttons:[{id:'cancel',label:ui('Cancelar')},{id:'delete',label:ui('Eliminar'),destructive:true}]});if(answer.action!=='delete'||state.activeCase!==c)return;c.metadata.realData={schema:M.VERSION,records:records().filter(row=>row.id!==r.id)};selected.delete(c.id);actions.changed();owner='';render(c,context.simulation,context.live);};
     const input=document.getElementById('real-data-file');document.getElementById('real-data-import').onclick=()=>input.click();
     input.onchange=async()=>{const file=input.files?.[0],c=state.activeCase,ticket=++revision;input.value='';if(!file)return;try{if(file.size>2*1024*1024)throw Error('El JSON excede 2 MB.');const imported=M.importRecords(JSON.parse(await file.text()));if(state.activeCase!==c||ticket!==revision)return;if(records().length+imported.length>M.MAX_RECORDS)throw Error('Límite de registros alcanzado.');const added=imported.map(r=>({...r,id:M.empty().id})),next={schema:M.VERSION,records:records().concat(added)};if(new Blob([JSON.stringify(next)]).size>512*1024)throw Error('Los registros exceden 512 KB.');c.metadata=c.metadata||{};c.metadata.realData=next;selected.set(c.id,added[0].id);actions.changed();owner='';render(c,context.simulation,context.live);status('Registro importado.');}catch(error){status(error.message,true);}};
     document.getElementById('real-data-template').onclick=()=>download(JSON.stringify(M.template(context?.simulation?.equipment||[]),null,2),'real-data-template.json','application/json');

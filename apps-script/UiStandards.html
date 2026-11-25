@@ -40,7 +40,6 @@ label:has(> input[type=checkbox]) { display:flex; flex-direction:row; flex-wrap:
 :is(#settings-dialog,#plant-calendar-dialog) .settings-simulation-grid label:not(:has(> input[type=checkbox])) { display:grid; gap:var(--space-2); }
 :is(#settings-dialog,#plant-calendar-dialog) .settings-simulation-grid select { width:100%; }
 #message-dialog-message { white-space:pre-line; overflow-wrap:anywhere; }
-.dialog-heading > .icon-button { width:var(--control-height); height:var(--control-height); min-width:var(--control-height); padding:var(--space-2); margin:0; flex-shrink:0; }
 .dialog-actions > button:not(.icon-button) { min-height:var(--control-height); padding:var(--space-2) var(--space-4); border-radius:var(--radius-md); font-size:var(--font-body); font-weight:var(--weight-medium); }
 #settings-dialog .accent-palette { display:flex; flex-wrap:wrap; gap:var(--space-2); }
 html[data-header-view=vgraph] #line-performance > .section-heading { display:none; }
@@ -87,7 +86,6 @@ html[data-equipment-layout=split] #basic-conveyor-panel .format-zone-setup { pad
 .simulation-analysis-heading,.json-section-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); }
 #equipment-subsection-title { margin:0; }
 .editor-subheading > .button-row { margin-left:auto; }
-.import-menu > summary.icon-button { list-style:none; display:flex; align-items:center; justify-content:center; }
 .import-menu > summary::-webkit-details-marker { display:none; }
 .import-menu > div { z-index:30; }
 html[data-header-view=conveyors] #export-equipment-json { display:none; }
@@ -151,13 +149,9 @@ html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation { min-wi
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > .scenario-card-header,
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > h4 { margin:0 0 var(--space-4); min-height:var(--control-height); align-content:center; font-size:var(--font-card); }
 html[data-ui-mode=basic] .scenario-tier-grid .scenario-actions { margin-top:auto; padding-top:var(--space-3); gap:var(--space-1); flex-wrap:nowrap; }
-html[data-ui-mode=basic] .scenario-tier-grid .scenario-actions .icon-button { width:var(--control-height); height:var(--control-height); flex-basis:var(--control-height); }
 html[data-ui-mode=basic] .scenario-current { border-left:var(--state-border-width) solid var(--muted); }
 html[data-ui-mode=basic] .scenario-current .scenario-basic-metrics { padding:var(--space-3) 0; }
 
-/* Outlined icon buttons in editor and case toolbars. */
-.editor-subheading .icon-button,.json-section-heading .icon-button,.cases-toolbar > .icon-button { border-color:var(--line); background:transparent; color:var(--muted); }
-.editor-subheading .icon-button:hover,.cases-toolbar > .icon-button:hover { background:var(--surface-hover); color:var(--ink); }
 .scenario-activity { width:100%; height:var(--state-border-width); margin:var(--space-3) 0; }
 .scenario-activity[hidden] { display:none; }
 html[data-ui-mode=basic] .scenario-search-progress { display:none; }
@@ -940,19 +934,6 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
   margin:0!important;padding:0!important;grid-column:auto!important;grid-row:auto!important;
 }
 .live-equipment-card .numeric-equipment-control-dock > .loss-toggle {display:none!important;}
-.live-equipment-card .numeric-equipment-control-dock > button[aria-pressed=true],
-.live-equipment-card .numeric-equipment-control-dock > button[aria-pressed=true]:disabled {
-  background:var(--accent)!important;border-color:var(--accent)!important;
-  color:#fff!important;opacity:1!important;
-}
-.live-equipment-card .numeric-equipment-control-dock > .live-control-emergency[aria-pressed=true],
-.live-equipment-card .numeric-equipment-control-dock > .live-control-emergency[aria-pressed=true]:disabled {
-  background:var(--danger)!important;border-color:var(--danger)!important;color:#fff!important;
-}
-.live-equipment-card .numeric-equipment-control-dock > button[aria-pressed=true] svg,
-.live-equipment-card .numeric-equipment-control-dock > button[aria-pressed=true]:disabled svg {
-  color:#fff!important;stroke:#fff!important;opacity:1!important;
-}
 html[data-events-enabled=false] .live-equipment-card .numeric-equipment-overview-side
  .numeric-equipment-header-footer > .numeric-equipment-control-dock {display:none!important;}
 .live-equipment-card .numeric-equipment-chart-side {gap:var(--space-1);}
@@ -1313,12 +1294,6 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
   margin-inline-start:0;white-space:nowrap;font-size:var(--font-secondary);color:var(--muted);
 }
 #simulation-playback #playback-performance {display:none!important;}
-:is(#simulation-equipment,#equipment-section) .equipment-filter-toggle[aria-pressed=true] {
-  background:var(--selected);color:var(--accent);border-color:var(--accent);
-}
-:is(#simulation-equipment,#equipment-section) .equipment-filter-toggle[aria-pressed=false] {
-  background:var(--surface);color:var(--muted);border-color:var(--line-strong);
-}
 #live-equipment > .live-equipment-card[hidden] {display:none!important;}
 
 

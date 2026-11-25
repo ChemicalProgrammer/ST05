@@ -94,14 +94,11 @@ html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list 
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-title-name { display:block; overflow-wrap:anywhere; font-size:var(--font-card); line-height:var(--leading-tight); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-title-meta { display:block; margin-top:var(--space-1); color:var(--muted); font-size:var(--font-caption); font-weight:var(--weight-regular); font-variant-numeric:tabular-nums; line-height:var(--leading-body); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .button-row { flex-wrap:nowrap; gap:var(--space-1); }
-html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .icon-button { width:30px; min-height:30px; height:30px; padding:var(--space-1); border:1px solid var(--line); background:transparent; }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card:hover { border-color:var(--secondary); border-top-color:var(--accent); background:color-mix(in srgb,var(--secondary-soft) 25%,var(--surface)); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card[data-equipment-type=CONVEYOR]:hover { border-top-color:var(--secondary); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card.equipment-selected,
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-card.equipment-selected:hover { border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent); }
 html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-selected .equipment-header strong { color:var(--selected-text); }
-html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .icon-button:hover { background:var(--secondary-soft); color:var(--secondary-text); }
-html[data-visual-style=elegant][data-equipment-layout=combined] #equipment-list .equipment-header .remove-equipment:hover { background:var(--danger-soft); color:var(--danger); border-color:var(--danger); }
 html[data-visual-style=elegant][data-equipment-layout=split] #equipment-list .equipment-header {
   padding:var(--space-2); margin-bottom:var(--space-3); border-radius:var(--radius-sm);
 }
@@ -327,7 +324,6 @@ html[data-visual-style=elegant] .scenario-preview-status[data-state] { border:0;
 
 html[data-visual-style=elegant] .case-row { transition:background var(--duration-fast),border-color var(--duration-fast),box-shadow var(--duration-fast); }
 html[data-visual-style=elegant] .case-glyph { background:transparent; border:0; color:var(--secondary-text); }
-html[data-visual-style=elegant] .case-tools .icon-button { width:var(--control-height); min-height:var(--control-height); }
 html[data-visual-style=elegant] .case-row:hover { background:color-mix(in srgb,var(--secondary-soft) 35%,var(--surface)); }
 html[data-visual-style=elegant] .cases-list.grid .case-row { border-top:3px solid var(--accent); border-radius:var(--radius-lg); }
 html[data-visual-style=elegant] .cases-list.grid .case-row:hover { background:color-mix(in srgb,var(--secondary-soft) 35%,var(--surface)); border-color:var(--secondary); border-top-color:var(--accent); box-shadow:var(--shadow); }

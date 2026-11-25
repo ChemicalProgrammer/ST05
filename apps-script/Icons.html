@@ -31,14 +31,28 @@ window.STIcons = (function() {
     save:'M4 3h13l4 4v14H3V3Zm3 0v6h9V3M7 21v-8h10v8', chevron:'m9 5 7 7-7 7', sun:'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1'
   };
   function svg(name) { return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="'+(paths[name]||paths.info)+'"/></svg>'; }
+  function normalizeIconButton(el) {
+    // Labelled icon-only actions share the control. Navigation, status pills
+    // and dedicated color/shape/disclosure controls retain their own designs.
+    if(!el?.matches?.('button,summary')||el.classList.contains('icon-button')||
+      el.matches('.app-section-tab,.nav-item,.st-status-pill,.fold-toggle,.theme-color-choice,.accent-choice,.simulation2d-bottle-choice,[role=tab],[data-icon-button=false]'))return false;
+    if(!el.hasAttribute('aria-label')&&!el.hasAttribute('title')&&!el.hasAttribute('aria-labelledby'))return false;
+    if(!Array.from(el.children).some(child=>child.classList.contains('icon')))return false;
+    if(!Array.from(el.childNodes).every(child=>child.nodeType===3?!child.textContent.trim():
+      child.nodeType!==1||child.classList.contains('icon')||child.classList.contains('sr-only')))return false;
+    el.classList.add('icon-button');
+    return true;
+  }
   function decorate(root) {
-    (root || document).querySelectorAll('[data-icon]').forEach(function(el) {
-      if (el.querySelector('.icon')) return;
-      el.insertAdjacentHTML('afterbegin', svg(el.dataset.icon));
-    });
+    const scope=root||document;
+    function decorateIcon(el){if(!el.querySelector('.icon'))el.insertAdjacentHTML('afterbegin',svg(el.dataset.icon));}
+    if(scope.matches?.('[data-icon]'))decorateIcon(scope);
+    scope.querySelectorAll('[data-icon]').forEach(decorateIcon);
+    if(scope.matches?.('button,summary'))normalizeIconButton(scope);
+    scope.querySelectorAll('button:not(.icon-button),summary:not(.icon-button)').forEach(normalizeIconButton);
   }
   function button(el,name) { if (el && !el.querySelector('.icon')) el.insertAdjacentHTML('afterbegin',svg(name)); }
-  return { svg:svg, equipment:function(type){return svg(type==='CONVEYOR'?'conveyor':'machine');}, decorate:decorate, button:button };
+  return { svg:svg, equipment:function(type){return svg(type==='CONVEYOR'?'conveyor':'machine');}, decorate:decorate, button:button, normalizeIconButton:normalizeIconButton };
 })();
 </script>
 

@@ -6,9 +6,19 @@ window.STSimulation2DEngine=(function(){
     'Ramp up':'acceleration','Ramp down':'deceleration',Blocked:'blocked','Back-up stop':'backupStop',Failed:'failure',
     Paused:'paused',Stopped:'stopped','Emergency stop':'emergencyStop','Planned stop':'plannedStop'
   };
+  // Match LineSimulationEngine.resolvePhysicalZone: reserve is a whole
+  // number of packages in the packed outlet queue, not a raw beam pulse.
+  function primeThresholdUnits(belt){
+    if(belt.prime==null)return null;
+    const pitch=belt.packageLength+belt.packedGap;
+    const capacity=Math.floor(belt.length/pitch);
+    return Math.max(1,Math.min(capacity,Math.ceil((belt.length-belt.prime)/pitch)));
+  }
   function create(definitions,seed=1,checkpoint,schedule={}){
     const line=definitions.map((definition,index)=>definition.kind==='belt'
-      ? {...definition,items:[],backupBlocked:false,backupElapsed:0,primeSeen:false,backupBeam:false,primeBeam:false,produced:0,state:'Empty',
+      ? {...definition,items:[],backupBlocked:false,backupElapsed:0,primeSeen:false,backupBeam:false,primeBeam:false,
+        primeThresholdUnits:primeThresholdUnits(definition),primeQueueUnits:0,primeTriggerCount:0,
+        backupOccupied:false,backupTriggerCount:0,backupClearCount:0,produced:0,state:'Empty',
         durations:{empty:0,flowing:0,accumulating:0},recentOutput:[],ratePerMinute:0}
       : {...definition,input:0,remaining:null,ready:false,started:0,produced:0,backupSince:null,residual:0,state:'Waiting',
         resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
@@ -28,6 +38,7 @@ window.STSimulation2DEngine=(function(){
     function rearmPrime(item){
       const upstream=line[line.indexOf(item)-1];
       item.awaitPrime=upstream?.kind==='belt'&&upstream.prime!=null;
+      if(item.awaitPrime)upstream.primeSeen=false;
     }
     // Keep configured machine defaults immutable. The outgoing conveyor
     // may override the restart profile after a completed Back-up stop.
@@ -104,16 +115,30 @@ window.STSimulation2DEngine=(function(){
         let limit=belt.length-belt.packageLength/2;
         for(const item of belt.items){item.x=Math.min(limit,item.x+travel);limit=item.x-belt.packageLength-belt.packedGap;}
       }
-      const beam=position=>position!==null&&belt.items.some(item=>Math.abs(item.x-position)<=belt.packageLength/2);
+      // Read both photoeyes after physical transport and before machine
+      // handoffs, including while the belt is stopped. The numerical
+      // discrete engine uses inclusive package edges (1e-6 mm).
+      const beam=position=>position!=null&&belt.items.some(item=>Math.abs(item.x-position)<=belt.packageLength/2+epsilon);
       belt.primeBeam=beam(belt.prime);
       belt.backupBeam=beam(belt.backup);
-      // The raw beam can clear briefly between packed products in the same queue.
-      const backupOccupied=belt.backupBeam||belt.backup!==null&&hasPackedPair(belt,belt.backup);
-      if(backupOccupied===belt.backupBlocked){belt.backupElapsed=0;return;}
+      // The queue must be contiguous and anchored at the outlet. An isolated
+      // passing package, even one blocking Prime, is not a reserve.
+      const packedPitch=belt.packageLength+belt.packedGap;
+      const end=belt.length-belt.packageLength/2;
+      let queued=0;
+      while(queued<belt.items.length&&belt.items[queued].x>=end-queued*packedPitch-epsilon)queued++;
+      belt.primeQueueUnits=queued;
+      // Physical Back-up is the raw beam OR the span between packed
+      // neighbours. The configured release position is not a second beam
+      // in the numerical discrete model; both engines use continuous clear.
+      belt.backupOccupied=belt.backupBeam||belt.backup!=null&&hasPackedPair(belt,belt.backup);
+      if(belt.backupOccupied===belt.backupBlocked){belt.backupElapsed=0;return;}
       belt.backupElapsed+=seconds;
-      if(belt.backupElapsed+epsilon>=(backupOccupied?belt.blockDelay:belt.clearDelay)){
-        belt.backupBlocked=backupOccupied;
+      if(belt.backupElapsed+1e-8>=(belt.backupOccupied?(belt.blockDelay??0):(belt.clearDelay??0))){
+        belt.backupBlocked=belt.backupOccupied;
         belt.backupElapsed=0;
+        if(belt.backupBlocked)belt.backupTriggerCount++;
+        else belt.backupClearCount++;
       }
     }
     function discharge(machine,downstream){
@@ -188,14 +213,7 @@ window.STSimulation2DEngine=(function(){
     }
     function primeReady(belt){
       if(belt?.kind!=='belt'||belt.prime==null)return true;
-      const pitch=belt.packageLength+belt.packedGap;
-      const capacity=1+Math.floor((belt.length-belt.packageLength+epsilon)/pitch);
-      const needed=Math.max(1,Math.min(capacity,Math.ceil((belt.length-belt.prime-epsilon)/pitch)));
-      for(let index=0;index<needed;index++){
-        const target=belt.length-belt.packageLength/2-index*pitch;
-        if(!belt.items[index]||belt.items[index].x<target-epsilon)return false;
-      }
-      return true;
+      return belt.primeQueueUnits>=belt.primeThresholdUnits;
     }
     function stepMachine(machine,upstream,downstream,seconds){
       if(options.failures&&updateFailure(machine,seconds)){machine.state='Failed';return;}
@@ -219,8 +237,14 @@ window.STSimulation2DEngine=(function(){
       const braking=machine.backupSince!==null&&time-machine.backupSince+epsilon>=downstream.responseDelay;
       if((machine.repairRecoveryPending&&machine.backupSince!==null)||(machine.residual<=0&&braking)){machine.state='Back-up stop';return;}
       if(machine.awaitPrime){
-        if(!available(upstream)||!primeReady(upstream)){machine.state='Waiting for Prime';return;}
+        // As in numerical triggerPrimeSensor, an active outgoing Back-up
+        // inhibits Prime authorization even during the stop response.
+        if(machine.backupSince!==null||!available(upstream)||!primeReady(upstream)){machine.state='Waiting for Prime';return;}
         machine.awaitPrime=false;
+        if(upstream?.kind==='belt'&&upstream.prime!=null&&!upstream.primeSeen){
+          upstream.primeSeen=true;
+          upstream.primeTriggerCount++;
+        }
       }
       machine.repairRecoveryPending=false;
       if(machine.started+epsilon<machine.activeStartDelaySeconds){

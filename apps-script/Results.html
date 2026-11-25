@@ -71,7 +71,7 @@ window.STResults=(function(){
     const card=kpiCard(target,'scrap','metric-card--result'),label=card.children[0],value=card.children[1];
     const stats=result?.resultView?.mode!=='round'?result?.batch?.statistics?.totalMacroStopScrapBottles:null;
     label.textContent='Scrap';setMetricValue(value,Number.isFinite(stats?.mean)?stats.mean:scrapTotal(result),'bottles',2);
-    card.title='Actual bottles discarded by machines during major/general repair events and restart purge. Excludes overflow, clearout and pending scrap.';
+    card.title='Actual bottles discarded by machines during major/general repairs, individual STOP and restart purge. Excludes overflow, clearout and pending scrap.';
     card.setAttribute('aria-description',card.title);card.tabIndex=0;
     let range=card.querySelector('small');
     if(Number.isFinite(stats?.mean)&&Number.isFinite(stats.min)&&Number.isFinite(stats.max)){

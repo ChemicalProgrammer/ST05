@@ -38,6 +38,31 @@ window.STMotion=(function(){
     [{transform:'translateX(0)',opacity:1},{transform:'translateX(18px)',opacity:0}],
     {duration:duration(visible?'panel-enter':'panel-exit',visible?180:150),easing:visible?'ease-out':'ease-in'});
   }
+  // Bounded keyed reflow keeps the final geometry and text size intact.
+  // Rendering is synchronous; only the slide/fade is animated.
+  function reflow(container,selector,mutate){
+    if(!container)return mutate();
+    var rows=Array.from(container.querySelectorAll(selector));
+    if(reduced()){rows.forEach(cancel);return mutate();}
+    var before=new Map();
+    rows.forEach(function(element){
+      var rect=element.getBoundingClientRect();
+      before.set(element.dataset.motionKey,{left:rect.left,top:rect.top});
+      cancel(element);
+    });
+    var result=mutate();
+    function limit(value){return Number.isFinite(value)?Math.max(-40,Math.min(40,value)):0;}
+    Array.from(container.querySelectorAll(selector)).forEach(function(element){
+      var prior=before.get(element.dataset.motionKey);
+      if(!prior)return;
+      var rect=element.getBoundingClientRect(),x=limit(prior.left-rect.left),y=limit(prior.top-rect.top);
+      if(!x&&!y)y=4;
+      play(element,[{opacity:.45,transform:'translate('+x+'px,'+y+'px)'},{opacity:1,transform:'translate(0px,0px)'}],{
+        duration:duration('card-update',220),easing:token('ease-enter','ease-out')
+      });
+    });
+    return result;
+  }
   function watchCards(container){
     if(!container||cardObservers.has(container))return;
     var sizes=new Map(),frame=0;
@@ -69,6 +94,6 @@ window.STMotion=(function(){
     observer.observe(container,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','class','style','aria-busy']});
     cardObservers.set(container,observer);
   }
-  return {reduced:reduced,duration:duration,cancel:cancel,play:play,reveal:reveal,enter:enter,exit:exit,panel:panel,watchCards:watchCards};
+  return {reduced:reduced,duration:duration,cancel:cancel,play:play,reveal:reveal,enter:enter,exit:exit,panel:panel,reflow:reflow,watchCards:watchCards};
 })();
 </script>

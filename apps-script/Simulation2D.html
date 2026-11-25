@@ -139,7 +139,7 @@ window.STSimulation2D=(function(){
   let conveyorGroupWidth=telemetryPairWidth+telemetryWidths[3]+telemetryGap;
   const machineHeight=540*sceneScale*machineScale,beltDepth=7.5*.75,beltInset=1.5*.75;
   let shiftHours=8,shiftOutput=[],limitSeconds=3600,save,signature,lastSave=0;
-  let seed=1,key,viewKey,definitions=[],model=null,frame,previous=0,lag=0,drag,validation='',runState='Ready',lastMetrics=-Infinity;
+  let seed=1,key,viewKey,definitions=[],model=null,frame,previous=0,lag=0,playbackRateAtFrame=null,drag,validation='',runState='Ready',lastMetrics=-Infinity;
   let representative=null,defaultRun=null,palletAnimation=null,palletFlow=null;
   let productHeights={},machineTypes=new Map(),bottleStages=new Map(),conveyorDimensions=new Map();
   const dimensionRowHeight=32,dimensionLevels=3,dimensionOffset=126;
@@ -1832,9 +1832,14 @@ window.STSimulation2D=(function(){
     el('running').textContent=num(running)+'/'+num(definitions.filter(item=>item.kind==='machine').length);
     el('backup').textContent=num(line.filter(item=>item.backupBlocked).length);
   }
+  // Pending wall-clock credit is not physical simulation state. Never
+  // carry a fast-forward backlog into a new rate or a resumed playback.
+  function resetPlaybackClock(){
+    previous=0;lag=0;playbackRateAtFrame=null;
+  }
   function cancelFrame(){
     if(frame!==undefined)window.cancelAnimationFrame(frame);
-    frame=undefined;previous=0;
+    frame=undefined;resetPlaybackClock();
   }
   let lastRunningNotification=null;
   function syncControls(){
@@ -1994,8 +1999,17 @@ window.STSimulation2D=(function(){
     }
     el('source').value=useRepresentative?'representative':'independent';
   }
+  function changePlaybackSpeed(){
+    resetPlaybackClock();
+    checkpoint();
+  }
   function animate(now){
-    if(previous)lag+=(now-previous)/1000*Number(el('speed').value);
+    const selectedRate=Number(el('speed').value);
+    const rate=Number.isFinite(selectedRate)&&selectedRate>0?selectedRate:1;
+    // Also handle programmatic selection changes without a DOM change event.
+    if(playbackRateAtFrame!==null&&rate!==playbackRateAtFrame)resetPlaybackClock();
+    playbackRateAtFrame=rate;
+    if(previous)lag+=Math.max(0,now-previous)/1000*rate;
     previous=now;
     const output=model.line.at(-1);
     const deadline=performance.now()+12;
@@ -2054,7 +2068,7 @@ window.STSimulation2D=(function(){
   el('pause').onclick=()=>{markPlaybackAction('pause');pause();};
   el('source').onchange=()=>switchSource(el('source').value==='representative'&&Boolean(representative));
   el('reset').onclick=()=>{markPlaybackAction('reset');reset();checkpoint();};
-  el('speed').addEventListener('change',checkpoint);
+  el('speed').addEventListener('change',changePlaybackSpeed);
   el('limit').addEventListener('change',function(){
     if(!this.checkValidity()||!Number.isFinite(this.valueAsNumber*60)||this.valueAsNumber<=0){
       this.value=limitSeconds/60;

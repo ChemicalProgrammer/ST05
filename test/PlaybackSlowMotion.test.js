@@ -63,7 +63,7 @@ test('2D slow motion uses the same fixed physics step at the same virtual horizo
   const end=source.indexOf('  function markPlaybackAction(',start);
   assert(start>=0&&end>start);
   const run=new Function('rate',source.slice(start,end)+`
-    let previous=1000,lag=0,frame,lastMetrics=0,lastSave=0,runState='Running';
+    let previous=1000,lag=0,playbackRateAtFrame=rate,frame,lastMetrics=0,lastSave=0,runState='Running';
     const step=1/120,limitSeconds=60,shiftOutput=[];
     const advances=[],output={produced:0};
     const model={time:0,line:[output],step(seconds){advances.push(seconds);this.time+=seconds;}};
@@ -111,4 +111,61 @@ test('all shared selector rates, including fractions, survive server normalizati
   }
   for(const rate of [null,0,-1,'bad',Infinity])assert.equal(normalize(rate),1);
   restore(select,normalize(1000000));assert.equal(Number(select.value),50000);
+});
+
+function speedHarness(source,rate=50000){
+  const start=source.indexOf('  function resetPlaybackClock(');
+  const end=source.indexOf('  let lastRunningNotification=',start);
+  const a=source.indexOf('  function changePlaybackSpeed(');
+  const b=source.indexOf('  function markPlaybackAction(',a);
+  assert(start>=0&&end>start&&a>=0&&b>a);
+  const run=new Function('initialRate',source.slice(start,end)+'\n'+source.slice(a,b)+`
+    let previous=1000,lag=0,playbackRateAtFrame=initialRate,frame,lastMetrics=0,lastSave=0,runState='Running';
+    const step=1/120,limitSeconds=1e9,shiftOutput=[];
+    let rate=initialRate,clock=0,workMs=.1,saves=0;
+    const advances=[],output={produced:0};
+    const model={time:0,line:[output],step(seconds){advances.push(seconds);this.time+=seconds;clock+=workMs;}};
+    const performance={now:()=>clock};
+    const el=()=>({value:String(rate)});
+    const status=()=>{},draw=()=>{},syncControls=()=>{},checkpoint=()=>{saves++;};
+    const window={requestAnimationFrame(){return 1;},cancelAnimationFrame(){}};
+    return {animate,cancelFrame,changePlaybackSpeed,setRate(value){rate=value;},setWork(value){workMs=value;},
+      snapshot(){return {time:model.time,lag,saves,ticks:advances.length,fixed:advances.every(x=>x===step)};}};
+  `);
+  return run(rate);
+}
+
+test('2D immediately discards high-speed backlog on successive user speed reductions',()=>{
+  const source=read('Simulation2D.html'),h=speedHarness(source);
+  assert(source.includes("el('speed').addEventListener('change',changePlaybackSpeed)"));
+  h.animate(1100);
+  const fast=h.snapshot();
+  assert(fast.lag>1000,'Overloaded high-speed frame must leave an actual backlog');
+  h.setRate(10);h.changePlaybackSpeed();
+  almost(h.snapshot().lag,0);almost(h.snapshot().time,fast.time);
+  h.setWork(0);h.animate(1200);h.animate(1300);
+  almost(h.snapshot().time-fast.time,1,1/120+1e-8);
+  const intermediate=h.snapshot();
+  h.setRate(1);h.changePlaybackSpeed();h.animate(1400);h.animate(2400);
+  almost(h.snapshot().time-intermediate.time,1,1/120+1e-8);
+  assert(h.snapshot().fixed);assert.equal(h.snapshot().saves,2);
+});
+
+test('2D detects a programmatic rate change without consuming old pending time',()=>{
+  const h=speedHarness(read('Simulation2D.html'));
+  h.animate(1100);const fast=h.snapshot();assert(fast.lag>1000);
+  h.setRate(.5);h.setWork(0);h.animate(1200);
+  almost(h.snapshot().time,fast.time);almost(h.snapshot().lag,0);
+  h.animate(2200);almost(h.snapshot().time-fast.time,.5,1/120+1e-8);
+  assert(h.snapshot().fixed);
+});
+
+test('2D pause and resume cannot replay a high-speed backlog or charge paused wall time',()=>{
+  const h=speedHarness(read('Simulation2D.html'));
+  h.animate(1100);const fast=h.snapshot();assert(fast.lag>1000);
+  h.cancelFrame();almost(h.snapshot().lag,0);
+  h.setRate(1);h.setWork(0);h.animate(10000);
+  almost(h.snapshot().time,fast.time);
+  h.animate(11000);almost(h.snapshot().time-fast.time,1,1/120+1e-8);
+  assert(h.snapshot().fixed);
 });

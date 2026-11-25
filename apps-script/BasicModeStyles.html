@@ -198,6 +198,9 @@ html[data-equipment-layout=split] .basic-conveyor-heading .basic-conveyor-tabs {
 .switchable-value > input[type=number] { flex:1; min-width:0; }
 .switchable-value > input[type=checkbox],html[data-equipment-layout=split] .basic-worksheet-group .switchable-value > input[type=checkbox] { width:16px; height:16px; min-height:16px; padding:0; flex:0 0 16px; }
 .switchable-value > .calculated-value { background:var(--surface-soft); border-color:transparent; text-align:right; }
+.equipment-fields input.calculated-value {background:var(--surface-soft);color:var(--ink);font-weight:var(--weight-semibold);box-shadow:none;appearance:textfield;cursor:default;}
+.equipment-fields input.calculated-value::-webkit-inner-spin-button,.equipment-fields input.calculated-value::-webkit-outer-spin-button {-webkit-appearance:none;margin:0;}
+.equipment-fields select[data-field-role=INACTIVE] {opacity:.65;}
 html[data-ui-mode=advance][data-header-view=vgraph] #results-body > :not(#line-performance),
 html[data-ui-mode=advance][data-header-view=vgraph] #line-performance > :not(#vgraph-profile) { display:none; }
 html[data-ui-mode=advance][data-header-view=results] #line-performance { display:none; }

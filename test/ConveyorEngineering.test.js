@@ -86,7 +86,9 @@ test('calculates FlowPilot velocity, population, overflow, recovery, and audit d
   closeTo(result.calculated.sensorClearGapSeconds, 23.25 / 624.75);
   closeTo(result.calculated.sensorCycleSeconds, 89.25 / 624.75);
   closeTo(result.calculated.overflowLengthMm, 1447.875);
-  closeTo(result.calculated.usefulAccumulationLengthMm, 17052.125);
+  closeTo(result.calculated.calculatedUsefulAccumulationLengthMm, 17052.125);
+  closeTo(result.calculated.usefulAccumulationLengthMm, 16900);
+  closeTo(result.calculated.availableOverflowLengthMm,1000);
   assert.equal(result.calculated.primeSensorPositionMm, 18500);
   assert.equal(result.calculated.recommendedBackupSensorPositionMm, 1447.875);
   assert.equal(result.calculated.conveyorCapacityUnits, 224);
@@ -298,4 +300,15 @@ test('direct geometry can reuse the same Back-up photoeye on restart without a s
  assert.equal(r.ok,true,JSON.stringify(r.error));
  const z=r.result.accumulationZoneMetrics['conveyor--physical-zone'];
  assert.equal(z.movingPitchMm,90);
+});
+
+test('installed backup determines useful accumulation while required reserve remains an independent result',()=>{
+  const input={installedLengthMm:20000,primeReserveMm:1500,packageLengthMm:66,upstreamDischargePitchMm:85,upstreamNominalSpeedBpm:420,downstreamHighSpeedBpm:430,downstreamInfeedPitchMm:90,conveyorSpeedFactorPercent:5,dischargeRunoutLengthMm:250,rejectRunoutLengthMm:350,blockedTimeDelaySeconds:.5,insuranceFactorUnits:2,bottlesDischargedAtStop:4};
+  const a=calculateConveyorEngineering(input).calculated;
+  const measured=calculateConveyorEngineering({...input,backupSensorPositionMm:3000}).calculated;
+  const manual=calculateConveyorEngineering({...input,manualLbaMm:15500}).calculated;
+  closeTo(measured.actualBackupSensorPositionMm,3000);closeTo(measured.usefulAccumulationLengthMm,15500);
+  closeTo(manual.actualBackupSensorPositionMm,3000);closeTo(manual.usefulAccumulationLengthMm,15500);
+  closeTo(measured.overflowLengthMm,a.overflowLengthMm);closeTo(manual.overflowLengthMm,a.overflowLengthMm);
+  closeTo(measured.overflowTransitSeconds,manual.overflowTransitSeconds);
 });

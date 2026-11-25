@@ -49,28 +49,207 @@ window.STEquipmentInspector=(function(){
     state=current;
     ['input','change'].forEach(function(type){el('equipment-inspector').addEventListener(type,function(event){if(event.target.matches('input,select,textarea')){var fields=selected?._fields;if(fields){selected.querySelector('.equipment-header strong').textContent=fields.querySelector('.equipment-type').value+' · '+fields.querySelector('.equipment-name').value+(fields.querySelector('.equipment-type').value==='CONVEYOR'?'':' · '+Number(fields.querySelector('.equipment-rate').value)+__ST_TEXT__('client.bpm'));refreshTitle(selected);}dirty(event);}});});
   }
-  function help(control,text){
-    var label=control.closest('label');if(!label||control.type==='hidden')return;label.title=text;
-    var details=document.createElement('details');details.className='parameter-help';
-    var summary=document.createElement('summary');summary.innerHTML=STIcons.svg('info');summary.setAttribute('aria-label',__ST_TEXT__('inspector.parameter_help'));
-    var message=document.createElement('p');message.id='parameter-help-'+(++helpSequence);message.textContent=text;message.setAttribute('role','tooltip');
-    control.setAttribute('aria-describedby',message.id);details.append(summary,message);label.appendChild(details);
-  }
-  var basic={
-    'equipment-name':__ST_TEXT__('inspector.help_name'),
-    'equipment-type':__ST_TEXT__('inspector.help_type'),
-    'equipment-unit':__ST_TEXT__('client.equipment_unit_help'),
-    'equipment-rate':__ST_TEXT__('inspector.help_rate'),
-  };
-  // Ayuda contextual de propiedades, sin edición JSON, ejemplos ni diálogos.
-  function decorate(card){
+  var parameterHelp={
+  "equipment-name": [
+    "Name identifying the machine in the line and results.",
+    "Nombre que identifica la máquina en la línea y los resultados."
+  ],
+  "equipment-type": [
+    "Physical machine function; determines the simulation model.",
+    "Función física del equipo; determina su modelo de simulación."
+  ],
+  "equipment-rate": [
+    "Nominal output in native units/min for the selected format, not observed throughput.",
+    "Velocidad nominal de salida en unidades nativas/min del formato, no throughput observado."
+  ],
+  "equipment-material-flow": [
+    "Input → output units. A conveyor inherits the connected machines' flow.",
+    "Unidades de entrada → salida. El conveyor hereda el flujo de las máquinas conectadas."
+  ],
+  "equipment-pacemaker": [
+    "Reference machine for ideal line production and efficiency.",
+    "Máquina de referencia para producción ideal y eficiencia."
+  ],
+  "equipment-maximum-speed": [
+    "Optional maximum achievable output in native units/min. Leave blank if unknown.",
+    "Velocidad máxima alcanzable en unidades nativas/min. Opcional; vacío si se desconoce."
+  ],
+  "equipment-recovery-time": [
+    "Machine recovery time after interruption; distinct from repair time.",
+    "Tiempo de recuperación de máquina tras una interrupción; distinto de la reparación."
+  ],
+  "equipment-residence-time": [
+    "Optional minimum time inside the machine (s). Capacity alone does not determine it.",
+    "Tiempo mínimo opcional dentro de la máquina (s). La capacidad no lo determina."
+  ],
+  "equipment-internal-capacity": [
+    "Maximum number of incoming packages physically held inside the machine.",
+    "Cantidad máxima de envases de entrada que caben dentro de la máquina."
+  ],
+  "equipment-occupancy-mode": [
+    "Storage: variable fill. Physical positions: finite rotating pockets.",
+    "Storage: llenado variable. Physical positions: posiciones físicas rotativas."
+  ],
+  "reliability-enabled": [
+    "Enable own random failures; conveyors normally have none unless documented.",
+    "Habilita fallas aleatorias propias; normalmente los conveyors no tienen, salvo excepción documentada."
+  ],
+  "reliability-mode": [
+    "General stops or separate minor/major categories. Do not count the same stops twice.",
+    "Paros generales o categorías menor/mayor separadas. No contabilices los mismos paros dos veces."
+  ],
+  "reliability-mtbfMinutes": [
+    "Mean operating time between own failures (min). Exclude external starvation/blocking.",
+    "Tiempo medio de operación entre fallas propias (min). Excluye starving/blocking externo."
+  ],
+  "reliability-mttrMinutes": [
+    "Mean repair duration per own failure (min).",
+    "Tiempo medio de reparación por falla propia (min)."
+  ],
+  "format-zone-lact": [
+    "Measured total installed conveyor length from upstream exit to downstream entry (mm).",
+    "Longitud total instalada medida desde descarga anterior hasta entrada siguiente (mm)."
+  ],
+  "format-zone-lp-prime": [
+    "Reserve between Prime photoeye and downstream entrance (mm). Prime position = total length − reserve.",
+    "Reserva entre fotocelda Prime y entrada siguiente (mm). Posición Prime = longitud total − reserva."
+  ],
+  "format-zone-package-length": [
+    "Bottle/case length in travel direction (mm). Formats can override this default.",
+    "Longitud de botella/caja en dirección de avance (mm). El formato puede sustituir este valor base."
+  ],
+  "format-zone-discharge-pitch": [
+    "Center-to-center spacing leaving upstream machine (mm), not necessarily the pitch on the moving belt.",
+    "Separación centro a centro a la salida anterior (mm), no necesariamente pitch de banda."
+  ],
+  "format-zone-discharge-velocity": [
+    "Optional measured discharge velocity (m/min). Blank: nominal output × discharge pitch / 1000. Not the belt speed.",
+    "Velocidad de descarga medida opcional (m/min). Vacío: flujo nominal × pitch de descarga / 1000. No es velocidad de banda."
+  ],
+  "format-zone-startup": [
+    "Upstream start-up delay before processing resumes (s).",
+    "Retardo de arranque antes de que la máquina anterior retome procesamiento (s)."
+  ],
+  "format-zone-restart-first-package": [
+    "Time from restart permission to first package exiting upstream machine (s). Distinct from start-up; zero only if confirmed.",
+    "Tiempo desde permiso de rearranque hasta salida del primer envase (s). Distinto de Start-up; cero solo si confirmado."
+  ],
+  "format-zone-residual": [
+    "Native packages still discharged after stop signal due to runout/deceleration.",
+    "Envases nativos que siguen saliendo tras señal de paro por inercia/desaceleración."
+  ],
+  "format-zone-stop-response": [
+    "Delay from stop request until upstream discharge response completes (s).",
+    "Retardo desde solicitud de paro hasta completar respuesta de descarga anterior (s)."
+  ],
+  "format-zone-infeed": [
+    "Center-to-center spacing at downstream infeed (mm). Used with its native input rate.",
+    "Separación centro a centro en entrada siguiente (mm). Se usa con su flujo nativo de entrada."
+  ],
+  "format-zone-downstream-ramp": [
+    "Time to reach full downstream machine speed after restart (s).",
+    "Tiempo para alcanzar velocidad plena de máquina siguiente tras rearranque (s)."
+  ],
+  "format-zone-discharge-runout": [
+    "Measured Discharge segment from machine exit to Coding or Overflow (mm). Zero if absent.",
+    "Tramo Discharge medido desde salida de máquina hasta Coding u Overflow (mm). Cero si no existe."
+  ],
+  "format-zone-reject-runout": [
+    "Measured Coding segment before Overflow (mm). Zero if absent.",
+    "Tramo Coding medido antes de Overflow (mm). Cero si no existe."
+  ],
+  "format-zone-backup": [
+    "Position of Back-up photoeye from conveyor entry (mm). Manual only for installed value; otherwise derived from LBA or required overflow.",
+    "Posición de fotocelda Back-up desde entrada (mm). Manual solo para posición instalada; si no, derivada de LBA u overflow requerido."
+  ],
+  "format-zone-lba": [
+    "Useful accumulation length between Back-up and Prime (mm). Manual LBA determines Back-up = Prime position − LBA. Required overflow is a separate check.",
+    "Longitud de acumulación útil entre Back-up y Prime (mm). LBA manual determina Back-up = posición Prime − LBA. Overflow requerido es una comprobación independiente."
+  ],
+  "format-zone-speed-mode": [
+    "Manual uses actual belt speed. Auto uses speed factors. Target Population/Overspeed takes precedence.",
+    "Manual usa velocidad real de banda. Auto usa factores. Population/Overspeed objetivo tiene prioridad."
+  ],
+  "format-zone-belt-speed": [
+    "Belt linear speed: m/min in Basic, mm/s in Advance. Calculated for Auto or target modes.",
+    "Velocidad lineal de banda: m/min en Basic, mm/s en Advance. Calculada en Auto o modos objetivo."
+  ],
+  "format-zone-moving-gap": [
+    "Optional free space between moving packages (mm), not center-to-center pitch. Target modes calculate spacing.",
+    "Separación libre opcional entre productos en movimiento (mm), no pitch centro a centro. Los modos objetivo calculan separación."
+  ],
+  "format-zone-accumulated-gap": [
+    "Gap between accumulated packages (mm). Zero means contact; use measured nonzero spacing if applicable.",
+    "Separación entre envases acumulados (mm). Cero significa contacto; usa separación medida no nula si aplica."
+  ],
+  "format-zone-population": [
+    "Nominal occupied belt length (%), not initial inventory. Target sets belt speed; otherwise calculated from native flow and actual speed.",
+    "Longitud ocupada nominal (%), no inventario inicial. Como objetivo fija velocidad; si no, se calcula con flujo nativo y velocidad real."
+  ],
+  "format-zone-speed-factor": [
+    "Discharge belt speed increase relative to machine discharge (%). 0 means equal; 10 means 10% faster. Needed for actual Discharge or Auto factors.",
+    "Incremento de velocidad Discharge respecto a descarga (%). 0 igual; 10, 10% más rápido. Aplica a Discharge real o Auto por factores."
+  ],
+  "format-zone-coding-factor": [
+    "Coding belt speed increase relative to Discharge (%). Optional; blank defaults to 0 (equal speed).",
+    "Incremento de Coding respecto a Discharge (%). Opcional; vacío usa 0 (misma velocidad)."
+  ],
+  "format-zone-acc-factor": [
+    "Accumulation belt speed increase relative to Coding (%). In Auto: belt speed = Coding speed × (1 + factor/100); blank defaults to 0, not measured. Calculated when using direct belt speed or a target.",
+    "Incremento de acumulación respecto a Coding (%). En Auto: velocidad banda = velocidad Coding × (1 + factor/100); vacío usa 0 como supuesto, no medición. Se calcula con velocidad directa u objetivo."
+  ],
+  "format-zone-blocked-delay": [
+    "Continuous occupied Back-up time to confirm blockage (s). Compare with package passage; too short can cause false stops.",
+    "Tiempo continuo ocupado de Back-up para confirmar bloqueo (s). Compara con paso del envase; demasiado corto causa posibles falsos paros."
+  ],
+  "format-zone-clear-delay": [
+    "Continuous clear Back-up time before releasing upstream machine (s). Use PLC setting.",
+    "Tiempo continuo libre de Back-up antes de liberar máquina anterior (s). Usa ajuste PLC."
+  ],
+  "format-zone-insurance": [
+    "Optional additional native packages reserved for uncertainty during overflow. Blank defaults to zero.",
+    "Envases adicionales opcionales como margen de incertidumbre en overflow. Vacío usa cero."
+  ],
+  "format-zone-overspeed": [
+    "Percent speed margin over downstream infeed. Checked sets target; unchecked calculates actual margin. Distinct from minimum-speed recommendation margin.",
+    "Margen porcentual respecto a velocidad de entrada siguiente. Activado fija objetivo; desactivado calcula margen real. Distinto del margen de velocidad mínima recomendada."
+  ],
+  "format-zone-lba-enabled": [
+    "Use LBA as manual geometry source; Back-up is calculated.",
+    "Usa LBA manual como fuente geométrica; Back-up es calculado."
+  ],
+  "format-zone-backup-enabled": [
+    "Use installed Back-up as manual source; LBA is calculated.",
+    "Usa Back-up instalado como fuente manual; LBA es calculado."
+  ],
+  "format-zone-population-enabled": [
+    "Set target Population as speed source; exclusive with Overspeed.",
+    "Fija Population objetivo como fuente de velocidad; excluye Overspeed."
+  ],
+  "format-zone-overspeed-enabled": [
+    "Set target Overspeed as speed source; exclusive with Population.",
+    "Fija Overspeed objetivo como fuente de velocidad; excluye Population."
+  ]
+};
+  function localized(en,es){return document.documentElement.lang==='es'?es:en;}
+  function refreshHelp(card){
+    if(!card?._fields)return;
     card._fields.querySelectorAll('input,select,textarea').forEach(function(control){
-      var label=control.closest('label');
-      if(!label||control.type==='hidden')return;
-      help(control,basic[control.className]||label.title||'');
+      if(control.type==='hidden'||control.closest('[hidden][aria-hidden=true]'))return;
+      var label=control.closest('label');if(!label)return;
+      var key=control.dataset.parameterHelp||Array.from(control.classList).find(name=>parameterHelp[name]),entry=parameterHelp[key];
+      if(control.dataset.baseParameterHelp===undefined)control.dataset.baseParameterHelp=control.title||label.title||'';
+      var text=entry?localized(...entry):control.dataset.baseParameterHelp||localized('Configure this equipment parameter.','Configura este parámetro del equipo.');
+      if(control.dataset.stopClass)text+=(localized(' Use 0/0 only if this category has no stops.',' Usa 0/0 solo si esta categoría no tiene paros.'));
+      var role=control.dataset.fieldRole;
+      if(role)text+='\n\n'+(role==='OUTPUT'?localized('Calculated output — read only. Not saved as a manual input.','Resultado calculado — solo lectura. No se guarda como dato manual.'):role==='INACTIVE'?localized('Not used in this mode; previous input is retained.','No se usa en este modo; se conserva el dato anterior.'):role==='OPTIONAL'?localized('Optional input — blank inherits the model default.','Entrada opcional — vacío hereda el valor del modelo.'):localized('Manual input in this mode.','Entrada manual en este modo.'));
+      control.title=text;control.setAttribute('aria-description',text);
+      if(control.type!=='checkbox'||!label.querySelector('input[type=number]'))label.title=text;
     });
   }
-  return {init:init,select:select,release:release,restore:restore,sync:sync,decorate:decorate,refreshTitle:refreshTitle,hide:function(){opened=false;},show:function(){if(selected)opened=true;},available:function(){return !!selected&&state?.uiView==='editor';},name:function(){return selected?selected._fields.querySelector('.equipment-name').value:'';}};
+  function decorate(card){refreshHelp(card);}
+  window.addEventListener('st-language-change',function(){document.querySelectorAll('#equipment-list .equipment-card').forEach(refreshHelp);});
+  return {init:init,select:select,release:release,restore:restore,sync:sync,decorate:decorate,refreshHelp:refreshHelp,refreshTitle:refreshTitle,hide:function(){opened=false;},show:function(){if(selected)opened=true;},available:function(){return !!selected&&state?.uiView==='editor';},name:function(){return selected?selected._fields.querySelector('.equipment-name').value:'';}};
 })();
 </script>
 

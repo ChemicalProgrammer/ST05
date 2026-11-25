@@ -8,7 +8,7 @@ var STReliabilityControls = (function(){
       var label=document.createElement('label'),input=document.createElement('input');label.textContent=spec[1];label.title=spec[1]+' — positive minutes when failures are enabled; disabling failures retains these values.';input.className='reliability-'+spec[0];input.type=spec[0]==='enabled'?'checkbox':'number';if(input.type==='checkbox')label.className='checkbox-label st-checkbox-card';if(input.type==='number'){input.min='0';input.step='any';}label.appendChild(input);group.appendChild(label);controls[spec[0]]=input;
     });
     var modeLabel=document.createElement('label'),mode=document.createElement('select');
-    modeLabel.textContent='Stop inputs';
+    modeLabel.textContent='Stop inputs';mode.dataset.parameterHelp='reliability-mode';
     mode.setAttribute('aria-label','Stop inputs');
     mode.add(new Option('General','general'));mode.add(new Option('Minor and major','split'));
     modeLabel.append(mode);group.prepend(modeLabel);
@@ -18,7 +18,7 @@ var STReliabilityControls = (function(){
       ['mtbfMinutes','mttrMinutes'].forEach(function(key){
         var label=document.createElement('label'),input=document.createElement('input');
         label.textContent=(kind==='minor'?'Minor':'Major')+' '+(key==='mtbfMinutes'?'MTBF':'MTTR')+' [min]';
-        input.type='number';input.min='0';input.step='any';input.placeholder='0 if no stops';
+        input.type='number';input.min='0';input.step='any';input.placeholder='0 if no stops';input.dataset.parameterHelp='reliability-'+key;input.dataset.stopClass=kind;
         label.append(input);group.append(label);splitControls[kind][key]=input;
       });
     });

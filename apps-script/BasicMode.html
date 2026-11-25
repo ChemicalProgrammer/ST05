@@ -121,9 +121,9 @@ window.STBasicMode=(function(){
         ['infeed','Infeed pitch (mm)'],['downstream-ramp','Ramp up time (sec)'],[null,'Consumption rate (m/min)','consumption']]],
       ['Geometry','geometry',[
         ['material-flow','Transport unit'],['lact','Lact = Total length (mm)'],['lp-prime','Lp = Prime zone (mm)'],['discharge-runout','Discharge actual (mm)'],['reject-runout','Coding actual (mm)'],['backup','Back-up sensor position (mm)'],
-        [null,'Overflow (mm)','overflow'],[null,'Lbu = D8 + E8 + F8 (mm)','lbu'],['lba','LBA (mm)']]],
+        [null,'Overflow (mm)','overflow'],[null,'Lbu (mm)','lbu'],['lba','LBA (mm)']]],
       ['Speed & sensors','sensors',[
-        ['speed-mode','Speed mode'],['moving-gap','Moving gap (mm)'],['accumulated-gap','Accumulated gap (mm)'],['population','Population (%)'],['belt-speed',__ST_TEXT__('conveyor.belt_speed_m_min')],['speed-factor','Discharge factor (%)'],['coding-factor','Coding factor (%)'],['acc-factor','Acc zone factor (%)'],['blocked-delay','Back up block delay (sec)'],
+        ['speed-mode','Speed mode'],['moving-gap','Moving gap (mm)'],['accumulated-gap','Accumulated gap (mm)'],['population','Population (%)'],['belt-speed',__ST_TEXT__('conveyor.belt_speed_m_min')],['speed-factor','Discharge factor (%)'],['coding-factor','Coding factor (%)'],['acc-factor','Accumulation speed factor (%)'],['blocked-delay','Back up block delay (sec)'],
         ['clear-delay','Back up clear delay (sec)'],['insurance','Insurance factor (pkgs)'],['overspeed','Conveyor overspeed (%)']]]
     ];
     groups.forEach(function(group){var section=node('section','','basic-worksheet-group'),h=node('h4',group[0]);h.dataset.basicGroup=group[1];section.appendChild(h);worksheet.appendChild(section);
@@ -131,7 +131,10 @@ window.STBasicMode=(function(){
         if(spec[0]){var control=fields.querySelector(spec[0]==='material-flow'?'.equipment-material-flow':'.format-zone-'+spec[0]);
           label=control.closest('label');moved.push({label:label,home:label.parentNode,next:label.nextSibling,text:label.firstChild.nodeValue});
           label.firstChild.nodeValue=!basic()&&spec[0]==='belt-speed'?__ST_TEXT__('conveyor.belt_speed'):spec[1];section.appendChild(label);}
-        else {label=node('label',spec[1],'basic-worksheet-calculated');var output=node('output','—');output.dataset.basicOutput=spec[2];label.appendChild(output);section.appendChild(label);}
+        else {label=node('label',spec[1],'basic-worksheet-calculated');var output=node('output','—');output.dataset.basicOutput=spec[2];
+          var descriptions={'package-velocity':['Nominal output rate × discharge pitch; theoretical local discharge speed.','Flujo nominal × pitch de descarga; velocidad local teórica.'],'output-b2b':['Native output rate × package length; packed flow.','Flujo nativo × longitud del envase; flujo contiguo.'],'consumption':['Native downstream input rate × package length; packed consumption.','Flujo nativo de entrada × longitud; consumo contiguo.'],'overflow':['Engine design overflow reserve, excluding Discharge and Coding.','Reserva Overflow de diseño del motor, sin Discharge y Coding.'],'lbu':['Operating distance from the entrance to Back-up.','Distancia operativa desde entrada hasta Back-up.']};
+          var help=descriptions[spec[2]];if(help){label.title=output.title=help[document.documentElement.lang==='es'?1:0];}
+          label.appendChild(output);section.appendChild(label);}
       });
     });
     fields._basicWorksheet={node:worksheet,moved:moved};
@@ -148,7 +151,7 @@ window.STBasicMode=(function(){
     var fields=card._fields,c=audit?.engineering?.calculated,up=equipment.find(function(e){return e.id===audit?.upstreamId;}),down=equipment.find(function(e){return e.id===audit?.downstreamId;});
     fields.querySelector('[data-basic-group=upstream]').textContent='Upstream: '+(up?.name||'—')+' ('+number(up?.nominalRatePerSecond*60)+' BPM)';
     fields.querySelector('[data-basic-group=downstream]').textContent='Downstream: '+(down?.name||'—')+' ('+number(down?.nominalRatePerSecond*60)+' BPM)';
-    var outputs={'package-velocity':c?.upstreamDischargeVelocityMmPerSecond*.06,'output-b2b':c?.machineOutputRateMmPerSecond*.06,'consumption':c?.downstreamInfeedRateMmPerSecond*.06,'overflow':c?.overflowProductLengthMm,'lbu':c?.overflowLengthMm,'lba':c?.usefulAccumulationLengthMm};
+    var outputs={'package-velocity':c?.upstreamDischargeVelocityMmPerSecond*.06,'output-b2b':c?.machineOutputRateMmPerSecond*.06,'consumption':c?.downstreamConsumptionRateMmPerSecond*.06,'overflow':c?.overflowProductLengthMm,'lbu':c?.actualBackupSensorPositionMm,'lba':c?.usefulAccumulationLengthMm};
     fields.querySelectorAll('[data-basic-output]').forEach(function(output){output.textContent=number(outputs[output.dataset.basicOutput]);});
   }
   function number(value,digits){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:digits??2}):'—';}

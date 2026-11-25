@@ -143,3 +143,48 @@ It does not restore historical geometry or change the installed speed,
 pitch, sensor positions, or stop statistics. The worksheet PASS still
 denotes its recovery-length criterion, not comprehensive engineering
 approval.
+
+## Parameter roles and contextual help
+
+The equipment cards and conveyor worksheet now explain parameters by name
+rather than worksheet cell location. Internal cell references remain in JSON
+and test selectors for traceability. Dialog evaluation pills reuse the existing
+light semantic status design. Tooltips are bilingual.
+
+The two geometry checkboxes are mutually exclusive:
+- Both unchecked: derive operating Back-up from the engineering model and
+  derive operating LBA from Prime minus Back-up. The worksheet separately
+  presents its automatic design geometry and required reserve.
+- LBA checked: LBA is the manual source; Back-up = installed length − Prime
+  reserve − LBA.
+- Back-up checked: installed Back-up is the manual source; LBA = installed
+  length − Prime reserve − Back-up.
+- With either manual source, the worksheet evaluates selected available
+  overflow against required overflow independently of recovery margin.
+  Required overflow remains a calculated design requirement. No measured
+  Back-up position is fabricated by enabling an empty manual input.
+
+Prime remains derived from installed length and Prime reserve. Existing
+records specifying both manual LBA and Back-up retain their prior LBA
+precedence; the previous Back-up can be restored through the checkbox.
+The engineering calculation uses the selected physical sensor position to
+determine useful accumulation and time to reach Back-up. This changes
+engineering results and buffer coverage estimates, not the discrete
+simulation equations or the selected sensor position.
+
+Speed source: Manual uses the entered belt speed; Auto uses the existing
+factors. Either target Population or target Overspeed supersedes the base
+speed mode. Belt speed, moving gap (in target modes), and accumulation
+factor (in Manual/target modes) are displayed read-only as applicable.
+Discharge and Coding factors remain available for their respective installed
+segments. The optional accumulation factor defaults to zero in Auto if
+unknown. Inactive manually entered values are retained in inputValues and
+are not stored as active overrides. Basic uses m/min and Advance mm/s for
+belt speed. Basic now honors the stored explicit speed mode rather than
+forcing MANUAL on every read.
+
+Required overflow and recovery formula harmonization between the worksheet
+and engineering engine is a separate pending task. The existing model-specific
+design formulas are not replaced by this change. Verify installation data,
+the deployed UI and complete simulation regression suite before accepting
+the new evaluation as a validated baseline.

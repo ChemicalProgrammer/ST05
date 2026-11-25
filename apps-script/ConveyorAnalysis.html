@@ -55,7 +55,10 @@
 }
 #conveyor-analysis-body { display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:var(--subsection-gap,var(--space-4)); }
 #conveyor-analysis-body .chart-note { margin:0; }
-#conveyor-analysis-body .conveyor-analysis-verdict { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; color:#fff; font-size:var(--font-secondary); white-space:nowrap; }
+#conveyor-analysis-body .conveyor-analysis-verdict.st-status-pill { cursor:default;background:var(--stopped-soft);color:var(--muted); }
+#conveyor-analysis-body .conveyor-analysis-verdict.is-pass { background:var(--success-soft);color:var(--success); }
+#conveyor-analysis-body .conveyor-analysis-verdict.is-fail { background:var(--failure-soft);color:var(--danger); }
+#conveyor-analysis-body .conveyor-analysis-verdict.is-review { background:var(--starved-soft);color:var(--warning); }
 </style>
 <script>
 window.STConveyorAnalysis=(function(){
@@ -126,15 +129,15 @@ window.STConveyorAnalysis=(function(){
       p.dischargeVelocitySource==='NOMINAL_RATE_AND_PITCH'?tr('Calculated from nominal machine rate × discharge pitch (AF not configured)','Calculada con flujo nominal de máquina × pitch de descarga (AF no configurado)'):tr('Unresolved discharge velocity','Velocidad de descarga no resuelta');
     const lines=[
       tr('Population = native upstream output rate × package length / conveyor speed. Rates are not inferred from belt speed.','Population = flujo nativo de salida × longitud del envase / velocidad del conveyor. El flujo no se deduce de la velocidad de banda.'),
-      'L16 = '+num(p.length)+' mm · L19 = '+num(p.dischargePitch)+' mm',
-      'L23 = '+num(p.dischargeVelocity)+' m/min · '+source,
-      'L24 = '+num(p.flow*.06)+' m/min · L40 = '+num(p.speed*.06)+' m/min',
+      tr('Package length','Longitud del envase')+' = '+num(p.length)+' mm · '+tr('Discharge pitch','Pitch de descarga')+' = '+num(p.dischargePitch)+' mm',
+      tr('Discharge velocity','Velocidad de descarga')+' = '+num(p.dischargeVelocity)+' m/min · '+source,
+      tr('Packed output rate','Flujo contiguo de salida')+' = '+num(p.flow*.06)+' m/min · '+tr('Belt speed','Velocidad de banda')+' = '+num(p.speed*.06)+' m/min',
       tr('Native discharge rate','Flujo nativo de descarga')+': '+num(p.rate)+' '+unit+'/min',
       tr('Configured upstream machine rate','Velocidad nominal configurada de la máquina anterior')+': '+num(p.upstreamRate*60)+' '+unit+'/min',
       tr('Native downstream input rate','Flujo nativo de entrada aguas abajo')+': '+num(p.highRate)+' '+unit+'/min',
       tr('Theoretical downstream infeed velocity','Velocidad teórica de entrada aguas abajo')+': '+num(p.infeedVelocity)+' m/min',
       tr('Belt transport capacity at discharge pitch (not machine output)','Capacidad de banda al pitch de descarga (no es flujo de máquina)')+': '+num(p.beltCapacityAtDischargePitchPackagesPerMinute)+' '+unit+'/min',
-      'L41 = '+num(p.population*100)+'%'
+      'Population = '+num(p.population*100)+'%'
     ];
     if(p.dischargeVelocitySource==='CONFIGURED_AF'&&Number.isFinite(p.nominalDischargeVelocity)&&Math.abs(p.dischargeVelocity-p.nominalDischargeVelocity)>1e-6)
       lines.push(tr('Configured AF differs from the theoretical discharge velocity of '+num(p.nominalDischargeVelocity)+' m/min. AF is used for local discharge velocity only; verify the measured speed and pitch if needed.','AF configurada difiere de la velocidad teórica de descarga de '+num(p.nominalDischargeVelocity)+' m/min. AF se utiliza solo como velocidad local de descarga; verifica la velocidad medida y el pitch si es necesario.'));
@@ -176,7 +179,7 @@ window.STConveyorAnalysis=(function(){
       status:worksheet.geometry.status,statusReason:source.resolutionError||worksheet.geometry.statusReason,
       configuration,geometry:worksheet.geometry,
       common:worksheet.common.map(([ref,label,unit,value,formula,governing],i)=>({
-        ...jsonRow(ref,label,unit,value,formula,trace.describe(trace.commonKeys[i]),Boolean(governing?.partial)),
+        ...jsonRow(ref,label,unit,value,formula,[parameterHelp(trace.commonKeys[i],'en'),trace.describe(trace.commonKeys[i])].filter(Boolean).join('\n\n'),Boolean(governing?.partial)),
         governingFormat:governing?.name||null
       })),
       formats:worksheet.profiles.map((p,i)=>({
@@ -184,7 +187,7 @@ window.STConveyorAnalysis=(function(){
         populationDiagnostic:profilePopulationHelp(p,'en'),
         inputsAndIntermediateValues:p,
         sections:rows.map(([title,entries])=>({title,rows:entries.filter(Array.isArray).map(([ref,label,unit,formula,read])=>
-          jsonRow('L'+ref,label,unit,read(p),formula,['L23','L41'].includes('L'+ref)?[trace.describe('L'+ref,i),profilePopulationHelp(p,'en')].filter(Boolean).join('\n\n'):trace.describe('L'+ref,i)))}))
+          jsonRow('L'+ref,label,unit,read(p),formula,[parameterHelp('L'+ref,'en'),trace.describe('L'+ref,i),...(['L23','L41'].includes('L'+ref)?[profilePopulationHelp(p,'en')]:[])].filter(Boolean).join('\n\n')))}))
       }))};
   }
   function buildEvaluationExport(context,{scope='SINGLE',name,worksheet}={}){
@@ -333,7 +336,8 @@ window.STConveyorAnalysis=(function(){
           dischargeTime,codingTime,duringDelay,inDischarge,inCoding,total,overflow,
           ramp:input.downstreamRampUpSeconds??belt.downstreamRampUpSeconds,
           dischargeFactor,codingFactor,
-          accumulationFactor:input.accumulationSpeedFactorPercent,overspeed:input.infeedOverspeedPercent??models[index].processData?.speedAndSensors?.overspeedVsInfeedScrewPercent??5};
+          accumulationFactor:models[index].processData?.accumulation?.speedMode==='MANUAL'||models[index].processData?.accumulation?.targetPopulationPercent!=null||models[index].processData?.accumulation?.targetOverspeedPercent!=null
+            ?(codingSpeed>0?(speed/codingSpeed-1)*100:NaN):input.accumulationSpeedFactorPercent,overspeed:input.infeedOverspeedPercent??models[index].processData?.speedAndSensors?.overspeedVsInfeedScrewPercent??5};
       });
     function extreme(field,select){
       const valid=profiles.filter(profile=>Number.isFinite(profile[field]));
@@ -341,10 +345,16 @@ window.STConveyorAnalysis=(function(){
       return {value:governing?.[field],name:governing?.name,partial:valid.length<profiles.length};
     }
     const overflow=extreme('overflow',(a,b)=>a>b);
-    const lbu=runout+overflow.value,lba=prime-lbu;
+    const requiredLbu=runout+overflow.value;
+    const manualLba=data.accumulation?.manualLbaMm,manualBackup=data.accumulation?.backupSensorPositionMm;
+    const geometryMode=Number.isFinite(manualLba)?'MANUAL_LBA':Number.isFinite(manualBackup)?'MANUAL_BACKUP':'AUTOMATIC';
+    const lbu=geometryMode==='MANUAL_LBA'?prime-manualLba:geometryMode==='MANUAL_BACKUP'?manualBackup:requiredLbu;
+    const lba=prime-lbu,availableOverflow=lbu-runout,operatingLba=zone.primeSensorPositionMm-zone.backupSensorPositionMm;
+    const insufficientOverflow=geometryMode!=='AUTOMATIC'&&Number.isFinite(overflow.value)&&Number.isFinite(availableOverflow)&&availableOverflow+1e-6<overflow.value;
+    const invalidGeometry=geometryMode!=='AUTOMATIC'&&Number.isFinite(lba)&&Number.isFinite(availableOverflow)&&(lba<=0||availableOverflow<0);
     for(const profile of profiles){
       const {speed,consumption,clear,firstPackage,dischargeTime,codingTime}=profile;
-      const overflowTime=divide(overflow.value,speed);
+      const overflowTime=divide(availableOverflow,speed);
       const arrival=clear+(firstPackage??NaN)+dischargeTime+codingTime+overflowTime;
       const consumed=consumption*arrival;
       const catchTime=divide(consumed,speed-consumption);
@@ -358,26 +368,29 @@ window.STConveyorAnalysis=(function(){
     const margin=recovery.value;
     const minimumLength=Number.isFinite(margin)?lact-margin:undefined;
     const transportIssue=data.transportFlowIssue||designProfiles.find(({models})=>models[index]?.processData?.productApplies!==false&&models[index]?.processData?.transportFlowIssue)?.models[index].processData.transportFlowIssue;
-    const status=transportIssue?'NOT EVALUATED':margin<-.000001?'FAIL':!Number.isFinite(margin)||recovery.partial?'NOT EVALUATED':margin>.000001?'PASS':'AT LIMIT';
+    const status=transportIssue?'NOT EVALUATED':invalidGeometry||insufficientOverflow||margin<-.000001?'FAIL':!Number.isFinite(margin)||recovery.partial?'NOT EVALUATED':margin>.000001?'PASS':'AT LIMIT';
     const point=margin>=0&&lba>=margin?prime-margin:NaN;
-    const geometry={lact,lp,prime,discharge,coding,runout,overflow,lbu,lba,recovery,point,minimumLength,status};
-    geometry.statusReason=transportIssue||explainVerdict(status,recovery,profiles,geometry);
+    const geometry={lact,lp,prime,discharge,coding,runout,overflow,lbu,lba,recovery,point,minimumLength,status,geometryMode,requiredLbu,availableOverflow,operatingLba};
+    geometry.statusReason=transportIssue||(invalidGeometry?'La posición seleccionada de Back-up debe quedar después de Discharge y Coding y antes de Prime.':insufficientOverflow?'Overflow disponible ('+availableOverflow.toFixed(2)+' mm) menor al requerido ('+overflow.value.toFixed(2)+' mm).':explainVerdict(status,recovery,profiles,geometry));
     return {profiles,geometry,common:[
       ['D8','Discharge','mm',discharge,'Input'],
       ['E8','Coding','mm',coding,'Input'],
       ['F8','Overflow','mm',overflow.value,'=MAX(L58:N58)',overflow],
       ['K8','Lrec (min)','mm',recovery.value,'=MIN(L70:N70)',recovery],
       ['L8','Lp','mm',lp,'Input'],
-      ['E11','Lbu','mm',lbu,'=D8+E8+F8',overflow],
-      ['I11','Accumulation Zone (Lba)','mm',lba,'=I13-L8-E11 (croquis)',overflow],
+      ['E11','Lbu','mm',lbu,'Installed/selected Back-up position from entry, or required overflow plus runout in Auto',geometryMode==='AUTOMATIC'?overflow:undefined],
+      ['I11','Accumulation Zone (Lba)','mm',lba,'Prime position minus selected Back-up position',geometryMode==='AUTOMATIC'?overflow:undefined],
       ['I13','Lact','mm',lact,'Input'],
       ['','Max Run-out point','mm',runout,'D8 + E8'],
-      ['','Back-up Sensor (calculated)','mm',lbu,'E11',overflow],
+      ['',geometryMode==='MANUAL_BACKUP'?'Back-up Sensor (manual input)':'Back-up Sensor (calculated)','mm',lbu,'Selected geometry source',geometryMode==='AUTOMATIC'?overflow:undefined],
       ['','Back-up Sensor (actual)','mm',zone.backupSensorPositionMm,'Operating position'],
       ['','Rec Pt.','mm',point,'I13 − L8 − K8',recovery],
       ['','Prime Sensor (calculated)','mm',prime,'I13 − L8'],
       ['','Prime Sensor (actual)','mm',zone.primeSensorPositionMm,'Operating position'],
-      ['','L (min needed)','mm',minimumLength,'Lact − Lrec (minimum for recovery)',recovery]
+      ['','L (min needed)','mm',minimumLength,'Lact − Lrec (minimum for recovery)',recovery],
+      ['','Back-up Sensor (required)','mm',requiredLbu,'Discharge + Coding + required Overflow',overflow],
+      ['','Overflow available (selected geometry)','mm',availableOverflow,'Selected Back-up position minus Discharge and Coding'],
+      ['','Operating LBA (engine)','mm',operatingLba,'Engine-resolved Prime minus Back-up position']
     ]};
   }
 
@@ -432,7 +445,7 @@ window.STConveyorAnalysis=(function(){
       [62,"Time for Upstream Machine to Make Packages in Process (time delay for first package to exit)","sec",'Input',p=>p.firstPackage],
       [63,"Time for Packages to Travel Across Discharge Conveyor","sec",'=$D$8/L$34/1000*60',p=>p.dischargeTime],
       [64,"Time for Packages to Travel Across Coding Conveyor","sec",'=$E$8/L37/1000*60',p=>p.codingTime],
-      [65,"Time for Packages to Travel Across Maximum Length Overflow Area (all formats are considered)","sec",'=$F$8/L40/1000*60',p=>p.overflowTime],
+      [65,"Time for Packages to Travel Across Selected Overflow Area","sec",'Selected overflow length / conveyor speed',p=>p.overflowTime],
       [66,"Total Time for First Package to Reach the Back up Sensor","sec",'=SUM(L61:L65)',p=>p.arrival],
       [67,"Reduction of queue in time for first bottle to reach back-up sensor","mm",'Native downstream input rate × L16 / 60 × L66',p=>p.consumed],
       [68,"Time from first bottle at backup sensor to first bottle reaching back of queue","sec",'=(L67/1000)/(L40-L30)*60',p=>p.catchTime],
@@ -458,7 +471,11 @@ window.STConveyorAnalysis=(function(){
   // IDs are the worksheet row references; display names let the user locate
   // the corresponding row even though the original cell column is hidden.
   const commonTraceKeys=['D8','E8','F8','K8','L8','E11','I11','I13','RUNOUT',
-    'BACKUP_CALCULATED','BACKUP_ACTUAL','RECOVERY_POINT','PRIME_CALCULATED','PRIME_ACTUAL','MIN_LENGTH'];
+    'BACKUP_CALCULATED','BACKUP_ACTUAL','RECOVERY_POINT','PRIME_CALCULATED','PRIME_ACTUAL','MIN_LENGTH','REQUIRED_BACKUP','AVAILABLE_OVERFLOW','OPERATING_LBA'];
+  const parameterDefinitions={"D8":["Installed Discharge section from machine exit to Coding or Overflow.","Tramo Discharge instalado desde salida hasta Coding u Overflow."],"E8":["Installed Coding section before Overflow.","Tramo Coding instalado antes de Overflow."],"F8":["Maximum required free-space reserve across applicable formats; computed from residual packages and belt population.","Máxima reserva requerida entre formatos; se calcula con envases residuales y población de banda."],"K8":["Minimum recovery margin across formats. Lrec > 0: reserve remains; Lrec = 0: exactly enough; Lrec < 0: accumulation runs out before recovery.","Margen mínimo de recuperación entre formatos. Lrec > 0: queda reserva; Lrec = 0: justo suficiente; Lrec < 0: se agota la acumulación antes de recuperar."],"L8":["Reserve from Prime photoeye to downstream machine entrance.","Reserva desde la fotocelda Prime hasta entrada siguiente."],"E11":["Distance from conveyor entrance to selected Back-up position. In automatic design this is Discharge + Coding + required Overflow.","Distancia desde entrada hasta Back-up seleccionado. En diseño automático es Discharge + Coding + Overflow requerido."],"I11":["Useful length between selected Back-up and Prime. Derived from installed length, Prime reserve and Back-up position, or supplied as manual LBA.","Longitud útil entre Back-up seleccionado y Prime. Derivada de longitud instalada, reserva Prime y Back-up, o definida como LBA manual."],"I13":["Total installed conveyor length.","Longitud total instalada."],"RUNOUT":["End of the installed Discharge and Coding sections, measured from conveyor entry.","Fin de los tramos Discharge y Coding instalados, medido desde entrada."],"BACKUP_CALCULATED":["Back-up position from the selected geometry source. Manual LBA derives it from Prime minus LBA; automatic design derives it from required overflow.","Posición Back-up según fuente geométrica. LBA manual la obtiene de Prime menos LBA; automático usa overflow requerido."],"BACKUP_ACTUAL":["Back-up position actually resolved by the simulation model; it may differ from the worksheet design recommendation.","Posición Back-up resuelta por el motor; puede diferir de la recomendación de diseño de la hoja."],"RECOVERY_POINT":["Position where the first restarted package catches the remaining queue. Exists only within a feasible useful accumulation zone.","Posición donde el primer envase del rearranque alcanza la cola restante. Solo existe dentro de acumulación útil factible."],"PRIME_CALCULATED":["Total installed length minus Prime reserve, measured from entry.","Longitud total instalada menos reserva Prime, medida desde entrada."],"PRIME_ACTUAL":["Prime position resolved by the operating model.","Posición Prime resuelta por el modelo operativo."],"MIN_LENGTH":["Length needed for zero recovery margin at the selected overflow reserve and flow conditions; separate overflow adequacy also applies.","Longitud para margen de recuperación cero con reserva de overflow y flujo seleccionados; también debe cumplirse overflow requerido."],"REQUIRED_BACKUP":["Minimum Back-up design position = Discharge + Coding + required Overflow.","Posición mínima Back-up de diseño = Discharge + Coding + Overflow requerido."],"AVAILABLE_OVERFLOW":["Distance between end of Coding/Discharge and selected Back-up. Compare against required Overflow.","Distancia entre fin de Coding/Discharge y Back-up seleccionado. Compara contra Overflow requerido."],"OPERATING_LBA":["Actual useful accumulation distance resolved by the engine (Prime minus Back-up).","Distancia útil de acumulación resuelta por el motor (Prime menos Back-up)."],"L16":["Physical package length in direction of movement.","Longitud física del envase en dirección de avance."],"L19":["Center-to-center spacing at upstream machine discharge.","Separación centro a centro en descarga anterior."],"L20":["Upstream machine start-up delay; distinct from time to first package.","Retardo de arranque anterior; distinto del tiempo al primer envase."],"L21":["Packages still discharged after stop command, in native packages.","Envases que aún salen tras orden de paro, en unidades nativas."],"L22":["Configured upstream nominal output expressed in bottle-equivalent BPM; physical flow uses native packages/min.","Salida nominal anterior en BPM equivalentes de botella; flujo físico usa envases nativos/min."],"L23":["Measured discharge velocity if provided; otherwise nominal native output × discharge pitch / 1000.","Velocidad de descarga medida si existe; si no, flujo nominal nativo × pitch de descarga / 1000."],"L24":["Linear output rate if all packages were touching: native output × package length.","Flujo lineal de salida si los envases estuvieran juntos: flujo nativo × longitud del envase."],"L27":["Configured downstream input rate expressed in bottle-equivalent BPM. Consumption uses native input rate.","Flujo configurado de entrada siguiente en BPM equivalentes. Consumo usa flujo nativo de entrada."],"L28":["Center-to-center pitch at downstream machine entrance.","Pitch centro a centro en entrada siguiente."],"L29":["Time for downstream machine to reach full speed, including Prime start delay where modeled.","Tiempo para alcanzar velocidad plena siguiente, incluyendo retardo Prime cuando se modela."],"L30":["Linear rate of touching packages consumed downstream: native input × package length.","Flujo lineal de envases contiguos consumidos: entrada nativa × longitud del envase."],"L33":["Discharge belt speed increment relative to package discharge velocity. 0 means equal.","Incremento de velocidad Discharge respecto a descarga. 0 significa igual."],"L34":["Discharge velocity multiplied by one plus the Discharge factor fraction.","Velocidad de descarga multiplicada por uno más fracción del factor Discharge."],"L35":["Packed upstream output divided by Discharge belt velocity; not live inventory.","Flujo contiguo anterior dividido por velocidad Discharge; no inventario en vivo."],"L36":["Coding belt speed increment relative to Discharge; optional, default zero.","Incremento de velocidad Coding respecto a Discharge; opcional, cero por defecto."],"L37":["Discharge belt velocity multiplied by one plus Coding factor fraction.","Velocidad Discharge multiplicada por uno más fracción de factor Coding."],"L38":["Packed upstream output divided by Coding belt velocity.","Flujo contiguo anterior dividido por velocidad Coding."],"L39":["Accumulation belt speed relative to Coding. In Auto factor mode it sets speed; in direct or target modes it is derived from actual belt and Coding speeds.","Velocidad de acumulación relativa a Coding. En Auto por factores fija velocidad; en velocidad directa u objetivo se obtiene de banda y Coding."],"L40":["Active linear transport speed of the accumulation conveyor.","Velocidad lineal activa de transporte del conveyor de acumulación."],"L41":["Packed nominal upstream flow divided by active belt velocity. Overflow requires less than 100% population.","Flujo nominal contiguo anterior dividido por velocidad de banda. Overflow requiere población menor que 100%."],"L45":["Time for one package to cross a stationary Back-up photoeye at belt speed.","Tiempo de paso de un envase frente a Back-up fijo a velocidad de banda."],"L46":["Continuous sensor occupation needed to confirm blockage. Too short can misinterpret a moving package as a blockage.","Tiempo de ocupación continua para confirmar bloqueo. Demasiado corto puede interpretar un envase en movimiento como bloqueo."],"L48":["Continuous clear time needed to release upstream machine.","Tiempo continuo libre para liberar máquina anterior."],"L51":["Packages discharged during the Back-up blocked delay: native output rate × delay.","Envases descargados durante retardo de bloqueo: flujo nativo × retardo."],"L52":["Residual packages discharged after the stop signal.","Envases residuales descargados tras señal de paro."],"L53":["Packages already in the Discharge section, based on its length and population.","Envases ya en Discharge según su longitud y población."],"L54":["Packages already in Coding, based on its length and population.","Envases ya en Coding según su longitud y población."],"L55":["Extra packages reserved as an engineering insurance margin.","Envases extra reservados como margen de ingeniería."],"L56":["Sum of packages during delay, residual discharge, Discharge/Coding inventory and insurance.","Suma de envases durante retardo, descarga residual, inventario Discharge/Coding y margen."],"L57":["Length occupied by the subtotal if packages touch.","Longitud ocupada por el subtotal si los envases están juntos."],"L58":["Required Overflow length = packed length of residual packages divided by free fraction of belt.","Longitud requerida de Overflow = longitud contigua residual dividida entre fracción libre de banda."],"L61":["Continuous clear delay before upstream restart.","Retardo libre continuo antes de rearranque anterior."],"L62":["Elapsed time from restart permission to first package exit; independently configured.","Tiempo desde permiso de rearranque hasta salida del primer envase; se configura de forma independiente."],"L63":["Travel time across Discharge: installed length / its speed.","Tiempo de tránsito Discharge: longitud instalada / velocidad."],"L64":["Travel time across Coding: installed length / its speed.","Tiempo de tránsito Coding: longitud instalada / velocidad."],"L65":["Travel time from runout end to selected Back-up across Overflow.","Tiempo desde fin de runout a Back-up seleccionado a través de Overflow."],"L66":["Clear delay plus first-package delay and all travel times to Back-up.","Retardo libre más retardo del primer envase y tiempos de tránsito a Back-up."],"L67":["Queue length consumed downstream before the first restarted package reaches Back-up.","Longitud de cola consumida antes de que primer envase llegue a Back-up."],"L68":["Time for first package at Back-up to catch the moving queue tail. Requires positive belt-minus-consumption speed.","Tiempo para alcanzar extremo de cola desde Back-up. Requiere velocidad de banda superior a consumo."],"L69":["Additional queue length consumed while the first package catches the queue.","Longitud adicional de cola consumida mientras primer envase alcanza la cola."],"L70":["Recovery margin: useful accumulation less both queue reductions. Lrec > 0 leaves reserve; Lrec = 0 is the limit; Lrec < 0 is a deficit.","Margen de recuperación: acumulación útil menos ambas reducciones. Lrec > 0 deja reserva; Lrec = 0 es límite; Lrec < 0 es déficit."],"L73":["Time supported downstream by an initially full useful accumulation zone (minutes).","Tiempo soportado aguas abajo por acumulación útil inicialmente llena (minutos)."],"L74":["Anti-starve protection time in seconds, under worksheet assumptions.","Tiempo de protección anti-starve en segundos, bajo supuestos de hoja."],"L75":["Time supported upstream by the free fraction of useful accumulation (minutes).","Tiempo soportado aguas arriba por fracción libre de acumulación útil (minutos)."],"L76":["Anti-block protection time in seconds.","Tiempo de protección anti-block en segundos."],"L79":["Design recommendation margin above downstream infeed speed; default 5% if not configured. Not the actual conveyor overspeed.","Margen recomendado de diseño sobre velocidad de entrada siguiente; 5% por defecto. No es overspeed real."],"L80":["Recommended minimum speed = downstream native input rate × infeed pitch × (1 + overspeed fraction) / 1000.","Velocidad mínima recomendada = flujo nativo de entrada × pitch de entrada × (1 + fracción overspeed) / 1000."]};
+  function parameterHelp(key,language=document.documentElement.lang==='es'?'es':'en'){
+    const entry=parameterDefinitions[key];return entry?entry[language==='es'?1:0]:'';
+  }
   function createPendingTrace(worksheet,context={},language='en'){
     const es=language==='es',tr=(en,spanish)=>es?spanish:en,formatNumber=n=>new Intl.NumberFormat(es?'es-MX':'en-US',{maximumFractionDigits:3}).format(n);
     const translate=value=>window.STLanguage?.current?.()===language?window.STLanguage.translate(value):value;
@@ -471,7 +488,7 @@ window.STConveyorAnalysis=(function(){
     const add=(key,label,value,dependencies=[],help='',partial=false)=>nodes.set(key,{key,label,value,dependencies,help,partial});
     for(const [index,entry] of worksheet.common.entries()){
       const [,label,,value,,source]=entry,key=commonTraceKeys[index];
-      add(common(key),translate(label)+(entry[0]?' ('+entry[0]+')':''),value,[],'',Boolean(source?.partial));
+      add(common(key),translate(label),value,[],'',Boolean(source?.partial));
     }
     const change=(key,dependencies,help)=>{const node=nodes.get(key);if(node){node.dependencies=dependencies||[];node.help=help||'';}};
     change(common('D8'),[],tr('Enter the installed Discharge length in Conveyors → Geometry. Enter 0 only if the section does not exist.','Captura Discharge actual en Conveyors → Geometry. Usa 0 solo si no existe el tramo.'));
@@ -481,7 +498,10 @@ window.STConveyorAnalysis=(function(){
     change(common('RUNOUT'),[dep(common('D8')),dep(common('E8'))]);
     change(common('PRIME_CALCULATED'),[dep(common('I13')),dep(common('L8'))]);
     change(common('F8'),profiles.map((p,i)=>dep(local(i,'L58'))),tr('There are no applicable formats with a calculable overflow. Review Formats.','No hay formatos aplicables con overflow calculable. Revisa Formats.'));
-    change(common('E11'),[dep(common('D8')),dep(common('E8')),dep(common('F8'))]);
+    change(common('E11'),g.geometryMode==='AUTOMATIC'?[dep(common('D8')),dep(common('E8')),dep(common('F8'))]:g.geometryMode==='MANUAL_LBA'?[dep(common('PRIME_CALCULATED'))]:[],tr('Check the active manual LBA or Back-up position.','Revisa LBA manual o la posición Back-up activa.'));
+    change(common('REQUIRED_BACKUP'),[dep(common('D8')),dep(common('E8')),dep(common('F8'))]);
+    change(common('AVAILABLE_OVERFLOW'),[dep(common('E11')),dep(common('RUNOUT'))]);
+    change(common('OPERATING_LBA'),[dep(common('PRIME_ACTUAL')),dep(common('BACKUP_ACTUAL'))]);
     change(common('I11'),[dep(common('PRIME_CALCULATED')),dep(common('E11'))]);
     change(common('K8'),[dep(common('F8')),...profiles.map((p,i)=>dep(local(i,'L70')))],tr('No applicable format has a calculable recovery distance.','Ningún formato aplicable tiene una distancia de recuperación calculable.'));
     change(common('BACKUP_CALCULATED'),[dep(common('E11'))]);
@@ -511,7 +531,7 @@ window.STConveyorAnalysis=(function(){
         if(!Array.isArray(entry))continue;
         const [ref,label,,formula,read]=entry,k='L'+ref;
         const suffix=[35,38,41].includes(ref)?' · '+({35:'Discharge',38:'Coding',41:'Overflow'}[ref]):'';
-        add(key(k),p.name+' · '+translate(label)+suffix+' ('+k+')',read(p));
+        add(key(k),p.name+' · '+translate(label)+suffix,read(p));
       }
       const set=(ref,dependencies,help)=>change(key(ref),dependencies,help);
       const internal=(ref,label,value,deps,help)=>add(key(ref),p.name+' · '+label,value,deps,help);
@@ -535,7 +555,8 @@ window.STConveyorAnalysis=(function(){
       set('L36',[],tr('Enter Coding Conveyor Speed Factor vs Previous Conveyor in Speed & Sensors.','Captura Coding Conveyor Speed Factor vs Previous Conveyor en Speed & Sensors.'));
       set('L37',[pos('L34'),pdep('L36')]);
       set('L38',[pdep('L24'),pos('L37')]);
-      set('L39',[],tr('Enter the accumulation conveyor speed factor in Speed & Sensors if used by the design.','Captura el factor de velocidad de acumulación en Speed & Sensors si el diseño lo utiliza.'));
+      const factorOutput=p.speedMode==='MANUAL'||p.targetPopulation!=null||p.targetOverspeed!=null;
+      set('L39',factorOutput?[pos('L40'),pos('L37')]:[],factorOutput?tr('Calculated from actual belt speed and Coding speed.','Calculado con velocidad real de banda y velocidad Coding.'):tr('Optional accumulation speed factor in Auto mode; blank uses zero.','Factor de acumulación opcional en Auto; vacío usa cero.'));
       const speedHelp=p.speedMode==='MANUAL'?tr('Enter a positive actual Conveyor Speed in Speed & Sensors (m/min in the editor).','Captura una velocidad real positiva del conveyor en Speed & Sensors (m/min en el editor).'):
         p.targetPopulation!=null?tr('Check target Population (greater than 0 and at most 100%), package length and nominal speed of '+upstream+'.','Revisa Population objetivo (mayor que 0 y hasta 100%), longitud del envase y velocidad nominal de '+upstream+'.'):
         p.targetOverspeed!=null?tr('Check target Overspeed, infeed pitch and speed of '+downstream+'.','Revisa Overspeed objetivo, pitch de entrada y velocidad de '+downstream+'.'):
@@ -547,18 +568,18 @@ window.STConveyorAnalysis=(function(){
         const missing=(value,label,test=positive)=>{if(!test(value))missingSpeedInputs.push(label);};
         if(p.targetPopulation!=null){
           missing(p.targetPopulation,tr('Target Population (0–100%, greater than zero)','Population objetivo (mayor que cero y hasta 100%)'),v=>positive(v)&&v<=100);
-          missing(p.length,tr('Package Length (L16)','Package Length (L16)'));
+          missing(p.length,tr('Package Length','Package Length'));
           missing(inputs.upstreamNominalSpeedBpm??p.upstreamRate,tr('Nominal speed of ','Velocidad nominal de ')+upstream);
         }else if(p.targetOverspeed!=null){
           missing(p.targetOverspeed,tr('Target Overspeed','Overspeed objetivo'),nonnegative);
-          missing(p.infeedPitch,tr('Infeed Pitch (L28)','Infeed Pitch (L28)'));
+          missing(p.infeedPitch,tr('Infeed Pitch','Infeed Pitch'));
           missing(inputs.downstreamHighSpeedBpm??p.downstreamInputRate,tr('Input speed of ','Velocidad de entrada de ')+downstream);
         }else{
           missing(inputs.upstreamNominalSpeedBpm??p.upstreamRate,tr('Nominal speed of ','Velocidad nominal de ')+upstream);
-          missing(p.dischargePitch,tr('Discharge Pitch (L19)','Discharge Pitch (L19)'));
-          missing(p.dischargeFactor,tr('Discharge speed factor (L33)','Factor de velocidad Discharge (L33)'),finite);
-          if(!finite(p.codingFactor)&&inputs.codingSpeedFactorPercent===undefined)missingSpeedInputs.push(tr('Coding speed factor (L36), if applicable','Factor de velocidad Coding (L36), si aplica'));
-          if(!finite(p.accumulationFactor)&&inputs.accumulationSpeedFactorPercent===undefined)missingSpeedInputs.push(tr('Accumulation speed factor (L39), if applicable','Factor de velocidad Accumulation (L39), si aplica'));
+          missing(p.dischargePitch,tr('Discharge Pitch','Discharge Pitch'));
+          missing(p.dischargeFactor,tr('Discharge speed factor','Factor de velocidad Discharge'),finite);
+          if(!finite(p.codingFactor)&&inputs.codingSpeedFactorPercent===undefined)missingSpeedInputs.push(tr('Coding speed factor, if applicable','Factor de velocidad Coding, si aplica'));
+          if(!finite(p.accumulationFactor)&&inputs.accumulationSpeedFactorPercent===undefined)missingSpeedInputs.push(tr('Accumulation speed factor, if applicable','Factor de velocidad Accumulation, si aplica'));
         }
       }
       set('L40',[],speedHelp+(missingSpeedInputs.length?' '+tr('Unresolved inputs: ','Inputs pendientes: ')+missingSpeedInputs.join('; ')+'.':''));
@@ -578,7 +599,7 @@ window.STConveyorAnalysis=(function(){
       set('L62',[],tr('Enter Time to First Package After Restart (s) on the conveyor, in Upstream. It is a separate input from Start-up Time.','Captura Time to First Package After Restart (s) en el conveyor, sección Upstream. Es un input distinto de Start-up Time.'));
       set('L63',[cd('D8'),...(g.discharge===0?[]:[pos('L34')])]);
       set('L64',[cd('E8'),...(g.coding===0?[]:[pos('L37')])]);
-      set('L65',[cd('F8'),pos('L40')]);
+      set('L65',[cd('AVAILABLE_OVERFLOW'),pos('L40')]);
       set('L66',['L61','L62','L63','L64','L65'].map(pdep));
       set('L67',[pdep('L30'),pdep('L66')]);
       internal('CATCH_SPEED',tr('Recovery speed margin (Conveyor Speed − Machine Package Consumption Rate)','Margen de velocidad de recuperación (Conveyor Speed − Machine Package Consumption Rate)'),(p.speed-p.consumption)*.06,[pos('L40'),pdep('L30')],tr('Conveyor Speed must exceed Machine Package Consumption Rate; a first package cannot catch the queue otherwise.','Conveyor Speed debe superar Machine Package Consumption Rate; de lo contrario el primer envase no puede alcanzar la cola.'));
@@ -656,7 +677,9 @@ window.STConveyorAnalysis=(function(){
         const badge=document.createElement('span');
         badge.textContent=verdict.status;
         badge.className='conveyor-analysis-verdict st-status-pill';
-        badge.style.backgroundColor=verdictColors[verdict.status];
+        badge.classList.toggle('is-pass',verdict.status==='PASS');
+        badge.classList.toggle('is-fail',verdict.status==='FAIL');
+        badge.classList.toggle('is-review',verdict.status==='AT LIMIT');
         badge.title=verdict.statusReason;
         tools.push(badge);
       }
@@ -690,13 +713,12 @@ window.STConveyorAnalysis=(function(){
       });
       return make(element,'tbody');
     }
-    function row(parent,ref,label){
+    function row(parent,ref,label,helpKey=ref){
       const element=make(parent,'tr');
       if(ref)element.dataset.cell=ref;
-      if(ref==='K8'||ref==='L70')element.title=recoveryHelp;
-      if(ref==='D8'||ref==='E8')element.title=lengthHelp[ref==='D8'?'discharge':'coding'];
-      const heading=make(element,'th',label);heading.scope='row';
-      if(ref)heading.title=ref+' · '+label;
+      const help=parameterHelp(helpKey);
+      element.title=help;
+      const heading=make(element,'th',label);heading.scope='row';heading.title=help;
       return element;
     }
     function renderValue(cell,value,tip,partial=false){
@@ -708,11 +730,12 @@ window.STConveyorAnalysis=(function(){
     }
     const common=table('Common Geometry',['Parameter','Value','Unit'],worksheet.geometry);
     worksheet.common.forEach(([ref,label,unit,value,,source],index)=>{
-      const element=row(common,ref,label);
+      const element=row(common,ref,label,trace.commonKeys[index]);
       const output=make(element,'td');
       output.className='numeric';
       make(element,'td',unit).className='metric-unit';
       renderValue(output,value,trace.describe(trace.commonKeys[index]),Boolean(source?.partial));
+      if(!output.title)output.title=parameterHelp(trace.commonKeys[index]);
     });
     if(!worksheet.profiles.length)make(body,'p','No applicable formats.');
     for(const [title,entries] of worksheet.profiles.length?rows:[]){
@@ -732,6 +755,7 @@ window.STConveyorAnalysis=(function(){
           const cell=make(element,'td');
           cell.className='numeric';
           renderValue(cell,read(profile),valueDiagnostic(worksheet,trace,'L'+ref,index));
+          if(!cell.title)cell.title=parameterHelp('L'+ref);
         });
         make(element,'td',unit).className='metric-unit';
       }
@@ -739,8 +763,8 @@ window.STConveyorAnalysis=(function(){
     const notes=window.STSubsection.create({title:'Calculation notes',description:'Input definitions and engineering assumptions.',variant:'B',native:true,open:true});
     body.append(notes.section);
     make(notes.body,'p','Time to First Package After Restart is configured on the conveyor card. Positions are measured from the conveyor entry.').className='chart-note';
-    make(notes.body,'p','Upstream Discharge Velocity (AF) overrides the conveyor speed used as the default discharge reference. Overflow requires conveyor population below 100%.').className='chart-note';
-    make(notes.body,'p','Accumulation Zone uses Lact − Lp − Lbu. Queue reduction and antistarve use the worksheet assumptions. L (min needed) is the installed length required for zero recovery margin, at the current worksheet settings.').className='chart-note';
+    make(notes.body,'p','Upstream Discharge Velocity (AF) is an optional measured value. Otherwise it is calculated from nominal machine output and discharge pitch. Overflow requires conveyor population below 100%.').className='chart-note';
+    make(notes.body,'p','Selected geometry: ' + ({AUTOMATIC:'Automatic design',MANUAL_LBA:'Manual LBA',MANUAL_BACKUP:'Manual Back-up'}[worksheet.geometry.geometryMode]||worksheet.geometry.geometryMode) + '. LBA = Prime position − Back-up position. Required overflow is evaluated independently from the selected reserve. The engine operating positions are also shown separately. L (min needed) is the length required for zero recovery margin at the selected reserve.').className='chart-note';
     body.scrollTop=0;
     dialog.showModal();
   }
@@ -768,6 +792,6 @@ window.STConveyorAnalysis=(function(){
     button.addEventListener('click',event=>{event.stopPropagation();openAnalysis();});
     paintEvaluationButton(button,null);return button;
   }
-  return {open,close,calculate,resolveProfiles,worksheetContext,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton,createPendingTrace,buildEvaluationExport,downloadEvaluation,profilePopulationHelp};
+  return {open,close,calculate,resolveProfiles,worksheetContext,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton,createPendingTrace,buildEvaluationExport,downloadEvaluation,profilePopulationHelp,parameterHelp};
 })();
 </script>

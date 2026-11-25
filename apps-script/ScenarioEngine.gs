@@ -502,15 +502,18 @@ function calculate(values) {
     values.primeReserveMm,
     overflowLengthMm
   );
-  const usefulAccumulationLengthMm = values.manualLbaMm ?? calculatedUsefulAccumulationLengthMm;
   const primeSensorPositionMm = subtractIfFinite(values.installedLengthMm, values.primeReserveMm);
   const actualBackupSensorPositionMm = values.manualLbaMm !== undefined
     ? subtractIfFinite(primeSensorPositionMm, values.manualLbaMm)
     : firstDefined(values.backupSensorPositionMm, overflowLengthMm);
+  // Required design reserve is independent of the actual installed sensor.
+  // A manually selected Back-up fixes the usable accumulation geometry.
+  const usefulAccumulationLengthMm = values.manualLbaMm ?? subtractIfFinite(primeSensorPositionMm, actualBackupSensorPositionMm);
+  const availableOverflowLengthMm = subtractIfFinite(actualBackupSensorPositionMm, values.dischargeRunoutLengthMm, values.rejectRunoutLengthMm);
   const conveyorCapacityUnits = safeFloorDivide(values.installedLengthMm, effectiveProductPitchMm);
   const primeTravelSeconds = safeDivide(primeSensorPositionMm, conveyorSpeedMmPerSecond);
   const totalTravelSeconds = safeDivide(values.installedLengthMm, conveyorSpeedMmPerSecond);
-  const overflowTransitSeconds = safeDivide(overflowLengthMm, conveyorSpeedMmPerSecond);
+  const overflowTransitSeconds = safeDivide(actualBackupSensorPositionMm, conveyorSpeedMmPerSecond);
   const recoveryToBackupSeconds = sumIfFinite(
     values.clearTimeDelaySeconds,
     values.upstreamStartupTimeSeconds,
@@ -566,6 +569,7 @@ function calculate(values) {
     overflowLengthMm,
     usefulAccumulationLengthMm,
     calculatedUsefulAccumulationLengthMm,
+    availableOverflowLengthMm,
     primeSensorPositionMm,
     recommendedBackupSensorPositionMm: overflowLengthMm,
     actualBackupSensorPositionMm,

@@ -37,8 +37,9 @@ test('each pending result has its own dependency trace and terminal input source
     const trace=h.api.createPendingTrace(worksheet,ctx);
     assert.equal(trace.describe('L16',0),'');
     assert.match(trace.describe('L62',0),/Time to First Package After Restart.*Upstream/);
-    assert.match(trace.describe('L66',0),/\(L62\)/);
-    assert.match(trace.describe('K8'),/\(L70\)/);
+    assert.match(trace.describe('L66',0),/Time for Upstream Machine to Make Packages in Process/);
+    assert.match(trace.describe('K8'),/Recovery Distance/);
+    assert(!/\b[FLDEIK]\d+\b/.test(trace.describe('K8')),'no spreadsheet cell references in user help');
     assert.match(trace.describe('K8'),/Time to First Package After Restart/);
     h.api.open('belt',ctx);
     const cells=[...h.body.querySelectorAll('td.conveyor-value-pending')];
@@ -181,5 +182,34 @@ test('JSON includes exact configuration, intermediate calculations and pending d
     assert.equal(models[1].processData.accumulation.restartToFirstPackageSeconds,undefined);
     h.api.open('belt',ctx);
     assert.equal(h.w.document.getElementById('conveyor-analysis-export-all').disabled,false);
+  }finally{h.close();}
+});
+
+test('manual geometry sources keep the required overflow independent and report inadequate installed reserve',()=>{
+  const h=harness();try{
+    const profile=fixture(),ctx=context([profile]),data=profile.models[1].processData;
+    const initial=h.api.calculate(ctx);
+    assert(initial.geometry.overflow.value>0);
+    const required=initial.geometry.overflow.value;
+    data.accumulation.manualLbaMm=7000;
+    const manual=h.api.calculate(ctx);
+    assert.equal(manual.geometry.geometryMode,'MANUAL_LBA');
+    assert.equal(manual.geometry.lbu,2000);assert.equal(manual.geometry.lba,7000);
+    delete data.accumulation.manualLbaMm;data.accumulation.backupSensorPositionMm=2000;
+    const installed=h.api.calculate(ctx);
+    assert.equal(installed.geometry.geometryMode,'MANUAL_BACKUP');
+    assert.equal(installed.geometry.lba,7000);
+    assert.equal(installed.geometry.overflow.value,required);
+    assert.equal(installed.geometry.recovery.value,manual.geometry.recovery.value);
+    data.accumulation.backupSensorPositionMm=251;
+    const insufficient=h.api.calculate(ctx);
+    assert.equal(insufficient.geometry.status,'FAIL');
+    assert.match(insufficient.geometry.statusReason,/Overflow disponible/);
+    h.api.open('belt',ctx);
+    const all=[...h.body.querySelectorAll('tbody th[scope=row]')];
+    assert(all.length>40&&all.every(row=>row.title));
+    assert(all.every(row=>!/\b[FLDEIK]\d+\b/.test(row.title)));
+    const badge=h.body.querySelector('.conveyor-analysis-verdict');
+    assert(badge.classList.contains('is-fail'));assert.equal(badge.style.backgroundColor,'');
   }finally{h.close();}
 });

@@ -20,12 +20,18 @@ function canonicalSimulationInputSignature(input) {
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
   if(run.dynamicLineBalancingEnabled!==true)delete run.dynamicLineBalancingEnabled;
   const dynamicMode=input.case.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
+  const macroScrap=input.case.equipment.some(item=>item.processData?.equipment?.macroStopScrapBottles>0);
   return JSON.stringify(canonical({
-    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':''),
+    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':'')+(macroScrap?'/SCRAP:1':''),
     unitOfFlow: input.case.unitOfFlow || 'units',
     equipment: input.case.equipment.map(item=>{
-      if(!item.processData?.dynamicLineBalancing||item.processData?.accumulation?.speedMode==='DYNAMIC'||run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true)return item;
-      const processData={...item.processData};delete processData.dynamicLineBalancing;return {...item,processData};
+      const inactiveDynamic=item.processData?.dynamicLineBalancing&&item.processData?.accumulation?.speedMode!=='DYNAMIC'&&!(run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true);
+      const zeroScrap=item.processData?.equipment?.macroStopScrapBottles===0;
+      if(!inactiveDynamic&&!zeroScrap)return item;
+      const processData={...item.processData};
+      if(inactiveDynamic)delete processData.dynamicLineBalancing;
+      if(zeroScrap){processData.equipment={...processData.equipment};delete processData.equipment.macroStopScrapBottles;}
+      return {...item,processData};
     }),
     run: {
       durationSeconds: 300, tickSeconds: .25, sampleEverySeconds: 5,
@@ -1258,6 +1264,8 @@ function validateSimulationInput(input) {
   const details = [];
   try { const resolvedProducts=validateProductSetup(input);if(resolvedProducts.length){for(const resolved of resolvedProducts){validateCase({...input.case,equipment:resolved.equipment},details,resolved.product);validateDynamicBalancing(resolved.equipment,input.run,details);}}else {validateCase(input?.case, details);validateDynamicBalancing(input?.case?.equipment,input?.run,details);} } catch(error) { details.push(invalid('run.productCatalog',error.message)); }
   validateRun(input?.run, details);
+  if(input?.case?.equipment?.some(item=>item?.processData?.equipment?.macroStopScrapBottles>0)&&
+    (input.run?.machineResidenceEnabled!==true||input.run?.engineId==='DES_SIMPY_EXPERIMENTAL'))details.push(invalid('run.engineId','Macrostop scrap requires the ST discrete physical engine (machine residence enabled).'));
   try { if(input?.run?.tickSeconds>0)resolvePlannedStops(input.run);if(input?.run?.eventsEnabled!==false&&(input?.run?.plannedStops?.length||input?.run?.plantCalendar?.enabled&&input.run.plantCalendar.mode==='SCHEDULED')&&input.run.engineId==='DES_SIMPY_EXPERIMENTAL')throw new Error('Scheduled plant stops currently require the ST engine.'); } catch(error){details.push(invalid('run.plantCalendar',error.message));}
   if(input?.run?.eventsEnabled!==false)validateCommands(input?.run?.commands, input?.case?.equipment, details);
 
@@ -1310,6 +1318,13 @@ function validateCase(caseModel, details,product) {
     validateNoiseProfile(equipment.noiseProfile, path, details);
     validateStartProfile(equipment, path, details);
     const design=equipment.processData?.equipment;
+    const scrap=design?.macroStopScrapBottles;
+    if(scrap!==undefined&&(!Number.isSafeInteger(scrap)||scrap<0))details.push(invalid(path+'.processData.equipment.macroStopScrapBottles','must be a nonnegative whole number of bottles'));
+    if(scrap>0){
+      if(isConveyorEquipment(equipment))details.push(invalid(path+'.processData.equipment.macroStopScrapBottles','Macrostop scrap applies only to machines.'));
+      else if(product&&scrap%productUnitFactor(equipment,product,'input')!==0)details.push(invalid(path+'.processData.equipment.macroStopScrapBottles','For case-fed machines, use whole incoming cases expressed in bottles for every selected format.'));
+      else if(!product&&![equipment.processData?.flowUnits?.input,equipment.processData?.flowUnits?.output,equipment.unitOfFlow].filter(Boolean).every(unit=>['BOTTLE','BOTTLES'].includes(String(unit).toUpperCase())))details.push(invalid(path+'.processData.equipment.macroStopScrapBottles','Select a product format for non-bottle flow units.'));
+    }
     if(product&&!isConveyorEquipment(equipment)&&design?.internalCapacityBottles!=null){
       const minimum=productUnitFactor(equipment,product)/productUnitFactor(equipment,product,'input');
       if(design.internalCapacityBottles<minimum)

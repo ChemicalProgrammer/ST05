@@ -10,6 +10,11 @@ window.STEquipmentRoles=(function(){
     else data.equipment.internalCapacityBottles=Number(input.value);
     var occupancy=fields.querySelector('.equipment-occupancy-mode');
     if(occupancy)data.equipment.occupancyMode=occupancy.value==='POSITIONS'?'POSITIONS':'STORAGE';
+    var scrap=fields.querySelector('.equipment-macrostop-scrap');
+    if(scrap&&!window.STBasicMode?.isBasic()){
+      if(!scrap.checkValidity()||!Number.isSafeInteger(Number(scrap.value))||Number(scrap.value)<0)return false;
+      if(Number(scrap.value)>0)data.equipment.macroStopScrapBottles=Number(scrap.value);else delete data.equipment.macroStopScrapBottles;
+    }
     return true;
   }
   function machineType(e){var types=['BLOWER','BLOWMOLDER','PUCKER','FILLER','CAPPER','FEEDER','DEPUCKER','SLEEVER','CASE_PACKER','PALLETIZER','CUSTOM'];return e.type==='PACEMAKER'?(types.includes(e.processData?.machineType)?e.processData.machineType:'CUSTOM'):e.type||'CUSTOM';}
@@ -48,6 +53,12 @@ window.STEquipmentRoles=(function(){
     occupancy.value=equipment.processData?.equipment?.occupancyMode==='POSITIONS'?'POSITIONS':'STORAGE';
     occupancy.title='Storage is a volume ceiling. Physical positions use a finite rotating pocket count: at steady full feed the positions are occupied, and starvation leaves real empty pockets. The optional Residence time remains a separate minimum.';
     occupancyLabel.append(occupancy);grid.append(occupancyLabel);
+    var scrapLabel=document.createElement('label'),scrap=document.createElement('input');
+    scrapLabel.className='machine-design-field advanced-scrap-field';scrapLabel.textContent='Macrostop scrap (bottles/stop)';
+    scrapLabel.title='Bottles rejected once per MAJOR or GENERAL repair event. Excludes MINOR, microstops and commands. If inventory is insufficient, the rest is rejected from incoming product after repair. For case-fed machines, specify complete cases in bottle equivalents.';
+    scrap.type='number';scrap.className='equipment-macrostop-scrap';scrap.min='0';scrap.step='1';scrap.required=true;
+    scrap.value=equipment.processData?.equipment?.macroStopScrapBottles??0;
+    scrapLabel.append(scrap);grid.append(scrapLabel);
     function refresh(){
       try{
         var data=JSON.parse(fields.querySelector('.equipment-process-data').value),characteristics=JSON.parse(fields.querySelector('.equipment-characteristics').value);
@@ -55,6 +66,7 @@ window.STEquipmentRoles=(function(){
         fields.querySelector('.equipment-maximum-speed').value=data.equipment?.maximumSpeedBpm??'';
         fields.querySelector('.equipment-recovery-time').value=data.equipment?.recoveryTimeSeconds??'';
         capacity.value=data.equipment?.internalCapacityBottles??'';
+        scrap.value=data.equipment?.macroStopScrapBottles??0;
         fields.querySelector('.equipment-residence-time').value=data.equipment?.residenceTimeSeconds??'';
         occupancy.value=data.equipment?.occupancyMode==='POSITIONS'?'POSITIONS':'STORAGE';
         refreshCapacityUnit();
@@ -67,6 +79,7 @@ window.STEquipmentRoles=(function(){
     var fields=card._fields,pacemaker=type!=='CONVEYOR'&&fields.querySelector('.equipment-pacemaker').checked;
     characteristics.isPacemaker=pacemaker;
     data.role=type==='CONVEYOR'?'CONVEYOR':pacemaker?'PACEMAKER':(characteristics.criticalMachine||data.role==='CRITICAL_MACHINE')?'CRITICAL_MACHINE':'MACHINE';data.machineType=type;
+    if(type==='CONVEYOR'&&data.equipment)delete data.equipment.macroStopScrapBottles;
     if(type!=='CONVEYOR'){
       if(!readCapacity(fields,data))return false;
       for(var spec of [['maximum-speed','maximumSpeedBpm'],['recovery-time','recoveryTimeSeconds'],['residence-time','residenceTimeSeconds']]){

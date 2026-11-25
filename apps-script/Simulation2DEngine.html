@@ -165,8 +165,14 @@ window.STSimulation2DEngine=(function(){
     Empty:'EMPTY',Flowing:'FLOWING',Accumulating:'ACCUMULATING',Waiting:'IDLE'
   };
   function accountingSnapshot(item,elapsed=item.stateAccounting?.accountedSeconds,detail=true){
-    return stateAccountingSnapshot(item.stateAccounting,elapsed,item.produced,item.designSpeedPerSecond??item.rate,
+    const result=stateAccountingSnapshot(item.stateAccounting,elapsed,item.produced,item.designSpeedPerSecond??item.rate,
       item.kind==='machine',item.reliabilityExposureSeconds,item.reliabilityChargedSeconds,detail);
+    if(result?.efficiency&&item.macroScrap){
+      const gross=item.produced+item.macroScrap.nativeEquivalent;
+      result.efficiency.quality=gross>0?Number((item.produced/gross).toFixed(6)):1;
+      result.efficiency.productionSpeed=result.productiveSeconds>0?Number((gross/result.productiveSeconds).toFixed(6)):null;
+    }
+    return result;
   }
   // Match LineSimulationEngine.resolvePhysicalZone: reserve is a whole
   // number of packages in the packed outlet queue, not a raw beam pulse.
@@ -185,6 +191,7 @@ window.STSimulation2DEngine=(function(){
         durations:{empty:0,flowing:0,accumulating:0},recentOutput:[],ratePerMinute:0}
       : {...definition,input:0,remaining:null,ready:false,started:0,produced:0,backupSince:null,residual:0,state:'Waiting',
         admittedInputUnits:0,stopDischargedUnits:0,residualDischargedUnits:0,dischargeOverflowUnits:0,stateAccounting:createStateAccounting(),
+        ...(definition.macroStopScrapBottles>0?{macroScrap:{requestedBottles:0,actualBottles:0,pendingBottles:0,stopCount:0,nativeEquivalent:0}}:{}),
         residualAtTrigger:0,resident:[],residenceClock:0,positionClock:0,positionDue:[],intakeCredit:1,outletCredit:0,rampElapsed:0,activeRampSeconds:definition.primeRampSeconds??definition.rampSeconds??0,failureRemaining:0,failureCount:0,exposure:null,
         activeStartDelaySeconds:definition.startDelay??0,startCause:'INITIAL',repairRecoveryPending:false,
         reliabilityExposureSeconds:0,reliabilityChargedSeconds:0,
@@ -343,13 +350,15 @@ window.STSimulation2DEngine=(function(){
       }else if(downstream?.capacityBottles!=null){
         if(!available(downstream)||downstream.resident.length>=Math.floor(downstream.capacityBottles/downstream.inputBottleFactor)||
           downstream.failureRemaining>0||downstream.started<downstream.activeStartDelaySeconds||downstream.backupSince!==null)return false;
-        downstream.resident.push(downstream.residenceClock+downstream.residenceSeconds);
         downstream.admittedInputUnits++;
-        if(downstream.occupancyMode==='POSITIONS')downstream.positionDue.push(downstream.positionClock+
-          Math.floor(downstream.capacityBottles/downstream.inputBottleFactor));
+        if(rejectIncoming(downstream)){
+          downstream.resident.push(downstream.residenceClock+downstream.residenceSeconds);
+          if(downstream.occupancyMode==='POSITIONS')downstream.positionDue.push(downstream.positionClock+
+            Math.floor(downstream.capacityBottles/downstream.inputBottleFactor));
+        }
       }else if(downstream){
         if(!available(downstream)||downstream.input>=downstream.batch||downstream.ready||downstream.remaining!==null||downstream.backupSince!==null)return false;
-        downstream.input++;
+        downstream.input+=rejectIncoming(downstream);
         downstream.admittedInputUnits++;
       }
       if(machine.capacityBottles!=null){
@@ -385,6 +394,28 @@ window.STSimulation2DEngine=(function(){
     }
     // Timers run at the beginning of a tick, like the numerical engine.
     // A repair advances during commanded/calendar stops, except E-stop.
+    function recordScrap(machine,count){
+      const s=machine.macroScrap,bottles=count*machine.inputBottleFactor;
+      s.actualBottles+=bottles;s.pendingBottles-=bottles;s.nativeEquivalent+=bottles/machine.bottlesPerUnit;
+    }
+    function chargeMacroStopScrap(machine,stopClass){
+      const s=machine.macroScrap;
+      if(!s||!['MAJOR','GENERAL'].includes(stopClass))return;
+      s.stopCount++;s.requestedBottles+=machine.macroStopScrapBottles;s.pendingBottles+=machine.macroStopScrapBottles;
+      const count=Math.min(machine.capacityBottles!=null?machine.resident.length:machine.input,Math.floor(s.pendingBottles/machine.inputBottleFactor));
+      if(count<=0)return;
+      if(machine.capacityBottles!=null){
+        machine.resident.splice(0,count);machine.positionDue.splice(0,count);
+        machine.outletCredit=0;machine.residual=Math.min(machine.residual,Math.floor(machine.resident.length/machine.batch));
+      }else{machine.input-=count;machine.ready=false;machine.remaining=null;}
+      recordScrap(machine,count);
+    }
+    function rejectIncoming(machine,count=1){
+      const s=machine.macroScrap;
+      if(!s||s.pendingBottles<machine.inputBottleFactor)return count;
+      const rejected=Math.min(count,Math.floor(s.pendingBottles/machine.inputBottleFactor));
+      recordScrap(machine,rejected);return count-rejected;
+    }
     function updateFailure(machine,seconds){
       if(machine.emergency)return;
       if(machine.failureRemaining>0){
@@ -410,6 +441,7 @@ window.STSimulation2DEngine=(function(){
       }
       machine.failureRemaining=profile.repairSeconds;
       machine.failureCount++;
+      chargeMacroStopScrap(machine,profile.stopClass??'GENERAL');
       reliability.startFailureEpisode(machine.failureHistory,time,profile.stopClass??'GENERAL',
         profile.repairSeconds,machine.failureTargetSeconds,machine.reliabilityChargedSeconds);
       machine.exposure=null;
@@ -485,14 +517,14 @@ window.STSimulation2DEngine=(function(){
       if(braking&&machine.input===0){machine.state=machine.produced>beforeOutput?motionState:'Back-up stop';return;}
       if(machine.remaining!==null){machine.state=motionState;return;}
       if(machine.input<machine.batch&&!braking){
-        if(!upstream){machine.admittedInputUnits+=machine.batch-machine.input;machine.input=machine.batch;}
+        if(!upstream){const admitted=machine.batch-machine.input;machine.admittedInputUnits+=admitted;machine.input+=rejectIncoming(machine,admitted);}
         if(upstream?.kind==='belt'&&available(upstream)){
           const first=upstream.items[0];
           if(first&&first.x+upstream.packageLength/2>=upstream.length-epsilon){
             upstream.items.shift();
             upstream.produced++;
             upstream.recentOutput.push(time);
-            machine.input++;
+            machine.input+=rejectIncoming(machine);
             machine.admittedInputUnits++;
           }
         }
@@ -532,9 +564,11 @@ window.STSimulation2DEngine=(function(){
             if(!first||first.x+upstream.packageLength/2<upstream.length-epsilon)break;
             upstream.items.shift();upstream.produced++;upstream.recentOutput.push(time);
           }
-          machine.resident.push(machine.residenceClock+machine.residenceSeconds);
           machine.admittedInputUnits++;
-          if(machine.occupancyMode==='POSITIONS')machine.positionDue.push(machine.positionClock+capacity);
+          if(rejectIncoming(machine)){
+            machine.resident.push(machine.residenceClock+machine.residenceSeconds);
+            if(machine.occupancyMode==='POSITIONS')machine.positionDue.push(machine.positionClock+capacity);
+          }
           admitted++;
           machine.intakeCredit=Math.max(0,machine.intakeCredit-1);
         }

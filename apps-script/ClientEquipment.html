@@ -448,6 +448,7 @@ function updateFormatZoneVisibility(card) {
       var isConveyor = equipmentField(card, '.equipment-type').value === 'CONVEYOR';
       equipmentField(card, '.format-zone-setup').classList.toggle('hidden', !isConveyor);
       var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!isConveyor||window.STBasicMode?.isBasic()||equipmentField(card,'.format-zone-speed-mode')?.value!=='DYNAMIC';
+      var scrap=equipmentField(card,'.equipment-macrostop-scrap');if(scrap){scrap.closest('label').hidden=isConveyor;scrap.disabled=isConveyor;}
       equipmentField(card, '.equipment-rate').readOnly = isConveyor;
       equipmentField(card, '.equipment-rate').closest('label').classList.toggle('hidden', isConveyor);
       if (isConveyor) equipmentField(card, '.equipment-rate').title = __ST_TEXT__('conveyor.help_belt_speed');

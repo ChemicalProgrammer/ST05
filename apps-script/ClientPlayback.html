@@ -1447,6 +1447,10 @@
           ['Repair ramp',model.processData?.downstream?.rampAfterRepair?formatNumber(model.processData?.downstream?.rampUpTimeSeconds||0):'Off',
             model.processData?.downstream?.rampAfterRepair?'s':''],
           ['Own failures',formatNumber(unit.failureCount||0)]);
+        if(!window.STBasicMode?.isBasic()){
+          rows.push(['Macrostop scrap',formatNumber(unit.macroStopScrapBottles??0),'bottles']);
+          if(unit.macroStopScrapPendingBottles>0)rows.push(['Pending scrap',formatNumber(unit.macroStopScrapPendingBottles),'bottles']);
+        }
       }
       updateNumerical2DRows(card.querySelector('.live-equipment-2d-summary .live-equipment-2d-rows'),rows,'summary',card);
     }

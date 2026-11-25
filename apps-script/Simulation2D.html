@@ -633,6 +633,7 @@ window.STSimulation2D=(function(){
         const residenceSeconds=data.equipment?.residenceTimeSeconds??0;
         const occupancyMode=data.equipment?.occupancyMode==='POSITIONS'?'POSITIONS':'STORAGE';
         return {capacityBottles,residenceSeconds,occupancyMode,inputBottleFactor,inputUnit:data.flowUnits?.input||'BOTTLES',id:item.id,name:item.name||item.id,
+          ...(data.equipment?.macroStopScrapBottles!==undefined&&data.equipment.macroStopScrapBottles!==0?{macroStopScrapBottles:data.equipment.macroStopScrapBottles}:{}),
           kind:'machine',unit,length:1100,rate,bottlesPerUnit,designSpeedPerSecond,
           rampSeconds:item.restartRampUpSeconds??data.downstream?.rampUpTimeSeconds??0,
           primeRampSeconds:zones[index-1]?.primeSensorPositionMm!=null?zones[index-1].downstreamRampUpSeconds:undefined,
@@ -667,6 +668,7 @@ window.STSimulation2D=(function(){
     for(const item of definitions){
       if(item.kind==='machine'){
         if(!(item.rate>0)||!Number.isInteger(item.batch)||item.batch<1)return item.name+': check nominal rate and bottles per case.';
+        if(item.macroStopScrapBottles!==undefined&&(!Number.isSafeInteger(item.macroStopScrapBottles)||item.macroStopScrapBottles<0||item.macroStopScrapBottles%item.inputBottleFactor!==0))return item.name+': '+localize2D('Macrostop scrap must be a nonnegative whole number of bottles, in complete incoming packages.');
         const minimum=item.batch*item.inputBottleFactor;
         if(!Number.isSafeInteger(item.capacityBottles)||item.capacityBottles<minimum)
           return item.name+': set Internal capacity to at least '+num(minimum/item.inputBottleFactor)+' '+(item.inputUnit==='CASES'?'cases':'bottles')+' in Equipment.';
@@ -1211,6 +1213,10 @@ window.STSimulation2D=(function(){
       }
     }
     summary.push(['Own failures',belt?'N/A':num(item.failureCount??0),'']);
+    if(!belt&&!window.STBasicMode?.isBasic()){
+      summary.push(['Macrostop scrap',num(item.macroScrap?.actualBottles??0),'bottles']);
+      if(item.macroScrap?.pendingBottles>0)summary.push(['Pending scrap',num(item.macroScrap.pendingBottles),'bottles']);
+    }
     const states=belt
       ? [duration('Empty','empty'),duration('Flowing','flowing'),duration('Accumulating','accumulating'),
         ['Ramp up','N/A',''],['Ramp down','N/A','']]
@@ -1914,6 +1920,7 @@ window.STSimulation2D=(function(){
         state:item.state,failureCount:item.kind==='machine'?finite(item.failureCount):null,
         stateAccounting:run.accountingSnapshot?.(item)??null,
         durationsSeconds:Object.fromEntries(Object.entries(item.durations||{}).map(([key,value])=>[key,finite(value)])),
+        ...(item.macroScrap?{macroStopScrapBottles:item.macroScrap.actualBottles,macroStopScrapRequestedBottles:item.macroScrap.requestedBottles,macroStopScrapPendingBottles:item.macroScrap.pendingBottles,macroStopScrapEvents:item.macroScrap.stopCount,macroStopScrapNativeEquivalent:item.macroScrap.nativeEquivalent}:{}),
         ...(item.kind==='machine'?{failureHistory:run.failureHistory?.(item)??null,waitingForPrimeSeconds:finite(item.waitingForPrimeSeconds),
           reliabilityClockBasis:'PRODUCTIVE_STATE_TICKS',
           reliabilityExposureSeconds:finite(item.reliabilityExposureSeconds),
@@ -1949,8 +1956,10 @@ window.STSimulation2D=(function(){
       inventories.every(Number.isFinite)&&losses.every(Number.isFinite);
     const inventoryBottles=valid?inventories.reduce((a,b)=>a+b,0):null;
     const overflowBottles=valid?losses.reduce((a,b)=>a+b,0):null;
+    const scrapConfigured=equipment.some(item=>item.macroStopScrapBottles!==undefined);
+    const scrapBottles=equipment.reduce((sum,item)=>sum+(item.macroStopScrapBottles||0),0);
     const materialBalance=valid?{unit:'BOTTLES',inputBottles:input,outputBottles:bottles,inventoryBottles,overflowBottles,
-      residualBottles:input-bottles-inventoryBottles-overflowBottles}:null;
+      ...(scrapConfigured?{scrapBottles}:{}),residualBottles:input-bottles-inventoryBottles-overflowBottles-scrapBottles}:null;
     return {schema:'st-simulation2d-summary-v1',controlPolicy:'PHYSICAL_FLOW_8',counterPolicy:'ST_EXCLUSIVE_STATES_V1',failureOverlap:run.failureOverlap?.()??null,source,seed:finite(runSeed),round:round??null,
       runState,durationSeconds:run.time,targetDurationSeconds:finite(limit),
       complete:runState==='Completed'&&Number.isFinite(limit)&&run.time>=limit-1e-8,
@@ -1958,6 +1967,7 @@ window.STSimulation2D=(function(){
       outputUnits:output?.producedUnits??null,outputBottles:bottles,
       throughputBpm:run.time>0&&bottles!==null?bottles*60/run.time:null,
       shiftOutputUnits:[...(shifts||[])].map(finite),equipment,materialBalance,
+      ...(scrapConfigured?{totalMacroStopScrapBottles:scrapBottles,totalMacroStopScrapRequestedBottles:equipment.reduce((sum,item)=>sum+(item.macroStopScrapRequestedBottles||0),0),totalMacroStopScrapPendingBottles:equipment.reduce((sum,item)=>sum+(item.macroStopScrapPendingBottles||0),0)}:{}),
       notes:['Counts are actual discrete outputs; bottle counts use each equipment output pack factor.',
         'The 2D model holds the selected format through changeovers. Legacy durations include Waiting for Prime in starving and Discharging in running; stateAccounting contains exclusive states and uncapped diagnostic equipment efficiency.',
         'Reliability exposure counts Running, Ramp up, Ramp down and Discharging ticks. Charged time excludes intervals with failures disabled or without a configured failure profile.',
@@ -1965,6 +1975,7 @@ window.STSimulation2D=(function(){
         'Sensor signals and outlet queue units are sampled after conveyor motion and before machine handoffs. Prime triggers count actual authorizations; Back-up triggers and clears count debounced transitions. The configured release position is diagnostic only in discrete transport.',
         'Normal blocked entry attempts retain product; only unavoidable residual discharge after the stop response can overflow at a physical conveyor. Machine outputs include spilled packages; conveyor inputs count accepted packages only.',
         'Material balance uses source admissions, final inventories in input units, final output and physical overflow in bottle equivalents. Older checkpoints without complete accounting cannot establish this balance.',
+        ...(scrapConfigured?['Macrostop scrap is separate from overflow; any unfulfilled quota remains pending until actual material is admitted.']:[]),
         'Schedule options on the enclosing checkpoint describe settings at capture, not proof that they were unchanged throughout the run.']};
   }
   // Apps Script may reorder object keys when it serializes a saved case.

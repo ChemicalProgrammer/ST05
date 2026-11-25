@@ -290,7 +290,8 @@ window.STResults=(function(){
     note.textContent='La velocidad productiva divide la salida entre el tiempo con flujo. La velocidad de banda y los pitches corresponden a la geometría al cierre de cada ronda. La acumulación muestra el inventario total en banda, incluyendo producto en tránsito. En vista promedio, el máximo es el promedio de los máximos por ronda. MTBF = exposición operativa / fallas. MTTR = tiempo en falla / fallas iniciadas y puede incluir una reparación parcial al cierre. — indica que el dato no aplica o que faltan registros.';
     scroll.className='table-scroll';
     const table=document.createElement('table'),head=table.createTHead().insertRow(),body=table.createTBody();
-    ['Equipo','Velocidad productiva','Banda (m/min)','Pitch transporte (mm)','Pitch acumulado (mm)','Inventario medio','Inventario máximo','Fallas','MTBF observado (min)','MTTR observado (min)'].forEach((label,index)=>{
+    const showScrap=!window.STBasicMode?.isBasic();
+    ['Equipo','Velocidad productiva','Banda (m/min)','Pitch transporte (mm)','Pitch acumulado (mm)','Inventario medio','Inventario máximo','Fallas','MTBF observado (min)','MTTR observado (min)',...(showScrap?['Macrostop scrap (bottles)','Pending scrap (bottles)']:[])].forEach((label,index)=>{
       const cell=document.createElement('th');cell.scope='col';cell.textContent=label;if(index)cell.className='numeric';head.append(cell);
     });
     for(const model of equipment){
@@ -306,6 +307,7 @@ window.STResults=(function(){
         cellWithUnit(mean(equipmentZones.map(zone=>zone?.averageInventoryUnits)),unit),
         cellWithUnit(mean(equipmentZones.map(zone=>zone?.maximumInventoryUnits)),unit),number(m.failureCount,2),
         number(ratio(m.reliabilityExposureSeconds,m.failureCount,1/60),2),number(ratio(m.failureSeconds,m.failureCount,1/60),2)];
+      if(showScrap)values.push(conveyor?'—':number(m.macroStopScrapBottles??0,2),conveyor?'—':number(m.macroStopScrapPendingBottles??0,2));
       const row=body.insertRow();
       values.forEach((value,index)=>{const cell=document.createElement(index?'td':'th');cell.textContent=value;if(index)cell.className='numeric';else cell.scope='row';row.append(cell);});
     }

@@ -399,6 +399,7 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
     failureRemainingSeconds: 0,
     failureSeconds: 0,
     failureCount: 0,
+    ...(model.processData?.equipment?.macroStopScrapBottles>0?{macroScrap:{requestedBottles:0,actualBottles:0,pendingBottles:0,stopCount:0,nativeEquivalent:0}}:{}),
     stopReliability:reliability,
     stopClassRandom:createEquipmentRandom(seed,model.id,'failure-class'),
     activeStopClass:null,
@@ -668,6 +669,11 @@ function accountNumericalState(runtime,item,index){
 function numericalAccountingSnapshot(item,elapsed,detail=true){
   const value=stateAccountingSnapshot(item.stateAccounting,elapsed,item.outputCount,machineDesignRatePerSecond(item),
     !isConveyorEquipment(item),item.reliabilityExposureSeconds,item.reliabilityChargedSeconds,detail);
+  if(value?.efficiency&&item.macroScrap){
+    const gross=item.outputCount+item.macroScrap.nativeEquivalent;
+    value.efficiency.quality=gross>0?round(item.outputCount/gross):1;
+    value.efficiency.productionSpeed=value.productiveSeconds>0?round(gross/value.productiveSeconds):null;
+  }
   if(detail&&value&&!isConveyorEquipment(item)){
     value.legacyRunningSeconds=round(item.runningSeconds);
     value.legacyRunningDesignOutputUnits=round(item.runningDesignOutput||0);
@@ -1099,6 +1105,53 @@ function advanceEquipmentControlTimers(runtime) {
   });
 }
 
+// Charge only actual physical loss; unfulfilled quota is a restart purge.
+function recordMacroScrap(equipment,units){
+  const s=equipment.macroScrap,bottles=Math.round(units*(equipment.outputBottleFactor||1));
+  s.actualBottles+=bottles;s.pendingBottles-=bottles;s.nativeEquivalent+=units;
+}
+function chargeMacroStopScrap(equipment,stopClass){
+  const s=equipment.macroScrap,r=equipment.residence;
+  if(!s||!r||!['MAJOR','GENERAL'].includes(stopClass))return;
+  const count=equipment.processData.equipment.macroStopScrapBottles;
+  if(!(count>0))return;
+  s.requestedBottles+=count;s.pendingBottles+=count;s.stopCount++;
+  const ratio=equipment.inputPerOutput||1,inputFactor=(equipment.outputBottleFactor||1)/ratio;
+  const remove=Math.min(Math.round(r.inventory*ratio),Math.floor(s.pendingBottles/inputFactor))/ratio;
+  if(!(remove>0))return;
+  let remaining=remove;
+  const ready=Math.min(r.ready,remaining);
+  r.ready=Math.round(Math.max(0,r.ready-ready)*ratio)/ratio;
+  remaining-=ready;
+  while(remaining>1e-8&&r.head<r.queue.length){
+    const entry=r.queue[r.head],taken=Math.min(entry.amount,remaining);
+    entry.amount-=taken;remaining-=taken;
+    if(entry.amount<1e-8)r.head++;
+  }
+  r.inventory=Math.round(Math.max(0,r.inventory-remove)*ratio)/ratio;
+  equipment.packageRemainder=0;
+  const control=activeBackupControl(equipment);
+  if(control)control.residualRemainingUnits=Math.min(control.residualRemainingUnits,Math.floor(r.inventory+1e-8));
+  recordMacroScrap(equipment,remove);
+}
+function rejectMacroScrapAdmission(equipment,admission){
+  const s=equipment.macroScrap;
+  if(!s||s.pendingBottles<=0)return admission;
+  const ratio=equipment.inputPerOutput||1,inputFactor=(equipment.outputBottleFactor||1)/ratio;
+  const rejected=Math.min(Math.round(admission*ratio),Math.floor(s.pendingBottles/inputFactor))/ratio;
+  if(rejected>0)recordMacroScrap(equipment,rejected);
+  return Math.round((admission-rejected)*ratio)/ratio;
+}
+function macroScrapMetrics(equipment){
+  const s=equipment.macroScrap;
+  return s?{macroStopScrapBottles:s.actualBottles,macroStopScrapRequestedBottles:s.requestedBottles,
+    macroStopScrapPendingBottles:s.pendingBottles,macroStopScrapEvents:s.stopCount,
+    macroStopScrapNativeEquivalent:round(s.nativeEquivalent)}:{};
+}
+function totalMacroScrap(runtime,key='actualBottles'){
+  return sum(runtime.equipment.map(item=>item.macroScrap?.[key]||0));
+}
+
 function updateReliabilityFailures(runtime) {
   if (runtime.run.reliabilityEnabled === false) return;
   runtime.equipment.forEach((equipment) => {
@@ -1136,6 +1189,7 @@ function updateReliabilityFailures(runtime) {
     equipment.failureRemainingSeconds = category.mttrMinutes * 60;
     equipment[category.stopClass.toLowerCase()+'FailureCount']+=1;
     equipment.failureCount += 1;
+    chargeMacroStopScrap(equipment,category.stopClass);
     startFailureEpisode(equipment.failureHistory,runtime.virtualSecond,category.stopClass,equipment.failureRemainingSeconds,equipment.failureTargetSeconds,equipment.reliabilityChargedSeconds);
     runtime.events.push({
       type: 'FAILURE_STARTED',
@@ -1415,9 +1469,10 @@ function processEquipmentFlow(runtime, index) {
       }
       if(admission>0){
         admitted=admission;
-        residence.inventory+=admission;
+        const retained=rejectMacroScrapAdmission(equipment,admission);
+        residence.inventory+=retained;
         if(runtime.run.discretePackages)residence.inventory=Math.round(residence.inventory*ratio)/ratio;
-        residence.queue.push({amount:admission,due:residence.clock+residenceSeconds,
+        if(retained>0)residence.queue.push({amount:retained,due:residence.clock+residenceSeconds,
           positionDue:equipment.processData?.equipment?.occupancyMode==='POSITIONS'
             ?residence.positionClock+capacity:undefined});
         consumeFlow(runtime,index,admission);
@@ -1878,6 +1933,7 @@ function recordLiveTelemetry(runtime) {
       backup:{controlActive:zone.backupActive}
     })),
     equipment:runtime.equipment.map(item=>({
+      ...macroScrapMetrics(item),
       id:item.id,unitOfFlow:item.unitOfFlow,mode:item.mode,
       availabilityState:item.availabilityState,
       stateAccounting:numericalAccountingSnapshot(item,runtime.virtualSecond,false),
@@ -1936,6 +1992,7 @@ function createSample(runtime,complete=false) {
       const effectiveness = createEquipmentEffectiveness(item, runtime.virtualSecond);
       return {
         ...(complete?createEquipmentMetrics(item,runtime.virtualSecond):{stateAccounting:numericalAccountingSnapshot(item,runtime.virtualSecond,false)}),
+        ...macroScrapMetrics(item),
         id: item.id,
         mode: item.mode,
         availabilityState: item.availabilityState,
@@ -2094,7 +2151,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4',
+    engineVersion: (runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4')+(runtime.equipment.some(item=>item.macroScrap)?'-scrap1':''),
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -2123,7 +2180,9 @@ function createSummary(runtime) {
   const idealOutput=runtime.product?runtime.idealBottleOutput:(lineEffectiveness.reference?.nominalRatePerSecond||0)*duration;
   const lossOutput=runtime.lineRateShortfallOutputEquivalents,recoveryOutput=runtime.lineRateRecoveryOutputEquivalents;
   const impactAvailable=validRate&&idealOutput>0;
+  const scrapConfigured=runtime.equipment.some(item=>item.macroScrap),scrap=totalMacroScrap(runtime);
   return {
+    ...(scrapConfigured?{totalMacroStopScrapBottles:scrap,totalMacroStopScrapRequestedBottles:totalMacroScrap(runtime,'requestedBottles'),totalMacroStopScrapPendingBottles:totalMacroScrap(runtime,'pendingBottles')}:{}),
     lineRunSeconds: round(runtime.lineRunSeconds),
     lineEffectiveRuntimeSeconds: runtime.lineRateReferenceValid?round(runtime.lineEffectiveRuntimeSeconds):null,
     lineRateLossSeconds: validRate?round(runtime.lineRateShortfallSeconds):null,
@@ -2152,7 +2211,8 @@ function createSummary(runtime) {
       inventoryUnits: round(materialInventory(runtime)),
       overflowUnits: round(runtime.product?runtime.overflowBottleEquivalents:sum(runtime.zones.map(zone => zone.overflowUnits))),
       clearoutUnits: runtime.product?round(runtime.clearoutBottleEquivalents):undefined,
-      residualUnits: round(runtime.sourceInputUnits-runtime.outputCount-materialInventory(runtime)-
+      ...(scrapConfigured?{scrapUnits:scrap}:{}),
+      residualUnits: round(runtime.sourceInputUnits-runtime.outputCount-materialInventory(runtime)-scrap-
         (runtime.product?runtime.clearoutBottleEquivalents+runtime.overflowBottleEquivalents:sum(runtime.zones.map(zone=>zone.overflowUnits))))
     },
     averageOutputRatePerSecond: round(duration>0?runtime.outputCount / duration:0),
@@ -2176,7 +2236,7 @@ function createSummary(runtime) {
     idealBottleOutput:runtime.product?runtime.idealBottleOutput:undefined,
     repairRestartPolicy: 'MTTR_STOP_TO_REPAIR_END_REPAIR_RAMP_OPT_IN',
     reliabilityClockBasis: 'PRODUCTIVE_STATE_TICKS',
-    qualityAssumption: 'NO_REJECT_MODEL_ASSUMES_100_PERCENT'
+    qualityAssumption: scrapConfigured?'MACROSTOP_SCRAP_ONLY_OTHER_REJECTS_NOT_MODELED':'NO_REJECT_MODEL_ASSUMES_100_PERCENT'
   };
 }
 
@@ -2198,6 +2258,7 @@ function materialInventory(runtime) {
 function createEquipmentMetrics(equipment, durationSeconds, accountingElapsedSeconds=durationSeconds) {
   const effectiveness = createEquipmentEffectiveness(equipment, durationSeconds);
   return {
+    ...macroScrapMetrics(equipment),
     internalInventoryBottles:equipmentInventoryBottles(equipment),
     internalCapacityBottles:equipment.residence?equipmentCapacityBottles(equipment):undefined,
     internalInputBottleFactor:equipment.residence?(equipment.outputBottleFactor||1)/(equipment.inputPerOutput||1):undefined,
@@ -2251,7 +2312,7 @@ function createEquipmentMetrics(equipment, durationSeconds, accountingElapsedSec
     qualityPercent: round(effectiveness.quality * 100),
     oee: round(effectiveness.oee),
     oeePercent: round(effectiveness.oee * 100),
-    qualityAssumption: 'NO_REJECT_MODEL_ASSUMES_100_PERCENT'
+    qualityAssumption: equipment.macroScrap?'MACROSTOP_SCRAP_ONLY_OTHER_REJECTS_NOT_MODELED':'NO_REJECT_MODEL_ASSUMES_100_PERCENT'
   };
 }
 
@@ -2265,12 +2326,9 @@ function createEquipmentEffectiveness(equipment, elapsedSeconds) {
     ? clampUnit(1 - equipment.stoppedSeconds / durationSeconds)
     : 1;
   const idealOutput = equipment.idealRunningNativeOutput ?? (Math.max(0, equipment.nominalRatePerSecond || 0) * Math.max(0, equipment.runningSeconds || 0));
-  const performance = idealOutput > 0
-    ? clampUnit(equipment.outputCount / idealOutput)
-    : 0;
-  // The current engine has no reject stream. Do not synthesize quality loss;
-  // expose the assumption alongside the metric until rejects are modeled.
-  const quality = 1;
+  const gross=equipment.outputCount+(equipment.macroScrap?.nativeEquivalent||0);
+  const performance = idealOutput > 0 ? clampUnit(gross / idealOutput) : 0;
+  const quality = gross>0?equipment.outputCount/gross:1;
   return { availability, performance, quality, oee: availability * performance * quality };
 }
 

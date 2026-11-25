@@ -232,5 +232,8 @@ html[data-equipment-layout=split] .equipment-fields[data-balancing-view=true] > 
 .dynamic-balancing-panel .dynamic-balancing-grid input {min-width:0;width:100%;}
 .dynamic-balancing-panel .dynamic-balancing-preview {margin-block:var(--space-2);font-variant-numeric:tabular-nums;}
 html[data-equipment-layout=split] .basic-conveyor-heading .basic-conveyor-tabs {flex-wrap:wrap;flex-shrink:1;}
+/* Macrostop scrap is an Advance-only machine design field. */
+html[data-ui-mode=basic] .advanced-scrap-field,.advanced-scrap-field[hidden]{display:none!important;}
+html[data-ui-mode=advance][data-equipment-layout=split] .basic-machine .equipment-grid > label.advanced-scrap-field:not([hidden]){display:grid!important;}
 </style>
 

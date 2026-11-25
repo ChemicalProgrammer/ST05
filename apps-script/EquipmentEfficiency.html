@@ -33,7 +33,7 @@ window.STEquipmentEfficiency=(function(){
     ['availability','Availability'],['runtimeEfficiency','Runtime Efficiency'],
     ['operationalEfficiency','Operational efficiency'],['throughput','Throughput']
   ];
-  const basis='Availability uses productive time / (productive time + own failures and microstops). Runtime efficiency uses actual output / design output during productive states. No reject stream; quality assumed 100%. New state accounting reports discrepancies above design without capping.';
+  const basis='Availability uses productive time / (productive time + own failures and microstops). Runtime efficiency uses actual output / design output during productive states. Runtime efficiency uses good output; new state accounting reports discrepancies above design without capping.';
   return {calculate,fromNumerical,fields,basis};
 })();
 </script>

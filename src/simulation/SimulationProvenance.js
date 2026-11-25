@@ -19,12 +19,18 @@ export function canonicalSimulationInputSignature(input) {
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
   if(run.dynamicLineBalancingEnabled!==true)delete run.dynamicLineBalancingEnabled;
   const dynamicMode=input.case.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
+  const macroScrap=input.case.equipment.some(item=>item.processData?.equipment?.macroStopScrapBottles>0);
   return JSON.stringify(canonical({
-    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':''),
+    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':'')+(macroScrap?'/SCRAP:1':''),
     unitOfFlow: input.case.unitOfFlow || 'units',
     equipment: input.case.equipment.map(item=>{
-      if(!item.processData?.dynamicLineBalancing||item.processData?.accumulation?.speedMode==='DYNAMIC'||run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true)return item;
-      const processData={...item.processData};delete processData.dynamicLineBalancing;return {...item,processData};
+      const inactiveDynamic=item.processData?.dynamicLineBalancing&&item.processData?.accumulation?.speedMode!=='DYNAMIC'&&!(run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true);
+      const zeroScrap=item.processData?.equipment?.macroStopScrapBottles===0;
+      if(!inactiveDynamic&&!zeroScrap)return item;
+      const processData={...item.processData};
+      if(inactiveDynamic)delete processData.dynamicLineBalancing;
+      if(zeroScrap){processData.equipment={...processData.equipment};delete processData.equipment.macroStopScrapBottles;}
+      return {...item,processData};
     }),
     run: {
       durationSeconds: 300, tickSeconds: .25, sampleEverySeconds: 5,

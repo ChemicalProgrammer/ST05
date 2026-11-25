@@ -1,0 +1,35 @@
+<style>
+/* Focus remains on the original element for accessibility, input editing
+   and shortcuts. Suppress only unsolicited visual focus rings while the
+   user is pointing or returning from an inactive window. Existing keyboard
+   focus-visible styles still apply whenever keyboard navigation resumes. */
+html[data-focus-rings=off] :focus-visible,
+html[data-focus-rings=off] .case-name:focus-visible::after,
+html[data-focus-rings=off] label.st-checkbox-card:focus-within {
+  outline:none!important;
+}
+</style>
+<script>
+(function(){
+  var root=document.documentElement;
+  function rings(enabled){
+    var value=enabled?'on':'off';
+    if(root.dataset.focusRings!==value)root.dataset.focusRings=value;
+  }
+  function reset(){rings(false);}
+  function keyboard(event){
+    // Browser/system shortcuts and modifier keys alone are not navigation
+    // inside the app. Shift+Tab and other ordinary keys still qualify.
+    if(event.altKey||event.ctrlKey||event.metaKey||event.isComposing)return;
+    var key=event.key||'';
+    if(key.length===1||['Tab','Enter','Escape','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown','Delete','Backspace'].includes(key))rings(true);
+  }
+  reset();
+  document.addEventListener('pointerdown',reset,true);
+  document.addEventListener('keydown',keyboard,true);
+  window.addEventListener('blur',reset);
+  document.addEventListener('visibilitychange',reset);
+  // Returning from the back/forward cache should not restore a stale ring.
+  window.addEventListener('pageshow',function(event){if(event.persisted)reset();});
+})();
+</script>

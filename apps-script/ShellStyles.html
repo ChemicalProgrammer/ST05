@@ -15,7 +15,7 @@
 .sidebar-collapsed .sidebar { width: var(--sidebar-collapsed); }
 .sidebar-collapsed .nav-label,.sidebar-collapsed .nav-caption,.sidebar-collapsed .brand-name { display: none; }
 .sidebar-collapsed .nav-item { justify-content: center; padding: var(--space-2); }
-.sidebar-collapsed .nav-item:hover::after,.sidebar-collapsed .nav-item:focus-visible::after { content: attr(aria-label); position: absolute; left: calc(100% + var(--space-3)); border: var(--border-width) solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); z-index: var(--z-overlay); box-shadow: var(--shadow-dialog); }
+.sidebar-collapsed .nav-item:hover::after,:where(html:not([data-focus-rings=off])) .sidebar-collapsed .nav-item:focus-visible::after { content: attr(aria-label); position: absolute; left: calc(100% + var(--space-3)); border: var(--border-width) solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); z-index: var(--z-overlay); box-shadow: var(--shadow-dialog); }
 .topbar {
   --header-action-gap:var(--space-3);
   height:var(--header-height);padding:0 var(--page-padding);
@@ -123,7 +123,7 @@ html[data-ui-mode=advance] .workspace-content > .card > .section-heading { flex-
 .round-background progress { width:100%; }
 .round-warning { color:var(--warning); padding:var(--space-2) 0; margin:0; }
 @media(max-width:760px){.round-background { grid-template-columns:1fr auto; }.round-background progress { grid-column:1; grid-row:2; }.round-background #batch-cancel { grid-column:2; grid-row:1/3; }}
-.topbar button:not(.icon-button):not(:disabled):is(:hover,:focus-visible) { background:var(--accent-soft); background:color-mix(in srgb,var(--accent) 10%,var(--surface)); color:var(--accent); }
+.topbar button:not(.icon-button):not(:disabled):hover,:where(html:not([data-focus-rings=off])) .topbar button:not(.icon-button):not(:disabled):focus-visible { background:var(--accent-soft); background:color-mix(in srgb,var(--accent) 10%,var(--surface)); color:var(--accent); }
 </style>
 
 

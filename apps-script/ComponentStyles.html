@@ -244,12 +244,13 @@ button.app-section-tab[hidden],button.app-section-tab.hidden {display:none!impor
   border:2px solid var(--danger)!important;
   box-shadow:0 0 0 2px var(--danger-soft)!important;
 }
-#header-errors:not(.hidden) #header-error-button:is(:hover,:focus-visible) {
+#header-errors:not(.hidden) #header-error-button:hover,
+:where(html:not([data-focus-rings=off])) #header-errors:not(.hidden) #header-error-button:focus-visible {
   background:var(--danger)!important;color:#fff!important;
   border-color:var(--danger)!important;
   box-shadow:0 0 0 3px var(--danger-soft)!important;
 }
-#header-errors:not(.hidden) #header-error-button:focus-visible {
+:where(html:not([data-focus-rings=off])) #header-errors:not(.hidden) #header-error-button:focus-visible {
   outline:var(--focus-width) solid var(--danger)!important;outline-offset:4px;
 }
 #header-errors:not(.hidden)::after {

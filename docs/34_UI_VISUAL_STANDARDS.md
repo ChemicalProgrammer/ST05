@@ -582,3 +582,10 @@ Durante el arrastre desde el icono de tipo, la fila sigue el puntero y las filas
 En Advance, solo el cambio explícito desde los dos botones de presentación anima la opacidad y un pequeño desplazamiento de la vista entrante, y la altura del contenido de la subsección con los tokens de movimiento existentes. Se reutilizan los mismos controles y valores del modelo. No se repite la animación en recálculos o refrescos ordinarios. Cambios rápidos de vista, contexto o modo cancelan la animación previa; la preferencia de movimiento reducido deshabilita la transición. No afecta a Basic.
 
 Validación: 7/7 pruebas de EquipmentTable (incluidas vista previa de arrastre ascendente/descendente, reversión, desplazamiento de página, cancelación y transiciones de presentación) aprobadas en arnés JavaScript aislado con doble de DOM; 4/4 comprobaciones estáticas CSS/JS aprobadas. No se ejecutó la suite completa de Node/JSDOM ni se comprobó la fluidez visual en navegador real.
+
+
+### Indicadores de foco y retorno a la ventana
+
+`FocusPresentation.html` centraliza la presentación del foco para Basic y Advance, incluido el conveyor interactivo del inicio y del estado de conexión. El atributo `data-focus-rings` se activa con acciones reales de teclado (incluye Shift+Tab) y se desactiva al usar el puntero, perder el foco de la ventana, cambiar la visibilidad o restaurar desde caché. Solo oculta el contorno visual involuntario y los resaltados exclusivamente de foco del header; no desenfoca controles, no intercepta eventos, no altera `aria-pressed` ni los estados de selección o edición. Las reglas `:focus-visible` permanecen disponibles para navegación con teclado. No modifica la animación ni comandos del conveyor de marca.
+
+Validación: 3/3 casos focalizados de FocusPresentation ejecutados en arnés de eventos JavaScript aislado; conservan foco/valor/estado, restablecen el contorno con navegación de teclado y verifican la política CSS. Pendiente la suite completa de Node/JSDOM y la reproducción real del cambio de ventana en el navegador.

@@ -183,6 +183,7 @@
   grid-column:2;
   min-width:0;
   max-width:100%;
-  padding-inline-start:2px;
+  /* Reserve the same inset in both states so selection never shifts text. */
+  padding-inline:var(--space-2);
 }
 </style>

@@ -96,3 +96,20 @@ test('record tree reuses comparison panel transitions and secondary titles witho
   assert.match(css,/details\.real-data-explorer-entry::details-content\s*\{[^}]*transition:block-size/);
  }finally{w.close();}
 });
+
+test('record tree keeps a consistent horizontal inset for selected and unselected nodes',()=>{
+ const css=fs.readFileSync('apps-script/RealDataStyles.html','utf8');
+ const rule=css.match(/#real-data-editor \.real-data-explorer-entry \.real-data-explorer-link\s*\{([^}]+)\}/);
+ assert(rule);
+ assert.match(rule[1],/grid-column:2/);
+ assert.match(rule[1],/padding-inline:var\(--space-2\)/);
+ assert.doesNotMatch(rule[1],/padding-inline-start:2px/);
+ const w=setup('en');try{
+  mount(w);const nav=w.document.querySelector('#real-data-editor .real-data-explorer-nav');
+  const selected=nav.querySelector('[data-explorer-select="group:reported"]');
+  assert(selected);selected.click();
+  assert.equal(selected.getAttribute('aria-current'),'page');
+  assert.equal(nav.querySelectorAll('[aria-current="page"]').length,1);
+  assert(selected.classList.contains('real-data-explorer-link'));
+ }finally{w.close();}
+});

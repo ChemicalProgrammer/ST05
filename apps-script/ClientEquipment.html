@@ -754,14 +754,33 @@ function numericInputValue(input) {
       }
       return api.resolveProfiles(equipment,format,formats);
     }
+    function editorConveyorExportMetadata(simulation){
+      return {origin:'EQUIPMENT_EDITOR_DRAFT',caseId:state.activeCase?.id||null,caseName:state.activeCase?.name||null,
+        simulationId:simulation.id||null,simulationName:simulation.name||null,uiMode:state.bootstrap?.uiMode||null};
+    }
+    function unresolvedEditorConveyorProfiles(simulation,error){
+      return {models:simulation.equipment,zones:simulation.equipment.map(()=>null),designProfiles:[],format:null,
+        configuration:{equipment:simulation.equipment,activeFormatId:simulation.dynamicConfig?.initialFormatId||null,
+          formats:simulation.dynamicConfig?.productCatalog||[]},
+        resolutionError:error?.message||'The current draft could not resolve conveyor geometry.'};
+    }
     function editorConveyorWorksheet(equipmentId,simulation,resolved){
       simulation=simulation||equipmentAnalysisEditorContext();
       var index=simulation.equipment.findIndex(e=>e.id===equipmentId&&e.type==='CONVEYOR');
       if(index<0)return null;
-      try{if(resolved===undefined)resolved=editorConveyorProfiles(simulation);}catch(_){}
-      if(resolved?.models?.[index]&&resolved.zones[index])return {zone:resolved.zones[index],data:resolved.models[index].processData||{},designProfiles:resolved.designProfiles,index};
-      // A partial imported record still opens the worksheet as NOT EVALUATED.
-      return {zone:{},data:simulation.equipment[index].processData||{},designProfiles:[],index};
+      try{if(resolved===undefined)resolved=editorConveyorProfiles(simulation);}catch(error){resolved=unresolvedEditorConveyorProfiles(simulation,error);}
+      if(!resolved?.models?.[index])resolved=unresolvedEditorConveyorProfiles(simulation);
+      return window.STConveyorAnalysis.worksheetContext(resolved,index,editorConveyorExportMetadata(simulation));
+    }
+    function exportConveyorEvaluations(){
+      var button=document.getElementById('export-conveyor-evaluations');
+      if(button)button.closest('.export-menu').open=false;
+      try{
+        var simulation=equipmentAnalysisEditorContext(),belt=simulation.equipment.find(item=>item.type==='CONVEYOR');
+        if(!belt)throw Error('There are no conveyors in this line.');
+        var context=editorConveyorWorksheet(belt.id,simulation);
+        window.STConveyorAnalysis.downloadEvaluation(context,{scope:'ALL'});
+      }catch(error){showError({message:error.message});}
     }
     function refreshEquipmentReliabilityBadges(preview){
       if(!state.activeCase)return;

@@ -1390,7 +1390,10 @@
       try{
         var resolved=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
         var model=resolved.models[index],zone=resolved.zones[index];
-        return zone?{zone:zone,data:model.processData||{},designProfiles:resolved.designProfiles,index:index}:null;
+        var tab=activePersistentSimulation();
+        return zone?window.STConveyorAnalysis.worksheetContext(resolved,index,{origin:'NUMERICAL_SIMULATION',
+          caseId:state.activeCase?.id||null,caseName:state.activeCase?.name||null,
+          simulationId:tab?.id||null,simulationName:tab?.name||null}):null;
       }catch(error){return null;}
     }
     function updateNumericalConveyorGeometry(card,model,zone){

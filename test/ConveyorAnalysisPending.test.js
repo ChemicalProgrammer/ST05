@@ -92,3 +92,54 @@ test('zero-length sections do not create a false dependency on their conveyor sp
     for(const ref of ['L53','L54','L63','L64'])assert.equal(trace.describe(ref,0),'',ref);
   }finally{h.close();}
 });
+
+test('population at 100% from the discharge fallback is not a missing overflow input',()=>{
+  const h=harness();try{
+    const profile=fixture('PAC-PAL',{unit:'CASES',bottlesPerCase:12,dischargePitch:30});
+    delete profile.models[1].processData.upstream.dischargeVelocityMPerMinute;
+    const ctx=context([profile]),worksheet=h.api.calculate(ctx),p=worksheet.profiles[0];
+    assert(Math.abs(p.population-1)<1e-12);
+    assert.equal(p.dischargeVelocitySource,'CONVEYOR_SPEED_FALLBACK');
+    assert.equal(worksheet.geometry.status,'NOT EVALUATED');
+    assert(!Number.isFinite(p.overflow));
+    assert.match(h.api.createPendingTrace(worksheet,ctx).describe('L58',0),/AF not configured/);
+    assert.match(h.api.profilePopulationHelp(p),/not a missing Overflow input/);
+    h.api.open('PAC-PAL',ctx);
+    assert.match(h.body.querySelector('[data-cell="L41"] td').title,/Conveyor speed fallback/);
+    assert.match(h.body.querySelector('[data-cell="L23"] td').title,/Configured upstream machine rate/);
+  }finally{h.close();}
+});
+test('JSON includes exact configuration, intermediate calculations and pending diagnostics for one or all conveyors',()=>{
+  const h=harness();try{
+    const first=fixture('Format A',{missingFirstPackage:true});
+    const second={...first.models[1],id:'belt2',name:'Second belt'};
+    const sink2={...first.models[2],id:'sink2',name:'Palletizer'};
+    const models=[...first.models,second,sink2];
+    const zones=[...first.zones,{...first.zones[1],upstreamControlEquipmentId:'sink',downstreamControlEquipmentId:'sink2'},null];
+    const profile={...first,models,zones};
+    const configuration={equipment:models,activeFormat:first.format,formats:[first.format]};
+    const resolved={...profile,configuration,designProfiles:[profile]};
+    const ctx=h.api.worksheetContext(resolved,1,{origin:'EQUIPMENT_EDITOR_DRAFT'});
+    const single=JSON.parse(JSON.stringify(h.api.buildEvaluationExport(ctx,{scope:'SINGLE'})));
+    assert.equal(single.schema,'st-conveyor-analysis-v1');
+    assert.equal(single.evaluations.length,1);
+    const e=single.evaluations[0];
+    assert.equal(e.equipmentId,'belt');
+    assert.equal(e.configuration.upstream.id,'source');
+    assert.equal(e.configuration.downstream.id,'sink');
+    assert.equal(e.configuration.activeResolved.zone.conveyorSpeedMmPerSecond,120);
+    const row=e.formats[0].sections.flatMap(s=>s.rows).find(r=>r.ref==='L62');
+    assert.equal(row.value,null);
+    assert.equal(row.status,'PENDING');
+    assert.match(row.diagnostic,/Time to First Package After Restart/);
+    const all=h.api.buildEvaluationExport(ctx,{scope:'ALL'});
+    assert.equal(all.summary.conveyors,2);
+    assert.deepEqual(Array.from(all.evaluations,e=>e.equipmentId),['belt','belt2']);
+    assert.equal(all.evaluations[1].configuration.downstream.id,'sink2');
+    assert.equal(all.configuration.equipment.length,5);
+    assert.equal(all.source.origin,'EQUIPMENT_EDITOR_DRAFT');
+    assert.equal(models[1].processData.accumulation.restartToFirstPackageSeconds,undefined);
+    h.api.open('belt',ctx);
+    assert.equal(h.w.document.getElementById('conveyor-analysis-export-all').disabled,false);
+  }finally{h.close();}
+});

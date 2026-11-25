@@ -588,7 +588,8 @@ window.STSimulation2D=(function(){
   function prepare(equipment,format,config,formats){
     const geometry=window.SimulatorEngine;
     const packSize=format?geometry.productPackSize(format):null;
-    const {models:configured,zones,designProfiles}=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
+    const resolvedProfiles=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
+    const {models:configured,zones,designProfiles}=resolvedProfiles;
     conveyorDimensions=new Map();
     conveyorWorksheets=new Map();
     equipmentAnalysisContext={equipment:equipment,dynamicConfig:{...config,
@@ -618,7 +619,7 @@ window.STSimulation2D=(function(){
           startDelay:item.startupDelaySeconds??data.upstream?.startupTimeSeconds??0,batch};
       }
       const zone=zones[index]||{};
-      const worksheet={zone,data,designProfiles,index};
+      const worksheet=window.STConveyorAnalysis.worksheetContext(resolvedProfiles,index,{origin:'SIMULATION_2D'});
       conveyorDimensions.set(item.id,dimensionRows(window.STConveyorAnalysis.calculate(worksheet).geometry));
       conveyorWorksheets.set(item.id,worksheet);
       const presentation=format?geometry.productPresentation(format,unit):{};

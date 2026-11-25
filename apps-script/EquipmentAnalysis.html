@@ -23,10 +23,10 @@
 #equipment-analysis-body > .st-subsection:not([open]) > .fold-content {display:none;}
 #equipment-analysis-body > .st-subsection:not([open]) > summary.st-subsection-header {border-block-end:0;border-radius:calc(var(--radius-md) - var(--border-width));}
 #equipment-analysis-body .chart-note { margin:0; }
-/* Keep each table at its natural content width. Only the chart needs the
-   full available panel width; the surrounding subsection still spans it. */
+/* Tables fill the subsection without determining the dialog width. Keep
+   automatic column sizing and compact units; scroll on narrow viewports. */
 #equipment-analysis-body .table-scroll {
-  justify-self:start;width:fit-content;min-width:0;max-width:100%;
+  justify-self:stretch;width:100%;min-width:0;max-width:100%;
   box-sizing:border-box;overflow-x:auto;margin:0;
 }
 #equipment-analysis-body .intervention-chart-scroll { overflow-x:auto; min-width:0; }
@@ -55,7 +55,7 @@
   margin:0;font-size:var(--font-body);font-weight:var(--weight-regular);
   line-height:var(--leading-body);color:var(--ink);overflow-wrap:anywhere;
 }
-#equipment-analysis-body table { width:auto; max-width:100%; table-layout:auto; }
+#equipment-analysis-body table { width:100%; max-width:100%; table-layout:auto; }
 #equipment-analysis-body :is(td,th) {
   padding:var(--space-2);overflow-wrap:anywhere;vertical-align:middle;
 }
@@ -65,7 +65,7 @@
 #equipment-analysis-body td.analysis-table-value {max-width:36ch;white-space:normal;overflow-wrap:anywhere;}
 #equipment-analysis-body td.analysis-table-value.numeric { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 #equipment-analysis-body td.analysis-table-unit {
-  display:table-cell;white-space:nowrap;text-align:center;vertical-align:middle;
+  display:table-cell;width:1%;white-space:nowrap;text-align:center;vertical-align:middle;
   line-height:inherit;font-size:inherit;font-weight:inherit;color:var(--unit-color);margin:0;
 }
 .equipment-analysis-pill.st-status-pill { position:static; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); background:var(--stopped-soft); width:max-content; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

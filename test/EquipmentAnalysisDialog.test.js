@@ -88,12 +88,13 @@ test('equipment section status uses actual evidence and distinguishes a technica
  }finally{h.close();}
 });
 
-test('equipment analysis tables use intrinsic column widths and normal recommendation typography',()=>{
+test('equipment analysis tables fill the subsection with automatic column sizing and normal recommendation typography',()=>{
  const h=harness();try{
   h.open(20,12);
   const style=h.w.document.querySelector('style').textContent;
-  assert.match(style,/#equipment-analysis-body table\s*\{\s*width:auto;\s*max-width:100%;\s*table-layout:auto;/);
-  assert.match(style,/\.table-scroll\s*\{[^}]*width:fit-content/);
+  assert.match(style,/#equipment-analysis-body table\s*\{\s*width:100%;\s*max-width:100%;\s*table-layout:auto;/);
+  assert.match(style,/#equipment-analysis-body \.table-scroll\s*\{[^}]*justify-self:stretch;[^}]*width:100%;[^}]*max-width:100%;[^}]*overflow-x:auto/);
+  assert.match(style,/\.analysis-table-unit\s*\{[^}]*width:1%;[^}]*white-space:nowrap/);
   assert.match(style,/--intervention-chart-width:735px/);
   assert.match(style,/\.intervention-current\s*\{[^}]*font-size:var\(--font-body\)[^}]*font-weight:var\(--weight-regular\)/);
   assert.equal(h.body.querySelector('.intervention-current').tagName,'P');

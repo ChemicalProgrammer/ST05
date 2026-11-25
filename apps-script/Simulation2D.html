@@ -588,6 +588,9 @@ window.STSimulation2D=(function(){
         if(window.STIcons)button.innerHTML=window.STIcons.svg(icon);
         else button.textContent=label;
         button.onclick=()=>{
+          // Capture the pre-command counters even if the view has just loaded
+          // or was paused. The following draw observes the exact scrap delta.
+          if(model&&action==='STOP')collectScrapBursts(performance.now());
           lastMachineActions.set(item.id,action);
           model?.control?.(item.id,action);
           status();draw();checkpoint();
@@ -2026,7 +2029,7 @@ window.STSimulation2D=(function(){
     const scrapBottles=equipment.reduce((sum,item)=>sum+(item.macroStopScrapBottles||0),0);
     const materialBalance=valid?{unit:'BOTTLES',inputBottles:input,outputBottles:bottles,inventoryBottles,overflowBottles,
       ...(scrapConfigured?{scrapBottles}:{}),residualBottles:input-bottles-inventoryBottles-overflowBottles-scrapBottles}:null;
-    return {schema:'st-simulation2d-summary-v1',controlPolicy:'PHYSICAL_FLOW_8',counterPolicy:'ST_EXCLUSIVE_STATES_V1',failureOverlap:run.failureOverlap?.()??null,source,seed:finite(runSeed),round:round??null,
+    return {schema:'st-simulation2d-summary-v1',controlPolicy:scrapConfigured?'PHYSICAL_FLOW_8_SCRAP2':'PHYSICAL_FLOW_8',counterPolicy:'ST_EXCLUSIVE_STATES_V1',failureOverlap:run.failureOverlap?.()??null,source,seed:finite(runSeed),round:round??null,
       runState,durationSeconds:run.time,targetDurationSeconds:finite(limit),
       complete:runState==='Completed'&&Number.isFinite(limit)&&run.time>=limit-1e-8,
       outputEquipmentId:output?.equipmentId??null,outputUnit:output?.outputUnit??null,
@@ -2303,7 +2306,7 @@ window.STSimulation2D=(function(){
     let nextSchedule={};
     scheduleError='';
     try{nextSchedule=resolveSchedule(config);}catch(error){scheduleError=error.message;}
-    const nextSignature=canonical2DSignature(['physical-flow-8',next,revised,nextSchedule,scheduleError]);
+    const nextSignature=canonical2DSignature([revised.some(item=>item.macroStopScrapBottles>0)?'physical-flow-8-scrap2':'physical-flow-8',next,revised,nextSchedule,scheduleError]);
     const nextRepresentative=Number.isFinite(source?.seed)?source:null;
     const sameCase=next===key&&nextSignature===signature;
     if(sameCase&&nextRepresentative?.round===representative?.round&&nextRepresentative?.seed===representative?.seed){

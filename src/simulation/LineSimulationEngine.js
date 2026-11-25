@@ -1112,7 +1112,7 @@ function recordMacroScrap(equipment,units){
 }
 function chargeMacroStopScrap(equipment,stopClass){
   const s=equipment.macroScrap,r=equipment.residence;
-  if(!s||!r||!['MAJOR','GENERAL'].includes(stopClass))return;
+  if(!s||!r||!['MAJOR','GENERAL','MANUAL_STOP'].includes(stopClass))return;
   const count=equipment.processData.equipment.macroStopScrapBottles;
   if(!(count>0))return;
   s.requestedBottles+=count;s.pendingBottles+=count;s.stopCount++;
@@ -1264,6 +1264,13 @@ function applyCommand(runtime, equipment, action) {
   }
 
   const wasOperational = isOperationalMode(equipment);
+  // An explicit STOP is a macrostop, even with stochastic failures disabled.
+  // Repeated STOP and a STOP during an already charged repair are idempotent.
+  if(action==='STOP'&&equipment.mode!=='STOP'&&equipment.macroScrap&&
+    !(equipment.failureRemainingSeconds>0&&['MAJOR','GENERAL'].includes(equipment.activeStopClass))&&
+    !(equipment.repairRestartPending&&['MAJOR','GENERAL'].includes(equipment.repairStopClass))){
+    chargeMacroStopScrap(equipment,'MANUAL_STOP');
+  }
   equipment.mode = action === 'RUN' ? 'AUTO' : action;
   if (!isOperationalMode(equipment)) cancelEquipmentStart(equipment);
   runtime.events.push({ type: 'COMMAND_APPLIED', atVirtualSecond: runtime.virtualSecond, equipmentId: equipment.id, action });
@@ -2151,7 +2158,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: (runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4')+(runtime.equipment.some(item=>item.macroScrap)?'-scrap1':''),
+    engineVersion: (runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4')+(runtime.equipment.some(item=>item.macroScrap)?'-scrap2':''),
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,

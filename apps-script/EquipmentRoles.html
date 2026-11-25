@@ -55,7 +55,7 @@ window.STEquipmentRoles=(function(){
     occupancyLabel.append(occupancy);grid.append(occupancyLabel);
     var scrapLabel=document.createElement('label'),scrap=document.createElement('input');
     scrapLabel.className='machine-design-field advanced-scrap-field';scrapLabel.textContent='Macrostop scrap (bottles/stop)';
-    scrapLabel.title='Bottles rejected once per MAJOR or GENERAL repair event. Excludes MINOR, microstops and commands. If inventory is insufficient, the rest is rejected from incoming product after repair. For case-fed machines, specify complete cases in bottle equivalents.';
+    scrapLabel.title='Bottles rejected once per MAJOR or GENERAL repair event or individual STOP. Excludes MINOR, microstops, PAUSE and emergency stop. If inventory is insufficient, the rest is rejected from incoming product after repair. For case-fed machines, specify complete cases in bottle equivalents.';
     scrap.type='number';scrap.className='equipment-macrostop-scrap';scrap.min='0';scrap.step='1';scrap.required=true;
     scrap.value=equipment.processData?.equipment?.macroStopScrapBottles??0;
     scrapLabel.append(scrap);grid.append(scrapLabel);

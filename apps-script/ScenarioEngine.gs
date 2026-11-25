@@ -22,7 +22,7 @@ function canonicalSimulationInputSignature(input) {
   const dynamicMode=input.case.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
   const macroScrap=input.case.equipment.some(item=>item.processData?.equipment?.macroStopScrapBottles>0);
   return JSON.stringify(canonical({
-    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':'')+(macroScrap?'/SCRAP:1':''),
+    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':'')+(macroScrap?'/SCRAP:2':''),
     unitOfFlow: input.case.unitOfFlow || 'units',
     equipment: input.case.equipment.map(item=>{
       const inactiveDynamic=item.processData?.dynamicLineBalancing&&item.processData?.accumulation?.speedMode!=='DYNAMIC'&&!(run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true);

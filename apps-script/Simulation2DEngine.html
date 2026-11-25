@@ -232,6 +232,13 @@ window.STSimulation2DEngine=(function(){
       if(action==='EMERGENCY_STOP'){item.emergency=true;item.mode='STOP';}
       else if(action==='RESET'&&item.emergency){item.emergency=false;item.mode='STOP';}
       else if(!item.emergency&&['RUN','AUTO','MANUAL','STOP','PAUSE'].includes(action)){
+        // The last repair episode also identifies an unfinished macrostop
+        // recovery after its repair timer expires. Do not charge it twice.
+        const repairClass=item.failureHistory?.episodes?.at(-1)?.[2];
+        if(action==='STOP'&&item.mode!=='STOP'&&item.macroScrap&&
+          !((item.failureRemaining>0||item.repairRecoveryPending)&&['MAJOR','GENERAL'].includes(repairClass))){
+          chargeMacroStopScrap(item,'MANUAL_STOP');
+        }
         item.mode=action;
         if(!wasRunning&&running(item)&&!item.repairRecoveryPending)restart(item);
       }
@@ -400,7 +407,7 @@ window.STSimulation2DEngine=(function(){
     }
     function chargeMacroStopScrap(machine,stopClass){
       const s=machine.macroScrap;
-      if(!s||!['MAJOR','GENERAL'].includes(stopClass))return;
+      if(!s||!['MAJOR','GENERAL','MANUAL_STOP'].includes(stopClass))return;
       s.stopCount++;s.requestedBottles+=machine.macroStopScrapBottles;s.pendingBottles+=machine.macroStopScrapBottles;
       const count=Math.min(machine.capacityBottles!=null?machine.resident.length:machine.input,Math.floor(s.pendingBottles/machine.inputBottleFactor));
       if(count<=0)return;

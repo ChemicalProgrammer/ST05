@@ -255,7 +255,7 @@ function scrapChecks(api,core,assert){
  const minor=trial(scrapFixture('minor'));assert(minor.n.equipmentMetrics.sink.minorFailureCount>0,'minor repairs observed');
  assert(minor.n.summary.totalMacroStopScrapBottles===0&&minor.d.line[2].macroScrap.requestedBottles===0,'minor excluded');
  const no=trial(scrapFixture(),90,{reliabilityEnabled:false,commands:[stop('sink',20,'PAUSE'),stop('sink',35,'RUN')]});
- assert(no.n.summary.totalMacroStopScrapBottles===0&&no.d.line[2].macroScrap.requestedBottles===0,'commands and disabled failures excluded');
+ assert(no.n.summary.totalMacroStopScrapBottles===0&&no.d.line[2].macroScrap.requestedBottles===0,'PAUSE and disabled failures excluded');
  const general=scrapFixture();delete general[2].processData.equipment.stopInputs;general[2].noiseProfile.reliability={mtbfMinutes:.12,mttrMinutes:.06};
  const g=trial(general);assert(g.n.equipmentMetrics.sink.macroStopScrapEvents===g.n.equipmentMetrics.sink.generalFailureCount&&g.n.summary.totalMacroStopScrapBottles===22,'general repairs included');
  const eq=packing();eq[4].processData.equipment.macroStopScrapBottles=24;eq[4].noiseProfile.reliability={mtbfMinutes:.15,mttrMinutes:.04};
@@ -291,3 +291,56 @@ test('macrostop scrap survives asynchronous calculation, precise playback and ba
  assert.equal(batch.result.batch.rows[0].summary.totalMacroStopScrapBottles,22);
  for(const row of batch.result.batch.rows){assert.equal(row.summary.materialBalance.residualUnits,0);assert.ok(row.equipmentMetrics.sink.macroStopScrapBottles>0);}
 });
+
+
+function manualScrapChecks(api,core,assert){
+ const make=()=>{const eq=timing();eq[2].processData.equipment.macroStopScrapBottles=7;return eq;};
+ const commands=[stop('sink',20,'STOP'),stop('sink',21,'STOP'),stop('sink',35,'RUN'),stop('sink',50,'PAUSE'),stop('sink',55,'RUN'),stop('sink',70,'STOP'),stop('sink',75,'RUN')];
+ const x=input(make(),100,{commands,reliabilityEnabled:false}),a=api.simulateLine(x);
+ assert(a.ok,'numerical success '+JSON.stringify(a.error));const n=a.result,m=n.equipmentMetrics.sink;
+ const dt=n.numerics.effectiveTickSeconds,d=core.create(definitions(make()),x.run.seed,undefined,{commands});
+ d.configure({failures:false,calendar:false,events:true});
+ for(let i=0;i<Math.round(100/dt);i++)d.step(dt);
+ const b=d.line[2].macroScrap;
+ assert(m.macroStopScrapEvents===2&&m.macroStopScrapRequestedBottles===14,'one quota per STOP transition');
+ assert(m.macroStopScrapBottles===14&&b.actualBottles===14&&b.stopCount===2,'both settle exactly 14');
+ assert(m.failureCount===0&&d.line[2].failureCount===0,'STOP is not own failure');
+ assert(n.summary.materialBalance.residualUnits===0&&balance2D(d).residualUnits===0,'material conservation');
+ assert(JSON.stringify(n.summary.materialBalance)===JSON.stringify(balance2D(d)),'matched independent engines');
+ const manual=core.create(definitions(make()),7);manual.configure({failures:false,calendar:false,events:false});
+ for(let i=0;i<Math.round(20/dt);i++)manual.step(dt);
+ const item=manual.line[2],inside=item.resident.length,before=item.produced;
+ manual.control('sink','STOP');
+ assert(item.macroScrap.requestedBottles===7,'direct UI STOP works with events off');
+ assert(item.macroScrap.actualBottles===Math.min(inside,7),'immediate actual discard');
+ assert(item.resident.length===Math.max(0,inside-7)&&item.produced===before,'only resident inventory removed');
+ manual.control('sink','STOP');assert(item.macroScrap.stopCount===1,'repeated direct STOP ignored');
+ assert(balance2D(manual).residualUnits===0,'paused checkpoint balance');
+ const saved=manual.snapshot(),restored=core.create(definitions(make()),7,saved);restored.control('sink','STOP');
+ assert(restored.line[2].macroScrap.stopCount===1,'restored stopped machine not charged again');
+ const empty=core.create(definitions(make()),7);empty.control('sink','STOP');
+ assert(empty.line[2].macroScrap.actualBottles===0&&empty.line[2].macroScrap.pendingBottles===7,'no invented bottles on empty machine');
+ const paused=core.create(definitions(make()),7);paused.control('sink','PAUSE');
+ assert(paused.line[2].macroScrap.stopCount===0,'PAUSE unchanged');
+ paused.control('sink','STOP');assert(paused.line[2].macroScrap.stopCount===1,'STOP after PAUSE is explicit discard');
+ const faultEq=scrapFixture(),faultInput=input(faultEq,90,{reliabilityEnabled:true});
+ const faultBaseline=api.simulateLine(faultInput).result;
+ const first=faultBaseline.equipmentMetrics.sink.failureHistory.episodes[0],when=first[0]+.25;
+ const faultRun=api.simulateLine(input(faultEq,90,{reliabilityEnabled:true,commands:[stop('sink',when,'STOP')]}));
+ assert(faultRun.ok,'repair STOP numerical success');
+ assert(faultRun.result.equipmentMetrics.sink.macroStopScrapEvents===1,'STOP inside major repair not charged twice');
+ const fault2=core.create(definitions(faultEq),7);fault2.configure({failures:true,calendar:false,events:true});
+ for(let i=0;i<Math.round(when/dt);i++)fault2.step(dt);
+ assert(fault2.line[2].failureRemaining>0,'2D repair active');
+ fault2.control('sink','STOP');assert(fault2.line[2].macroScrap.stopCount===1,'2D repair STOP no duplicate');
+ const packingEq=packing();packingEq[4].processData.equipment.macroStopScrapBottles=24;
+ const packCommands=[stop('sink',80,'STOP'),stop('sink',90,'RUN')],packInput=input(packingEq,180,{commands:packCommands});
+ const pr=api.simulateLine(packInput);assert(pr.ok,'cases STOP success');
+ const pd=core.create(definitions(packingEq),7,undefined,{commands:packCommands});pd.configure({failures:false,calendar:false,events:true});
+ for(let i=0;i<Math.round(180/dt);i++)pd.step(dt);
+ assert(pr.result.summary.totalMacroStopScrapBottles===24&&pd.line[4].macroScrap.actualBottles===24,'discard two whole cases, 24 bottles');
+ assert(pr.result.summary.materialBalance.residualUnits===0&&balance2D(pd).residualUnits===0,'case balance');
+ return {numeric:n.summary.materialBalance,twoD:balance2D(d),stopCount:m.macroStopScrapEvents,caseScrap:pr.result.summary.totalMacroStopScrapBottles};
+}
+
+test('individual STOP charges scrap once in both engines, independently of reliability',()=>manualScrapChecks({simulateLine},core,(ok,msg)=>assert.ok(ok,msg)));

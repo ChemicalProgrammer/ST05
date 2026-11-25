@@ -20,7 +20,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
 | Descarga y overflow | Implementado y evaluado (ambos motores; diferencias residuales pendientes) |
 | Contadores | Implementado y evaluado (balances cerrados; anomalías de clasificación pendientes) |
-| Resolución temporal | Sensibilidad evaluada; correcciones de servicio y confiabilidad implementadas, pruebas cortas aprobadas, G 24 h pendiente |
+| Resolución temporal | Sensibilidad y G 24 h emparejada evaluadas; producción R1 idéntica; diferencias de trayectoria e inventario menores pendientes |
 | Validación contra planta | Pendiente |
 
 **Interpretación:** «Implementado» significa que existe una corrección publicada, no que esté validada con el caso de planta. «Implementado y evaluado» indica que se realizó una comparación posterior al cambio, no necesariamente que se alcanzó equivalencia completa. «Pendiente» no implica ausencia total de lógica existente, sino que falta su revisión sistemática de homologación.
@@ -48,8 +48,8 @@ Datos históricos de la conversación y última evidencia del archivo de caso ex
 | Simulación 2D, etapa 5 (`PHYSICAL_FLOW_7`) | 207,132 | 143.84 | +21.57% |
 | Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, PRECISE) | 192,984 | 134.02 | +13.27% |
 | Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, BALANCED) | 193,032 | 134.05 | +13.30% |
-| Numérica corregida ST_CURRENT 0.20.4, PRECISE, G 24 h | Pendiente | Pendiente | Pendiente |
-| 2D corregida PHYSICAL_FLOW_8, G 24 h | Pendiente | Pendiente | Pendiente |
+| Numérica corregida ST_CURRENT 0.20.4, PRECISE, G 24 h (R1) | 190,152 | 132.05 | +11.61% |
+| 2D corregida PHYSICAL_FLOW_8, G 24 h (semilla R1) | 190,152 | 132.05 | +11.61% |
 
 Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores. Tras evaluar ambos motores de la etapa 4, la diferencia 2D − numérica es +25,584 botellas. La numérica histórica de 136,764 se conserva y no se usa como referencia vigente.
 
@@ -403,6 +403,41 @@ Pruebas de etapa 6 sobre el candidato final: 88/88 focalizadas aprobadas en arn�
 
 Residual 0 en todas. Con fallas, media 1,156 botellas en ambos motores; los conteos por equipo Scrambler/Virtual/Filler/Packer/Palletizer son respectivamente [0,0,0,1,0], [0,1,0,0,0] y [0,3,2,0,0] en ambos. La ronda representativa por cercanía a media de este fixture es 1 (1,140), no necesariamente la representativa de 24 h. Runtime Efficiency máxima en las pruebas 99.7858%; no demuestra ausencia de anomalías durante 24 h. Aunque coincide salida en todas las pruebas, persisten diferencias físicas de entrada, inventario y overflow. No modificar inputs para compensar. Pendiente evaluación G 24 h y revisión de cuantización/sensores/descarga donde persistan diferencias. No declarar equivalencia integral ni validación de planta.
 
+### Evaluación G de 24 h tras las correcciones (25 de noviembre)
+
+Fuente: `G-complete (12).json`, revisión 74, 39,644,399 bytes, SHA-256 `afafd237c90dd999a2c5e47a7559bde34876b3c42d1745c9144fdd68c48a358e`. ST_CURRENT 0.20.4/cache:33, PRECISE efectivo 1/120 s, tres rondas completas; PHYSICAL_FLOW_8 independiente, completa, semilla 20261124. Formato S, 12 botellas/caja, 86,400 s, residencia y fallas activadas, eventos/calendario desactivados. La lista de equipos coincide con la firma numérica. Opciones 2D son las guardadas al capturar, no historial de cambios durante ejecución. El selector 2D guarda 1×; no contiene telemetría de velocidad wall-clock ni permite reconstruir las reducciones reportadas. La corrección del reloj de reproducción no afecta el motor ni invalida esta corrida.
+
+| Referencia | Botellas | Error vs planta |
+| --- | ---: | ---: |
+| Planta, base aún sin confirmar | 170,376 | — |
+| Numérica R1, 20261124 | 190,152 | +11.61% |
+| Numérica R2, 20261125 | 181,752 | +6.68% |
+| Numérica R3, 20261126 (representativa) | 185,820 | +9.06% |
+| Media numérica (n=3) | 185,908 | +9.12% |
+| 2D independiente, 20261124 | 190,152 | +11.61% |
+
+DE muestral numérica 4,200.69 botellas. Ambas corridas emparejadas entregaron 15,846 cajas, 132.05 bpm. Se elimina la brecha de producción previamente observada (14,148 botellas con paso igual en las referencias 0.20.3/política 7), no se declara equivalencia integral.
+
+| Balance (botellas) | Numérica R1 | 2D |
+| --- | ---: | ---: |
+| Entrada | 194,862 | 194,875 |
+| Salida | 190,152 | 190,152 |
+| Inventario final | 945 | 962 |
+| Overflow | 3,765 | 3,761 |
+| Residual | 0 | 0 |
+
+Diferencia aritmética 2D−numérica: +13 entrada −17 inventario +4 menor overflow = 0 salida. Todas las rondas numéricas cierran material, tiempos (residual máximo 0.000006 s) y salida por estado. 2D residual de tiempo máximo 0.000014 s y residual de salida 0 en los nueve elementos. No hay salida fuera de estado productivo en las máquinas de las corridas emparejadas.
+
+| Máquina | Fallas num./2D | Runtime Efficiency num./2D (%) | Blocked num./2D (min) |
+| --- | ---: | ---: | ---: |
+| Scrambler | 21 / 21 | 97.4542 / 97.4540 | 0 / 0 |
+| Virtual inlet | 208 / 208 | 99.7812 / 99.7823 | 0 / 0 |
+| Filler | 70 / 70 | 99.0861 / 99.0900 | 26.1592 / 26.1625 |
+| Case Packer | 87 / 87 | 88.7420 / 88.7476 | 0 / 0 |
+| Palletizer | 32 / 32 | 96.7302 / 96.7318 | 0 / 0 |
+
+Se verificaron las 418 secuencias de exposición sorteada y clase de falla, coincidentes por equipo (tolerancia 0.00001 s), con un episodio abierto en el Case Packer en cada motor. Diferencia máxima de inicio calendario de eventos correspondientes 19.525 s, no idéntica trayectoria. La unión de intervalos de reparación fue 37,827.091667 / 37,830.308339 s y el solapamiento de dos o más 1,996.175 / 1,985.45 s. Máximo concurrente 3 en ambos. No hay Runtime Efficiency >100% en ninguna de las tres rondas numéricas ni en 2D. Se considera evaluada la corrección en G 24 h para la semilla 20261124. No exigir repetición por el cambio de reloj de reproducción. Pendiente comparación emparejada de la ronda representativa y de las distribuciones 2D, estudio de diferencias físicas residuales y validación de planta con bases de medición confirmadas.
+
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |
@@ -418,11 +453,10 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 
 ## 6. Punto de continuación
 
-1. Conservar exportaciones (9), (10), (11) y 2D política 7 como históricos. Actualizar Apps Script a 0.20.4/cache:33 y PHYSICAL_FLOW_8.
-2. Repetir G numérica PRECISE, 24 h, tres rondas con semillas 20261124–20261126, formato S, residencia/fallas habilitadas, eventos/calendario deshabilitados. Ronda 1 se empareja con 2D independiente; para comparación representativa usar la semilla de la nueva ronda representativa, que puede cambiar. Conservar resultados de las tres rondas, su promedio y dispersión.
-3. Repetir G 2D independiente 24 h con semilla 20261124; si es viable, ejecutar las otras dos semillas de G en exportaciones separadas para comparar distribuciones. Exportar historial completo de fallas, balances, tiempos y producción. Comparar con nueva numérica a igual tick; evaluar discrepancias restantes sin ajustar inputs.
-4. Revisar diferencias de overflow, exposición y recuperación en G, verificar persistencia 2D en Apps Script, ampliar pruebas de resolución y robustez de falla temporal. No considerar el fixture corto validación de todo el día.
-5. Validación contra planta: confirmar base de tiempo y unidades de registros reales, contrastar con múltiples réplicas y turnos/equipos si hay datos. Aislamiento histórico de etapa 2 y funciones no homologadas (MICRO_STOP, respuesta no nula, fallas propias de conveyors, DES alternativo) permanecen pendientes de revisión según alcance.
+1. Conservar exportaciones (9), (10), (11) y (12), incluyendo resultados históricos y G 24 h corregida. La corrección de reproducción 2D es independiente del motor; no necesita volver a ejecutar (12).
+2. Confirmada paridad de producción en G 24 h con semilla 20261124 (190,152 botellas ambos motores). Numérica representativa R3 (185,820, semilla 20261126), media 185,908 (n=3). Para ampliar comparación, ejecutar 2D representativa usando esa semilla y conservar ambas corridas independientes; otra 2D con semilla 20261125 permitiría comparar todas las réplicas.
+3. Revisar diferencias de inventario/overflow, desfase de inicios de fallas y recuperación de G; comprobar cambio de velocidad y persistencia en Apps Script. No confundir coincidencia de salida con trayectoria idéntica.
+4. Validación contra planta: confirmar base de tiempo, calendario, unidades y registros de equipos/turnos. Media numérica excede producción real 9.12%; no ajustar parámetros únicamente para igualar producción. Evaluar convergencia y distribución 2D cuando existan las réplicas necesarias. Las funciones no homologadas (MICRO_STOP, respuesta no nula, fallas de conveyors, DES alternativo) permanecen fuera de esta validación.
 
 La evaluación conjunta no equivale a homologación completa ni validación de planta.
 

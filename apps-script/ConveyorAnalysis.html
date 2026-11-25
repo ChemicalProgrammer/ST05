@@ -365,7 +365,7 @@ window.STConveyorAnalysis=(function(){
           dischargeTime,codingTime,duringDelay,inDischarge,inCoding,total,overflow,
           ramp:input.downstreamRampUpSeconds??belt.downstreamRampUpSeconds,
           dischargeFactor,codingFactor,
-          accumulationFactor:models[index].processData?.accumulation?.speedMode==='MANUAL'||models[index].processData?.accumulation?.targetPopulationPercent!=null||models[index].processData?.accumulation?.targetOverspeedPercent!=null
+          accumulationFactor:['MANUAL','DYNAMIC'].includes(models[index].processData?.accumulation?.speedMode)||models[index].processData?.accumulation?.targetPopulationPercent!=null||models[index].processData?.accumulation?.targetOverspeedPercent!=null
             ?(codingSpeed>0?(speed/codingSpeed-1)*100:NaN):input.accumulationSpeedFactorPercent,overspeed:input.infeedOverspeedPercent??models[index].processData?.speedAndSensors?.overspeedVsInfeedScrewPercent??5};
       });
     function extreme(field,select){
@@ -584,15 +584,15 @@ window.STConveyorAnalysis=(function(){
       set('L36',[],tr('Enter Coding Conveyor Speed Factor vs Previous Conveyor in Speed & Sensors.','Captura Coding Conveyor Speed Factor vs Previous Conveyor en Speed & Sensors.'));
       set('L37',[pos('L34'),pdep('L36')]);
       set('L38',[pdep('L24'),pos('L37')]);
-      const factorOutput=p.speedMode==='MANUAL'||p.targetPopulation!=null||p.targetOverspeed!=null;
+      const factorOutput=['MANUAL','DYNAMIC'].includes(p.speedMode)||p.targetPopulation!=null||p.targetOverspeed!=null;
       set('L39',factorOutput?[pos('L40'),pos('L37')]:[],factorOutput?tr('Calculated from actual belt speed and Coding speed.','Calculado con velocidad real de banda y velocidad Coding.'):tr('Optional accumulation speed factor in Auto mode; blank uses zero.','Factor de acumulación opcional en Auto; vacío usa cero.'));
-      const speedHelp=p.speedMode==='MANUAL'?tr('Enter a positive actual Conveyor Speed in Speed & Sensors (m/min in the editor).','Captura una velocidad real positiva del conveyor en Speed & Sensors (m/min en el editor).'):
+      const speedHelp=['MANUAL','DYNAMIC'].includes(p.speedMode)?tr('Enter a positive actual Conveyor Speed in Speed & Sensors (m/min in the editor).','Captura una velocidad real positiva del conveyor en Speed & Sensors (m/min en el editor).'):
         p.targetPopulation!=null?tr('Check target Population (greater than 0 and at most 100%), package length and nominal speed of '+upstream+'.','Revisa Population objetivo (mayor que 0 y hasta 100%), longitud del envase y velocidad nominal de '+upstream+'.'):
         p.targetOverspeed!=null?tr('Check target Overspeed, infeed pitch and speed of '+downstream+'.','Revisa Overspeed objetivo, pitch de entrada y velocidad de '+downstream+'.'):
         tr('Check Conveyor Speed or AUTO calculation inputs: '+upstream+' nominal speed, discharge pitch and speed factors.','Revisa Conveyor Speed o los inputs de cálculo AUTO: velocidad nominal de '+upstream+', pitch de descarga y factores de velocidad.');
       // Machine rate and discharge pitch are independent of belt speed.
       const missingSpeedInputs=[];
-      if(!positive(p.speed)&&p.speedMode!=='MANUAL'){
+      if(!positive(p.speed)&&!['MANUAL','DYNAMIC'].includes(p.speedMode)){
         const inputs=p.engineeringInput||{};
         const missing=(value,label,test=positive)=>{if(!test(value))missingSpeedInputs.push(label);};
         if(p.targetPopulation!=null){
@@ -701,7 +701,7 @@ window.STConveyorAnalysis=(function(){
       return ['No recovery point exists because the available accumulation is insufficient; this is an evaluated failure, not missing data.','No existe punto de recuperación porque la acumulación disponible es insuficiente; es un fallo evaluado, no un dato faltante.'];
     // Do not demand data for absent runout zones when belt speed comes from
     // a direct input or a target rather than the cascade of zone factors.
-    if(profile&&(profile.speedMode==='MANUAL'||profile.targetPopulation!=null||profile.targetOverspeed!=null)){
+    if(profile&&(['MANUAL','DYNAMIC'].includes(profile.speedMode)||profile.targetPopulation!=null||profile.targetOverspeed!=null)){
       const absentDischarge=g.discharge===0&&g.coding===0&&['L33','L34','L35'].includes(key);
       const absentCoding=g.coding===0&&['L36','L37','L38','L39'].includes(key);
       if(absentDischarge||absentCoding)return ['Not required: this runout segment is absent and the active speed source does not depend on its factor.','No requerido: este tramo no existe y la fuente de velocidad activa no depende de su factor.'];

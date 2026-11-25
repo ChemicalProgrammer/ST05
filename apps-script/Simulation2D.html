@@ -2207,7 +2207,7 @@ window.STSimulation2D=(function(){
   });
   return {pause,capture,isRunning:()=>runState==='Running',refreshRunLocks:syncControls,
     hasState:()=>Boolean(viewKey&&model),syncEvents,onEventEditorChange(callback){eventEditorChanged=callback;},unload(){window.clearTimeout(sensorFadeTimer);sensorFadeTimer=null;sensorVisuals.clear();sensorVisualModel=null;if(viewSaveTimer!==null)checkpoint();window.clearTimeout(viewSaveTimer);viewSaveTimer=null;finishSplit();syncEvents(false);setFullscreen(false);fullscreenCamera=null;window.clearTimeout(viewSaveTimer);viewSaveTimer=null;endDrag();cancelFrame();save=null;key=null;viewKey=null;model=null;defaultRun=null;representative=null;},load(identity,equipment,format,config={},stored,saveRecord,source,formats=[]){
-    dynamicBalancingRequested=config.dynamicLineBalancingEnabled===true;
+    dynamicBalancingRequested=config.dynamicLineBalancingEnabled===true||equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
     const configuredHours=config.shiftHours??config.durationOptions?.shiftHours??config.shiftSeconds/3600;
     const hours=Number.isFinite(configuredHours)&&configuredHours>0?configuredHours:8;
     const next=JSON.stringify([identity,config.seed,hours]);

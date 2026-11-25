@@ -226,7 +226,7 @@ html[data-ui-mode=advance][data-header-view=results] #line-performance { display
 html[data-equipment-layout=split] .equipment-fields > .dynamic-balancing-panel {display:none;}
 html[data-equipment-layout=split] .equipment-fields[data-balancing-view=true] > :not(.dynamic-balancing-panel) {display:none!important;}
 html[data-equipment-layout=split] .equipment-fields[data-balancing-view=true] > .dynamic-balancing-panel:not([hidden]) {display:block;}
-.dynamic-balancing-panel[hidden] {display:none!important;}
+.dynamic-balancing-panel[hidden],.dynamic-speed-control[hidden],.basic-conveyor-tabs > button[hidden] {display:none!important;}
 .dynamic-balancing-panel .dynamic-balancing-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr));gap:var(--space-3);}
 .dynamic-balancing-panel .dynamic-balancing-grid label {min-width:0;display:flex;flex-direction:column;gap:var(--space-1);}
 .dynamic-balancing-panel .dynamic-balancing-grid input {min-width:0;width:100%;}

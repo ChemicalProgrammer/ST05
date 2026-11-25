@@ -60,16 +60,14 @@
 
     function attachDynamicBalancing(card,equipment){
       var saved=equipment.processData?.dynamicLineBalancing, fields=card._fields;
+      card._dynamicSavedMode=equipment.processData?.accumulation?.speedMode==='DYNAMIC';
+      card._dynamicSavedConfig=saved;
       var section=document.createElement('section');section.className='dynamic-balancing-panel';section.hidden=equipment.type!=='CONVEYOR';
       section.dataset.configured=String(Boolean(saved));
       var title=document.createElement('h4');title.textContent='Dynamic balancing';
       var note=document.createElement('p');note.className='chart-note';note.textContent='Experimental numerical control. Use measured VFD limits; sensor positions are calculated from compact queue reserves.';
-      var toggle=document.createElement('label');toggle.className='checkbox-label st-checkbox-card';
-      var enable=document.createElement('input');enable.type='checkbox';enable.className='dynamic-balancing-enabled';enable.checked=saved?.enabled===true;
-      var caption=document.createElement('span');caption.textContent='Enable for this conveyor';toggle.append(enable,caption);
       var grid=document.createElement('div');grid.className='dynamic-balancing-grid';
-      var specs=[['maxSpeedMPerMinute','Maximum belt speed (m/min)',null,0],['boostPercent','Recovery boost (%)',20,0],
-        ['lowReserveSeconds','Low reserve (s)',12,0],['highReserveSeconds','High reserve (s)',25,0],
+      var specs=[['lowReserveSeconds','Low reserve (s)',12,0],['highReserveSeconds','High reserve (s)',25,0],
         ['accelerationSeconds','Acceleration time (s)',2,0],['decelerationSeconds','Deceleration time (s)',2,0],
         ['confirmSeconds','Sensor confirmation (s)',0.5,0],['minDwellSeconds','Minimum dwell (s)',2,0]];
       specs.forEach(function(spec){var label=document.createElement('label'),input=document.createElement('input');
@@ -77,16 +75,18 @@
         input.value=saved?.[spec[0]]??spec[2]??'';label.append(input);grid.append(label);
       });
       var preview=document.createElement('p');preview.className='chart-note dynamic-balancing-preview';preview.setAttribute('role','status');
-      section.append(title,note,toggle,grid,preview);fields.append(section);
+      section.append(title,note,grid,preview);fields.append(section);
       section.addEventListener('input',function(){section.dataset.configured='true';});
       section.addEventListener('change',function(){section.dataset.configured='true';});
     }
     function readDynamicBalancing(card){
       var section=equipmentField(card,'.dynamic-balancing-panel');
       if(!section)return undefined;
-      var enabled=section.querySelector('.dynamic-balancing-enabled').checked;
+      var enabled=equipmentField(card,'.format-zone-speed-mode')?.value==='DYNAMIC';
       if(!enabled&&section.dataset.configured!=='true')return undefined;
-      var config={enabled:enabled};section.querySelectorAll('[data-balancing-field]').forEach(function(input){
+      var reference=equipmentField(card,'.format-zone-dynamic-reference'),percent=equipmentField(card,'.format-zone-dynamic-percent');
+      var config={speedReference:reference?.value||'NORMAL',speedPercent:numericInputValue(percent)};
+      section.querySelectorAll('[data-balancing-field]').forEach(function(input){
         var value=input.value.trim();if(value!==''&&Number.isFinite(Number(value)))config[input.dataset.balancingField]=Number(value);
       });
       return config;
@@ -94,7 +94,7 @@
     function refreshDynamicBalancing(card,models,index,zone){
       var section=equipmentField(card,'.dynamic-balancing-panel');
       if(!section)return;
-      section.hidden=equipmentField(card,'.equipment-type').value!=='CONVEYOR';
+      section.hidden=equipmentField(card,'.equipment-type').value!=='CONVEYOR'||window.STBasicMode?.isBasic()||equipmentField(card,'.format-zone-speed-mode').value!=='DYNAMIC';
       if(section.hidden)return;
       var locked=typeof runControlsLocked==='function'&&runControlsLocked();
       section.querySelectorAll('input').forEach(function(input){input.disabled=locked;});
@@ -102,13 +102,10 @@
       var nominal=zone?.conveyorSpeedMmPerSecond*.06;
       var format=function(value){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:2}):'—';};
       var prefix=(es?'Velocidad nominal: ':'Nominal speed: ')+format(nominal)+' m/min. ';
-      if(!config?.enabled){preview.textContent=prefix+(es?'Control local desactivado.':'Local control disabled.');return;}
-      if(Number.isFinite(nominal)&&!Number.isFinite(config.maxSpeedMPerMinute)){
-        preview.textContent=prefix+(es?'Ingresa un límite mecánico o experimental explícito. Referencia de prueba (+20%): ':'Enter an explicit mechanical or trial limit. Trial reference (+20%): ')+format(nominal*1.2)+' m/min';return;
-      }
+      if(!config){preview.textContent=prefix+'—';return;}
       try{
         var result=window.SimulatorEngine.resolveDynamicBeltSettings(zone,config,models[index+1]);
-        preview.textContent=prefix+(es?'Recuperación: ':'Recovery: ')+format(result.highSpeedMmPerSecond*.06)+' m/min · S Low: '+format(result.lowPositionMm/1000)+' m ('+result.lowUnits+') · S High: '+format(result.highPositionMm/1000)+' m ('+result.highUnits+')';
+        preview.textContent=prefix+(es?'Velocidad máxima: ':'Maximum speed: ')+format(result.highSpeedMmPerSecond*.06)+' m/min · S Low: '+format(result.lowPositionMm/1000)+' m ('+result.lowUnits+') · S High: '+format(result.highPositionMm/1000)+' m ('+result.highUnits+')';
       }catch(error){preview.textContent=prefix+(window.STLanguage?.translate(error.message)??error.message);}
     }
 
@@ -278,6 +275,25 @@
         else { control.type = spec[3]; control.min = '0'; control.step = 'any'; if(spec[0]==='population'){control.min='0.01';control.max='100';} }
         label.appendChild(control); grid.appendChild(label);
       });
+      var mode=equipmentField(card,'.format-zone-speed-mode');
+      if(!window.STBasicMode?.isBasic()||card._dynamicSavedMode){
+        var option=document.createElement('option');option.value='DYNAMIC';option.textContent=window.STBasicMode?.isBasic()?'Dynamic (configured in Advance)':'Dynamic';option.disabled=Boolean(window.STBasicMode?.isBasic());mode.append(option);
+      }
+      var referenceLabel=document.createElement('label'),reference=document.createElement('select');
+      referenceLabel.textContent='Specified speed reference';referenceLabel.className='dynamic-speed-control';reference.className='format-zone-dynamic-reference';
+      [['NORMAL','Normal'],['MAXIMUM','Maximum']].forEach(function(pair){var o=document.createElement('option');o.value=pair[0];o.textContent=pair[1];reference.append(o);});
+      referenceLabel.append(reference);
+      var percentLabel=document.createElement('label'),percent=document.createElement('input');percentLabel.textContent='Maximum speed (% of normal)';percentLabel.className='dynamic-speed-control';
+      percent.className='format-zone-dynamic-percent';percent.type='number';percent.step='any';percent.min='0';percentLabel.append(percent);
+      var summaryLabel=document.createElement('label'),summary=document.createElement('output');summaryLabel.textContent='Calculated speed range (m/min)';summaryLabel.className='dynamic-speed-control';summary.className='format-zone-dynamic-range';summaryLabel.append(summary);
+      grid.append(referenceLabel,percentLabel,summaryLabel);
+      var saved=card._dynamicSavedConfig;
+      reference.value=saved?.speedReference==='MAXIMUM'?'MAXIMUM':'NORMAL';reference.dataset.previousReference=reference.value;
+      percent.value=saved?.speedPercent??(reference.value==='MAXIMUM'?100/1.2:100+(saved?.boostPercent??20));
+      reference.addEventListener('change',function(){
+        var value=Number(percent.value);if(reference.dataset.previousReference!==reference.value&&value>0&&Number.isFinite(value))percent.value=Number((10000/value).toPrecision(10));
+        reference.dataset.previousReference=reference.value;
+      });
       prepareSwitchableFields(card);
     }
 
@@ -298,23 +314,42 @@
       if(role==='OUTPUT')input.setAttribute('aria-readonly','true');else input.removeAttribute('aria-readonly');
     }
     function syncSwitchableFields(card){
+      var speedMode=equipmentField(card,'.format-zone-speed-mode'),dynamic=speedMode.value==='DYNAMIC',basic=Boolean(window.STBasicMode?.isBasic());
       ['population','lba','backup','overspeed'].forEach(function(key){
         var input=equipmentField(card,'.format-zone-'+key),toggle=equipmentField(card,'.format-zone-'+key+'-enabled'),enabled=toggle.checked,was=input.dataset.inputMode==='true';
+        if(key==='population'||key==='overspeed'){if(dynamic)toggle.checked=enabled=false;toggle.disabled=dynamic;}
         if(enabled&&!was)input.value=input.dataset.manualValue!==undefined&&input.dataset.manualValue!==''?input.dataset.manualValue:key==='backup'?'':input.value;
         if(enabled||was)input.dataset.manualValue=input.value;
         input.dataset.inputMode=String(enabled);conveyorFieldRole(input,enabled?'INPUT':'OUTPUT',true);
       });
       var target=equipmentField(card,'.format-zone-population-enabled').checked||equipmentField(card,'.format-zone-overspeed-enabled').checked;
-      var mode=equipmentField(card,'.format-zone-speed-mode'),manual=!target&&mode.value==='MANUAL';
-      mode.dataset.fieldRole=target?'INACTIVE':'INPUT';mode.disabled=target;
+      var mode=speedMode,manual=!target&&['MANUAL','DYNAMIC'].includes(mode.value);
+      mode.dataset.fieldRole=target?'INACTIVE':'INPUT';mode.disabled=target||dynamic&&basic;
       function switchField(key,editable,optional){
         var field=equipmentField(card,'.format-zone-'+key),was=field.dataset.inputMode!=='false';
-        if(editable&&!was)field.value=field.dataset.manualValue??'';
+        if(editable&&!was)field.value=field.dataset.manualValue||(dynamic&&key==='belt-speed'?field.value:'');
         if(editable||was)field.dataset.manualValue=field.value;
         field.dataset.inputMode=String(editable);
         conveyorFieldRole(field,editable?(optional?'OPTIONAL':'INPUT'):'OUTPUT',!optional);
       }
       switchField('belt-speed',manual,false);switchField('moving-gap',!target,true);switchField('acc-factor',!target&&!manual,true);
+      var reference=equipmentField(card,'.format-zone-dynamic-reference'),percent=equipmentField(card,'.format-zone-dynamic-percent'),summary=equipmentField(card,'.format-zone-dynamic-range');
+      if(reference&&percent&&summary){
+        [reference,percent,summary].forEach(function(field){field.closest('label').hidden=!dynamic||basic;});
+        reference.disabled=percent.disabled=!dynamic||basic;
+        percent.closest('label').firstChild.nodeValue=reference.value==='MAXIMUM'?'Normal speed (% of maximum)':'Maximum speed (% of normal)';
+        if(reference.value==='MAXIMUM')percent.max='100';else percent.removeAttribute('max');
+        var belt=equipmentField(card,'.format-zone-belt-speed');
+        if(dynamic){
+          if(basic)belt.readOnly=true;
+          var section=equipmentField(card,'.dynamic-balancing-panel');if(section)section.dataset.configured='true';
+          try{var specified=Number(belt.value)/(basic?.06:1),pair=window.SimulatorEngine.resolveDynamicSpeedPair(specified,{speedReference:reference.value,speedPercent:numericInputValue(percent)});
+            summary.textContent=(pair.nominalSpeedMmPerSecond*.06).toFixed(2)+' → '+(pair.maxSpeedMmPerSecond*.06).toFixed(2);
+            belt.title=reference.value==='MAXIMUM'?'Specified maximum belt speed':'Specified normal belt speed';
+          }catch(error){summary.textContent=window.STLanguage?.translate(error.message)??error.message;}
+        }
+        var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!dynamic||basic||equipmentField(card,'.equipment-type')?.value!=='CONVEYOR';
+      }
       ['discharge-velocity','speed-factor','coding-factor','accumulated-gap','insurance'].forEach(function(key){conveyorFieldRole(equipmentField(card,'.format-zone-'+key),'OPTIONAL');});
       window.STEquipmentInspector?.refreshHelp?.(card);
     }
@@ -412,7 +447,7 @@ function populateFormatZoneInputs(card, equipment) {
 function updateFormatZoneVisibility(card) {
       var isConveyor = equipmentField(card, '.equipment-type').value === 'CONVEYOR';
       equipmentField(card, '.format-zone-setup').classList.toggle('hidden', !isConveyor);
-      var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!isConveyor;
+      var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!isConveyor||window.STBasicMode?.isBasic()||equipmentField(card,'.format-zone-speed-mode')?.value!=='DYNAMIC';
       equipmentField(card, '.equipment-rate').readOnly = isConveyor;
       equipmentField(card, '.equipment-rate').closest('label').classList.toggle('hidden', isConveyor);
       if (isConveyor) equipmentField(card, '.equipment-rate').title = __ST_TEXT__('conveyor.help_belt_speed');
@@ -431,7 +466,12 @@ function updateFormatZoneVisibility(card) {
       var populationEnabled=equipmentField(card,'.format-zone-population-enabled').checked;
       var lbaEnabled=equipmentField(card,'.format-zone-lba-enabled').checked;
       var overspeedEnabled=equipmentField(card,'.format-zone-overspeed-enabled').checked;
-      var manual = !populationEnabled && !overspeedEnabled && values.speedMode === 'MANUAL';
+      var dynamic=values.speedMode==='DYNAMIC',manual = !populationEnabled && !overspeedEnabled && ['MANUAL','DYNAMIC'].includes(values.speedMode);
+      var specifiedSpeed=values.conveyorSpeedMmPerSecond,normalSpeed=specifiedSpeed;
+      if(dynamic){
+        try{normalSpeed=window.SimulatorEngine.resolveDynamicSpeedPair(specifiedSpeed,values.dynamicLineBalancing).nominalSpeedMmPerSecond;}
+        catch(error){target.textContent=window.STLanguage?.translate(error.message)??error.message;return;}
+      }
       var processData = parseJsonForPreview(equipmentField(card, '.equipment-process-data').value);
       var index = Number(card.dataset.index);
       var line=state.activeCase?.equipment||[];
@@ -446,7 +486,7 @@ function updateFormatZoneVisibility(card) {
         targetOverspeedPercent: values.targetOverspeedPercent,
         targetPopulationPercent: values.targetPopulationPercent,
         manualLbaMm: values.manualLbaMm,
-        resolvedConveyorSpeedMmPerSecond:manual?values.conveyorSpeedMmPerSecond:undefined,
+        resolvedConveyorSpeedMmPerSecond:manual?normalSpeed:undefined,
         codingSpeedFactorPercent: values.codingFactorPercent ?? processData.speedAndSensors?.codingConveyorSpeedFactorVsPreviousConveyorPercent,
         accumulationSpeedFactorPercent: values.accFactorPercent ?? processData.speedAndSensors?.conveyorSpeedFactorVsPreviousConveyorPercent,
         installedLengthMm: values.lactMm,
@@ -469,13 +509,13 @@ function updateFormatZoneVisibility(card) {
         upstreamStartupTimeSeconds: upstreamMachine.processData?.upstream?.startupTimeSeconds
       });
       var derived = calculation.calculated;
-      if(manual&&values.conveyorSpeedMmPerSecond>0&&values.packageLengthMm>0&&upstreamMachine.nominalRatePerSecond>0&&!(derived.effectiveProductPitchMm>0)){
+      if(manual&&normalSpeed>0&&values.packageLengthMm>0&&upstreamMachine.nominalRatePerSecond>0&&(!(derived.effectiveProductPitchMm>0)||dynamic&&derived.effectiveProductPitchMm<values.packageLengthMm+(values.accumulatedGapMm??0))){
         var packed=values.packageLengthMm+(values.accumulatedGapMm??0);
-        var inferredPitch=values.movingGapMm!==undefined?values.packageLengthMm+values.movingGapMm:Math.max(packed,values.conveyorSpeedMmPerSecond/upstreamMachine.nominalRatePerSecond);
-        calculation=calculator({...calculation.input,resolvedConveyorSpeedMmPerSecond:values.conveyorSpeedMmPerSecond,resolvedProductPitchMm:inferredPitch});
+        var inferredPitch=values.movingGapMm!==undefined?values.packageLengthMm+values.movingGapMm:Math.max(packed,normalSpeed/upstreamMachine.nominalRatePerSecond);
+        calculation=calculator({...calculation.input,resolvedConveyorSpeedMmPerSecond:normalSpeed,resolvedProductPitchMm:inferredPitch});
         derived=calculation.calculated;
       }
-      var beltSpeed = manual ? values.conveyorSpeedMmPerSecond : derived.conveyorSpeedMmPerSecond;
+      var beltSpeed = manual ? normalSpeed : derived.conveyorSpeedMmPerSecond;
       applyConveyorOutputs(card,{...derived,conveyorSpeedMmPerSecond:beltSpeed},values);
       var actualPopulation=beltSpeed>0?derived.machineOutputRateMmPerSecond/beltSpeed*100:undefined;
       if(populationEnabled||overspeedEnabled)values.movingGapMm=derived.productGapMm;
@@ -512,11 +552,11 @@ function applyConveyorOutputs(card,d,values,zone,profile){
     function readFormatZoneInputs(card) {
       function manualFieldValue(key){var text=equipmentField(card,'.format-zone-'+key).dataset.manualValue;return text!==undefined&&text!==''&&Number.isFinite(Number(text))?Number(text):undefined;}
       var basic=window.STBasicMode?.isBasic(),mode=equipmentField(card,'.format-zone-speed-mode').value||'AUTO',target=equipmentField(card,'.format-zone-population-enabled').checked||equipmentField(card,'.format-zone-overspeed-enabled').checked;
-      var beltSpeed=!target&&mode==='MANUAL'?numericInputValue(equipmentField(card,'.format-zone-belt-speed')):undefined;
+      var beltSpeed=!target&&['MANUAL','DYNAMIC'].includes(mode)?numericInputValue(equipmentField(card,'.format-zone-belt-speed')):undefined;
       var storedSpeed=manualFieldValue('belt-speed');
       if(basic){if(beltSpeed!==undefined)beltSpeed=Number((beltSpeed/.06).toPrecision(15));if(storedSpeed!==undefined)storedSpeed=Number((storedSpeed/.06).toPrecision(15));}
       return {
-        dynamicLineBalancing:readDynamicBalancing(card),
+        dynamicLineBalancing:typeof readDynamicBalancing==='function'?readDynamicBalancing(card):undefined,
         inputValues:{populationPercent:manualFieldValue('population'),lbaMm:manualFieldValue('lba'),overspeedPercent:manualFieldValue('overspeed'),backupPositionMm:manualFieldValue('backup'),beltSpeedMmPerSecond:storedSpeed,movingGapMm:manualFieldValue('moving-gap'),accFactorPercent:manualFieldValue('acc-factor')},
         targetOverspeedPercent:equipmentField(card,'.format-zone-overspeed-enabled').checked?numericInputValue(equipmentField(card,'.format-zone-overspeed')):undefined,
         targetPopulationPercent: equipmentField(card,'.format-zone-population-enabled').checked ? numericInputValue(equipmentField(card,'.format-zone-population')) : undefined,

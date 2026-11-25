@@ -5,7 +5,7 @@
 window.STEquipmentTable=(function(){
   var current=null,section='equipment',separate=false,scope='equipment',active=false,initialized=false;
   var signature='',renderedCards=[],bindings=[],rowActions=[],updating=false,queued=false;
-  var labels={},manualWidths=new Map(),tableLayouts=[],gesture=null;
+  var labels={},manualWidths=new Map(),tableLayouts=[],gesture=null,rowSettlements=new WeakMap(),viewMotion=null,viewContext='';
   function el(id){return document.getElementById(id);}
   function tr(en,es){return document.documentElement.lang==='es'?es:en;}
   function node(tag,cls,text){var n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
@@ -210,6 +210,29 @@ window.STEquipmentTable=(function(){
     // The canonical editor owns topology, validation, autosave and order.
     card._moveTableRow?.(target,layout.conveyor?'conveyors':'equipment');
   }
+  function rowShift(row,y){row.style.transform=y?'translateY('+y+'px)':'';}
+  function stopRowSettlements(rows){
+    rows.forEach(r=>{rowSettlements.get(r)?.cancel();rowSettlements.delete(r);});
+  }
+  function visibleRowPositions(layout){
+    return new Map(layout.rows.map(r=>[r.dataset.tableEquipmentId,r.getBoundingClientRect().top]));
+  }
+  function reducedMotion(){return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);}
+  function motionOptions(){
+    var style=window.getComputedStyle?.(document.documentElement);
+    return {duration:parseFloat(style?.getPropertyValue('--duration-normal'))||180,easing:style?.getPropertyValue('--ease').trim()||'ease-out'};
+  }
+  function settleRows(layout,before){
+    if(!active||updating||reducedMotion())return;
+    var {duration,easing}=motionOptions();
+    stopRowSettlements(layout.rows);
+    layout.rows.forEach(r=>{
+      if(!r.isConnected||!r.animate||!before.has(r.dataset.tableEquipmentId))return;
+      var delta=before.get(r.dataset.tableEquipmentId)-r.getBoundingClientRect().top;
+      if(Math.abs(delta)<.5)return;
+      rowSettlements.set(r,r.animate([{transform:'translateY('+delta+'px)'},{transform:'translateY(0px)'}],{duration,easing}));
+    });
+  }
   function bindRowDrag(symbol,row,card,layout){
     var label=tr('Drag to reorder; use Up/Down keys','Arrastra para reordenar; usa las flechas arriba/abajo');
     symbol.title=label;symbol.setAttribute('aria-label',label);
@@ -219,27 +242,87 @@ window.STEquipmentTable=(function(){
       reorder(card,layout.cards[layout.cards.indexOf(card)+(e.key==='ArrowUp'?-1:1)],layout);
     });
     symbol.addEventListener('pointerdown',e=>{
-      if(symbol.disabled)return;
-      var start=e.clientY,from=layout.cards.indexOf(card),target=from,dragging=false;
+      if(symbol.disabled||e.button!==0||gesture)return;
+      stopRowSettlements(layout.rows);
+      // Keep the canonical row order and pointer capture intact. Only the
+      // painted positions are changed until pointerup commits the reorder.
+      var from=layout.cards.indexOf(card),target=from,dragging=false;
+      var rects=layout.rows.map(r=>r.getBoundingClientRect()),origin=rects[from];
+      var start=e.clientY,tableTop=layout.table.getBoundingClientRect().top;
+      var grabOffset=start-origin.top,first=rects[0].top,last=rects.at(-1).bottom;
+      var height=origin.height,lastX=e.clientX,lastY=e.clientY,frame=null;
       function clear(){
-        row.classList.remove('equipment-table-dragging');
-        layout.rows.forEach(r=>r.classList.remove('equipment-table-drop-before','equipment-table-drop-after'));
+        if(frame!==null){window.cancelAnimationFrame?.(frame);frame=null;}
+        layout.table.classList.remove('equipment-table-row-drag-active');
+        layout.rows.forEach(r=>{r.classList.remove('equipment-table-dragging');rowShift(r,0);});
+      }
+      function previewOrder(next){
+        if(target===next)return;
+        target=next;
+        // With zero border spacing, opening a gap for the dragged row means
+        // shifting the crossed rows by its actual height, not a fixed pitch.
+        layout.rows.forEach((r,i)=>{
+          if(i===from)return;
+          var offset=next>from&&i>from&&i<=next?-height:next<from&&i>=next&&i<from?height:0;
+          rowShift(r,offset);
+        });
+      }
+      function preview(){
+        var delta=layout.table.getBoundingClientRect().top-tableTop;
+        var bounds=layout.scroller.getBoundingClientRect();
+        var valid=lastX>=bounds.left&&lastX<=bounds.right&&lastY>=first+delta-16&&lastY<=last+delta+16;
+        var desired=lastY-grabOffset-delta,center=desired+height/2;
+        var best=Infinity,next=from;
+        if(valid)rects.forEach((rect,i)=>{
+          var distance=Math.abs(center-(rect.top+rect.height/2));
+          if(distance<best){best=distance;next=i;}
+        });
+        previewOrder(next);
+        // Follow the pointer continuously without animating the held row.
+        // Clamp it within the table body so it never covers the headers.
+        rowShift(row,Math.max(first,Math.min(last-height,desired))-origin.top);
+      }
+      function edgeDirection(){
+        if(lastY<48)return -1;
+        if(lastY>window.innerHeight-48)return 1;
+        return 0;
+      }
+      function scrollFrame(){
+        frame=null;if(!dragging||!edgeDirection())return;
+        var bounds=layout.scroller.getBoundingClientRect();
+        if(lastX<bounds.left||lastX>bounds.right)return;
+        var before=layout.table.getBoundingClientRect().top;
+        window.scrollBy?.(0,edgeDirection()*12);
+        preview();
+        if(layout.table.getBoundingClientRect().top!==before)queueScroll();
+      }
+      function queueScroll(){
+        if(frame===null&&edgeDirection()&&window.requestAnimationFrame)frame=window.requestAnimationFrame(scrollFrame);
       }
       function move(ev){
-        if(!dragging&&Math.abs(ev.clientY-start)<4)return;
-        dragging=true;clear();row.classList.add('equipment-table-dragging');
-        var bounds=layout.scroller.getBoundingClientRect(),first=layout.rows[0].getBoundingClientRect(),last=layout.rows.at(-1).getBoundingClientRect();
-        if(ev.clientX<bounds.left||ev.clientX>bounds.right||ev.clientY<first.top-16||ev.clientY>last.bottom+16){target=from;return;}
-        if(ev.clientY<48)window.scrollBy?.(0,-12);
-        else if(ev.clientY>window.innerHeight-48)window.scrollBy?.(0,12);
-        var best=Infinity;target=from;
-        layout.rows.forEach((r,i)=>{
-          var rect=r.getBoundingClientRect(),distance=Math.abs(ev.clientY-(rect.top+rect.height/2));
-          if(distance<best){best=distance;target=i;}
-        });
-        if(target!==from)layout.rows[target].classList.add(target<from?'equipment-table-drop-before':'equipment-table-drop-after');
+        lastX=ev.clientX;lastY=ev.clientY;
+        if(!dragging&&Math.abs(lastY-start)<4)return;
+        if(!dragging){
+          dragging=true;layout.table.classList.add('equipment-table-row-drag-active');row.classList.add('equipment-table-dragging');
+        }
+        preview();queueScroll();
       }
-      startGesture(e,symbol,move,ev=>{move(ev);clear();if(dragging&&target!==from)reorder(card,layout.cards[target],layout);},clear);
+      function finish(commit,ev){
+        if(commit&&ev)move(ev);
+        var before=dragging?visibleRowPositions(layout):null,destination=layout.cards[target];
+        var changed=commit&&dragging&&target!==from&&canMove(card);
+        clear();
+        if(changed){
+          // A single drop updates the real model. The layout may be rebuilt
+          // by the editor, so settle the new rows from their last painted Y.
+          reorder(card,destination,layout);
+        }
+        if(before){
+          var nextLayout=tableLayouts.find(l=>l.conveyor===layout.conveyor&&l.cards.includes(card));
+          if(nextLayout)settleRows(nextLayout,before);
+        }
+      }
+      startGesture(e,symbol,move,ev=>finish(true,ev),()=>finish(false));
     });
   }
   function headingParts(text){
@@ -427,12 +510,44 @@ window.STEquipmentTable=(function(){
   function scheduleRefresh(){
     if(queued)return;queued=true;queueMicrotask(function(){queued=false;refresh();});
   }
+  function cancelViewMotion(){
+    var motion=viewMotion;if(!motion)return;
+    viewMotion=null;
+    motion.content.classList.remove('equipment-view-transition');
+    motion.animations.forEach(a=>a.cancel());
+  }
+  function animateViewChange(content,fromHeight){
+    var incoming=active?el('equipment-table-view'):separate?(el('basic-conveyor-layout')||el('equipment-list')):el('equipment-list');
+    if(reducedMotion()||!content||content.hidden||!incoming?.animate||!Number.isFinite(fromHeight)||fromHeight<=0)return;
+    var toHeight=content.getBoundingClientRect().height;
+    if(!(toHeight>0))return;
+    var options=motionOptions(),motion={content,animations:[]};
+    viewMotion=motion;
+    function finish(){
+      if(viewMotion!==motion)return;
+      viewMotion=null;content.classList.remove('equipment-view-transition');
+    }
+    // Animate the actual new view and the section's height; no duplicate
+    // input tree, deferred model update or temporary second presentation.
+    var reveal=incoming.animate([{opacity:.3,transform:'translateY(5px)'},{opacity:1,transform:'translateY(0px)'}],options);
+    motion.animations.push(reveal);
+    var last=reveal;
+    if(Math.abs(fromHeight-toHeight)>.5&&content.animate){
+      content.classList.add('equipment-view-transition');
+      var height=content.animate([{height:fromHeight+'px'},{height:toHeight+'px'}],options);
+      motion.animations.push(height);last=height;
+    }
+    last.onfinish=finish;last.oncancel=finish;
+  }
   function select(mode){
-    if(!current||!['cards','table'].includes(mode))return;
+    if(!current||!['cards','table'].includes(mode)||el('equipment-view-tools')?.hidden||active===(mode==='table'))return;
+    var content=el('equipment-section-content'),fromHeight=content?.getBoundingClientRect().height;
+    cancelViewMotion();
     labels[scope]=mode;window.STPreferences?.write('equipmentView.'+scope,mode);
     // Reuse the existing editor layout coordinator. View changes alone do
     // not invalidate results, mark the case dirty, or commit input values.
     window.STBasicMode?.sync(current);
+    if(active===(mode==='table'))animateViewChange(content,fromHeight);
   }
   function sync(state,view,split){
     current=state;section=view;separate=Boolean(split);scope=key(view,separate);
@@ -446,6 +561,9 @@ window.STEquipmentTable=(function(){
     }
     var allowed=Boolean(state?.activeCase&&state.uiView==='editor'&&['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase()));
     var next=allowed&&wantsTable(state,view,separate);
+    var context=JSON.stringify([state?.activeCase?.id,state?.activeSimulationId,scope,view,allowed]);
+    if(context!==viewContext||next!==active)cancelViewMotion();
+    viewContext=context;
     tools.hidden=!allowed;
     tools.setAttribute('aria-label',tr('Equipment presentation','Vista de equipos'));
     for(var [id,on,en,es] of [['equipment-view-cards',!next,'Card view','Vista de tarjetas'],['equipment-view-table',next,'Table view','Vista de tablas']]){

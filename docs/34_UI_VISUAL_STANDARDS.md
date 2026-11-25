@@ -571,3 +571,14 @@ Validación focalizada: 3/3 casos de `test/EquipmentTable.test.js` ejecutados co
 Se restituyen las leyendas de grupo en una fila superior con colspan y colgroup reales, sin mezclar nombre del parámetro y unidad. Los tres niveles usan el color secundario; todas las divisiones verticales de encabezado usan la misma línea secundaria. Las filas de encabezado tienen altura automática y las leyendas/unidades no llevan relleno entre sí. Se elimina el número de posición visible, manteniendo el icono de tipo como punto de arrastre y el orden interno original. El área de redimensionamiento es transparente en hover (solo cambia el cursor); se conserva el foco visible para teclado, los mínimos de entrada, el ajuste automático y los anchos personalizados. Basic no cambia.
 
 Validación: 5/5 pruebas de EquipmentTable en arnés JavaScript con doble de DOM y 4/4 comprobaciones estáticas CSS/markup aprobadas. No se realizó prueba visual en navegador real.
+
+
+#### Arrastre animado de filas (Advance)
+
+Durante el arrastre desde el icono de tipo, la fila sigue el puntero y las filas cruzadas se desplazan animadamente por la altura real del elemento arrastrado, dejando el espacio de inserción sin cambiar el orden canónico. Se mantiene la alineación de columnas y el ancho manual; al soltar se llama una sola vez al reordenamiento existente del editor y se anima el asentamiento de las filas. Escape, pérdida de captura, cancelación de puntero y soltar fuera revierten la vista previa sin tocar los datos. Respeta la preferencia de movimiento reducido. No afecta tarjetas, Basic ni motores de simulación.
+
+### Transición de presentación Cards / Table
+
+En Advance, solo el cambio explícito desde los dos botones de presentación anima la opacidad y un pequeño desplazamiento de la vista entrante, y la altura del contenido de la subsección con los tokens de movimiento existentes. Se reutilizan los mismos controles y valores del modelo. No se repite la animación en recálculos o refrescos ordinarios. Cambios rápidos de vista, contexto o modo cancelan la animación previa; la preferencia de movimiento reducido deshabilita la transición. No afecta a Basic.
+
+Validación: 7/7 pruebas de EquipmentTable (incluidas vista previa de arrastre ascendente/descendente, reversión, desplazamiento de página, cancelación y transiciones de presentación) aprobadas en arnés JavaScript aislado con doble de DOM; 4/4 comprobaciones estáticas CSS/JS aprobadas. No se ejecutó la suite completa de Node/JSDOM ni se comprobó la fluidez visual en navegador real.

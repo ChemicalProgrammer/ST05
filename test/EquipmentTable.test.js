@@ -13,7 +13,7 @@ function fixture(){
   const cardsButton=withId('button','equipment-view-cards'),tableButton=withId('button','equipment-view-table');
   tools.append(cardsButton,tableButton);
   const list=withId('div','equipment-list'),host=withId('div','equipment-table-view');
-  section.append(tools,list,host);d.body.append(section);
+  const content=withId('div','equipment-section-content');content.append(list,host);section.append(tools,content);d.body.append(section);
   const state={activeCase:{id:'c'},uiView:'editor',bootstrap:{uiMode:'ADVANCE'}};
   const preferences=new Map(),calls={dirty:0,evaluation:0,delete:0,reorder:0,releases:0};
   let view='equipment',split=false;
@@ -78,7 +78,7 @@ function fixture(){
   }
   const a=card('Filler','FILLER',0),b=card('Belt','CONVEYOR',1),c=card('Capper','CAPPER',2);
   w.eval(source);w.STBasicMode.sync(state);
-  return {dom,w,d,state,calls,preferences,list,host,tools,a,b,c,card,cardsButton,tableButton,
+  return {dom,w,d,state,calls,preferences,list,host,tools,content,a,b,c,card,cardsButton,tableButton,
     sync:(v='equipment',s=false)=>{view=v;split=s;w.STBasicMode.sync(state);},
     row:id=>host.querySelector('[data-table-equipment-id="'+id+'"]'),
     cell:(id,col)=>host.querySelector('[data-table-equipment-id="'+id+'"] td[data-column="'+col+'"]'),
@@ -201,24 +201,105 @@ test('group headings span their parameters, labels and units are separate, and r
  }finally{h.close();}
 });
 
-test('dragging from the existing equipment icon calls the canonical group reorder and Escape cancels',()=>{
+test('rows visibly shift while dragging, reverse smoothly, and only commit on drop',()=>{
  const h=fixture();
  try{
+   // Use three machines of unequal row heights to exercise real gaps.
+   const thirdCard=h.card('Packer','FILLER',3);
    h.tableButton.click();
-   const first=h.row('Filler'),last=h.row('Capper'),icon=first.querySelector('.equipment-table-symbol');
-   const scroller=first.closest('.equipment-table-scroll');
+   const first=h.row('Filler'),middle=h.row('Capper'),last=h.row('Packer'),icon=first.querySelector('.equipment-table-symbol');
+   const scroller=first.closest('.equipment-table-scroll'),table=first.closest('table');
    const rect=(top,height)=>({top,bottom:top+height,height,left:0,right:500,width:500});
-   first.getBoundingClientRect=()=>rect(100,40);last.getBoundingClientRect=()=>rect(140,40);scroller.getBoundingClientRect=()=>rect(70,110);
+   let tableTop=70;
+   table.getBoundingClientRect=()=>rect(tableTop,180);
+   first.getBoundingClientRect=()=>rect(100+tableTop-70,40);
+   middle.getBoundingClientRect=()=>rect(140+tableTop-70,60);
+   last.getBoundingClientRect=()=>rect(200+tableTop-70,35);
+   scroller.getBoundingClientRect=()=>rect(70,165);
    const send=(target,type,x,y)=>{
      const ev=new h.w.MouseEvent(type,{button:0,clientX:x,clientY:y,bubbles:true,cancelable:true});
      Object.defineProperty(ev,'pointerId',{value:1});target.dispatchEvent(ev);
    };
-   send(icon,'pointerdown',10,120);send(h.w,'pointermove',10,160);
-   assert(last.classList.contains('equipment-table-drop-after'));
+   const unchanged=()=>assert.deepEqual([...h.list.querySelectorAll('.equipment-card')].map(c=>c.dataset.equipmentId),['Filler','Belt','Capper','Packer']);
+   const reset=()=>{
+     for(const r of [first,middle,last])assert.equal(r.style.transform,'');
+     assert(!table.classList.contains('equipment-table-row-drag-active'));
+     assert(!first.classList.contains('equipment-table-dragging'));
+   };
+   send(icon,'pointerdown',10,120);send(h.w,'pointermove',10,170);
+   assert(table.classList.contains('equipment-table-row-drag-active'));
+   assert(first.classList.contains('equipment-table-dragging'));
+   assert.equal(first.style.transform,'translateY(50px)');
+   assert.equal(middle.style.transform,'translateY(-40px)');
+   assert.equal(last.style.transform,'');
+   assert.equal(h.calls.reorder,0);unchanged();
+   send(h.w,'pointermove',10,220);
+   assert.equal(middle.style.transform,'translateY(-40px)');
+   assert.equal(last.style.transform,'translateY(-40px)');
+   assert.equal(first.style.transform,'translateY(95px)');
+   assert.equal(h.calls.reorder,0);
+   send(h.w,'pointermove',10,170);
+   assert.equal(last.style.transform,'','returning across a row closes the gap');
+   assert.equal(middle.style.transform,'translateY(-40px)');
+   tableTop=60;send(h.w,'pointermove',10,170);
+   assert.equal(first.style.transform,'translateY(60px)','held row follows the cursor even as the page scrolls');
    h.w.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
-   assert.equal(h.calls.reorder,0);assert(!last.classList.contains('equipment-table-drop-after'));
-   send(icon,'pointerdown',10,120);send(h.w,'pointermove',10,160);send(h.w,'pointerup',10,160);
-   assert.equal(h.calls.reorder,1);assert.deepEqual(h.calls.lastMove,['Filler','Capper','equipment']);
-   assert(!first.classList.contains('equipment-table-dragging'));
+   assert.equal(h.calls.reorder,0);reset();unchanged();
+   tableTop=70;
+   send(icon,'pointerdown',10,120);send(h.w,'pointermove',10,220);send(h.w,'pointerup',600,220);
+   assert.equal(h.calls.reorder,0,'drop outside the table cancels');reset();unchanged();
+   send(icon,'pointerdown',10,120);send(h.w,'pointermove',10,220);send(h.w,'pointerup',10,220);
+   assert.equal(h.calls.reorder,1);assert.deepEqual(h.calls.lastMove,['Filler','Packer','equipment']);
+   reset();unchanged();
+   assert.equal(thirdCard._fields.querySelector('.equipment-name').value,'Packer');
+ }finally{h.close();}
+});
+
+test('dragging a lower row upward opens a gap of its own height and cancellation restores the view',()=>{
+ const h=fixture();
+ try{
+   h.tableButton.click();
+   const first=h.row('Filler'),last=h.row('Capper'),icon=last.querySelector('.equipment-table-symbol'),table=last.closest('table');
+   const rect=(top,height)=>({top,bottom:top+height,height,left:0,right:500,width:500});
+   first.getBoundingClientRect=()=>rect(100,40);last.getBoundingClientRect=()=>rect(140,60);
+   table.getBoundingClientRect=()=>rect(70,130);last.closest('.equipment-table-scroll').getBoundingClientRect=()=>rect(70,130);
+   function send(target,type,y){const ev=new h.w.MouseEvent(type,{button:0,clientX:10,clientY:y,bubbles:true,cancelable:true});Object.defineProperty(ev,'pointerId',{value:3});target.dispatchEvent(ev);}
+   send(icon,'pointerdown',170);send(h.w,'pointermove',120);
+   assert.equal(last.style.transform,'translateY(-40px)');
+   assert.equal(first.style.transform,'translateY(60px)');
+   assert.equal(h.calls.reorder,0);
+   send(h.w,'pointercancel',120);
+   assert.equal(h.calls.reorder,0);assert.equal(first.style.transform,'');assert.equal(last.style.transform,'');
+   assert(!table.classList.contains('equipment-table-row-drag-active'));
+ }finally{h.close();}
+});
+
+test('switching cards and tables animates the new view and section height, but not data refreshes',()=>{
+ const h=fixture();
+ try{
+   const animations=[];
+   function animator(node){node.animate=(frames,options)=>{const a={node,frames,options,cancelled:false,cancel(){this.cancelled=true;this.oncancel?.();}};animations.push(a);return a;};}
+   animator(h.content);animator(h.host);animator(h.list);
+   h.content.getBoundingClientRect=()=>({height:h.host.hidden?520:210});
+   h.tableButton.click();
+   assert.equal(h.host.hidden,false);
+   assert.equal(animations.length,2);
+   assert.equal(animations[0].node,h.host);assert.equal(animations[0].frames[0].opacity,.3);
+   assert.deepEqual(Array.from(animations[1].frames,x=>x.height),['520px','210px']);
+   assert(h.content.classList.contains('equipment-view-transition'));
+   h.w.STEquipmentTable.refresh();h.sync();
+   assert.equal(animations.length,2,'normal updates do not restart the transition');
+   const rate=h.cell('Filler','rate').querySelector('input');rate.value='575';emit(h,rate);
+   assert.equal(h.a._fields.querySelector('.equipment-rate').value,'575');
+   h.cardsButton.click();
+   assert(animations[0].cancelled&&animations[1].cancelled,'rapid toggles cancel the previous motion');
+   assert.equal(animations[2].node,h.list);
+   assert.deepEqual(Array.from(animations[3].frames,x=>x.height),['210px','520px']);
+   animations[3].onfinish();
+   assert(!h.content.classList.contains('equipment-view-transition'));
+   assert.equal(h.calls.dirty,1);
+   assert.equal(h.a._fields.querySelector('.equipment-rate').value,'575');
+   h.w.matchMedia=()=>({matches:true});h.tableButton.click();
+   assert.equal(h.host.hidden,false);assert.equal(animations.length,4,'reduced-motion preference suppresses animation');
  }finally{h.close();}
 });

@@ -1,5 +1,5 @@
 import { planDiscretePackages, addDiscretePackets } from './DiscretePackageEngine.js';
-import { stopReliabilityProfile, selectReliabilityStop } from './StopReliability.js';
+import { stopReliabilityProfile, selectReliabilityStop, createFailureHistory, startFailureEpisode, closeFailureEpisode, chargeFailureEpisode, snapshotFailureHistory, summarizeFailureOverlap } from './StopReliability.js';
 import { applyProductProfile, productUnitFactor, productFlowUnit, productPackSize } from './ProductProfiles.js';
 import { plantCalendarSchedule, resolvePlannedStops } from './PlantCalendarSchedule.js';
 import { createEquipmentRandom } from './SeededRandom.js';
@@ -386,6 +386,7 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
   const microStopRandom=createEquipmentRandom(seed,model.id,"microstop-occurrence");
   const microStopDurationRandom=createEquipmentRandom(seed,model.id,"microstop-duration");
   const reliability = reliabilityEnabled ? stopReliabilityProfile(model, reliabilityCategories) : null;
+  const failureTargetSeconds=reliability?randomExponentialSeconds(failureRandom,reliability.mtbfMinutes*60):null;
   return {
     ...model,
     nominalRatePerSecond: machineOperatingRatePerSecond(model),
@@ -412,9 +413,9 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
     emergencyStopLatched: false,
     emergencyStopSeconds: 0,
     failureRandom,microStopRandom,microStopDurationRandom,
-    timeToFailureRemainingSeconds: reliability
-      ? randomExponentialSeconds(failureRandom, reliability.mtbfMinutes * 60)
-      : null,
+    failureHistory:createFailureHistory(),
+    failureTargetSeconds,
+    timeToFailureRemainingSeconds:failureTargetSeconds,
     outputCount: 0,
     runningSeconds: 0,
     runningDesignOutput: 0,
@@ -1036,32 +1037,35 @@ function updateReliabilityFailures(runtime) {
 
     if (equipment.failureRemainingSeconds > 0) {
       equipment.failureRemainingSeconds = Math.max(0, equipment.failureRemainingSeconds - runtime.run.tickSeconds);
+      if(equipment.failureRemainingSeconds<=1e-8)equipment.failureRemainingSeconds=0;
       if (equipment.failureRemainingSeconds === 0) {
         // Confirmed plant convention: MTTR ends when repair is finished.
         // Recovery has no extra startup delay; repair ramps are explicitly opt-in.
         cancelEquipmentStart(equipment);
         equipment.repairRestartPending = true;
         equipment.repairStopClass=equipment.activeStopClass;
+        closeFailureEpisode(equipment.failureHistory,runtime.virtualSecond);
         runtime.events.push({ type: 'REPAIR_COMPLETED', atVirtualSecond: runtime.virtualSecond, equipmentId: equipment.id, stopClass:equipment.activeStopClass });
         equipment.activeStopClass=null;
-        equipment.timeToFailureRemainingSeconds = randomExponentialSeconds(equipment.failureRandom, profile.mtbfMinutes * 60);
+        equipment.failureTargetSeconds=equipment.timeToFailureRemainingSeconds=randomExponentialSeconds(equipment.failureRandom,profile.mtbfMinutes*60);
       }
       return;
     }
 
     if (!isOperationalMode(equipment) || equipment.microStopRemainingSeconds > 0) return;
     if (equipment.timeToFailureRemainingSeconds === null) {
-      equipment.timeToFailureRemainingSeconds = randomExponentialSeconds(equipment.failureRandom, profile.mtbfMinutes * 60);
+      equipment.failureTargetSeconds=equipment.timeToFailureRemainingSeconds=randomExponentialSeconds(equipment.failureRandom,profile.mtbfMinutes*60);
     }
-    // Exposure is consumed after actual positive processing, not by AUTO/idle time.
+    // Exposure is consumed during productive service ticks, not AUTO/idle time.
     // A threshold crossed in the previous productive tick fails at this tick boundary.
-    if (equipment.timeToFailureRemainingSeconds > 0) return;
+    if (equipment.timeToFailureRemainingSeconds > 1e-8) return;
 
     const category=selectReliabilityStop(profile,equipment.stopClassRandom);
     equipment.activeStopClass=category.stopClass;
     equipment.failureRemainingSeconds = category.mttrMinutes * 60;
     equipment[category.stopClass.toLowerCase()+'FailureCount']+=1;
     equipment.failureCount += 1;
+    startFailureEpisode(equipment.failureHistory,runtime.virtualSecond,category.stopClass,equipment.failureRemainingSeconds,equipment.failureTargetSeconds,equipment.reliabilityChargedSeconds);
     runtime.events.push({
       type: 'FAILURE_STARTED',
       atVirtualSecond: runtime.virtualSecond,
@@ -1188,7 +1192,7 @@ function processEquipment(runtime, index) {
     // Full productive ticks, not output/nominal equivalent time: partial flow and
     // productive ramps still consume operating time. No-flow states consume none.
     equipment.reliabilityExposureSeconds+=runtime.run.tickSeconds;
-    if(runtime.run.reliabilityEnabled!==false&&equipment.noiseProfile?.reliability&&equipment.timeToFailureRemainingSeconds!==null){
+    if(runtime.run.reliabilityEnabled!==false&&equipment.stopReliability&&equipment.timeToFailureRemainingSeconds!==null){
       equipment.timeToFailureRemainingSeconds-=runtime.run.tickSeconds;
       equipment.reliabilityChargedSeconds+=runtime.run.tickSeconds;
     }
@@ -1207,6 +1211,7 @@ function processEquipment(runtime, index) {
 function processEquipmentFlow(runtime, index) {
   const equipment = runtime.equipment[index];
   const tickSeconds = runtime.run.tickSeconds;
+  equipment.discreteResidentStep=Boolean(runtime.run.discretePackages&&equipment.residence);
   if (!isAvailable(equipment)) {
     recordUnavailable(equipment, tickSeconds);
     return;
@@ -1265,6 +1270,7 @@ function processEquipmentFlow(runtime, index) {
   const downstreamSpace = getDownstreamSpace(runtime, index);
   let flow = Math.max(0, Math.min(requestedFlow, inputAvailable, residualDischarge ? requestedFlow : downstreamSpace));
   let entries;
+  let outletWork=false,blockedOutlet=false,admissionWork=false;
   if(residence){
     residence.clock+=tickSeconds;
     // Position mode: move finite physical pockets with the machine's actual
@@ -1276,6 +1282,7 @@ function processEquipmentFlow(runtime, index) {
       &&(residence.queue[residence.head].positionDue===undefined
         ||residence.queue[residence.head].positionDue<=residence.positionClock+1e-8)){
       residence.ready+=residence.queue[residence.head++].amount;
+      if(runtime.run.discretePackages)residence.ready=Math.round(residence.ready*ratio)/ratio;
     }
     if(residence.head>=1024){residence.queue.splice(0,residence.head);residence.head=0;}
     inputAvailable=residence.ready;
@@ -1289,10 +1296,20 @@ function processEquipmentFlow(runtime, index) {
       : Infinity;
     if(!residence)inputAvailable=index===0?Infinity:(transportRate>0?incomingZone.waitingUnits/ratio:0);
     const requestedPackages=residence?requestedFlow:Math.min(requestedFlow,transportRate*tickSeconds/ratio);
+    const previousCredit=equipment.packageRemainder||0;
+    const hasComplete=Boolean(residence&&residence.inventory>=1-1e-8);
+    const service=hasComplete?previousCredit+requestedPackages:0;
     const planned=planDiscretePackages(equipment,runtime.zones[index],runtime.virtualSecond,tickSeconds,
       requestedPackages,inputAvailable,downstreamSpace,residualDischarge?control.residualRemainingUnits:undefined);
     flow=planned.count;
     entries=planned.entries;
+    if(residence&&runtime.run.discretePackages){
+      // A tick that finishes a package earns service even if the transfer
+      // cannot yet occur. Only a ready, already completed package whose
+      // attempted discharge fails is Blocked for the entire tick.
+      outletWork=hasComplete&&requestedPackages>0&&previousCredit<1-1e-8;
+      blockedOutlet=hasComplete&&inputAvailable>=1-1e-8&&service>=1-1e-8&&flow===0&&!outletWork;
+    }
   }
   const phase=control?'STOP':isRampingUp(equipment)?'RAMP':null;
   if(flow>0&&phase){
@@ -1304,6 +1321,10 @@ function processEquipmentFlow(runtime, index) {
   if(residence){
     residence.ready=Math.max(0,residence.ready-flow);
     residence.inventory=Math.max(0,residence.inventory-flow);
+    if(runtime.run.discretePackages){
+      residence.ready=Math.round(residence.ready*ratio)/ratio;
+      residence.inventory=Math.round(residence.inventory*ratio)/ratio;
+    }
     if(!control){
       const free=Math.max(0,capacity-residence.inventory);
       const transport=index===0||!incomingZone.physicalModelEnabled?Infinity:
@@ -1314,13 +1335,17 @@ function processEquipmentFlow(runtime, index) {
       let admission=Math.min(free,requestedFlow,available,transport/ratio);
       if(runtime.run.discretePackages){
         const supply=Math.min(requestedFlow*ratio,transport);
-        residence.intakeCredit=Math.min(Math.max(1,supply),(residence.intakeCredit||0)+supply);
+        admissionWork=supply>0&&free*ratio>=1-1e-8&&available*ratio>=1-1e-8;
+        // Spend credit before limiting the retained remainder. Capping first
+        // discards fractional work at every package and biases throughput by tick.
+        residence.intakeCredit=(residence.intakeCredit||0)+supply;
         admission=Math.floor(Math.min(free*ratio,available*ratio,residence.intakeCredit)+1e-8)/ratio;
-        residence.intakeCredit=Math.max(0,residence.intakeCredit-admission*ratio);
+        residence.intakeCredit=Math.max(0,Math.min(1,residence.intakeCredit-admission*ratio));
       }
       if(admission>0){
         admitted=admission;
         residence.inventory+=admission;
+        if(runtime.run.discretePackages)residence.inventory=Math.round(residence.inventory*ratio)/ratio;
         residence.queue.push({amount:admission,due:residence.clock+residenceSeconds,
           positionDue:equipment.processData?.equipment?.occupancyMode==='POSITIONS'
             ?residence.positionClock+capacity:undefined});
@@ -1334,7 +1359,13 @@ function processEquipmentFlow(runtime, index) {
   const blockedPackage=completePackages&&pending>=1-1e-8&&inputAvailable>=1&&downstreamSpace<1&&flow===0;
   const working=!blockedPackage&&(processingPackage||workingInside);
   const stateInput=completePackages&&inputAvailable<1?0:inputAvailable;
-  recordMaterialState(equipment,requestedFlow,working?Math.max(inputAvailable,requestedFlow):stateInput,downstreamSpace,
+  if(residence&&runtime.run.discretePackages){
+    // Partial cases cannot be blocked at their output until a complete
+    // package is ready. Count fractional intake and outlet service as work.
+    const productive=flow>0||!blockedOutlet&&(outletWork||admissionWork||workingInside||isRampingUp(equipment));
+    recordMaterialState(equipment,requestedFlow,productive?Math.max(inputAvailable,requestedFlow):0,
+      blockedOutlet?0:productive?downstreamSpace:Infinity,productive?Math.max(flow,requestedFlow):0,tickSeconds,control,residualDischarge);
+  }else recordMaterialState(equipment,requestedFlow,working?Math.max(inputAvailable,requestedFlow):stateInput,downstreamSpace,
     working?Math.max(flow,requestedFlow):flow,tickSeconds,control,residualDischarge);
   moveFlow(runtime, index, flow, residualDischarge, requestedFlow, inputAvailable, phase, entries);
   equipment.outputCount += flow;
@@ -1352,7 +1383,7 @@ function getRequestedFlow(equipment, tickSeconds) {
   if (isRampingUp(equipment)) {
     const rampFactor = equipment.startRampDurationSeconds <= 0
       ? 1
-      : equipment.startRampElapsedSeconds / equipment.startRampDurationSeconds;
+      : Math.min(1,(equipment.startRampElapsedSeconds+(equipment.residence&&equipment.discreteResidentStep?tickSeconds/2:0)) / equipment.startRampDurationSeconds);
     return equipment.nominalRatePerSecond * tickSeconds * rampFactor;
   }
   return equipment.nominalRatePerSecond * tickSeconds;
@@ -1428,7 +1459,7 @@ function advanceEquipmentStart(runtime, equipment) {
     equipment.startDelayRemainingSeconds = Math.max(0, equipment.startDelayRemainingSeconds - runtime.run.tickSeconds);
     return;
   }
-  if (isRampingUp(equipment)) {
+  if (isRampingUp(equipment)&&!(equipment.discreteResidentStep&&equipment.availabilityState==='BLOCKED')) {
     equipment.startRampElapsedSeconds = Math.min(
       equipment.startRampDurationSeconds,
       equipment.startRampElapsedSeconds + runtime.run.tickSeconds
@@ -1441,7 +1472,7 @@ function isStartDelayed(equipment) {
 }
 
 function isRampingUp(equipment) {
-  return equipment.startRampElapsedSeconds < equipment.startRampDurationSeconds;
+  return equipment.startRampElapsedSeconds+1e-8 < equipment.startRampDurationSeconds;
 }
 
 function resolveStartupDelaySeconds(equipment) {
@@ -1680,6 +1711,7 @@ function recordUnavailable(equipment, tickSeconds) {
   } else if (equipment.failureRemainingSeconds > 0) {
     equipment.stoppedSeconds += tickSeconds;
     equipment.failureSeconds += tickSeconds;
+    chargeFailureEpisode(equipment.failureHistory,tickSeconds);
     equipment[(equipment.activeStopClass||'GENERAL').toLowerCase()+'FailureSeconds']+=tickSeconds;
     equipment.availabilityState = 'FAILURE';
   } else if (equipment.microStopRemainingSeconds > 0) {
@@ -1989,7 +2021,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: '0.20.3',
+    engineVersion: '0.20.4',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -1998,7 +2030,7 @@ function createResult(runtime,partial=false) {
     plantCalendar: runtime.calendar.horizonSeconds ? {mode:'SCHEDULED',horizonSeconds:runtime.calendar.horizonSeconds,plannedStopSeconds:runtime.calendar.plannedStopSeconds,observedStopSeconds:runtime.calendarStopSeconds,events:runtime.calendar.events,restartPolicy:runtime.calendar.restartPolicy,completePeriod:Math.abs(duration-runtime.calendar.horizonSeconds)<runtime.run.tickSeconds+1e-8} : undefined,
     seed: runtime.run.seed,
     durationSeconds: duration,
-    summary: createSummary(runtime),
+    summary: {...createSummary(runtime),failureOverlap:summarizeFailureOverlap(runtime.equipment.map(e=>e.failureHistory),runtime.virtualSecond)},
     equipmentMetrics: Object.fromEntries(runtime.equipment.map((item) => [item.id, createEquipmentMetrics(item, duration, runtime.virtualSecond)])),
     accumulationZoneMetrics: Object.fromEntries(runtime.zones.filter((zone) => zone.visible).map((zone) => [
       zone.id,
@@ -2124,6 +2156,7 @@ function createEquipmentMetrics(equipment, durationSeconds, accountingElapsedSec
     stoppedSeconds: round(equipment.stoppedSeconds),
     failureSeconds: round(equipment.failureSeconds),
     failureCount: equipment.failureCount,
+    failureHistory:snapshotFailureHistory(equipment.failureHistory),
     minorFailureCount:equipment.minorFailureCount,majorFailureCount:equipment.majorFailureCount,generalFailureCount:equipment.generalFailureCount,
     minorFailureSeconds:round(equipment.minorFailureSeconds),majorFailureSeconds:round(equipment.majorFailureSeconds),generalFailureSeconds:round(equipment.generalFailureSeconds),
     plannedStopSeconds: round(equipment.plannedStopSeconds||0),
@@ -2284,7 +2317,7 @@ function configureProductFactors(runtime){
 function switchRuntimeProduct(runtime,id){
   const product=runtime.run.productCatalog.find(p=>p.id===id);
   const removed=materialInventory(runtime);
-  for(const e of runtime.equipment)if(e.residence)e.residence={clock:0,positionClock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1};
+  for(const e of runtime.equipment)if(e.residence){e.residence={clock:0,positionClock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1};e.packageRemainder=0;}
   runtime.clearoutBottleEquivalents+=removed;currentProductRow(runtime).clearoutBottleEquivalents+=removed;
   runtime.productTimeline.at(-1).endSeconds=runtime.virtualSecond;
   const models=applyProductProfile(runtime.baseEquipment,product);

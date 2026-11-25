@@ -10,7 +10,7 @@ export function planDiscretePackages(equipment, zone, start, tick, requested, av
     for(let index=0;index<count&&entry<=end+1e-8;index++,entry+=headway)entries.push(Math.min(entry,end));
     return {count:entries.length,entries};
   }
-  const canProcess=(equipment.residence?.inventory??available)>=1;
+  const canProcess=(equipment.residence?.inventory??available)>=1-1e-8;
   const previous=canProcess?(equipment.packageRemainder||0):0;
   const service=canProcess?previous+requested:0;
   const completed=Math.floor(service+1e-8);

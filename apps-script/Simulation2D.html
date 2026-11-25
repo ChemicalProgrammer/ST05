@@ -479,13 +479,27 @@ window.STSimulation2D=(function(){
   el('viewports')?.addEventListener('change',event=>{setViewportCount(event.target.value);checkpoint();});
 
   function num(value){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:2}):'—';}
+  function fallbackStopReliabilityProfile(model, categories) {
+    const general=model.noiseProfile?.reliability;
+    // 2D also resolves draft inputs before the numerical validator runs.
+    const valid=profile=>Number.isFinite(profile?.mtbfMinutes)&&profile.mtbfMinutes>0&&
+      Number.isFinite(profile?.mttrMinutes)&&profile.mttrMinutes>0;
+    const split=model.processData?.equipment?.stopInputs;
+    if (!split) return categories?.general===false||!valid(general) ? null : {...general,stopClasses:null};
+    const stopClasses=['minor','major'].filter(kind=>categories?.[kind]!==false && valid(split[kind]))
+      .map(kind=>({stopClass:kind.toUpperCase(),...split[kind],rate:1/split[kind].mtbfMinutes}));
+    const total=stopClasses.reduce((sum,profile)=>sum+profile.rate,0);
+    if (!total) return null;
+    return {mtbfMinutes:1/total,mttrMinutes:stopClasses.reduce((sum,profile)=>sum+profile.rate*profile.mttrMinutes,0)/total,stopClasses};
+  }
+
   function failuresFor(item,config){
-    const split=item.processData?.equipment?.stopInputs;
-    const profiles=split?Object.entries(split):[['general',item.noiseProfile?.reliability]];
-    return profiles.filter(([key,profile])=>config.reliabilityCategories?.[key]!==false
-      &&Number.isFinite(profile?.mtbfMinutes)&&profile.mtbfMinutes>0
-      &&Number.isFinite(profile.mttrMinutes)&&profile.mttrMinutes>0)
-      .map(([,profile])=>({rate:1/(profile.mtbfMinutes*60),repairSeconds:profile.mttrMinutes*60}));
+    const resolve=window.SimulatorEngine?.reliabilitySupport?.stopReliabilityProfile??fallbackStopReliabilityProfile;
+    const profile=resolve(item,config.reliabilityCategories);
+    if(!profile)return [];
+    const classes=profile.stopClasses||[{stopClass:'GENERAL',...profile,rate:1/profile.mtbfMinutes}];
+    return classes.map(category=>({stopClass:category.stopClass,rate:category.rate/60,ratePerMinute:category.rate,
+      repairSeconds:category.mttrMinutes*60,meanExposureSeconds:profile.mtbfMinutes*60}));
   }
   let schedule={},scheduleError='';
   const scheduleOptions={failures:el('failures'),events:el('use-events'),calendar:el('use-calendar')};
@@ -1873,7 +1887,7 @@ window.STSimulation2D=(function(){
         state:item.state,failureCount:item.kind==='machine'?finite(item.failureCount):null,
         stateAccounting:run.accountingSnapshot?.(item)??null,
         durationsSeconds:Object.fromEntries(Object.entries(item.durations||{}).map(([key,value])=>[key,finite(value)])),
-        ...(item.kind==='machine'?{waitingForPrimeSeconds:finite(item.waitingForPrimeSeconds),
+        ...(item.kind==='machine'?{failureHistory:run.failureHistory?.(item)??null,waitingForPrimeSeconds:finite(item.waitingForPrimeSeconds),
           reliabilityClockBasis:'PRODUCTIVE_STATE_TICKS',
           reliabilityExposureSeconds:finite(item.reliabilityExposureSeconds),
           reliabilityChargedSeconds:finite(item.reliabilityChargedSeconds),
@@ -1910,7 +1924,7 @@ window.STSimulation2D=(function(){
     const overflowBottles=valid?losses.reduce((a,b)=>a+b,0):null;
     const materialBalance=valid?{unit:'BOTTLES',inputBottles:input,outputBottles:bottles,inventoryBottles,overflowBottles,
       residualBottles:input-bottles-inventoryBottles-overflowBottles}:null;
-    return {schema:'st-simulation2d-summary-v1',controlPolicy:'PHYSICAL_FLOW_7',counterPolicy:'ST_EXCLUSIVE_STATES_V1',source,seed:finite(runSeed),round:round??null,
+    return {schema:'st-simulation2d-summary-v1',controlPolicy:'PHYSICAL_FLOW_8',counterPolicy:'ST_EXCLUSIVE_STATES_V1',failureOverlap:run.failureOverlap?.()??null,source,seed:finite(runSeed),round:round??null,
       runState,durationSeconds:run.time,targetDurationSeconds:finite(limit),
       complete:runState==='Completed'&&Number.isFinite(limit)&&run.time>=limit-1e-8,
       outputEquipmentId:output?.equipmentId??null,outputUnit:output?.outputUnit??null,
@@ -1920,10 +1934,22 @@ window.STSimulation2D=(function(){
       notes:['Counts are actual discrete outputs; bottle counts use each equipment output pack factor.',
         'The 2D model holds the selected format through changeovers. Legacy durations include Waiting for Prime in starving and Discharging in running; stateAccounting contains exclusive states and uncapped diagnostic equipment efficiency.',
         'Reliability exposure counts Running, Ramp up, Ramp down and Discharging ticks. Charged time excludes intervals with failures disabled or without a configured failure profile.',
+        'Dedicated failureHistory records all own repair episodes, independent of general event sampling. failureOverlap measures open repair intervals, not additive line production losses.',
         'Sensor signals and outlet queue units are sampled after conveyor motion and before machine handoffs. Prime triggers count actual authorizations; Back-up triggers and clears count debounced transitions. The configured release position is diagnostic only in discrete transport.',
         'Normal blocked entry attempts retain product; only unavoidable residual discharge after the stop response can overflow at a physical conveyor. Machine outputs include spilled packages; conveyor inputs count accepted packages only.',
         'Material balance uses source admissions, final inventories in input units, final output and physical overflow in bottle equivalents. Older checkpoints without complete accounting cannot establish this balance.',
         'Schedule options on the enclosing checkpoint describe settings at capture, not proof that they were unchanged throughout the run.']};
+  }
+  // Apps Script may reorder object keys when it serializes a saved case.
+  // Compare the semantic 2D definition, not JSON insertion order. Numerical
+  // resolution is intentionally absent from this independent-run signature.
+  function canonical2DSignature(value){
+    function sorted(v){
+      if(Array.isArray(v))return v.map(sorted);
+      if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().filter(k=>k!=='zoneId'&&v[k]!==undefined).map(k=>[k,sorted(v[k])]));
+      return v;
+    }
+    try{return JSON.stringify(sorted(typeof value==='string'?JSON.parse(value):value));}catch(_){return null;}
   }
   function capture(){
     if(restoringView||!viewKey)return null;
@@ -2161,8 +2187,7 @@ window.STSimulation2D=(function(){
     let nextSchedule={};
     scheduleError='';
     try{nextSchedule=resolveSchedule(config);}catch(error){scheduleError=error.message;}
-    const omitZone=(key,value)=>key==='zoneId'?undefined:value;
-    const nextSignature=JSON.stringify(['physical-flow-7',next,revised,nextSchedule,scheduleError],omitZone);
+    const nextSignature=canonical2DSignature(['physical-flow-8',next,revised,nextSchedule,scheduleError]);
     const nextRepresentative=Number.isFinite(source?.seed)?source:null;
     const sameCase=next===key&&nextSignature===signature;
     if(sameCase&&nextRepresentative?.round===representative?.round&&nextRepresentative?.seed===representative?.seed){
@@ -2196,7 +2221,7 @@ window.STSimulation2D=(function(){
     if(newView){lastMachineActions.clear();markPlaybackAction(null);endDrag();viewKey=nextView;viewports.forEach(view=>{view.initialized=false;});camera.fit=viewportCount===1;}
     reset();
     let restoredRun=false,resumedPresentation;
-    if(model&&[1,2].includes(stored?.version)&&(stored.signature===signature)&&stored.checkpoint){
+    if(model&&[1,2].includes(stored?.version)&&(canonical2DSignature(stored.signature)===signature)&&stored.checkpoint){
       model=STSimulation2DEngine.create(definitions,seed,stored.checkpoint,schedule);
       configureModel();
       shiftOutput=Array.isArray(stored.shiftOutput)?[...stored.shiftOutput]:[];

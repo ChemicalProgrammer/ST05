@@ -1,6 +1,6 @@
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
-export const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.3/DES:0.5.0/cache:32';
+export const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.4/DES:0.5.0/cache:33';
 
 export function canonicalSimulationInputSignature(input) {
   function canonical(value) {

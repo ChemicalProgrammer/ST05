@@ -1070,7 +1070,7 @@ test('2D counts the configured repair ramp and the Back-up response with zero ru
   const repair=engine.create([machine]);
   repair.line[0].failureRemaining=.25;
   repair.step(.25);
-  assert.equal(repair.line[0].durations.acceleration,0);
+  assert.equal(repair.line[0].durations.acceleration,.25);
   for(let i=0;i<5;i++)repair.step(.25);
   assert.equal(repair.line[0].durations.acceleration,1);
   assert.equal(repair.line[0].state,'Running');

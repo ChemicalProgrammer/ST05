@@ -69,6 +69,13 @@ export async function simulateBatch(input, options={}) {
     for(const key of Object.keys(metrics))if(typeof metrics[key]==='number')equipmentStatistics[id][key]=summarizeReplications(rows.map(r=>r.equipmentMetrics[id][key]));
   }
   const batch={schema:'st-replications-v1',rounds:count,baseSeed,representativeRound:closestRound(rows,statistics.outputCount?.mean,statistics.lineOeePercent?.mean),durationSeconds:input.run.durationSeconds,shiftSeconds:input.run.shiftSeconds||null,statistics,equipmentStatistics,rows,replays};
+  // Histories are individual trajectories. Only their scalar overlap
+  // statistics can be aggregated over independent replications.
+  const overlapRows=rows.map(row=>row.summary.failureOverlap);
+  if(overlapRows.every(row=>row?.schema==='ST_FAILURE_OVERLAP_V1')){
+    batch.failureOverlapStatistics=Object.fromEntries(['episodes','openEpisodes','unionSeconds','overlapSeconds','summedEquipmentSeconds','peakConcurrent']
+      .map(key=>[key,summarizeReplications(overlapRows.map(row=>row[key]))]));
+  }
   if(!options.summaryOnly&&input.run.calculationMode!=='SUMMARY'&&batch.representativeRound>1&&!replays[batch.representativeRound-2]){
     const row=rows[batch.representativeRound-1],runner=options.runRound||simulateLineAsync;
     options.onRepresentative?.(row.round);
@@ -99,6 +106,8 @@ export function replicationView(result,selection='average'){
     return {...result,...row,batch:undefined,inputSignature:signature,products:row.products,plantCalendar:row.plantCalendar,samples:replay?.samples||[],accumulationZoneMetrics:replay?.accumulationZoneMetrics||{},resultView:{mode:'round',round:row.round}};
   }
   const view={...result,summary:averageRoundValues(rows.map(r=>r.summary)),equipmentMetrics:averageRoundValues(rows.map(r=>r.equipmentMetrics)),plantCalendar:averageRoundValues(rows.map(r=>r.plantCalendar)),resultView:{mode:'average',rounds:rows.length}};
+  for(const metrics of Object.values(view.equipmentMetrics||{}))delete metrics.failureHistory;
+  if(view.summary)delete view.summary.failureOverlap;
   if(result.effectiveRuntimeStop){
     view.durationSeconds=averageRoundValues(rows.map(r=>r.durationSeconds));
     view.effectiveRuntimeStop={...result.effectiveRuntimeStop,status:'BATCH',

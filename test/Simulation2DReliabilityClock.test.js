@@ -40,7 +40,9 @@ test('operating ramp consumes exposure and one threshold triggers exactly one fa
  model.step(.25);assert.equal(m.exposure,0);assert.equal(m.failureCount,0);
  model.step(.25);assert.equal(m.state,'Failed');assert.equal(m.failureCount,1);assert.equal(m.reliabilityChargedSeconds,.5);
  for(let i=0;i<4;i++)model.step(.25);
- assert.equal(m.failureCount,1);assert.equal(m.reliabilityChargedSeconds,.5);
+ // The fourth repair tick is the first recovered productive tick.
+ assert.equal(m.failureCount,1);assert.equal(m.reliabilityChargedSeconds,.75);
+ assert.equal(m.durations.failure,1);
  assert.equal(m.restartRequests.REPAIR_COMPLETED,1);
 });
 test('clock stays reproducible across checkpoint restore and distinguishes disabled failures',()=>{

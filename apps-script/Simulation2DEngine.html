@@ -1,6 +1,78 @@
 <script>
 window.STSimulation2DEngine=(function(){
   const epsilon=1e-6;
+  // Standalone test/replay harnesses use the exact same pure helpers.
+  // Production uses the shared numerical implementation exposed by SimulatorEngine.
+  function normalizeSeed(seed) {
+    return Number.isInteger(seed) ? seed >>> 0 : 0;
+  }
+  function equipmentRandomSeed(seed,equipmentId,eventType) {
+    const key=JSON.stringify([normalizeSeed(seed),String(equipmentId),String(eventType)]);
+    let hash=2166136261;
+    for(let i=0;i<key.length;i++){hash^=key.charCodeAt(i);hash=Math.imul(hash,16777619);}
+    return hash>>>0;
+  }
+  function seededRandomStep(state) {
+    state=(state+0x6d2b79f5)>>>0;
+    let value=state;
+    value=Math.imul(value^(value>>>15),value|1);
+    value^=value+Math.imul(value^(value>>>7),value|61);
+    return {state,value:((value^(value>>>14))>>>0)/4294967296};
+  }
+
+  // Dedicated repair episodes are independent of the bounded generic event log.
+  // Times are virtual seconds. Observed failure time is exclusive state time;
+  // an open repair interval can overlap calendar/command/E-stop conditions.
+  function createFailureHistory(){
+    return {schema:'ST_FAILURE_HISTORY_V1',complete:true,episodes:[]};
+  }
+  function startFailureEpisode(history,start,stopClass,repair,threshold,charged){
+    if(!history)return;
+    history.episodes.push([start,null,stopClass,repair,Number.isFinite(threshold)?threshold:null,charged,0,null]);
+  }
+  function closeFailureEpisode(history,end,reason='REPAIRED'){
+    const row=history?.episodes.at(-1);
+    if(row&&row[1]===null){row[1]=end;row[7]=reason;}
+  }
+  function chargeFailureEpisode(history,seconds){
+    const row=history?.episodes.at(-1);
+    if(row&&row[1]===null)row[6]+=seconds;
+  }
+  function snapshotFailureHistory(history){
+    if(!history)return null;
+    return {schema:history.schema,complete:history.complete,fields:[
+      'startSecond','endSecond','stopClass','configuredRepairSeconds','sampledExposureSeconds',
+      'cumulativeChargedSecondsAtStart','observedFailureSeconds','endReason'
+    ],episodes:history.episodes.map(row=>row.map((value,index)=>typeof value==='number'?Number(value.toFixed(index===6?9:6)):value))};
+  }
+  function summarizeFailureOverlap(histories,elapsed){
+    if(!Number.isFinite(elapsed)||histories.some(h=>!h||!h.complete))return null;
+    const boundaries=[];let count=0,open=0;
+    for(const history of histories)for(const row of history.episodes){
+      count++;if(row[1]===null)open++;
+      const start=Math.min(elapsed,Math.max(0,row[0])),end=Math.min(elapsed,row[1]??elapsed);
+      if(end>start){boundaries.push([start,1],[end,-1]);}
+    }
+    boundaries.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+    let active=0,last=0,union=0,overlap=0,sum=0,peak=0;
+    for(let i=0;i<boundaries.length;){
+      const t=boundaries[i][0],span=t-last;
+      if(active>0)union+=span;
+      if(active>1)overlap+=span;
+      sum+=active*span;
+      while(i<boundaries.length&&boundaries[i][0]===t)active+=boundaries[i++][1];
+      peak=Math.max(peak,active);last=t;
+    }
+    const tidy=v=>Number(v.toFixed(6));
+    return {schema:'ST_FAILURE_OVERLAP_V1',basis:'OPEN_REPAIR_INTERVALS_NOT_LINE_LOSS',
+      episodes:count,openEpisodes:open,unionSeconds:tidy(union),overlapSeconds:tidy(overlap),
+      summedEquipmentSeconds:tidy(sum),peakConcurrent:peak};
+  }
+
+  const reliability=window.SimulatorEngine?.reliabilitySupport||{
+    equipmentRandomSeed,seededRandomStep,createFailureHistory,startFailureEpisode,closeFailureEpisode,
+    chargeFailureEpisode,snapshotFailureHistory,summarizeFailureOverlap
+  };
   const durationKey={
     Starting:'starting',Running:'running',Discharging:'running',Starved:'starving','Waiting for Prime':'starving',
     'Ramp up':'acceleration','Ramp down':'deceleration',Blocked:'blocked','Back-up stop':'backupStop',Failed:'failure',
@@ -118,7 +190,9 @@ window.STSimulation2DEngine=(function(){
         reliabilityExposureSeconds:0,reliabilityChargedSeconds:0,
         restartRequests:{INITIAL:1},startingSecondsByCause:{},rampUpSecondsByCause:{},waitingForPrimeSeconds:0,
         awaitPrime:definitions[index-1]?.kind==='belt'&&definitions[index-1].prime!=null,
-        randomState:(Math.trunc(seed)+Math.imul(index+1,2654435761))>>>0,
+        failureRandomState:reliability.equipmentRandomSeed(seed,definition.id,'failure'),
+        failureClassRandomState:reliability.equipmentRandomSeed(seed,definition.id,'failure-class'),
+        failureTargetSeconds:null,failureHistory:reliability.createFailureHistory(),repairRestartIssued:false,
         durations:{starting:0,running:0,starving:0,acceleration:0,deceleration:0,blocked:0,backupStop:0,failure:0,paused:0,stopped:0,emergencyStop:0,plannedStop:0},
         recentOutput:[],ratePerMinute:0});
     let time=0,commandIndex=0,stopIndex=0,activeStop=null,materialAccountingComplete=true,counterAccountingComplete=true;
@@ -152,12 +226,13 @@ window.STSimulation2DEngine=(function(){
       else if(action==='RESET'&&item.emergency){item.emergency=false;item.mode='STOP';}
       else if(!item.emergency&&['RUN','AUTO','MANUAL','STOP','PAUSE'].includes(action)){
         item.mode=action;
-        if(!wasRunning&&running(item))restart(item);
+        if(!wasRunning&&running(item)&&!item.repairRecoveryPending)restart(item);
       }
       if(!running(item))item.state=haltState(item);
     }
     function haltState(item){
       if(item.emergency)return 'Emergency stop';
+      if(activeStop)return 'Planned stop';
       if(item.mode==='PAUSE')return 'Paused';
       if(item.mode==='STOP')return 'Stopped';
       return 'Planned stop';
@@ -167,6 +242,8 @@ window.STSimulation2DEngine=(function(){
       if(!options.failures)for(const item of line){
         if(item.failureRemaining>0){
           item.failureRemaining=0;
+          reliability.closeFailureEpisode(item.failureHistory,time,'DISABLED');
+          item.repairRecoveryPending=true;item.repairRestartIssued=false;
           if(item.state==='Failed')item.state='Waiting';
         }
       }
@@ -185,6 +262,7 @@ window.STSimulation2DEngine=(function(){
         saved.durations={...item.durations,...saved.durations};
         Object.assign(item,saved);
         if(!counterAccountingComplete)item.stateAccounting=null;
+        if(item.kind==='machine'&&saved.failureHistory?.schema!=='ST_FAILURE_HISTORY_V1')item.failureHistory=null;
       });
     }
     function snapshot(){
@@ -286,55 +364,61 @@ window.STSimulation2DEngine=(function(){
       machine.recentOutput.push(time);
       return true;
     }
-    function random(machine){
-      machine.randomState=(Math.imul(machine.randomState,1664525)+1013904223)>>>0;
-      return (machine.randomState+.5)/4294967296;
+    function random(machine,field){
+      const next=reliability.seededRandomStep(machine[field]);
+      machine[field]=next.state;return next.value;
     }
-    // Match the numerical engine's productive-state eligibility, rather
-    // than treating retained material as proof of operation. Keep a separate
-    // counter of time actually charged while the reliability process is on.
+    function sampleExposure(machine){
+      const profiles=machine.failures||[];
+      const total=profiles.reduce((sum,profile)=>sum+profile.rate,0);
+      const mean=profiles[0]?.meanExposureSeconds??(total>0?1/total:null);
+      if(!(mean>0))return null;
+      return -Math.log(1-Math.max(random(machine,'failureRandomState'),1e-12))*mean;
+    }
     function chargeReliability(machine,seconds){
       if(!['Running','Ramp up','Ramp down','Discharging'].includes(machine.state))return;
       machine.reliabilityExposureSeconds+=seconds;
-      const profiles=machine.failures||[];
-      if(!options.failures||!profiles.length)return;
-      if(machine.exposure===null){
-        const total=profiles.reduce((sum,profile)=>sum+profile.rate,0);
-        if(!(total>0))return;
-        machine.exposure=-Math.log(random(machine))/total;
-      }
-      machine.exposure-=seconds;
-      machine.reliabilityChargedSeconds+=seconds;
+      if(!options.failures||!machine.failures?.length)return;
+      if(machine.exposure===null)machine.failureTargetSeconds=machine.exposure=sampleExposure(machine);
+      if(machine.exposure===null)return;
+      machine.exposure-=seconds;machine.reliabilityChargedSeconds+=seconds;
     }
+    // Timers run at the beginning of a tick, like the numerical engine.
+    // A repair advances during commanded/calendar stops, except E-stop.
     function updateFailure(machine,seconds){
+      if(machine.emergency)return;
       if(machine.failureRemaining>0){
         machine.failureRemaining=Math.max(0,machine.failureRemaining-seconds);
-        if(machine.failureRemaining===0){
-          // Repair has no extra startup delay; post-repair ramps are opt-in.
-          restart(machine,'REPAIR_COMPLETED',0,machine.rampAfterRepair?machine.rampSeconds??0:0);
-          machine.repairRecoveryPending=true;
+        if(machine.failureRemaining<=1e-8){
+          machine.failureRemaining=0;
+          reliability.closeFailureEpisode(machine.failureHistory,time);
+          machine.repairRecoveryPending=true;machine.repairRestartIssued=false;
+          machine.failureTargetSeconds=machine.exposure=sampleExposure(machine);
         }
-        return true;
+        return;
       }
       const profiles=machine.failures||[];
-      // A threshold reached during a productive tick causes a failure at
-      // the next tick boundary. Do not sample or consume time while parked.
-      if(!profiles.length||machine.exposure===null||machine.exposure>0)return false;
-      const total=profiles.reduce((sum,profile)=>sum+profile.rate,0);
-      if(!(total>0))return false;
-      let pick=random(machine)*total;
-      const profile=profiles.find(item=>(pick-=item.rate)<=0)||profiles.at(-1);
+      if(!available(machine)||!profiles.length||machine.exposure===null||machine.exposure>1e-8)return;
+      const rate=profile=>profile.ratePerMinute??profile.rate;
+      const total=profiles.reduce((sum,profile)=>sum+rate(profile),0);
+      if(!(total>0))return;
+      let profile=profiles[0];
+      if(profiles.length>1){
+        const threshold=random(machine,'failureClassRandomState')*total;
+        let cumulative=0;
+        profile=profiles.find(item=>(cumulative+=rate(item))>threshold)||profiles.at(-1);
+      }
       machine.failureRemaining=profile.repairSeconds;
       machine.failureCount++;
+      reliability.startFailureEpisode(machine.failureHistory,time,profile.stopClass??'GENERAL',
+        profile.repairSeconds,machine.failureTargetSeconds,machine.reliabilityChargedSeconds);
       machine.exposure=null;
-      return true;
     }
     function primeReady(belt){
       if(belt?.kind!=='belt'||belt.prime==null)return true;
       return belt.primeQueueUnits>=belt.primeThresholdUnits;
     }
     function stepMachine(machine,upstream,downstream,seconds){
-      if(options.failures&&updateFailure(machine,seconds)){machine.state='Failed';return;}
       if(downstream?.backupBlocked){
         if(machine.backupSince===null){
           machine.backupSince=time;
@@ -361,6 +445,10 @@ window.STSimulation2DEngine=(function(){
       }
       const braking=machine.backupSince!==null&&time-machine.backupSince+epsilon>=downstream.responseDelay;
       if((machine.repairRecoveryPending&&machine.backupSince!==null)||(machine.residual<=0&&braking)){machine.state='Back-up stop';return;}
+      if(machine.repairRecoveryPending&&!machine.repairRestartIssued){
+        restart(machine,'REPAIR_COMPLETED',0,machine.rampAfterRepair?machine.rampSeconds??0:0);
+        machine.repairRestartIssued=true;
+      }
       if(machine.awaitPrime){
         // As in numerical triggerPrimeSensor, an active outgoing Back-up
         // inhibits Prime authorization even during the stop response.
@@ -371,12 +459,12 @@ window.STSimulation2DEngine=(function(){
           upstream.primeTriggerCount++;
         }
       }
-      machine.repairRecoveryPending=false;
+      machine.repairRecoveryPending=false;machine.repairRestartIssued=false;
       if(machine.started+epsilon<machine.activeStartDelaySeconds){
         machine.started=Math.min(machine.activeStartDelaySeconds,machine.started+seconds);machine.state='Starting';return;
       }
       const decelerating=machine.backupSince!==null&&!braking;
-      const accelerating=!decelerating&&!braking&&machine.rampElapsed<machine.activeRampSeconds;
+      const accelerating=!decelerating&&!braking&&machine.rampElapsed+1e-8<machine.activeRampSeconds;
       const factor=decelerating?Math.max(0,1-(time-machine.backupSince)/downstream.responseDelay)
         :accelerating?Math.min(1,(machine.rampElapsed+seconds/2)/machine.activeRampSeconds):1;
       const motionState=decelerating?'Ramp down':accelerating?'Ramp up':braking?'Discharging':'Running';
@@ -384,6 +472,7 @@ window.STSimulation2DEngine=(function(){
         stepResident(machine,upstream,downstream,seconds,factor,motionState,accelerating,machine.backupSince!==null);
         return;
       }
+      const beforeOutput=machine.produced;
       if(machine.remaining!==null){
         if(accelerating)machine.rampElapsed+=seconds;
         machine.remaining-=seconds*factor;
@@ -393,7 +482,7 @@ window.STSimulation2DEngine=(function(){
         if(!discharge(machine,downstream,braking)){machine.state='Blocked';return;}
         if(braking)machine.residual=Math.max(0,machine.residual-1);
       }
-      if(braking&&machine.input===0){machine.state='Back-up stop';return;}
+      if(braking&&machine.input===0){machine.state=machine.produced>beforeOutput?motionState:'Back-up stop';return;}
       if(machine.remaining!==null){machine.state=motionState;return;}
       if(machine.input<machine.batch&&!braking){
         if(!upstream){machine.admittedInputUnits+=machine.batch-machine.input;machine.input=machine.batch;}
@@ -419,19 +508,25 @@ window.STSimulation2DEngine=(function(){
       if(machine.occupancyMode==='POSITIONS')machine.positionClock+=work*machine.batch;
       const ready=machine.resident[machine.batch-1]<=machine.residenceClock+epsilon
         &&(machine.occupancyMode!=='POSITIONS'||machine.positionDue[machine.batch-1]<=machine.positionClock+epsilon);
-      machine.outletCredit=machine.resident.length>=machine.batch?machine.outletCredit+work:0;
+      const complete=machine.resident.length>=machine.batch;
+      const previousCredit=complete?machine.outletCredit:0;
+      const outletWork=complete&&work>0&&previousCredit<1-1e-8;
+      machine.outletCredit=complete?previousCredit+work:0;
       const beforeOutput=machine.produced;let admitted=0;
-      let blocked=false;
-      if((!stopping||machine.residual>0)&&machine.outletCredit+epsilon>=1&&ready){
+      let blocked=false,admissionWork=false;
+      if((!stopping||machine.residual>0)&&machine.outletCredit+1e-8>=1&&ready){
         if(discharge(machine,downstream,motionState==='Discharging')){
           machine.outletCredit=Math.max(0,machine.outletCredit-1);
           if(stopping)machine.residual=Math.max(0,machine.residual-1);
-        }else blocked=true;
+        }else blocked=!outletWork;
       }
       machine.outletCredit=Math.min(1,machine.outletCredit);
       if(!stopping&&(!upstream||upstream.kind==='belt'&&available(upstream))){
-        machine.intakeCredit+=work*machine.batch;
-        while(machine.intakeCredit+epsilon>=1&&machine.resident.length<capacity){
+        const supply=Math.min(work*machine.batch,upstream?upstream.speed/(upstream.packageLength+upstream.packedGap)*seconds:Infinity);
+        const first=upstream?.items[0];
+        admissionWork=supply>0&&machine.resident.length<capacity&&(!upstream||first&&first.x+upstream.packageLength/2>=upstream.length-epsilon);
+        machine.intakeCredit+=supply;
+        while(machine.intakeCredit+1e-8>=1&&machine.resident.length<capacity){
           if(upstream){
             const first=upstream.items[0];
             if(!first||first.x+upstream.packageLength/2<upstream.length-epsilon)break;
@@ -446,11 +541,13 @@ window.STSimulation2DEngine=(function(){
         machine.intakeCredit=Math.min(1,machine.intakeCredit);
       }
       if(accelerating&&!blocked)machine.rampElapsed+=seconds;
-      machine.state=blocked?'Blocked':stopping&&!machine.resident.length&&motionState!=='Ramp down'?'Back-up stop':
-        admitted>0||machine.produced>beforeOutput||machine.resident.some(due=>due>machine.residenceClock+epsilon)||ready&&machine.outletCredit>0||accelerating||motionState==='Ramp down'?motionState:
-        'Starved';
+      // Account for the tick in which the final residual actually leaves,
+      // not the stopped state reached at its end. Fractional service/intake
+      // is productive work even when no complete unit leaves in this tick.
+      machine.state=blocked?'Blocked':machine.produced>beforeOutput||admitted>0||outletWork||admissionWork||
+        machine.resident.some(due=>due>machine.residenceClock+epsilon)||accelerating||stopping?motionState:'Starved';
     }
-    return {line,snapshot,configure,control,accountingSnapshot:(item,detail=true)=>accountingSnapshot(item,time,detail),get time(){return time;},get materialAccountingComplete(){return materialAccountingComplete;},step(seconds){
+    return {line,snapshot,configure,control,failureHistory:item=>reliability.snapshotFailureHistory(item.failureHistory),failureOverlap:()=>reliability.summarizeFailureOverlap(line.filter(item=>item.kind==='machine').map(item=>item.failureHistory),time),accountingSnapshot:(item,detail=true)=>accountingSnapshot(item,time,detail),get time(){return time;},get materialAccountingComplete(){return materialAccountingComplete;},step(seconds){
       while(commandIndex<commands.length&&commands[commandIndex].atVirtualSecond<=time+epsilon){
         const event=commands[commandIndex++];
         if(options.events)control(event.equipmentId,event.action);
@@ -466,13 +563,17 @@ window.STSimulation2DEngine=(function(){
         }
       }
       activeStop=nextStop;
+      if(options.failures)for(const item of line)if(item.kind==='machine')updateFailure(item,seconds);
       time+=seconds;
       line.forEach(item=>{if(item.kind==='belt')moveBelt(item,seconds,available(item));});
       for(let index=line.length-1;index>=0;index--){
         const item=line[index];
         if(item.kind!=='machine')continue;
-        if(available(item))stepMachine(item,line[index-1],line[index+1],seconds);
+        if(item.emergency||activeStop)item.state=haltState(item);
+        else if(options.failures&&item.failureRemaining>0)item.state='Failed';
+        else if(available(item))stepMachine(item,line[index-1],line[index+1],seconds);
         else item.state=haltState(item);
+        if(item.state==='Failed')reliability.chargeFailureEpisode(item.failureHistory,seconds);
         const category=durationKey[item.state];
         if(category)item.durations[category]+=seconds;
         chargeReliability(item,seconds);
@@ -506,6 +607,6 @@ window.STSimulation2DEngine=(function(){
       }
     }};
   }
-  return {create,accountingSnapshot};
+  return {create,accountingSnapshot,failureHistory:item=>reliability.snapshotFailureHistory(item.failureHistory),failureOverlap:run=>reliability.summarizeFailureOverlap(run.line.filter(item=>item.kind==='machine').map(item=>item.failureHistory),run.time)};
 })();
 </script>

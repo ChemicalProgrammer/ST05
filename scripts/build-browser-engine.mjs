@@ -142,6 +142,7 @@ async function simulateBrowserBatch(input,options={}){
 window.addEventListener?.('pagehide',()=>{workerPool?.close();workerPool=null;for(const controller of playbackControllers)controller.close();});
 window.SimulatorEngine = {
   advancePackagePositions,
+  reliabilitySupport:{equipmentRandomSeed,seededRandomStep,stopReliabilityProfile,createFailureHistory,startFailureEpisode,closeFailureEpisode,chargeFailureEpisode,snapshotFailureHistory,summarizeFailureOverlap},
   simulateLine: function(input){if(selectedEngine(input)===SIMPY_ENGINE_ID)return {ok:false,error:{code:'ASYNC_ENGINE_REQUIRED',message:'SimPy requires simulateLineAsync.'}};return simulateLine(input);},
   simulateBatch: simulateBrowserBatch,
   replicationView:replicationView,

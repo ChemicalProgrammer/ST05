@@ -328,6 +328,8 @@ test('explicit residence is independent of capacity and preserves integer packag
   input.case.equipment[0].processData.equipment={internalCapacityBottles:35,residenceTimeSeconds:20};
   input.case.equipment[2].nominalRatePerSecond=10;
   input.case.equipment[1].processData.accumulation.primeSensorPositionMm=100;
+  // Isolate residence/headway from an unrelated normal-package Back-up pulse.
+  input.case.equipment[1].processData.accumulation.blockedTimeDelaySeconds=.5;
   input.case.equipment[2].processData.downstream.rampUpTimeSeconds=0;
   input.case.equipment[0].processData.downstream.rampUpTimeSeconds=0;
   const {ok,result}=simulateLine(input);

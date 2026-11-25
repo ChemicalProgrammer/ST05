@@ -3,45 +3,43 @@
 'use strict';
 
 /* WORKER_MODEL_START */
-function createSeededRandom(seed) {
-  let state = normalizeSeed(seed);
-
-  return {
-    next() {
-      state = (state + 0x6d2b79f5) >>> 0;
-      let value = state;
-      value = Math.imul(value ^ (value >>> 15), value | 1);
-      value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-    }
-  };
-}
-
+// Stable, serializable Mulberry32 streams. The numerical engine retains its
+// existing sequence; 2D stores the same per-equipment state in its checkpoint.
 function normalizeSeed(seed) {
-  if (!Number.isInteger(seed)) {
-    return 0;
-  }
-
-  return seed >>> 0;
+  return Number.isInteger(seed) ? seed >>> 0 : 0;
 }
-
-
-// Stable streams isolate equipment and event families from unrelated draw order.
-function createEquipmentRandom(seed,equipmentId,eventType) {
+function equipmentRandomSeed(seed,equipmentId,eventType) {
   const key=JSON.stringify([normalizeSeed(seed),String(equipmentId),String(eventType)]);
   let hash=2166136261;
   for(let i=0;i<key.length;i++){hash^=key.charCodeAt(i);hash=Math.imul(hash,16777619);}
-  return createSeededRandom(hash>>>0);
+  return hash>>>0;
+}
+function seededRandomStep(state) {
+  state=(state+0x6d2b79f5)>>>0;
+  let value=state;
+  value=Math.imul(value^(value>>>15),value|1);
+  value^=value+Math.imul(value^(value>>>7),value|61);
+  return {state,value:((value^(value>>>14))>>>0)/4294967296};
+}
+function createSeededRandom(seed) {
+  let state=normalizeSeed(seed);
+  return {next(){const next=seededRandomStep(state);state=next.state;return next.value;}};
+}
+function createEquipmentRandom(seed,equipmentId,eventType) {
+  return createSeededRandom(equipmentRandomSeed(seed,equipmentId,eventType));
 }
 
 
 // Category frequencies share the same operating exposure. Exponential clocks
 // superpose to a total rate, with event categories sampled by their rate share.
 function stopReliabilityProfile(model, categories) {
-  if (!model.noiseProfile?.reliability) return null;
+  const general=model.noiseProfile?.reliability;
+  // 2D also resolves draft inputs before the numerical validator runs.
+  const valid=profile=>Number.isFinite(profile?.mtbfMinutes)&&profile.mtbfMinutes>0&&
+    Number.isFinite(profile?.mttrMinutes)&&profile.mttrMinutes>0;
   const split=model.processData?.equipment?.stopInputs;
-  if (!split) return categories?.general===false ? null : {...model.noiseProfile.reliability,stopClasses:null};
-  const stopClasses=['minor','major'].filter(kind=>categories?.[kind]!==false && split[kind].mtbfMinutes>0)
+  if (!split) return categories?.general===false||!valid(general) ? null : {...general,stopClasses:null};
+  const stopClasses=['minor','major'].filter(kind=>categories?.[kind]!==false && valid(split[kind]))
     .map(kind=>({stopClass:kind.toUpperCase(),...split[kind],rate:1/split[kind].mtbfMinutes}));
   const total=stopClasses.reduce((sum,profile)=>sum+profile.rate,0);
   if (!total) return null;
@@ -59,6 +57,55 @@ function selectReliabilityStop(profile,random) {
     if (threshold<cumulative) return category;
   }
   return profile.stopClasses.at(-1);
+}
+
+// Dedicated repair episodes are independent of the bounded generic event log.
+// Times are virtual seconds. Observed failure time is exclusive state time;
+// an open repair interval can overlap calendar/command/E-stop conditions.
+function createFailureHistory(){
+  return {schema:'ST_FAILURE_HISTORY_V1',complete:true,episodes:[]};
+}
+function startFailureEpisode(history,start,stopClass,repair,threshold,charged){
+  if(!history)return;
+  history.episodes.push([start,null,stopClass,repair,Number.isFinite(threshold)?threshold:null,charged,0,null]);
+}
+function closeFailureEpisode(history,end,reason='REPAIRED'){
+  const row=history?.episodes.at(-1);
+  if(row&&row[1]===null){row[1]=end;row[7]=reason;}
+}
+function chargeFailureEpisode(history,seconds){
+  const row=history?.episodes.at(-1);
+  if(row&&row[1]===null)row[6]+=seconds;
+}
+function snapshotFailureHistory(history){
+  if(!history)return null;
+  return {schema:history.schema,complete:history.complete,fields:[
+    'startSecond','endSecond','stopClass','configuredRepairSeconds','sampledExposureSeconds',
+    'cumulativeChargedSecondsAtStart','observedFailureSeconds','endReason'
+  ],episodes:history.episodes.map(row=>row.map((value,index)=>typeof value==='number'?Number(value.toFixed(index===6?9:6)):value))};
+}
+function summarizeFailureOverlap(histories,elapsed){
+  if(!Number.isFinite(elapsed)||histories.some(h=>!h||!h.complete))return null;
+  const boundaries=[];let count=0,open=0;
+  for(const history of histories)for(const row of history.episodes){
+    count++;if(row[1]===null)open++;
+    const start=Math.min(elapsed,Math.max(0,row[0])),end=Math.min(elapsed,row[1]??elapsed);
+    if(end>start){boundaries.push([start,1],[end,-1]);}
+  }
+  boundaries.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  let active=0,last=0,union=0,overlap=0,sum=0,peak=0;
+  for(let i=0;i<boundaries.length;){
+    const t=boundaries[i][0],span=t-last;
+    if(active>0)union+=span;
+    if(active>1)overlap+=span;
+    sum+=active*span;
+    while(i<boundaries.length&&boundaries[i][0]===t)active+=boundaries[i++][1];
+    peak=Math.max(peak,active);last=t;
+  }
+  const tidy=v=>Number(v.toFixed(6));
+  return {schema:'ST_FAILURE_OVERLAP_V1',basis:'OPEN_REPAIR_INTERVALS_NOT_LINE_LOSS',
+    episodes:count,openEpisodes:open,unionSeconds:tidy(union),overlapSeconds:tidy(overlap),
+    summedEquipmentSeconds:tidy(sum),peakConcurrent:peak};
 }
 
 
@@ -1536,7 +1583,7 @@ function planDiscretePackages(equipment, zone, start, tick, requested, available
     for(let index=0;index<count&&entry<=end+1e-8;index++,entry+=headway)entries.push(Math.min(entry,end));
     return {count:entries.length,entries};
   }
-  const canProcess=(equipment.residence?.inventory??available)>=1;
+  const canProcess=(equipment.residence?.inventory??available)>=1-1e-8;
   const previous=canProcess?(equipment.packageRemainder||0):0;
   const service=canProcess?previous+requested:0;
   const completed=Math.floor(service+1e-8);
@@ -1965,6 +2012,7 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
   const microStopRandom=createEquipmentRandom(seed,model.id,"microstop-occurrence");
   const microStopDurationRandom=createEquipmentRandom(seed,model.id,"microstop-duration");
   const reliability = reliabilityEnabled ? stopReliabilityProfile(model, reliabilityCategories) : null;
+  const failureTargetSeconds=reliability?randomExponentialSeconds(failureRandom,reliability.mtbfMinutes*60):null;
   return {
     ...model,
     nominalRatePerSecond: machineOperatingRatePerSecond(model),
@@ -1991,9 +2039,9 @@ function createEquipmentRuntime(model, seed, reliabilityEnabled = true, reliabil
     emergencyStopLatched: false,
     emergencyStopSeconds: 0,
     failureRandom,microStopRandom,microStopDurationRandom,
-    timeToFailureRemainingSeconds: reliability
-      ? randomExponentialSeconds(failureRandom, reliability.mtbfMinutes * 60)
-      : null,
+    failureHistory:createFailureHistory(),
+    failureTargetSeconds,
+    timeToFailureRemainingSeconds:failureTargetSeconds,
     outputCount: 0,
     runningSeconds: 0,
     runningDesignOutput: 0,
@@ -2615,32 +2663,35 @@ function updateReliabilityFailures(runtime) {
 
     if (equipment.failureRemainingSeconds > 0) {
       equipment.failureRemainingSeconds = Math.max(0, equipment.failureRemainingSeconds - runtime.run.tickSeconds);
+      if(equipment.failureRemainingSeconds<=1e-8)equipment.failureRemainingSeconds=0;
       if (equipment.failureRemainingSeconds === 0) {
         // Confirmed plant convention: MTTR ends when repair is finished.
         // Recovery has no extra startup delay; repair ramps are explicitly opt-in.
         cancelEquipmentStart(equipment);
         equipment.repairRestartPending = true;
         equipment.repairStopClass=equipment.activeStopClass;
+        closeFailureEpisode(equipment.failureHistory,runtime.virtualSecond);
         runtime.events.push({ type: 'REPAIR_COMPLETED', atVirtualSecond: runtime.virtualSecond, equipmentId: equipment.id, stopClass:equipment.activeStopClass });
         equipment.activeStopClass=null;
-        equipment.timeToFailureRemainingSeconds = randomExponentialSeconds(equipment.failureRandom, profile.mtbfMinutes * 60);
+        equipment.failureTargetSeconds=equipment.timeToFailureRemainingSeconds=randomExponentialSeconds(equipment.failureRandom,profile.mtbfMinutes*60);
       }
       return;
     }
 
     if (!isOperationalMode(equipment) || equipment.microStopRemainingSeconds > 0) return;
     if (equipment.timeToFailureRemainingSeconds === null) {
-      equipment.timeToFailureRemainingSeconds = randomExponentialSeconds(equipment.failureRandom, profile.mtbfMinutes * 60);
+      equipment.failureTargetSeconds=equipment.timeToFailureRemainingSeconds=randomExponentialSeconds(equipment.failureRandom,profile.mtbfMinutes*60);
     }
-    // Exposure is consumed after actual positive processing, not by AUTO/idle time.
+    // Exposure is consumed during productive service ticks, not AUTO/idle time.
     // A threshold crossed in the previous productive tick fails at this tick boundary.
-    if (equipment.timeToFailureRemainingSeconds > 0) return;
+    if (equipment.timeToFailureRemainingSeconds > 1e-8) return;
 
     const category=selectReliabilityStop(profile,equipment.stopClassRandom);
     equipment.activeStopClass=category.stopClass;
     equipment.failureRemainingSeconds = category.mttrMinutes * 60;
     equipment[category.stopClass.toLowerCase()+'FailureCount']+=1;
     equipment.failureCount += 1;
+    startFailureEpisode(equipment.failureHistory,runtime.virtualSecond,category.stopClass,equipment.failureRemainingSeconds,equipment.failureTargetSeconds,equipment.reliabilityChargedSeconds);
     runtime.events.push({
       type: 'FAILURE_STARTED',
       atVirtualSecond: runtime.virtualSecond,
@@ -2767,7 +2818,7 @@ function processEquipment(runtime, index) {
     // Full productive ticks, not output/nominal equivalent time: partial flow and
     // productive ramps still consume operating time. No-flow states consume none.
     equipment.reliabilityExposureSeconds+=runtime.run.tickSeconds;
-    if(runtime.run.reliabilityEnabled!==false&&equipment.noiseProfile?.reliability&&equipment.timeToFailureRemainingSeconds!==null){
+    if(runtime.run.reliabilityEnabled!==false&&equipment.stopReliability&&equipment.timeToFailureRemainingSeconds!==null){
       equipment.timeToFailureRemainingSeconds-=runtime.run.tickSeconds;
       equipment.reliabilityChargedSeconds+=runtime.run.tickSeconds;
     }
@@ -2786,6 +2837,7 @@ function processEquipment(runtime, index) {
 function processEquipmentFlow(runtime, index) {
   const equipment = runtime.equipment[index];
   const tickSeconds = runtime.run.tickSeconds;
+  equipment.discreteResidentStep=Boolean(runtime.run.discretePackages&&equipment.residence);
   if (!isAvailable(equipment)) {
     recordUnavailable(equipment, tickSeconds);
     return;
@@ -2844,6 +2896,7 @@ function processEquipmentFlow(runtime, index) {
   const downstreamSpace = getDownstreamSpace(runtime, index);
   let flow = Math.max(0, Math.min(requestedFlow, inputAvailable, residualDischarge ? requestedFlow : downstreamSpace));
   let entries;
+  let outletWork=false,blockedOutlet=false,admissionWork=false;
   if(residence){
     residence.clock+=tickSeconds;
     // Position mode: move finite physical pockets with the machine's actual
@@ -2855,6 +2908,7 @@ function processEquipmentFlow(runtime, index) {
       &&(residence.queue[residence.head].positionDue===undefined
         ||residence.queue[residence.head].positionDue<=residence.positionClock+1e-8)){
       residence.ready+=residence.queue[residence.head++].amount;
+      if(runtime.run.discretePackages)residence.ready=Math.round(residence.ready*ratio)/ratio;
     }
     if(residence.head>=1024){residence.queue.splice(0,residence.head);residence.head=0;}
     inputAvailable=residence.ready;
@@ -2868,10 +2922,20 @@ function processEquipmentFlow(runtime, index) {
       : Infinity;
     if(!residence)inputAvailable=index===0?Infinity:(transportRate>0?incomingZone.waitingUnits/ratio:0);
     const requestedPackages=residence?requestedFlow:Math.min(requestedFlow,transportRate*tickSeconds/ratio);
+    const previousCredit=equipment.packageRemainder||0;
+    const hasComplete=Boolean(residence&&residence.inventory>=1-1e-8);
+    const service=hasComplete?previousCredit+requestedPackages:0;
     const planned=planDiscretePackages(equipment,runtime.zones[index],runtime.virtualSecond,tickSeconds,
       requestedPackages,inputAvailable,downstreamSpace,residualDischarge?control.residualRemainingUnits:undefined);
     flow=planned.count;
     entries=planned.entries;
+    if(residence&&runtime.run.discretePackages){
+      // A tick that finishes a package earns service even if the transfer
+      // cannot yet occur. Only a ready, already completed package whose
+      // attempted discharge fails is Blocked for the entire tick.
+      outletWork=hasComplete&&requestedPackages>0&&previousCredit<1-1e-8;
+      blockedOutlet=hasComplete&&inputAvailable>=1-1e-8&&service>=1-1e-8&&flow===0&&!outletWork;
+    }
   }
   const phase=control?'STOP':isRampingUp(equipment)?'RAMP':null;
   if(flow>0&&phase){
@@ -2883,6 +2947,10 @@ function processEquipmentFlow(runtime, index) {
   if(residence){
     residence.ready=Math.max(0,residence.ready-flow);
     residence.inventory=Math.max(0,residence.inventory-flow);
+    if(runtime.run.discretePackages){
+      residence.ready=Math.round(residence.ready*ratio)/ratio;
+      residence.inventory=Math.round(residence.inventory*ratio)/ratio;
+    }
     if(!control){
       const free=Math.max(0,capacity-residence.inventory);
       const transport=index===0||!incomingZone.physicalModelEnabled?Infinity:
@@ -2893,13 +2961,17 @@ function processEquipmentFlow(runtime, index) {
       let admission=Math.min(free,requestedFlow,available,transport/ratio);
       if(runtime.run.discretePackages){
         const supply=Math.min(requestedFlow*ratio,transport);
-        residence.intakeCredit=Math.min(Math.max(1,supply),(residence.intakeCredit||0)+supply);
+        admissionWork=supply>0&&free*ratio>=1-1e-8&&available*ratio>=1-1e-8;
+        // Spend credit before limiting the retained remainder. Capping first
+        // discards fractional work at every package and biases throughput by tick.
+        residence.intakeCredit=(residence.intakeCredit||0)+supply;
         admission=Math.floor(Math.min(free*ratio,available*ratio,residence.intakeCredit)+1e-8)/ratio;
-        residence.intakeCredit=Math.max(0,residence.intakeCredit-admission*ratio);
+        residence.intakeCredit=Math.max(0,Math.min(1,residence.intakeCredit-admission*ratio));
       }
       if(admission>0){
         admitted=admission;
         residence.inventory+=admission;
+        if(runtime.run.discretePackages)residence.inventory=Math.round(residence.inventory*ratio)/ratio;
         residence.queue.push({amount:admission,due:residence.clock+residenceSeconds,
           positionDue:equipment.processData?.equipment?.occupancyMode==='POSITIONS'
             ?residence.positionClock+capacity:undefined});
@@ -2913,7 +2985,13 @@ function processEquipmentFlow(runtime, index) {
   const blockedPackage=completePackages&&pending>=1-1e-8&&inputAvailable>=1&&downstreamSpace<1&&flow===0;
   const working=!blockedPackage&&(processingPackage||workingInside);
   const stateInput=completePackages&&inputAvailable<1?0:inputAvailable;
-  recordMaterialState(equipment,requestedFlow,working?Math.max(inputAvailable,requestedFlow):stateInput,downstreamSpace,
+  if(residence&&runtime.run.discretePackages){
+    // Partial cases cannot be blocked at their output until a complete
+    // package is ready. Count fractional intake and outlet service as work.
+    const productive=flow>0||!blockedOutlet&&(outletWork||admissionWork||workingInside||isRampingUp(equipment));
+    recordMaterialState(equipment,requestedFlow,productive?Math.max(inputAvailable,requestedFlow):0,
+      blockedOutlet?0:productive?downstreamSpace:Infinity,productive?Math.max(flow,requestedFlow):0,tickSeconds,control,residualDischarge);
+  }else recordMaterialState(equipment,requestedFlow,working?Math.max(inputAvailable,requestedFlow):stateInput,downstreamSpace,
     working?Math.max(flow,requestedFlow):flow,tickSeconds,control,residualDischarge);
   moveFlow(runtime, index, flow, residualDischarge, requestedFlow, inputAvailable, phase, entries);
   equipment.outputCount += flow;
@@ -2931,7 +3009,7 @@ function getRequestedFlow(equipment, tickSeconds) {
   if (isRampingUp(equipment)) {
     const rampFactor = equipment.startRampDurationSeconds <= 0
       ? 1
-      : equipment.startRampElapsedSeconds / equipment.startRampDurationSeconds;
+      : Math.min(1,(equipment.startRampElapsedSeconds+(equipment.residence&&equipment.discreteResidentStep?tickSeconds/2:0)) / equipment.startRampDurationSeconds);
     return equipment.nominalRatePerSecond * tickSeconds * rampFactor;
   }
   return equipment.nominalRatePerSecond * tickSeconds;
@@ -3007,7 +3085,7 @@ function advanceEquipmentStart(runtime, equipment) {
     equipment.startDelayRemainingSeconds = Math.max(0, equipment.startDelayRemainingSeconds - runtime.run.tickSeconds);
     return;
   }
-  if (isRampingUp(equipment)) {
+  if (isRampingUp(equipment)&&!(equipment.discreteResidentStep&&equipment.availabilityState==='BLOCKED')) {
     equipment.startRampElapsedSeconds = Math.min(
       equipment.startRampDurationSeconds,
       equipment.startRampElapsedSeconds + runtime.run.tickSeconds
@@ -3020,7 +3098,7 @@ function isStartDelayed(equipment) {
 }
 
 function isRampingUp(equipment) {
-  return equipment.startRampElapsedSeconds < equipment.startRampDurationSeconds;
+  return equipment.startRampElapsedSeconds+1e-8 < equipment.startRampDurationSeconds;
 }
 
 function resolveStartupDelaySeconds(equipment) {
@@ -3259,6 +3337,7 @@ function recordUnavailable(equipment, tickSeconds) {
   } else if (equipment.failureRemainingSeconds > 0) {
     equipment.stoppedSeconds += tickSeconds;
     equipment.failureSeconds += tickSeconds;
+    chargeFailureEpisode(equipment.failureHistory,tickSeconds);
     equipment[(equipment.activeStopClass||'GENERAL').toLowerCase()+'FailureSeconds']+=tickSeconds;
     equipment.availabilityState = 'FAILURE';
   } else if (equipment.microStopRemainingSeconds > 0) {
@@ -3568,7 +3647,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: '0.20.3',
+    engineVersion: '0.20.4',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -3577,7 +3656,7 @@ function createResult(runtime,partial=false) {
     plantCalendar: runtime.calendar.horizonSeconds ? {mode:'SCHEDULED',horizonSeconds:runtime.calendar.horizonSeconds,plannedStopSeconds:runtime.calendar.plannedStopSeconds,observedStopSeconds:runtime.calendarStopSeconds,events:runtime.calendar.events,restartPolicy:runtime.calendar.restartPolicy,completePeriod:Math.abs(duration-runtime.calendar.horizonSeconds)<runtime.run.tickSeconds+1e-8} : undefined,
     seed: runtime.run.seed,
     durationSeconds: duration,
-    summary: createSummary(runtime),
+    summary: {...createSummary(runtime),failureOverlap:summarizeFailureOverlap(runtime.equipment.map(e=>e.failureHistory),runtime.virtualSecond)},
     equipmentMetrics: Object.fromEntries(runtime.equipment.map((item) => [item.id, createEquipmentMetrics(item, duration, runtime.virtualSecond)])),
     accumulationZoneMetrics: Object.fromEntries(runtime.zones.filter((zone) => zone.visible).map((zone) => [
       zone.id,
@@ -3703,6 +3782,7 @@ function createEquipmentMetrics(equipment, durationSeconds, accountingElapsedSec
     stoppedSeconds: round(equipment.stoppedSeconds),
     failureSeconds: round(equipment.failureSeconds),
     failureCount: equipment.failureCount,
+    failureHistory:snapshotFailureHistory(equipment.failureHistory),
     minorFailureCount:equipment.minorFailureCount,majorFailureCount:equipment.majorFailureCount,generalFailureCount:equipment.generalFailureCount,
     minorFailureSeconds:round(equipment.minorFailureSeconds),majorFailureSeconds:round(equipment.majorFailureSeconds),generalFailureSeconds:round(equipment.generalFailureSeconds),
     plannedStopSeconds: round(equipment.plannedStopSeconds||0),
@@ -3863,7 +3943,7 @@ function configureProductFactors(runtime){
 function switchRuntimeProduct(runtime,id){
   const product=runtime.run.productCatalog.find(p=>p.id===id);
   const removed=materialInventory(runtime);
-  for(const e of runtime.equipment)if(e.residence)e.residence={clock:0,positionClock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1};
+  for(const e of runtime.equipment)if(e.residence){e.residence={clock:0,positionClock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1};e.packageRemainder=0;}
   runtime.clearoutBottleEquivalents+=removed;currentProductRow(runtime).clearoutBottleEquivalents+=removed;
   runtime.productTimeline.at(-1).endSeconds=runtime.virtualSecond;
   const models=applyProductProfile(runtime.baseEquipment,product);
@@ -3958,6 +4038,13 @@ async function simulateBatch(input, options={}) {
     for(const key of Object.keys(metrics))if(typeof metrics[key]==='number')equipmentStatistics[id][key]=summarizeReplications(rows.map(r=>r.equipmentMetrics[id][key]));
   }
   const batch={schema:'st-replications-v1',rounds:count,baseSeed,representativeRound:closestRound(rows,statistics.outputCount?.mean,statistics.lineOeePercent?.mean),durationSeconds:input.run.durationSeconds,shiftSeconds:input.run.shiftSeconds||null,statistics,equipmentStatistics,rows,replays};
+  // Histories are individual trajectories. Only their scalar overlap
+  // statistics can be aggregated over independent replications.
+  const overlapRows=rows.map(row=>row.summary.failureOverlap);
+  if(overlapRows.every(row=>row?.schema==='ST_FAILURE_OVERLAP_V1')){
+    batch.failureOverlapStatistics=Object.fromEntries(['episodes','openEpisodes','unionSeconds','overlapSeconds','summedEquipmentSeconds','peakConcurrent']
+      .map(key=>[key,summarizeReplications(overlapRows.map(row=>row[key]))]));
+  }
   if(!options.summaryOnly&&input.run.calculationMode!=='SUMMARY'&&batch.representativeRound>1&&!replays[batch.representativeRound-2]){
     const row=rows[batch.representativeRound-1],runner=options.runRound||simulateLineAsync;
     options.onRepresentative?.(row.round);
@@ -3988,6 +4075,8 @@ function replicationView(result,selection='average'){
     return {...result,...row,batch:undefined,inputSignature:signature,products:row.products,plantCalendar:row.plantCalendar,samples:replay?.samples||[],accumulationZoneMetrics:replay?.accumulationZoneMetrics||{},resultView:{mode:'round',round:row.round}};
   }
   const view={...result,summary:averageRoundValues(rows.map(r=>r.summary)),equipmentMetrics:averageRoundValues(rows.map(r=>r.equipmentMetrics)),plantCalendar:averageRoundValues(rows.map(r=>r.plantCalendar)),resultView:{mode:'average',rounds:rows.length}};
+  for(const metrics of Object.values(view.equipmentMetrics||{}))delete metrics.failureHistory;
+  if(view.summary)delete view.summary.failureOverlap;
   if(result.effectiveRuntimeStop){
     view.durationSeconds=averageRoundValues(rows.map(r=>r.durationSeconds));
     view.effectiveRuntimeStop={...result.effectiveRuntimeStop,status:'BATCH',
@@ -4512,7 +4601,7 @@ function createSimPyBrowserEngine(host, files) {
 
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
-const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.3/DES:0.5.0/cache:32';
+const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.4/DES:0.5.0/cache:33';
 
 function canonicalSimulationInputSignature(input) {
   function canonical(value) {
@@ -6541,6 +6630,7 @@ async function simulateBrowserBatch(input,options={}){
 window.addEventListener?.('pagehide',()=>{workerPool?.close();workerPool=null;for(const controller of playbackControllers)controller.close();});
 window.SimulatorEngine = {
   advancePackagePositions,
+  reliabilitySupport:{equipmentRandomSeed,seededRandomStep,stopReliabilityProfile,createFailureHistory,startFailureEpisode,closeFailureEpisode,chargeFailureEpisode,snapshotFailureHistory,summarizeFailureOverlap},
   simulateLine: function(input){if(selectedEngine(input)===SIMPY_ENGINE_ID)return {ok:false,error:{code:'ASYNC_ENGINE_REQUIRED',message:'SimPy requires simulateLineAsync.'}};return simulateLine(input);},
   simulateBatch: simulateBrowserBatch,
   replicationView:replicationView,

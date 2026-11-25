@@ -58,7 +58,7 @@ function numericalInput(extra={}){
 test('numerical exclusive accounting conserves time and output in every machine and conveyor, including commanded stops',()=>{
  const i=numericalInput({commands:[{equipmentId:'sink',atVirtualSecond:5,action:'STOP'},{equipmentId:'sink',atVirtualSecond:20,action:'RUN'},{equipmentId:'belt',atVirtualSecond:23,action:'STOP'},{equipmentId:'belt',atVirtualSecond:25,action:'RUN'}]});
  const response=simulateLine(i);assert(response.ok,JSON.stringify(response.error));const r=response.result;
- assert.equal(r.summary.outputCount,37,'Established physical fixture remains unchanged');
+ assert.equal(r.summary.outputCount,33,'Corrected discrete service fixture');
  for(const item of Object.values(r.equipmentMetrics))reconcile(item.stateAccounting,r.durationSeconds,item.outputCount);
  const a=r.equipmentMetrics.source.stateAccounting,c=r.equipmentMetrics.belt.stateAccounting;
  assert(a.stateSeconds.DISCHARGING>0);assert(a.stateSeconds.BACKUP_STOP>0);assert.equal(a.stateSeconds.RAMP_DOWN,undefined);
@@ -95,7 +95,7 @@ test('2D export keeps exclusive counters and old checkpoints do not fabricate th
  const summarize=new Function(source.slice(start,source.indexOf('  function capture(){',start))+';return summarize2DRun;')();
  const model=create([m('source')],7);for(let i=0;i<20;i++)model.step(.05);
  let summary=summarize(model,'Completed',7,'INDEPENDENT',null,1,[]);
- assert.equal(summary.controlPolicy,'PHYSICAL_FLOW_7');assert.equal(summary.counterPolicy,'ST_EXCLUSIVE_STATES_V1');
+ assert.equal(summary.controlPolicy,'PHYSICAL_FLOW_8');assert.equal(summary.counterPolicy,'ST_EXCLUSIVE_STATES_V1');
  reconcile(summary.equipment[0].stateAccounting,model.time,model.line[0].produced);
  const cp=model.snapshot();delete cp.counterAccountingComplete;
  const restored=create([m('source')],7,cp);

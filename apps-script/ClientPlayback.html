@@ -31,9 +31,14 @@
       timer.title=es?'Tiempo real de cálculo o reproducción; excluye pausas sin cálculo activo.':'Real time spent calculating or playing; excludes pauses without active computation.';
       var result=state.run.result, reset=state.run.playbackAction==='reset'&&!pending;
       var target=Number(result?.durationSeconds||session?.run?.durationSeconds);
-      var percent=reset?0:result&&!result.provisional?100:result?.provisional&&target>0?Math.max(0,Math.min(99.9,(Number(result.calculatedThroughSeconds)||0)/target*100)):pending?0:null;
-      calc.textContent=calculation+' '+(percent===null?'—':percent.toFixed(1)+'%');
+      var batchOnly=pending&&!result;
+      var batchValue=Math.max(0,Math.min(99.9,(Number(session?.batchProgress?.value)||0)*100));
+      var percent=reset?0:result&&!result.provisional?100:result?.provisional&&target>0?Math.max(0,Math.min(99.9,(Number(result.calculatedThroughSeconds)||0)/target*100)):batchOnly?batchValue:0;
+      calc.textContent=(batchOnly&&session?.run?.rounds>1?(es?'Cálculo lote':'Batch calc'):calculation)+' '+percent.toFixed(1)+'%';
       calc.title=es?'Avance del cálculo de la ronda mostrada. La reproducción precisa reconstruye estados bajo demanda; 100% no garantiza reproducción instantánea.':'Calculation of the displayed round. Precise playback reconstructs states on demand; 100% does not guarantee instant playback.';
+      if(batchOnly&&session?.run?.rounds>1)calc.title=es?'Avance global de las rondas en cálculo.':'Overall calculation progress across rounds.';
+      if(!reset&&typeof state.run.calculationWallMs==='number'&&Number.isFinite(state.run.calculationWallMs))
+        calc.title+=' '+(es?'Tiempo de cálculo registrado: ':'Recorded calculation time: ')+executionTimeText(state.run.calculationWallMs)+'.';
       if(active&&numericalExecutionTimer===null)numericalExecutionTimer=window.setTimeout(function(){numericalExecutionTimer=null;syncNumericalExecutionIndicators();},250);
       if(!active&&numericalExecutionTimer!==null){window.clearTimeout(numericalExecutionTimer);numericalExecutionTimer=null;}
     }
@@ -264,9 +269,9 @@
       if(state.run.playbackAction==='stop'||(playbackVisualSample()?.virtualSecond??0)>=state.run.result.durationSeconds-1e-8){
         stopPlaybackTimer();state.run.sampleIndex=0;state.run._resumeVirtualSecond=0;state.run._displayedVirtualSecond=0;
         playbackRoundPositions()[state.run.roundIndex]=0;
+        if(typeof resetNumericalExecutionClock==='function'&&!roundSession?.pending)resetNumericalExecutionClock(0);
       }
       markNumericalPlaybackAction('play');
-      if(typeof syncNumericalExecutionIndicators==='function'&&state.run._resumeVirtualSecond===0&&!roundSession?.pending&&numericalExecutionClock.startedAt===null&&state.run.result&&!state.run.result.provisional)resetNumericalExecutionClock(0);
       state.run.active=true;
       state.run.playing = true;
       state.run._displayedVirtualSecond=state.run.result.samples?.[state.run.sampleIndex]?.virtualSecond||0;

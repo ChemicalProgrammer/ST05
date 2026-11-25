@@ -144,7 +144,8 @@
       state.run.active=false;
       state.run.playing=false;
       var view=simulation.results?.view;
-      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock(view?.executionWallMs??simulation.results?.executionWallMs);
+      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock(view?.executionWallMs??simulation.results?.executionWallMs??(simulation.results?null:0));
+      state.run.calculationWallMs=simulation.results?.calculationWallMs??null;
       markNumericalPlaybackAction(view?.playbackAction);
       state.run.equipmentControlActions=cloneJson(view?.equipmentControlActions||{});
       state.run.playbackPositions={result:state.run.representative,times:{...view?.roundTimes}};
@@ -267,6 +268,7 @@
         durationSeconds: result.durationSeconds??run.durationSeconds,effectiveRuntimeStop:result.effectiveRuntimeStop,
         completedAt: new Date().toISOString(),
         executionWallMs:typeof numericalExecutionElapsedMs==='function'?numericalExecutionElapsedMs():undefined,
+        calculationWallMs:typeof state.run.calculationWallMs==='number'?state.run.calculationWallMs:undefined,
         batch: storedBatch?cloneJson(storedBatch):undefined,shifts:result.shifts,replicationStatus:cloneJson(result.replicationStatus||null),
         detailCoverage:cloneJson(result.detailCoverage||{}),numerics:cloneJson(result.numerics||null),
         plantCalendar:cloneJson(result.plantCalendar||null),products:cloneJson(result.products||null),
@@ -848,7 +850,7 @@
     }
     function calculateBatch(run,execution){
       cancelRoundSession();stopPlaybackTimer();
-      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock();
+      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock(0);
       return new Promise(function(resolve){
         var session={caseId:state.activeCase.id,simulationId:state.activeSimulationId,caseModel:cloneJson({id:state.activeCase.id,unitOfFlow:state.activeCase.unitOfFlow,equipment:state.activeCase.equipment}),run:cloneJson(run),generation:0,version:0,cancelled:false,dirty:false,finishing:false,resolveFirst:resolve};roundSession=session;
         document.getElementById('batch-cancel').onclick=function(){

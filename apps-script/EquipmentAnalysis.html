@@ -629,6 +629,11 @@ window.STEquipmentAnalysis=(function(){
     const report=window.STScenarios.equipmentAnalysis(source,equipmentId,snapshotOptions);
     return {report,name:e.name||e.id,equipment:e,simulation:source,options:snapshotOptions,openedAt:new Date().toISOString()};
   }
+  function buildLineEvaluation(simulation,options={}){
+    const first=simulation?.equipment?.find(machine);
+    if(!first)return {schema:'st-equipment-analysis-v1',scope:'ALL',status:'NOT_APPLICABLE',evaluations:[],summary:{equipment:0}};
+    return buildEvaluationExport('ALL',createEvaluationContext(simulation,first.id,options));
+  }
   function downloadLineEvaluation(simulation,options={}){
     const first=simulation?.equipment?.find(machine);
     if(!first)throw Error(t('There are no machines in this line.','No hay equipos en esta línea.'));
@@ -731,6 +736,6 @@ window.STEquipmentAnalysis=(function(){
   exportAll.addEventListener('click',()=>exportCurrent('ALL'));
   dialog.addEventListener('close',()=>{closeExportMenu();current=null;});
   window.addEventListener('st-language-change',()=>{if(dialog.open)render();});
-  return {assess,paint,createButton,open,close,statusText,sectionProgress,buildEvaluationExport,downloadEvaluation,downloadLineEvaluation};
+  return {assess,paint,createButton,open,close,statusText,sectionProgress,buildEvaluationExport,downloadEvaluation,downloadLineEvaluation,buildLineEvaluation};
 })();
 </script>

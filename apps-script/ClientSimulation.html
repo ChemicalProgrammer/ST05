@@ -115,6 +115,7 @@
       cancelRoundSession();stopPlaybackTimer();
       state.run.sampleIndex = 0;
       state.run.liveTelemetry=[];
+      state.run.restoredSpeedHistory=null;
       state.run._resumeVirtualSecond=0;
       state.activeSimulationId = simulation.id;
       state.workspaceView = 'simulation';
@@ -154,6 +155,7 @@
         state.run._resumeVirtualSecond=state.run.playbackPositions.times[0]??state.run.result.samples[state.run.sampleIndex].virtualSecond;
         if(initialRound>0&&playbackReplay(state.run.representative.batch,initialRound))selectPlaybackRound(initialRound,false);
       }
+      if(typeof charts!=='undefined')charts.restoreSpeedHistory?.(view?.speedHistory);
       syncPlaybackRounds();
       state.isDirty = autosave.pending() || hadUnsavedChanges;
       document.querySelectorAll('#live-equipment .live-equipment-card').forEach(function(card){card.dataset.losses='closed';card.classList.remove('show-losses');card.querySelector('.loss-toggle')?.setAttribute('aria-expanded','false');});
@@ -228,7 +230,9 @@
         [result.samples[Math.max(0,state.run.sampleIndex-1)],sample].forEach(function(frame){if(!replay.samples.some(function(saved){return saved.virtualSecond===frame.virtualSecond;}))replay.samples.push(cloneJson(frame));});
         replay.samples.sort(function(a,b){return a.virtualSecond-b.virtualSecond;});
       }
-      simulation.results.view={virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),playbackAction:state.run.playbackAction,equipmentControlActions:cloneJson(state.run.equipmentControlActions||{}),lossesOpen:Array.from(document.querySelectorAll('#live-equipment .live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;})};
+      var history=typeof charts!=='undefined'?charts.captureSpeedHistory?.():null;
+      simulation.results.view={virtualSecond:sample.virtualSecond,roundIndex:state.run.roundIndex,roundTimes:{...positions},zoneDetails:cloneJson(state.liveZoneDetails),playbackAction:state.run.playbackAction,equipmentControlActions:cloneJson(state.run.equipmentControlActions||{}),lossesOpen:Array.from(document.querySelectorAll('#live-equipment .live-equipment-card.show-losses')).map(function(card){return card.dataset.equipmentId;}),
+        ...(history&&history.endSecond===sample.virtualSecond?{speedHistory:history}:{})};
     }
     function compactStoredReplays(simulations) {
       (simulations||[]).forEach(function(simulation){

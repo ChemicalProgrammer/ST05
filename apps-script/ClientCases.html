@@ -417,6 +417,10 @@ async function openCase(caseId, initialView) {
             if(replay.events?.length){replay.detailCoverage=Object.assign({},replay.detailCoverage,{savedEventsOmitted:replay.events.length+(replay.detailCoverage?.savedEventsOmitted||0)});replay.events=[];changed=true;}
           });
         });
+        if(!changed)(draft.simulations||[]).forEach(function(sim){
+          var history=sim.results?.view?.speedHistory;
+          if(history?.rows?.length>2){history.rows=retainedReplaySamples(history.rows,Math.max(2,Math.floor(history.rows.length/2)));history.sampled=true;changed=true;}
+        });
         if(!changed)throw Object.assign(new Error('The case exceeds the save size budget even after compacting replay. Export the full results and remove unneeded simulations before saving. Your draft remains open.'),{code:'CASE_SAVE_SIZE'});
       }
       return draft;

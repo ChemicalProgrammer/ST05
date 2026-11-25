@@ -1289,7 +1289,10 @@
       // Their durations remain available in the States group and raw samples.
       card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatRatePerMinute(belt.capacityPerSecond,equipmentFlowUnit)+' a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond,equipmentFlowUnit) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatRatePerMinute(model.processData.equipment.maximumSpeedBpm/60,equipmentFlowUnit) : '');
       card.querySelector('.live-sparkline-nominal-rate').textContent = formatRatePerMinute(belt?belt.capacityPerSecond:model.nominalRatePerSecond,equipmentFlowUnit);
-      card.querySelector('.equipment-speed-sparkline-heading span').textContent=state.run.result?.detailCoverage?.recordingMode==='SUMMARY'?'Summary · endpoint snapshots':STRunOptions.windowLabel()+(state.run.result?.detailCoverage?.aggregated?' · aggregated':'');
+      var savedWindow=state.run.restoredSpeedHistory;
+      var restored= savedWindow?.result===state.run.result&&!state.run.playing&&savedWindow.history.endSecond===sample.virtualSecond;
+      var coverage=state.run.result?.detailCoverage;
+      card.querySelector('.equipment-speed-sparkline-heading span').textContent=coverage?.recordingMode==='SUMMARY'?'Summary · endpoint snapshots':STRunOptions.windowLabel()+(restored?(savedWindow.history.sampled?' · saved window (sampled)':' · saved window'):coverage?.savedReplaySampled?' · compact saved history':coverage?.aggregated?' · aggregated':'');
       var action=state.run.equipmentControlActions?.[model.id];
       if(!action){
         action=unit.mode==='STOP'?'STOP':unit.mode==='PAUSE'?'PAUSE'

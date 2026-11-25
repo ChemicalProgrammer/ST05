@@ -6,6 +6,7 @@ window.STRealData=(function(){
   // Localize the presentation only; English is the default UI language.
   const english={
     "Registro": "Record",
+    "Complete simulated time and rate-loss evidence":"Complete simulated time and rate-loss evidence",
     "Captura los tiempos, paradas y valores observados para compararlos con el modelo.": "Record observed times, downtime and values for comparison with the model.",
     "Registro tools": "Record tools",
     "Seleccionar registro": "Select record",
@@ -321,7 +322,7 @@ window.STRealData=(function(){
     effective.append(reported);runtime.body.append(effective);
   }
   function refreshTimeTree(){
-    const record=current();if(!record)return;const h=M.timeHierarchy(record);
+    const record=current();if(!record)return;const h=M.timeHierarchy(record),strict=M.timeHierarchy(record,true);
     for(const output of document.querySelectorAll('[data-time-value]')){
       const id=output.dataset.timeValue;if(output.tagName==='INPUT'){
         const manual=M.timeMode(record,id),wasManual=output.dataset.inputMode==='true';output.readOnly=!manual;output.classList.toggle('calculated-value',!manual);output.dataset.inputMode=String(manual);
@@ -332,7 +333,10 @@ window.STRealData=(function(){
     for(const minutes of document.querySelectorAll('[data-explorer-minutes]')){
       const id=minutes.dataset.explorerMinutes;
       const seconds=id==='unscheduledMaintenance'?M.at(record,'timeBreakdown.unplanned.unscheduledMaintenanceSeconds')??0:h.values[id];
+      const provisional=id!=='unscheduledMaintenance'&&!finite(strict.values[id])&&finite(seconds);
       minutes.textContent=' · '+fmt(finite(seconds)?seconds/60:null)+' min';
+      minutes.dataset.provisional=String(provisional);
+      minutes.title=provisional?tr('Working balance: some source values are missing.','Balance provisional: faltan datos de origen.'):'';
     }
     syncRegistrationTreeWidth();
     for(const id of M.timeSectionIds){
@@ -549,8 +553,13 @@ window.STRealData=(function(){
   }
   function calibrationHtml(result){
     const columns=result.calibration.columns;
+    const missing=result.calibration.missing||[],checks=result.calibration.checks||[];
+    const label=name=>ui(name);
+    const notice=missing.length?'<div class="real-data-calibration-notice" role="status"><strong>'+tr('Missing inputs','Datos faltantes')+'</strong><p>'+tr('Calculated cells update as soon as their required inputs are known. For a reported total, select its node and enable manual entry. Enter zero only for a confirmed zero loss.','Las celdas se actualizan al completar los datos requeridos. Si conoces un total reportado, selecciona su nodo y activa la captura manual. Escribe cero solo si confirmaste que no hubo pérdida.')+'</p><ul>'+missing.map(item=>'<li>'+esc(label(item.label))+(item.section?' <button class="ghost real-data-input-shortcut" type="button" data-real-shortcut="'+esc(item.section)+'">'+tr('Enter value','Capturar dato')+'</button>':'')+'</li>').join('')+'</ul></div>':'';
+    const checkLabels={REPORTED_EFFECTIVE_VS_TIME_BALANCE:tr('Reported effective runtime differs from the time balance.','El tiempo efectivo reportado difiere del balance de tiempos.'),REPORTED_EFFECTIVE_VS_GOOD_PRODUCTION:tr('Reported effective runtime differs from good production / standard rate.','El tiempo efectivo reportado difiere de producción conforme / velocidad estándar.'),REPORTED_UPDT_VS_TIME_RATIO:tr('Reported UPDT differs from downtime / production available time. Check the denominator.','El UPDT reportado difiere de paro / tiempo disponible de producción. Verifica el denominador.')};
+    const discrepancies=checks.length?'<div class="real-data-calibration-notice"><strong>'+tr('Reconciliation checks','Comprobaciones de conciliación')+'</strong><ul>'+checks.map(item=>'<li>'+esc(checkLabels[item.code])+' '+tr('Reported: ','Reportado: ')+fmt(item.reported)+' '+item.unit+' · '+tr('Calculated: ','Calculado: ')+fmt(item.calculated)+' '+item.unit+'</li>').join('')+'</ul></div>':'';
     const attrs=c=>' title="'+esc(displayText(c.formula))+'" aria-description="'+esc(displayText(c.formula))+'" tabindex="0"';
-    return '<div class="real-data-calibration-scroll" role="region" aria-label="'+esc(ui('Hoja de cálculo de rate loss calibrado'))+'" tabindex="0"><table class="real-data-calibration-table"><thead><tr>'+columns.map(c=>'<th scope="col"'+attrs(c)+'>'+esc(ui(c.label))+(c.unit?'<small>['+esc(c.unit==='pp'?'%':c.unit)+']</small>':'')+'</th>').join('')+'</tr></thead><tbody><tr>'+columns.map(c=>'<td data-calibration="'+esc(c.id)+'" class="'+(c.letter==='A'||c.letter==='B'?'':'numeric')+'"'+attrs(c)+'>'+((c.letter==='A'||c.letter==='B')?esc(c.value||'—'):fmt(c.value))+(c.unit==='%'?' %':'')+'</td>').join('')+'</tr></tbody></table></div><p class="chart-note">'+esc(ui(result.calibration.note))+'</p>';
+    return '<div class="real-data-calibration-scroll" role="region" aria-label="'+esc(ui('Hoja de cálculo de rate loss calibrado'))+'" tabindex="0"><table class="real-data-calibration-table"><thead><tr>'+columns.map(c=>'<th scope="col"'+attrs(c)+'>'+esc(ui(c.label))+(c.unit?'<small>['+esc(c.unit==='pp'?'%':c.unit)+']</small>':'')+'</th>').join('')+'</tr></thead><tbody><tr>'+columns.map(c=>'<td data-calibration="'+esc(c.id)+'" class="'+(c.letter==='A'||c.letter==='B'?'':'numeric')+'"'+attrs(c)+'>'+((c.letter==='A'||c.letter==='B')?esc(c.value||'—'):fmt(c.value))+(c.unit==='%'?' %':'')+'</td>').join('')+'</tr></tbody></table></div><p class="chart-note">'+esc(ui(result.calibration.note))+'</p>'+notice+discrepancies;
 
   }
   function downtimeHtml(d){
@@ -626,14 +635,25 @@ window.STRealData=(function(){
     for(const [id,html] of [['real-data-comparison',data?comparisonHtml(data):''],['real-data-calibration',data?calibrationHtml(data):'']])document.getElementById(id).innerHTML=html||'<p class="empty">'+esc(ui('Sin registro seleccionado.'))+'</p>';
     STSubsection.init(comparison);
     showComparisonExplorer(comparison,selectedGroup);
+    for(const button of document.querySelectorAll('#real-data-calibration [data-real-shortcut]')){
+      button.onclick=()=>{
+        const target=[...document.querySelectorAll('#real-data-editor [data-explorer-select]')].find(n=>n.dataset.explorerSelect===button.dataset.realShortcut);
+        if(!target)return;
+        target.click();
+        const panel=document.getElementById(target.getAttribute('aria-controls'));
+        panel?.scrollIntoView?.({block:'nearest',behavior:'smooth'});
+        (panel?.querySelector('[data-time-toggle]')||panel?.querySelector('input'))?.focus();
+      };
+    }
   }
   function render(caseRecord,simulation,live){
     if(!state||!caseRecord)return;
     if(context?.simulation?.id!==simulation?.id||context?.caseRecord?.id!==caseRecord.id)selection='average';
+    const replacedCase=context?.caseRecord!==caseRecord;
     context={caseRecord,simulation,live};const record=current(),key=caseRecord.id+':'+(record?.id||'')+':'+(simulation?.id||'');
     if(record)selected.set(caseRecord.id,record.id);
     const selector=document.getElementById('real-data-record');selector.replaceChildren();for(const r of records()){const option=el('option',r.name+(r.date?' · '+r.date:''));option.value=r.id;selector.append(option);}selector.value=record?.id||'';
-    if(owner!==key){owner=key;register();}
+    if(owner!==key||replacedCase){owner=key;register();}
     document.getElementById('real-data-delete').disabled=!record;
     const select=document.getElementById('real-data-view'),result=source(),options=[['average',ui('Promedio de rondas')]];
     if(result?.batch?.rows?.length){options.push(['representative',ui('Ronda representativa')]);for(const r of result.batch.rows)options.push([String(r.round),tr('Round ','Ronda ')+r.round+' · '+tr('seed ','semilla ')+r.seed]);}

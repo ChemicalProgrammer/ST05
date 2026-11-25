@@ -16,7 +16,7 @@ window.STRealDataModel=(function(){
   function timeMode(record,id){
     const saved=record.timeOverrides?.[id];
     if(saved)return saved.enabled===true;
-    const c=timeCategories[id];return !!c&&!record.timeBreakdown?.[id]?.enabled&&at(record,c.total)>0;
+    const c=timeCategories[id];return !!c&&!record.timeBreakdown?.[id]?.enabled&&Number.isFinite(at(record,c.total))&&at(record,c.total)>0;
   }
   function timeHierarchy(record,requireInputs=false){
     const known=Number.isFinite,zero=v=>known(v)?v:0,values={},sources={},warnings=[];
@@ -46,7 +46,12 @@ window.STRealDataModel=(function(){
   function hierarchyRecord(record){
     if(!record.timeHierarchyEnabled)return record;
     const h=timeHierarchy(record).values;
-    return {...record,aem:{...record.aem,businessExternalDowntimeSeconds:h.external,plantAvailableSeconds:h.plant,plantDecisionDowntimeSeconds:h.decision,productionAvailableSeconds:h.production,scrapSeconds:h.scrap,reworkSeconds:h.rework},downtimeSeconds:h.unplanned,rateLossSeconds:h.rateLoss,lineRunOverrideSeconds:timeMode(record,'runtime')?h.runtime:null,runtimeLossOverrideSeconds:timeMode(record,'losses')?h.losses:null};
+    // The tree can show a working balance, but the comparison must retain
+    // missing measured rate loss and empty manual entries as unknown.
+    const strict=timeHierarchy(record,true).values;
+    return {...record,aem:{...record.aem,businessExternalDowntimeSeconds:h.external,plantAvailableSeconds:h.plant,plantDecisionDowntimeSeconds:h.decision,productionAvailableSeconds:h.production,scrapSeconds:h.scrap,reworkSeconds:h.rework},
+      downtimeSeconds:timeMode(record,'unplanned')?strict.unplanned:h.unplanned,rateLossSeconds:record.rateLossSeconds,
+      lineRunOverrideSeconds:timeMode(record,'runtime')?strict.runtime:null,runtimeLossOverrideSeconds:timeMode(record,'losses')?strict.losses:null};
   }
   function normalize(value){
     if(!value||typeof value!=='object'||Array.isArray(value))throw Error('A real-data record must be an object.');
@@ -304,13 +309,44 @@ window.STRealDataModel=(function(){
     add('globalOee','OEE global guardado','%',null,sim?.oee,'Indicador guardado: producción / producción ideal de toda la simulación × 100. Se distingue de OE y AU por su base.','Indicadores');
     // Calibration only uses captured operands or a balance with all operands present.
     const strictTimes=original.timeHierarchyEnabled?timeHierarchy(original,true).values:null;
-    const calibrationAvailable=strictTimes?finite(strictTimes.production)?strictTimes.production/60:null:actualAvailable;
+    const calibrationAvailable=strictTimes?finite(strictTimes.production)&&strictTimes.production>0?strictTimes.production/60:null:actualAvailable>0?actualAvailable:null;
     const calibrationDowntime=(strictTimes?strictTimes.unplanned:original.downtimeSeconds)??(original.updtDefinition==='AEM_UNPLANNED'?original.updtSeconds:null);
     const calibrationRuntime=strictTimes?(timeMode(original,'runtime')?strictTimes.runtime:finite(calibrationAvailable)&&finite(calibrationDowntime)?calibrationAvailable*60-calibrationDowntime:null):(finite(calibrationAvailable)&&finite(calibrationDowntime)?calibrationAvailable*60-calibrationDowntime:original.runTimeSeconds);
     const capturedRateLoss=original.rateLossSeconds;
     const calibrationEffective=finite(calibrationAvailable)&&finite(calibrationDowntime)&&finite(capturedRateLoss)?calibrationAvailable-(calibrationDowntime+capturedRateLoss)/60:null;
     const i=percent(capturedRateLoss,finite(calibrationAvailable)?calibrationAvailable*60:null),k=percent(sim?.rateLossMeasured?sim.measuredRateLossSeconds:null,times.available),h=original.validation.reportedOeePercent,j=percent(sim?.measuredEffectiveSeconds,times.available),l=finite(i)&&finite(k)?i-k:null,m=finite(j)&&finite(l)?j-l:null,n=finite(m)&&finite(h)?m-h:null;
-    const calibration={basis:'GROSS',rows:[
+    // Explain dependencies per cell. Available observations and simulated
+    // results remain usable even when a different operand is missing.
+    const missing=[];
+    const requireField=(value,label,section)=>{if(!finite(value))missing.push({label,section});};
+    if(!finite(calibrationAvailable)){
+      if(strictTimes){
+        if(timeMode(original,'production'))requireField(strictTimes.production,'Production Available Time','production');
+        else{
+          if(!finite(strictTimes.plant)){
+            if(timeMode(original,'plant'))requireField(strictTimes.plant,'Plant Available Time','plant');
+            else{
+              requireField(original.durationSeconds,'Total Time','total');
+              requireField(strictTimes.external,'Business / External Downtime','external');
+            }
+          }
+          requireField(strictTimes.decision,'Plant Decision Downtime','decision');
+        }
+      }else requireField(calibrationAvailable,'Production Available Time','production');
+    }
+    requireField(calibrationDowntime,'Unplanned Downtime','unplanned');
+    requireField(capturedRateLoss,'Production Rate Losses','losses');
+    requireField(h,'OEE (Opera)','group:reported');
+    if(!finite(j)||!finite(k))missing.push({label:'Complete simulated time and rate-loss evidence',section:null});
+    const checks=[];
+    const discrepancy=(code,reported,calculated,unit)=>{if(finite(reported)&&finite(calculated)&&Math.abs(reported-calculated)>(unit==='%'?.1:1))checks.push({code,reported,calculated,unit,difference:calculated-reported});};
+    // Only compare production to equivalent time using a confirmed reference
+    // and good-output basis; do not substitute calculated values for reports.
+    const productionEffective=window.STAemComparison.effectiveRuntimeFromProduction(original);
+    discrepancy('REPORTED_EFFECTIVE_VS_TIME_BALANCE',realEffective,calibrationEffective,'min');
+    discrepancy('REPORTED_EFFECTIVE_VS_GOOD_PRODUCTION',realEffective,finite(productionEffective)?productionEffective/60:null,'min');
+    discrepancy('REPORTED_UPDT_VS_TIME_RATIO',original.reportedUpdtPercent,percent(calibrationDowntime,finite(calibrationAvailable)?calibrationAvailable*60:null),'%');
+    const calibration={basis:'GROSS',missing,checks,rows:[
       {id:'realLoss',label:'Rate loss real',value:i,unit:'%',formula:'Rate loss real / Production Available Time real × 100.'},
       {id:'simLoss',label:'Rate loss simulado',value:k,unit:'%',formula:'Rate loss simulado / Production Available Time simulado × 100.'},
       {id:'lossDifference',label:'Diferencia de rate loss',value:l,unit:'pp',formula:'Rate loss real − rate loss simulado.'},

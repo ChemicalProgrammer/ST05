@@ -177,19 +177,62 @@ window.STCharts=function(state,formatNumber,playbackView){
       context.globalAlpha=.2;context.lineWidth=1;context.beginPath();samples.forEach(function(sample){var unit=sample.equipment[equipmentIndex];if(!unit||!Number.isFinite(unit.minRatePerSecond)||!Number.isFinite(unit.maxRatePerSecond))return;var x=xForSample(sample);context.moveTo(x,yForRate(unit.minRatePerSecond));context.lineTo(x,yForRate(unit.maxRatePerSecond));});context.stroke();context.globalAlpha=1;
     }
 
-    function getRollingSpeedSamples() {
-      var result=state.run.result;
+    function speedWindowKey(seconds){return Number.isFinite(seconds)?seconds:'FULL';}
+    function restoreSpeedHistory(history){
+      state.run.restoredSpeedHistory=null;
+      if(history?.schema!=='st-speed-window-v1'||!state.run.result||history.seed!==state.run.result.seed||
+        history.roundIndex!==state.run.roundIndex||!Array.isArray(history.rows)||history.rows.length>601)return;
+      var ids=(state.activeCase?.equipment||[]).map(e=>e.id);
+      if(JSON.stringify(ids)!==JSON.stringify(history.equipmentIds))return;
+      var previous=-Infinity,samples=[];
+      for(const row of history.rows){
+        if(!Array.isArray(row)||row.length!==ids.length+1||!Number.isFinite(row[0])||row[0]<=previous)return;
+        previous=row[0];
+        var equipment=[];
+        for(let i=1;i<row.length;i++){
+          var rates=row[i];
+          if(!Array.isArray(rates)||rates.length!==4||rates.some(v=>v!==null&&!Number.isFinite(v)))return;
+          equipment.push({id:ids[i-1],actualRatePerSecond:rates[0],meanRatePerSecond:rates[1],minRatePerSecond:rates[2],maxRatePerSecond:rates[3]});
+        }
+        samples.push({virtualSecond:row[0],equipment});
+      }
+      if(!samples.length||previous!==history.endSecond)return;
+      state.run.restoredSpeedHistory={result:state.run.result,history,samples};
+    }
+    function captureSpeedHistory(){
+      if(!state.run.result||state.run.result.provisional||state.run.result.detailCoverage?.recordingMode==='SUMMARY')return null;
+      var samples=getRollingSpeedSamples(true),end=samples.at(-1)?.virtualSecond;
+      if(!Number.isFinite(end))return null;
+      var ids=(state.activeCase?.equipment||[]).map(e=>e.id);
+      if(!ids.length)return null;
+      var count=Math.min(601,samples.length),rows=[],numericRate=v=>Number.isFinite(v)?v:null;
+      for(let i=0;i<count;i++){
+        var sample=samples[count===1?0:Math.floor(i*(samples.length-1)/(count-1))];
+        var byId=new Map((sample.equipment||[]).map(u=>[u.id,u]));
+        rows.push([sample.virtualSecond,...ids.map((id,index)=>{
+          var u=byId.get(id)||sample.equipment?.[index]||{};
+          return [u.actualRatePerSecond,u.meanRatePerSecond,u.minRatePerSecond,u.maxRatePerSecond].map(numericRate);
+        })]);
+      }
+      return {schema:'st-speed-window-v1',seed:state.run.result.seed,roundIndex:state.run.roundIndex||0,
+        endSecond:end,window:speedWindowKey(STRunOptions.windowSeconds(end,(state.run.configuration?.shiftHours||8)*3600)),
+        equipmentIds:ids,rows,sampled:samples.length>count||!!state.run.restoredSpeedHistory?.history?.sampled};
+    }
+    function getRollingSpeedSamples(forcePlayback=false) {
+      var result=state.run.result,forPlayback=forcePlayback||state.uiView!=='results';
       // Live playback supplies a bounded, measured chart window independently
       // of the compact history retained for the full Results view.
-      var visible=state.uiView!=='results'&&typeof playbackView==='function'
+      var visible=forPlayback&&typeof playbackView==='function'
         ?playbackView():null;
       var all=visible?.samples||result?.samples;
       if(!all?.length)return [];
-      var endIndex=state.uiView==='results'?all.length-1:
+      var endIndex=!forPlayback?all.length-1:
         Math.min(visible?.index??state.run.sampleIndex,all.length-1);
       if(endIndex<0)return [];
       var endTime=all[endIndex].virtualSecond;
       var windowSeconds=STRunOptions.windowSeconds(endTime,(state.run.configuration?.shiftHours||8)*3600);
+      var saved=state.run.restoredSpeedHistory;
+      if(forPlayback&&!state.run.playing&&saved?.result===result&&saved.history.endSecond===endTime&&saved.history.window===speedWindowKey(windowSeconds))return saved.samples;
       if(rollingCache&&rollingCache.samples===all&&rollingCache.length===all.length
         &&rollingCache.index===endIndex&&rollingCache.window===windowSeconds
         &&rollingCache.first===all[0]&&rollingCache.last===all[endIndex])return rollingCache.recent;
@@ -247,6 +290,6 @@ window.STCharts=function(state,formatNumber,playbackView){
 
     function speedColor(index) { return token('--series-' + (index % 13)); }
 
-return {drawSimulationChart:drawSimulationChart,drawEquipmentSpeedChart:drawEquipmentSpeedChart,drawEquipmentSpeedSparkline:drawEquipmentSpeedSparkline};
+return {drawSimulationChart:drawSimulationChart,drawEquipmentSpeedChart:drawEquipmentSpeedChart,drawEquipmentSpeedSparkline:drawEquipmentSpeedSparkline,captureSpeedHistory,restoreSpeedHistory};
 };
 </script>

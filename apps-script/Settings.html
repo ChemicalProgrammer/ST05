@@ -125,7 +125,7 @@ window.STSettings = (function() {
         STPreferences.setCaseOptions(current);
         window.dispatchEvent(new Event('st-rate-loss-reporting-change'));
       };
-      label.append(check,document.createTextNode(category.label));target.append(label);
+      label.append(check,document.createTextNode(window.STLanguage?.translate(category.label)||category.label));target.append(label);
     });
   }
   // Modo predeterminado para nuevos casos; respeta registros múltiples heredados.

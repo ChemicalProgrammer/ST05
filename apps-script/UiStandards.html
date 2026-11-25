@@ -287,6 +287,13 @@ html[data-ui-mode] .scenario-result-box .scenario-basic-metric:first-child stron
 .scenario-config-section[hidden] { display:none!important; }
 .scenario-config-section { padding:0; border:0; }
 .scenario-baseline-note { font-size:var(--font-caption); margin:var(--space-2) 0 0; }
+/* Basic CAPEX cards keep the KPIs, warning badge and progress. The
+   detailed baseline note and redundant historical completion note stay
+   available in Advance; real failures and in-progress states remain visible. */
+html[data-ui-mode=basic] .scenario-tier-grid .scenario-baseline-note,
+html[data-ui-mode=basic] .scenario-tier-grid .scenario-preview-status.scenario-completion-note[data-state=stale] {
+  display:none!important; min-height:0; margin:0; padding:0;
+}
 
 .scenario-config-dialog { height:min(720px,calc(100dvh - 32px)); }
 .scenario-config-dialog > .dialog-body { flex:1; min-height:0; overflow:auto; }

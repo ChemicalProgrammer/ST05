@@ -14,7 +14,7 @@ function translationCatalog(){
   assert.ok(first,'The English/Spanish translation catalog is required');
   const entries=[JSON.parse(first[1])];
   for(const match of languageSource.matchAll(/Object\.assign\(translations,(\{[\s\S]*?\})\);/g))
-    entries.push(JSON.parse(match[1]));
+    entries.push(new Function('return ('+match[1]+');')()); // Trusted source literals may use single quotes.
   const mapped=Object.assign({},...entries);
   for(const [key,value] of Object.entries({...mapped}))
     if(key.trim()&&!Object.prototype.hasOwnProperty.call(mapped,key.trim()))

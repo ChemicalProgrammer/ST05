@@ -94,3 +94,31 @@ test('Changing languages is presentation-only and does not call any case-saving 
     assert.equal(language.translate('Global OEE'),'OEE global');
   }finally{dom.window.close();}
 });
+
+
+test('legacy Spanish labels render correctly in English, including nodes added after initialization',async()=>{
+  const {dom,language,doc}=screen();
+  try{
+    const values=[
+      ['Falta parcial de producto en la salida','Partial product starvation at output'],
+      ['Rampa del equipo de salida','Output equipment ramp'],
+      ['Transición de paro del equipo de salida','Output equipment stop transition'],
+      ['Sin atribuir','Unassigned']
+    ];
+    const host=doc.getElementById('dynamic');
+    for(const [es,en] of values){
+      const label=doc.createElement('label');
+      label.textContent=es;label.setAttribute('aria-description',es);host.append(label);
+    }
+    await new Promise(resolve=>setTimeout(resolve,0));
+    assert.deepEqual([...host.children].map(n=>n.textContent),values.map(x=>x[1]));
+    assert.deepEqual([...host.children].map(n=>n.getAttribute('aria-description')),values.map(x=>x[1]));
+    language.setLanguage('es');
+    assert.deepEqual([...host.children].map(n=>n.textContent),values.map(x=>x[0]));
+    language.setLanguage('en');
+    assert.deepEqual([...host.children].map(n=>n.textContent),values.map(x=>x[1]));
+    for(const key of ['Equipment presentation','Card view','Table view','Equipment Analysis Tool']){
+      language.setLanguage('es');assert.notEqual(language.translate(key),key);
+    }
+  }finally{dom.window.close();}
+});

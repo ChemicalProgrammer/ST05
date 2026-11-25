@@ -168,6 +168,9 @@ test('an old winning scenario remains inspectable but cannot be created after a 
     assert.match(h.host.querySelector('.scenario-result-notice').textContent,/Saved result from previous inputs/);
     assert(h.host.querySelector('.scenario-basic-metric'),'Saved metrics remain visible for review.');
     assert.equal(h.host.querySelector('.scenario-preview-status').textContent,'Previous analysis completed.');
+    assert.ok(h.host.querySelector('.scenario-preview-status').classList.contains('scenario-completion-note'),'Historical completion is a removable Basic-only note.');
+    const ui=fs.readFileSync('apps-script/UiStandards.html','utf8');
+    assert.match(ui,/html\[data-ui-mode=basic\] \.scenario-tier-grid \.scenario-baseline-note,[\s\S]*?\.scenario-preview-status\.scenario-completion-note\[data-state=stale\][\s\S]*?display:none!important/);
     assert.match(openTrace(h).textContent,/Saved result from previous inputs or search settings/);
     h.host.querySelector('.scenario-create').onclick();
     assert.equal(h.creationCalls(),0,'A disabled stale result cannot be applied even if its handler is called directly.');

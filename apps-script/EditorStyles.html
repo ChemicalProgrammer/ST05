@@ -34,7 +34,11 @@
   .model-boundary { font-size: var(--text-13); margin: var(--size-14) 0; }
 
 
-.equipment-drag { cursor:grab; touch-action:none; }
+/* Drag handles override the shared icon-button cursor only when enabled. */
+button.equipment-drag.icon-button { touch-action:none; }
+button.equipment-drag.icon-button:not(:disabled):not([aria-disabled=true]) { cursor:grab; }
+button.equipment-drag.icon-button:not(:disabled):not([aria-disabled=true]):active,
+.equipment-card.equipment-dragging button.equipment-drag.icon-button:not(:disabled):not([aria-disabled=true]) { cursor:grabbing; }
 #equipment-list .equipment-header .equipment-analysis-pill { flex:0 0 auto; max-width:9rem; }
 #equipment-list .equipment-header .button-row { min-width:0; }
 #equipment-list .equipment-header .equipment-analysis-pill[hidden] {display:none!important;}

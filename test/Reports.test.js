@@ -277,6 +277,8 @@ test('additional case information is the last shared export section, only in Adv
   const basic=w.STReports.requestCaseExport(record),basicDialog=w.document.querySelector('.case-export-dialog');
   assert.equal(basicDialog.querySelectorAll('.case-export-additional,[data-export-extra]').length,0);
   assert.equal(basicDialog.querySelectorAll('.case-export-section').length,2);
+  assert(!basicDialog.textContent.includes('Gemini conversation'));
+  assert.equal(basicDialog.querySelector('.case-export-results .case-export-option-grid').querySelectorAll('input').length,5);
   basicDialog.querySelector('.dialog-heading button').click();assert.equal(await basic,false);
  }finally{h.dom.window.close();}
 });
@@ -367,5 +369,34 @@ test('case export uses a single header selector, compact groups and preserves sa
   assert.deepEqual(saved.simulations[0].simulation2d,record.simulations[0].simulation2d);
   assert.equal(saved.metadata.realData,undefined);
   assert.equal(JSON.stringify(record),before);
+ }finally{h.dom.window.close();}
+});
+
+test('Basic excludes Gemini conversation from the export payload without deleting saved chat',async()=>{
+ const h=setup();try{
+  const w=h.w;w.STIcons={svg:()=>'<svg></svg>'};w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.STDialog={beginActivity:()=>()=>{}};
+  let downloaded;w.URL.createObjectURL=blob=>{downloaded=blob;return 'blob:basic-case';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
+  w.document.documentElement.dataset.uiMode='basic';
+  const record={name:'A',activeSimulationId:'a',simulations:[{id:'a',name:'A',equipment:[],geminiHistory:[{role:'user',text:'Preserved in case'}]}]};
+  const before=JSON.stringify(record),pending=w.STReports.requestCaseExport(record),dialog=w.document.querySelector('.case-export-dialog');
+  assert(!dialog.textContent.includes('Gemini conversation'));
+  const mode=dialog.querySelector('#case-export-mode');mode.value='CURRENT';mode.onchange();
+  assert(!dialog.textContent.includes('Gemini conversation'));
+  await new Promise(r=>setTimeout(r,120));dialog.querySelector('.dialog-actions button:last-child').click();assert.equal(await pending,true);
+  const json=await new Promise(resolve=>{const reader=new w.FileReader();reader.onload=()=>resolve(reader.result);reader.readAsText(downloaded);});
+  assert.equal(JSON.parse(json).simulations[0].geminiHistory,undefined);assert.equal(JSON.stringify(record),before);
+ }finally{h.dom.window.close();}
+});
+test('reports use the selected language and preserve user-defined case names',()=>{
+ const h=setup();try{
+  const w=h.w;w.STPreferences={read:()=>null,write:()=>true};
+  w.eval(read('Language.html').match(/<script>([\s\S]*?)<\/script>/)[1]);
+  w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+  h.c.name='Settings';h.sim.name='Results';
+  w.STLanguage.setLanguage('es');const html=w.STReports.resultsHtml(h.result,h.c,h.sim),doc=new JSDOM(html);
+  assert.equal(doc.window.document.documentElement.lang,'es');assert.match(doc.window.document.body.textContent,/Diagnóstico de pérdidas/);
+  assert.equal(doc.window.document.querySelector('.report-context [data-st-no-translate]').textContent,'Settings');
+  assert.match(doc.window.document.body.textContent,/Rampas de arranque y transiciones de paro/);doc.window.close();
+  w.STLanguage.setLanguage('en');const en=w.STReports.resultsHtml(h.result,h.c,h.sim);assert.match(en,/lang="en"/);assert.match(en,/Loss diagnosis/);assert.match(en,/MTTR ends when repair finishes/);
  }finally{h.dom.window.close();}
 });

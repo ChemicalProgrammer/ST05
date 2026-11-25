@@ -38,7 +38,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; background:var(--report-surf
 .report-chat .user-message { white-space:pre-wrap; }
 .report-chat .date { font-size:10px; color:var(--report-muted); }
 .report-chat img { max-width:100%; }
-@media print { .report-cover { break-inside:avoid; padding:18px 22px; } .report-content { border:0; padding:0; } .report-kpi { padding:12px 14px; } .report-kpi strong { font-size:22px; } .report-table { border-radius:0; } }
+@media print { .report-cover { break-inside:avoid; padding:18px 22px; } .report-content { border:0; padding:0; } .report-kpi { padding:12px 14px; } .report-kpi strong { font-size:22px; } .report-table { border-radius:0; } .report-content table { break-inside:auto; } .report-content thead { display:table-header-group; } .report-content h2,.report-content h3,.report-content h4 { break-after:avoid; } .report-charts figure { break-inside:avoid; } }
 @media screen and (max-width:640px) { main { padding:12px; } .report-content { padding:16px; } .report-kpis { grid-template-columns:1fr; } }
 </template>
 

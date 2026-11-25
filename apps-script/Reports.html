@@ -154,10 +154,23 @@ window.STReports=(function(){
       download(recordedChartCsv(recordedChartData(result,activeCase,simulation,round)),filename+'.csv','text/csv;charset=utf-8');
     });
   }
+  // Reports run outside the application's DOM observer. Localize presentation
+  // explicitly and leave user names, chat messages and serialized data intact.
+  function reportText(text){return typeof text==='string'?(window.STLanguage?.translate(text)||text):text;}
+  function reportName(text){return '<span data-st-no-translate>'+escape(text)+'</span>';}
+  function localizeReport(root){
+    if(!window.STLanguage)return;
+    var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    while(walker.nextNode()){
+      var node=walker.currentNode,parent=node.parentElement;
+      if(parent&&!parent.closest('td,pre,code,svg,[data-st-no-translate]'))node.nodeValue=reportText(node.nodeValue);
+    }
+    root.querySelectorAll('[title],[aria-description],[aria-label]').forEach(function(node){if(node.closest('[data-st-no-translate],svg,pre,code'))return;['title','aria-description','aria-label'].forEach(function(attr){if(node.hasAttribute(attr))node.setAttribute(attr,reportText(node.getAttribute(attr)));});});
+  }
   function table(headers,rows,headerTips,rowTips){
     var fragment=document.getElementById('report-table-template').content.cloneNode(true);
-    var tr=document.createElement('tr');headers.forEach(function(h,i){var th=document.createElement('th');th.scope='col';th.textContent=h;if(headerTips?.[i]){th.title=headerTips[i];th.setAttribute('aria-description',headerTips[i]);th.tabIndex=0;}tr.append(th);});fragment.querySelector('thead').append(tr);
-    rows.forEach(function(row,rowIndex){var tr=document.createElement('tr');row.forEach(function(c,columnIndex){var td=document.createElement('td');td.textContent=c??'—';if(columnIndex===0&&rowTips?.[rowIndex]){td.title=rowTips[rowIndex];td.setAttribute('aria-description',td.title);td.tabIndex=0;}tr.append(td);});fragment.querySelector('tbody').append(tr);});
+    var tr=document.createElement('tr');headers.forEach(function(h,i){var th=document.createElement('th');th.scope='col';th.textContent=reportText(h);if(headerTips?.[i]){th.title=reportText(headerTips[i]);th.setAttribute('aria-description',th.title);th.tabIndex=0;}tr.append(th);});fragment.querySelector('thead').append(tr);
+    rows.forEach(function(row,rowIndex){var tr=document.createElement('tr');row.forEach(function(c,columnIndex){var td=document.createElement('td');td.textContent=/^(Metric|Concepto|Causa observada en la salida|Observed state|Comparison|Parameter|Parámetro|Incluida en reportado)$/i.test(String(headers[columnIndex]))?reportText(c??'—'):c??'—';if(columnIndex===0&&rowTips?.[rowIndex]){td.title=reportText(rowTips[rowIndex]);td.setAttribute('aria-description',td.title);td.tabIndex=0;}tr.append(td);});fragment.querySelector('tbody').append(tr);});
     var container=document.createElement('div');container.append(fragment);return container.innerHTML;
   }
   function human(key){return key.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' ');}
@@ -174,10 +187,11 @@ window.STReports=(function(){
     palette+='@media print{:root{color-scheme:light;';Object.entries(printTokens).forEach(function(pair){if(pair[1]&&/^[#(),.%\s\w-]+$/.test(pair[1]))palette+=pair[0]+':'+pair[1]+';';});palette+='}}';
     var root=document.getElementById('report-document-template').content.cloneNode(true);
     root.querySelector('[data-report="brand"]').textContent=__ST_TEXT__('reports.brand');root.querySelector('[data-report="title"]').textContent=title;
-    root.querySelector('[data-report="subtitle"]').textContent=__ST_TEXT__('reports.subtitle')+' · '+(basic()?'Basic':'Advance');root.querySelector('[data-report="footer"]').textContent=__ST_TEXT__('reports.footer')+' · '+new Date().toISOString();
+    root.querySelector('[data-report="subtitle"]').textContent=reportText(__ST_TEXT__('reports.subtitle'))+' · '+(basic()?'Basic':'Advance');root.querySelector('[data-report="footer"]').textContent=reportText(__ST_TEXT__('reports.footer'))+' · '+new Date().toISOString();
     var section=document.getElementById('report-'+(kind||'results')+'-template').content.cloneNode(true);Object.entries(slots).forEach(function(pair){var slot=section.querySelector('[data-report="'+pair[0]+'"]');if(slot)slot.innerHTML=pair[1];});section.querySelectorAll('[data-report-text]').forEach(function(node){node.textContent=templateText[node.dataset.reportText]||node.dataset.reportText;});if(basic())section.querySelectorAll('[data-report-advance]').forEach(function(node){node.remove();});root.querySelector('[data-report="body"]').append(section);
-    var container=document.createElement('div');container.append(root);
-    return '<!doctype html><html lang="en" data-ui-mode="'+(basic()?'basic':'advance')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(title)+'</title><style>'+css+palette+'</style></head><body>'+container.innerHTML+'</body></html>';
+    var container=document.createElement('div');container.append(root);localizeReport(container);
+    var locale=document.documentElement.lang==='es'?'es':'en';
+    return '<!doctype html><html lang="'+locale+'" data-ui-mode="'+(basic()?'basic':'advance')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(reportText(title))+'</title><style>'+css+palette+'</style></head><body>'+container.innerHTML+'</body></html>';
   }
   function batchHtml(batch,displayRateLabel){
     if(!batch)return '';
@@ -193,7 +207,7 @@ window.STReports=(function(){
     if(original){var svg=original.cloneNode(true),from=[original].concat(Array.from(original.querySelectorAll('*'))),to=[svg].concat(Array.from(svg.querySelectorAll('*')));from.forEach(function(node,i){var style=getComputedStyle(node);['fill','stroke','stroke-width','font-size','font-family'].forEach(function(name){to[i].style.setProperty(name,style.getPropertyValue(name));});});html+='<figure style="background:'+escape(surface)+'">'+svg.outerHTML+'</figure>';}
     return html;
   }
-  const rateLossHelp="La pérdida bruta de velocidad de la línea suma los déficits de cada intervalo con salida positiva: máximo(0, duración del intervalo − producción / velocidad de referencia del formato activo). La recuperación suma por separado la producción por encima de esa referencia. Balance neto = pérdida bruta − recuperación = tiempo de operación − tiempo productivo equivalente. Puede ser negativo por descarga de acumuladores. Las paradas completas se contabilizan aparte. Ejemplo: producir 300 botellas en una rampa de 2 min con referencia de 300 bpm equivale a perder 1 min. La pérdida de línea se mide en la salida final; no es la suma de los equipos. El dato real de planta solo sirve como comparación y no agrega una penalización al motor. Antes de compararlo deben coincidir periodo, referencia y definición bruta o neta. Se supone calidad del 100 %. No se modela desaceleración gradual. La vista promedio utiliza las mediciones de todas las rondas.";
+  const rateLossHelp="La pérdida bruta de velocidad de la línea suma los déficits de cada intervalo con salida positiva: máximo(0, duración del intervalo − producción / velocidad de referencia del formato activo). La recuperación suma por separado la producción por encima de esa referencia. Balance neto = pérdida bruta − recuperación = tiempo de operación − tiempo productivo equivalente. Puede ser negativo por descarga de acumuladores. Las paradas completas se contabilizan aparte. Ejemplo: producir 300 botellas en una rampa de 2 min con referencia de 300 bpm equivale a perder 1 min. La pérdida de línea se mide en la salida final; no es la suma de los equipos. El dato real de planta solo sirve como comparación y no agrega una penalización al motor. Antes de compararlo deben coincidir periodo, referencia y definición bruta o neta. El modelo incluye desperdicio por paro mayor/general o STOP cuando está configurado; no modela otras causas de rechazo. No se modela desaceleración gradual. La vista promedio utiliza las mediciones de todas las rondas.";
   const rateLossCategories=[
     {id:'starvation',label:'Falta parcial de producto en la salida',key:'lineRateLossStarvationSeconds'},
     {id:'ramp',label:'Rampa del equipo de salida',key:'lineRateLossRampSeconds'},
@@ -233,7 +247,7 @@ window.STReports=(function(){
       equipment.map(e=>[e.name||e.id,...fields.map(key=>min(rateLossCounter(result,key,'average',e.id)))]));
     const note='La tabla de línea reparte el déficit de salida una sola vez. La falta parcial de producto identifica el mecanismo inmediato y puede tener su origen aguas arriba. Sin atribuir incluye el déficit que la salida no permite asociar a una categoría. Los contadores por equipo son locales y pueden solaparse.';
     const missing=data.available?'':' El desglose de línea requiere una corrida del motor continuo con los contadores nuevos.';
-    return '<h3>Line rate loss breakdown</h3><p class="chart-note">'+escape(note+missing)+'</p><div class="table-scroll">'+line+'</div><h3>Speed losses by equipment</h3><div class="table-scroll">'+local+'</div>';
+    return '<h3>Line rate loss breakdown</h3><p class="chart-note">'+escape(reportText(note)+(missing?' '+reportText(missing.trim()):''))+'</p><div class="table-scroll">'+line+'</div><h3>Speed losses by equipment</h3><div class="table-scroll">'+local+'</div>';
   }
   function rateLossRows(result){
     const metric=key=>{
@@ -351,22 +365,27 @@ window.STReports=(function(){
   const rampNote="El MTTR termina al finalizar la reparación. Por defecto el equipo se recupera sin espera ni rampa adicional, sujeto a disponibilidad de material y controles de parada. La rampa tras reparación requiere habilitación expresa por equipo; las rampas iniciales, por comando y por sensor son independientes. Los reinicios cuentan solicitudes de recuperación y las rampas cuentan secuencias ejecutadas, incluso interrumpidas. Las botellas equivalentes son producto procesado, no perdido. La transición de parada incluye respuesta a acumulación y descarga residual; no se modela desaceleración gradual. El mismo producto puede contarse en varios equipos: no sumar como producción única de línea. — significa dato no disponible. El reloj MTBF avanza solo en intervalos con flujo procesado positivo; un intervalo parcialmente productivo cuenta completo y las esperas sin flujo no cuentan. En vista promedio todos los contadores son promedios de las rondas.";
   function resultsHtml(result,activeCase,simulation){
     var units=result.unitOfFlow||activeCase.unitOfFlow||'units';
-    var slots={ramps:'<h2>Start ramps and stop transitions</h2>'+table(rampHeaders,rampRows(result,simulation?.equipment||activeCase.equipment||[]).map(row=>row.map((v,i)=>i?value(v):v)),rampHeaderTips)+'<p>'+escape(rampNote)+'</p>',context:escape(activeCase.name)+' · '+escape(simulation?.name||''),limitations:escape(__ST_TEXT__('exports.report_limitations')),batch:batchHtml(result.batch,STFlowUnits.labels(units).rate),representative:escape((result.resultView?.mode==='average'?'Mean of '+result.resultView.rounds+' rounds. ':result.resultView?.round?'Round '+result.resultView.round+'. ':'')+(result.batch?__ST_TEXT__('batch.representative'):'')),charts:chartsHtml(),equipment:'',zones:''};
+    var slots={ramps:'<h2>Start ramps and stop transitions</h2>'+table(rampHeaders,rampRows(result,simulation?.equipment||activeCase.equipment||[]).map(row=>row.map((v,i)=>i?value(v):v)),rampHeaderTips)+'<p>'+escape(rampNote)+'</p>',context:reportName(activeCase.name)+' · '+reportName(simulation?.name||''),limitations:escape(__ST_TEXT__('exports.report_limitations')),batch:batchHtml(result.batch,STFlowUnits.labels(units).rate),representative:escape((result.resultView?.mode==='average'?'Mean of '+result.resultView.rounds+' rounds. ':result.resultView?.round?'Round '+result.resultView.round+'. ':'')+(result.batch?__ST_TEXT__('batch.representative'):'')),charts:chartsHtml(),equipment:'',zones:''};
     if(result.engineId==='DES_SIMPY_EXPERIMENTAL')slots.limitations+=' '+escape('DES · SimPy 4.1.2 (experimental). '+(result.limitations||[]).join(' '));
-    var stats=result.batch?.statistics,mean=(key,fallback)=>Number.isFinite(stats?.[key]?.mean)?stats[key].mean:fallback,loss=lossBreakdown(result,simulation);
-    slots.headline=kpis([['OEE',mean('lineOeePercent',result.summary.lineOeePercent),'%'],['Throughput',mean('throughputPerMinute',result.summary.outputCount/result.durationSeconds*60),' '+STFlowUnits.labels(units).rate],['Production',mean('outputCount',result.summary.outputCount),' '+units]]);
+    var stats=result.resultView?.mode==='round'?null:result.batch?.statistics,mean=(key,fallback)=>Number.isFinite(stats?.[key]?.mean)?stats[key].mean:fallback,loss=lossBreakdown(result,simulation);
+    var headline=[['OEE',mean('lineOeePercent',result.summary.lineOeePercent),'%'],['Throughput',mean('throughputPerMinute',result.durationSeconds>0?result.summary.outputCount/result.durationSeconds*60:null),' '+STFlowUnits.labels(units).rate],['Production',mean('outputCount',result.summary.outputCount),' '+reportText(units)]];
+    if(!basic())headline.push(['Scrap',mean('totalMacroStopScrapBottles',result.summary.totalMacroStopScrapBottles??result.summary.materialBalance?.scrapUnits??null),' '+reportText('bottles')]);
+    var effective=window.STResults?.effectiveRunTime?.(result,simulation),failures=window.STResults?.failureBreakdown?.(result,simulation?.equipment||activeCase.equipment||[]);
+    if(effective)headline.push(['Effective Run Time',effective.minutes,' min']);
+    if(failures)headline.push(['Total failure downtime (MTBF/MTTR)',failures.total,' min']);
+    slots.headline=kpis(headline);
     slots.losses=lossHtml(loss)+'<h2>Line Rate Loss</h2>'+table(['Metric','min'],rateLossRows(result).map(([label,n])=>[label,value(n)]))+'<p>'+escape(rateLossHelp)+'</p>'+rateLossImpactHtml(result)+equipmentRateLossHtml(result,simulation?.equipment||activeCase.equipment||[])+rateLossAttributionHtml(result,simulation?.equipment||activeCase.equipment||[],activeCase.metadata?.consoleOptions?.rateLossCategories);slots.observed='<h2>Observed equipment times</h2>'+table(['Equipment','Observed state','Time (%)'],loss.observedEquipmentTimes.map(o=>[o.name,o.state,value(o.percent)+'%']));
-    slots.context+=' · '+escape(result.batch?'Mean of '+result.batch.rounds+' rounds':'Single round')+' · '+escape(result.engineId||'ST_CURRENT');
+    slots.context+=' · '+escape(result.resultView?.mode==='round'?reportText('Round')+' '+result.resultView.round:result.batch?reportText('Mean of')+' '+result.batch.rounds+' '+reportText('rounds'):reportText('Single round'))+' · '+escape(result.engineId||'ST_CURRENT');
     slots.overview=table([__ST_TEXT__('results.metric'),__ST_TEXT__('exports.value')],[[__ST_TEXT__('exports.duration'),result.durationSeconds],[__ST_TEXT__('exports.seed'),result.seed],[__ST_TEXT__('exports.units'),units],[__ST_TEXT__('results.throughput')+' ('+STFlowUnits.labels(units).rate+')',value(result.summary.outputCount/result.durationSeconds*60)]].concat(scalars(result.summary)));
-    (simulation?.equipment||activeCase.equipment||[]).forEach(function(e){slots.equipment+='<section><h3>'+escape(e.name)+' · '+escape(e.type)+'</h3>'+table([__ST_TEXT__('results.metric'),__ST_TEXT__('exports.value')],scalars(result.equipmentMetrics?.[e.id]||{}))+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars({unitOfFlow:e.unitOfFlow||'units',nominalRatePerSecond:e.nominalRatePerSecond,processData:e.processData,noiseProfile:e.noiseProfile}))+'</section>';});
+    (simulation?.equipment||activeCase.equipment||[]).forEach(function(e){slots.equipment+='<section><h3>'+reportName(e.name)+' · '+escape(e.type)+'</h3>'+table([__ST_TEXT__('results.metric'),__ST_TEXT__('exports.value')],scalars(result.equipmentMetrics?.[e.id]||{}))+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars({unitOfFlow:e.unitOfFlow||'units',nominalRatePerSecond:e.nominalRatePerSecond,processData:e.processData,noiseProfile:e.noiseProfile}))+'</section>';});
     Object.entries(result.accumulationZoneMetrics||{}).forEach(function(pair){slots.zones+='<section><h2>'+escape(__ST_TEXT__('exports.accumulation'))+' · '+escape(pair[0])+'</h2>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars(pair[1]))+'</section>';});
     if(basic()){
-      var stats=result.batch?.statistics,mean=function(key,fallback){return Number.isFinite(stats?.[key]?.mean)?stats[key].mean:fallback;};
+      var stats=result.resultView?.mode==='round'?null:result.batch?.statistics,mean=function(key,fallback){return Number.isFinite(stats?.[key]?.mean)?stats[key].mean:fallback;};
       slots.overview=table([__ST_TEXT__('results.metric'),__ST_TEXT__('exports.value')],[
         [__ST_TEXT__('results.global_oee')+' (%)',value(mean('lineOeePercent',result.summary.lineOeePercent))],
         [__ST_TEXT__('results.throughput')+' ('+STFlowUnits.labels(units).rate+')',value(mean('throughputPerMinute',result.summary.outputCount/result.durationSeconds*60))],
         [__ST_TEXT__('results.production')+' ('+units+')',value(mean('outputCount',result.summary.outputCount))]]);
-      slots.context+=' · '+escape(result.durationSeconds)+' s'+(result.batch?' · Mean of '+escape(result.batch.rounds)+' rounds':'');
+      slots.context+=' · '+escape(result.durationSeconds)+' s';
       slots.equipment='';slots.zones='';slots.batch='';slots.representative='';
     }
     if(result.products){slots.overview+='<h2>Production by packing format</h2>'+table(['Format','Product','Output unit','Output equivalent','Complete cases','Partial case equivalent','Bottle equivalents','Clear-out (bottles)'],result.products.rows.map(function(row){return [row.name,row.productName||row.name,row.outputUnit,value(row.outputNative),value(row.completeCases),value(row.partialCaseEquivalent),value(row.outputBottleEquivalents),value(row.clearoutBottleEquivalents)];}))+'<p>Representative round. Continuous equivalent flow; changeover clear-out is removed inventory, not production.</p>';}
@@ -380,13 +399,13 @@ window.STReports=(function(){
       if(!basic())body+='<h3>'+escape(__ST_TEXT__('scenario.evidence'))+'</h3>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars(p.evidence));body+='</section>';
     });
     var checks=table([__ST_TEXT__('client.equipment'),__ST_TEXT__('exports.check'),__ST_TEXT__('exports.status')],plan.checks.map(function(c){return [c.equipmentId||'—',STScenarioText[c.rule]||c.rule,STScenarioText[c.status]||c.status];}));
-    return documentHtml(__ST_TEXT__('exports.whatif_report'),{context:escape(simulation.name),proposals:body,checks:checks},'whatif');
+    return documentHtml(__ST_TEXT__('exports.whatif_report'),{context:reportName(simulation.name),proposals:body,checks:checks},'whatif');
   }
   function evaluationSummaryHtml(simulation){
     var evaluations=window.STScenarioExplorer?.evaluations(simulation)||[];
     return evaluations.map(function(saved){
       var e=saved.candidate?saved:saved.lastResult||saved,comparison=e.independentCheck||e;
-      var html='<section><h2>'+escape(e.title||saved.title)+'</h2><p>Scenario search result · '+escape(e.status||saved.status)+'</p>';
+      var html='<section><h2>'+reportName(e.title||saved.title)+'</h2><p>Scenario search result · '+escape(e.status||saved.status)+'</p>';
       if(e!==saved)html+='<p>Previous evaluation. Configuration changed; recalculate before creating a scenario.</p>';
       if(comparison.baseline&&comparison.candidate)html+=table(['Metric','Baseline','Scenario','Difference'],[['OEE (%)','oee'],['Throughput ('+STFlowUnits.labels(e.unitOfFlow||simulation.unitOfFlow).rate+')','throughput']].map(function(spec){var base=comparison.baseline[spec[1]],next=comparison.candidate[spec[1]];return [spec[0],value(base),value(next),value(next-base)];}));
       if(e.independentCheck)html+='<p>Independent check · Rounds: '+escape(e.independentCheck.rounds)+' · Passed: '+escape(e.independentCheck.passed)+'</p>';
@@ -408,7 +427,7 @@ window.STReports=(function(){
     if(!evaluations.length)return html+'<p>No calculated evaluations available for these inputs for this case.</p></section>';
     evaluations.forEach(function(saved){
       var e=saved.candidate?saved:saved.lastResult||saved;
-      html+='<section><h3>'+escape(e.title)+'</h3><p>'+escape(e.tier)+' · '+escape(e.status)+' · '+escape(e.updatedAt)+'</p>';
+      html+='<section><h3>'+reportName(e.title)+'</h3><p>'+escape(e.tier)+' · '+escape(e.status)+' · '+escape(e.updatedAt)+'</p>';
       if(e!==saved)html+='<p>Previous evaluation. Configuration changed; recalculate before creating a scenario.</p>';
       html+=table(['Evaluation setting','Value'],scalars({method:e.method,engineeringReviewAcknowledged:e.engineeringReviewAcknowledged,run:e.run,trials:e.trials,infeasibleTrials:e.infeasibleTrials,acceptance:e.acceptance,error:e.error}));
       var rows=[];function comparison(label,base,next){if(!base||!next)return;rows.push([label,'OEE (%)',value(base.oee),value(next.oee),value(next.oee-base.oee)]);rows.push([label,'Throughput ('+STFlowUnits.labels(e.unitOfFlow||simulation.unitOfFlow).rate+')',value(base.throughput),value(next.throughput),value(next.throughput-base.throughput)]);}
@@ -454,10 +473,10 @@ window.STReports=(function(){
     var equipment=ids.map(function(id){
       var left=a.equipment.find(e=>e.id===id),right=b.equipment.find(e=>e.id===id);
       var zonesA=Object.values(a.results?.accumulationZoneMetrics||{}).filter(z=>z.ownerEquipmentId===id),zonesB=Object.values(b.results?.accumulationZoneMetrics||{}).filter(z=>z.ownerEquipmentId===id);
-      return '<section><h3>'+escape(left?.name||right?.name||id)+' · '+escape(id)+'</h3>'+diff({metrics:a.results?.equipmentMetrics?.[id]||{},accumulation:zonesA},{metrics:b.results?.equipmentMetrics?.[id]||{},accumulation:zonesB})+'</section>';
+      return '<section><h3>'+reportName(left?.name||right?.name||id)+' · '+escape(id)+'</h3>'+diff({metrics:a.results?.equipmentMetrics?.[id]||{},accumulation:zonesA},{metrics:b.results?.equipmentMetrics?.[id]||{},accumulation:zonesB})+'</section>';
     }).join('');
     var changed=STInputComparison.changes(a,b).rows;
-    var slots={context:escape(data.case.name)+' · '+escape(a.name)+' vs. '+escape(b.name),basis:escape(data.comparability),
+    var slots={context:reportName(data.case.name)+' · '+reportName(a.name)+' vs. '+reportName(b.name),basis:escape(data.comparability),
       'overview-title':escape(__ST_TEXT__('results.outcome_comparison')),overview:diff(meanSummary(a),meanSummary(b)),
       'inputs-title':escape(__ST_TEXT__('comparison.changed_inputs')),inputs:changed.length?table([__ST_TEXT__('client.equipment'),__ST_TEXT__('exports.parameter'),__ST_TEXT__('view.baseline'),__ST_TEXT__('results.proposed')],changed):'<p>'+escape(__ST_TEXT__('comparison.no_equipment_input_differences_run_settings_are_listed_below'))+'</p>',
       'equipment-title':escape(__ST_TEXT__('view.equipment_comparison')),equipment:equipment,
@@ -578,7 +597,8 @@ window.STReports=(function(){
         if(!prepared)return;exportButton.disabled=true;endActivity=STDialog.beginActivity(dialog);dialog.setAttribute('aria-busy','true');
         try{await new Promise(function(done){setTimeout(done,0);});if(closed)return;exportCompleteCase(prepared);finish(true);}catch(error){preview.textContent=tr('Cannot export:','No se puede exportar:')+' '+error.message;}finally{endActivity?.();endActivity=null;dialog.removeAttribute('aria-busy');if(!closed)exportButton.disabled=!prepared;}
       });footer.append(cancel,exportButton);dialog.append(heading,body,footer);document.body.append(dialog);dialog.showModal();
-      var advanced=!basic(),selections=caseExportSelection(record,'COMPLETE'),extras=caseExportExtras('COMPLETE',advanced),resultLevel='FULL';
+      var advanced=!basic(),selections=dialogSelection('COMPLETE'),extras=caseExportExtras('COMPLETE',advanced),resultLevel='FULL';
+      function dialogSelection(preset){var choices=caseExportSelection(record,preset);if(!advanced)choices.forEach(function(choice){choice.chat=false;});return choices;}
       function markCustom(){presetSelect.value=resultLevel;}
       function check(text,checked,onchange,keepName){
         var l=el('label',null,'case-export-check st-checkbox-card'),input=el('input');input.type='checkbox';input.checked=checked;
@@ -623,8 +643,8 @@ window.STReports=(function(){
           results.grid.append(numericalCheck,spatialCheck,
             check('Equipment analysis',choice.equipmentAnalysis,function(value){choice.equipmentAnalysis=value;}),
             check('Conveyor analysis',choice.conveyorAnalysis,function(value){choice.conveyorAnalysis=value;}),
-            check('Supporting analysis and diagnostics',choice.analysis,function(value){choice.analysis=value;}),
-            check('Gemini conversation',choice.chat,function(value){choice.chat=value;}));
+            check('Supporting analysis and diagnostics',choice.analysis,function(value){choice.analysis=value;}));
+          if(advanced)results.grid.append(check('Gemini conversation',choice.chat,function(value){choice.chat=value;}));
           controls.append(results.block);
           var scenarios=section('What-If scenarios','Choose saved evaluations. Simulations created from them are selected separately.','case-export-scenarios');
           // Review/status codes belong to saved evidence, not the export
@@ -650,7 +670,7 @@ window.STReports=(function(){
       presetSelect.onchange=function(){
         var mode=presetSelect.value;
         if(['COMPLETE','CURRENT','CONFIGURATION','REVIEW'].includes(mode)){
-          selections=caseExportSelection(record,mode);extras=caseExportExtras(mode,advanced);
+          selections=dialogSelection(mode);extras=caseExportExtras(mode,advanced);
           resultLevel=mode==='CONFIGURATION'?'NONE':mode==='REVIEW'?'SUMMARY':'FULL';
         }else{
           // Changing detail never resets the selected simulations, 2D state,
@@ -673,7 +693,7 @@ window.STReports=(function(){
   }
   function configurationHtml(data){
     var slots={metadata:table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars(data.case)),settings:table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars({simulation:data.simulation.name,dynamicConfig:data.simulation.dynamicConfig,engineConfig:data.simulation.engineConfig})),equipment:'',json:escape(JSON.stringify(data,null,2))};
-    data.simulation.equipment.forEach(function(e){slots.equipment+='<section><h2>'+escape(e.name)+'</h2>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars(e))+'</section>';});
+    data.simulation.equipment.forEach(function(e){slots.equipment+='<section><h2>'+reportName(e.name)+'</h2>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],scalars(e))+'</section>';});
     if(basic()){
       slots.metadata=table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],[['Case',data.case.name],['Flow unit',data.case.unitOfFlow]]);
       var run=data.simulation.dynamicConfig;
@@ -692,7 +712,7 @@ window.STReports=(function(){
           var zone=audit.find(function(x){return x.equipmentId===e.id;}),calculated=zone?.engineering?.calculated,geometry=zone?.engineering?.runtimeGeometry;
           rows.push(['Belt speed (m/min)',value(geometry?.conveyorSpeedMmPerSecond*.06)],['Population (%)',value(acc.targetPopulationPercent??(calculated?.machineOutputRateMmPerSecond/geometry?.conveyorSpeedMmPerSecond*100))],['LBA (mm)',value(acc.manualLbaMm??calculated?.usefulAccumulationLengthMm)],['Overflow (mm)',value(calculated?.overflowProductLengthMm)],['Required overflow Lbu (mm)',value(calculated?.overflowLengthMm)]);
         }
-        slots.equipment+='<section><h2>'+escape(e.name)+'</h2>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],rows)+'</section>';
+        slots.equipment+='<section><h2>'+reportName(e.name)+'</h2>'+table([__ST_TEXT__('exports.parameter'),__ST_TEXT__('exports.value')],rows)+'</section>';
       });
     }
     var commands=data.simulation.dynamicConfig.commands||[];if(commands.length)slots.settings+='<h3>Scheduled controls</h3>'+table(['Equipment','Action','Virtual second'],commands.map(c=>[c.equipmentId,c.action,c.atVirtualSecond??c.atSeconds]));
@@ -709,7 +729,7 @@ window.STReports=(function(){
   function chatText(data){return data.messages.map(function(m){return (m.role==='user'?'You':'Gemini')+(m.createdAt?' · '+m.createdAt:'')+'\n'+m.text;}).join('\n\n────────────────────\n\n');}
   function chatHtml(data){
     var content=data.messages.map(function(m){var body=document.createElement('div');if(m.role==='model')STMarkdown.render(m.text,body);else{body.className='user-message';body.textContent=m.text;}
-      return '<article><h2>'+escape(m.role==='user'?'You':'Gemini')+'</h2>'+(m.createdAt?'<p class="date">'+escape(m.createdAt)+'</p>':'')+body.outerHTML+'</article>';
+      body.setAttribute('data-st-no-translate','');return '<article><h2>'+escape(m.role==='user'?'You':'Gemini')+'</h2>'+(m.createdAt?'<p class="date">'+escape(m.createdAt)+'</p>':'')+body.outerHTML+'</article>';
     }).join('');
     return documentHtml('Gemini chat history',{context:escape(data.exportedAt),transcript:content},'chat');
   }

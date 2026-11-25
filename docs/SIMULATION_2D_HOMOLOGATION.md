@@ -20,7 +20,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
 | Descarga y overflow | Implementado y evaluado (ambos motores; diferencias residuales pendientes) |
 | Contadores | Implementado y evaluado (balances cerrados; anomalías de clasificación pendientes) |
-| Resolución temporal | Pendiente |
+| Resolución temporal | En evaluación (FAST vs PRECISE; falta sensibilidad intermedia y pruebas controladas) |
 | Validación contra planta | Pendiente |
 
 **Interpretación:** «Implementado» significa que existe una corrección publicada, no que esté validada con el caso de planta. «Implementado y evaluado» indica que se realizó una comparación posterior al cambio, no necesariamente que se alcanzó equivalencia completa. «Pendiente» no implica ausencia total de lógica existente, sino que falta su revisión sistemática de homologación.
@@ -46,7 +46,8 @@ Datos históricos de la conversación y última evidencia del archivo de caso ex
 | Simulación 2D, posterior a etapa 4 (`PHYSICAL_FLOW_6`) | 207,132 | 143.84 | +21.57% |
 | Simulación numérica, etapa 5 (ST_CURRENT 0.20.3, FAST) | 181,548 | 126.08 | +6.56% |
 | Simulación 2D, etapa 5 (`PHYSICAL_FLOW_7`) | 207,132 | 143.84 | +21.57% |
-| Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, PRECISE) | Pendiente | Pendiente | Pendiente |
+| Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, PRECISE) | 192,984 | 134.02 | +13.27% |
+| Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, BALANCED) | Pendiente | Pendiente | Pendiente |
 
 Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores. Tras evaluar ambos motores de la etapa 4, la diferencia 2D − numérica es +25,584 botellas. La numérica histórica de 136,764 se conserva y no se usa como referencia vigente.
 
@@ -234,6 +235,43 @@ Hallazgos:
 
 La resolución numérica existente con residencia habilitada y tick solicitado 0.25 s permite FAST (1/20 s), BALANCED (1/60 s) y PRECISE (1/120 s). El motor 2D usa 1/120 s. Confirmado en `src/simulation/LineSimulationEngine.js` (`resolveSimulationNumerics`) y política 2D vigente. No confundir Playback speed ni sample interval con integración. Primera comparación: repetir únicamente numérica con PRECISE, duración 1,440 min, semilla 20261124, una ronda, mismos equipos/formatos, fallas habilitadas y eventos/calendario deshabilitados, residencia activa. Mantener numérica FAST y 2D política 7 como referencias; no repetir 2D. Se recomienda guardar exportación independiente. Este paso varía un solo factor: resolución numérica. No cambia código. A igual tick, no se garantiza misma trayectoria ni secuencia aleatoria. Después evaluar BALANCED si es necesario, y pruebas cortas deterministas sin fallas y con eventos controlados. Revisar conservación, producción, eficiencia sin tope, tiempos de estados y discrepancias de créditos, evitando elegir el tick únicamente por cercanía a planta.
 
+### Evaluación inicial de etapa 6 — FAST vs PRECISE
+
+Fuente: exportación `G-complete (10).json`, revisión 66, 38,812,224 bytes, SHA-256 `a5ded8499bdd8fae38eeac92c94941a16d9bc9d67789c90120c4dea26bd0f08d`. Comparación directa con `G-complete (9).json`, revisión 61. Ambas listas de equipos son idénticas y coinciden con la lista de equipos de sus firmas numéricas. La única diferencia semántica en el run de las firmas numéricas es FAST frente a ausencia de numericalResolution (por defecto PRECISE). El bloque results.numerics y el replay confirman PRECISE efectivo 1/120 s, solicitado 0.25 s, versión 0.20.3/cache:32. Duración 86,400 s, formato S, residencia/fallas activadas, eventos/calendario desactivados. Tres rondas completas, semillas 20261124–20261126. La captura 2D del archivo (10) está Ready, tiempo 0, complete=false; no es una corrida de 0 botellas. Se reutiliza la 2D completa de (9), PHYSICAL_FLOW_7; las firmas 2D de ambos archivos son semánticamente idénticas (orden de claves no significativo). No se estableció por qué se reinició la captura; revisar persistencia de resultados independientes al cambiar resolución numérica.
+
+| Semilla | FAST (botellas) | PRECISE (botellas) | Diferencia PRECISE − FAST |
+| --- | ---: | ---: | ---: |
+| 20261124 | 181,548 | 192,984 | +11,436 |
+| 20261125 | 176,040 | 183,480 | +7,440 |
+| 20261126 | 178,188 | 187,572 | +9,384 |
+| Media | 178,592 | 188,012 | +9,420 |
+
+Desviación estándar muestral FAST 2,776.14, PRECISE 4,767.25 botellas. Comparación descriptiva emparejada por semilla dentro de la numérica (n=3, no prueba de convergencia ni validación). Ronda 1: incremento 6.30% respecto a FAST; brecha 2D − numérica disminuye de 25,584 a 14,148 botellas (44.70%; +7.33% respecto a PRECISE). Error frente a planta aumenta de +6.56% a +13.27%. El paso temporal afecta los resultados; no escoger FAST solo porque es más próximo al dato real. No atribuir porcentajes de la brecha a causas independientes a partir de una sola comparación.
+
+| Balance (botellas) | FAST | PRECISE | 2D |
+| --- | ---: | ---: | ---: |
+| Entrada | 185,813 | 195,663 | 212,424 |
+| Salida | 181,548 | 192,984 | 207,132 |
+| Inventario final | 1,004 | 6 | 941 |
+| Overflow | 3,261 | 2,673 | 4,351 |
+| Residual | 0 | 0 | 0 |
+
+Diferencia 2D − PRECISE: +16,761 entrada −935 inventario adicional −1,678 overflow adicional = +14,148 salida. La entrada domina la diferencia aritmética, no prueba atribución causal. Las tres rondas PRECISE cierran balances materiales. Los nueve elementos de ronda 1 cierran salida por estado; máximo residual absoluto de tiempo 0.000006 s. El reloj MTBF cargado coincide con exposición productiva en las cinco máquinas de ronda 1.
+
+| Máquina | Runtime Efficiency FAST / PRECISE / 2D (%) | Blocked FAST / PRECISE / 2D (min) | Fallas FAST / PRECISE / 2D |
+| --- | ---: | ---: | ---: |
+| Scrambler | 116.27 / 100.79 / 100.81 | 147.53 / 26.79 / 28.44 | 18 / 21 / 15 |
+| Virtual inlet | 88.44 / 99.52 / 99.97 | 0.03 / 0.04 / 0 | 222 / 212 / 211 |
+| Filler | 108.67 / 102.14 / 102.17 | 150.64 / 53.29 / 57.09 | 61 / 70 / 68 |
+| Case Packer | 92.86 / 99.19 / 99.19 | 113.42 / 146.33 / 0 | 79 / 78 / 93 |
+| Palletizer | 93.42 / 96.25 / 96.48 | 0 / 0 / 0 | 32 / 33 / 21 |
+
+Hallazgos y siguientes diagnósticos:
+- Runtime Efficiency y Blocked del Scrambler y Filler se acercan notablemente al igualar tick. Persiste sobreproducción aparente (PRECISE +1,530.747895 / +4,072.605538 botellas respectivamente sobre integral de diseño, frente a +1,716.033306 / +4,440.083311 2D). No confundir cierre contable con exactitud física. Investigar créditos, estado al cierre de tick y tiempo de descarga.
+- Case Packer PRECISE: 16,082 episodios observados, 87 alcanzan BACKUP_STOP, 15,995 terminan sin observar ese estado. 150.72 min DISCHARGING sin salida; Blocked 146.33 min frente a cero 2D; Starved 31.12 min frente a 158.23; Waiting for Prime 318.89 frente a 257.82. La clasificación de bloqueo/escasez sigue discrepando incluso con el mismo paso. En numérica, processEquipmentFlow usa disponibilidad, packageRemainder, capacidad de entrada y bloqueo de paquete; en 2D, stepResident determina Blocked cuando un intento efectivo de descarga falla. Estas condiciones deben contrastarse con trazas deterministas; no deducir equivalencia por métricas agregadas.
+- Scrambler PRECISE registra 21 fallas y 356.60 min de falla, 2D 15 y 258.90 min; diferencia 97.70 min. Se verificó que los motores no comparten el algoritmo ni la inicialización de RNG: numérica createEquipmentRandom usa hash de semilla, id y familia de evento y streams separados; 2D usa LCG con índice de línea y stream de máquina compartido. Misma semilla no significa misma secuencia de fallas. No atribuir todo el gap restante a una sola causa. Probar primero sin fallas y con órdenes controladas a igual tick; después alinear streams de confiabilidad por identidad y evento con pruebas de reproducibilidad, sin modificar MTBF/MTTR de entrada para calibrar.
+- La corrida (10) no valida planta: Real Data tiene una sola referencia de producción agregada, sin desglose de equipos, y la base de tiempos/producción permanece sin confirmar. Conservar el archivo previo para 2D y ambos resultados numéricos. Ningún archivo ejecutable fue modificado ni se ejecutaron nuevas simulaciones o pruebas de código en esta actualización documental.
+
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |
@@ -242,17 +280,17 @@ La resolución numérica existente con residencia habilitada y tick solicitado 0
 | Sensores | Evaluación conjunta registrada; revisar las diferencias de disparos, especialmente PAC-PAL, sin cambiar los inputs durante la homologación. |
 | Descarga y overflow | Evaluación de ambos motores registrada y balances cerrados; revisar equivalencia de eventos de descarga/parada y máximo visual como diagnóstico transversal. |
 | Contadores | Evaluación G registrada; balances cerrados. Pendiente conciliar sobreproducción aparente, atribución de última descarga a Back-up stop y duración de fases sin salida. |
-| Resolución temporal | Medir sensibilidad al paso de integración y a los límites de tick; distinguir velocidad de reproducción de resolución del modelo. |
+| Resolución temporal | FAST/PRECISE comparados; completar BALANCED y casos deterministas con igual tick y fallas deshabilitadas; revisar clasificación Case Packer y créditos, y después aislar discrepancias de RNG. |
 | Validación contra planta | Comparar resultados con datos reales, revisar por equipo y por turno si existen datos, y evaluar variación entre réplicas. |
 
 Estos criterios son una guía de revisión, no una especificación de cambios ya aprobados ni evidencia de defectos confirmados.
 
 ## 6. Punto de continuación
 
-1. Conservar referencias etapa 5: numérica 0.20.3 FAST (181,548 botellas, ronda 1) y 2D PHYSICAL_FLOW_7 (207,132 botellas). No sobrescribir exportaciones.
-2. Ejecutar únicamente una nueva numérica ST_CURRENT 0.20.3, PRECISE (paso efectivo 1/120 s), G, 1,440 min, semilla 20261124, una ronda, formato S, residencia/fallas habilitadas, eventos/calendario deshabilitados. No se requiere cambio de código ni repetición 2D.
-3. Exportar resultados y contrastar con FAST y 2D. Verificar si cambian Blocked, eficiencia sobre diseño, salida por estado, exposición, paros efectivos y balance. Si procede, completar BALANCED y pruebas deterministas cortas con fallas deshabilitadas.
-4. Resolver los defectos físicos o de clasificación que se demuestren y documentar sus versiones, sin ajustar entradas para forzar coincidencia.
+1. Conservar referencias: (9) numérica FAST 181,548 botellas y 2D PHYSICAL_FLOW_7 207,132; (10) numérica PRECISE 192,984, ronda 1. No tratar la 2D Ready de (10) como resultado ni sobrescribir el histórico.
+2. Completar sensibilidad con una corrida numérica BALANCED (1/60 s), ST_CURRENT 0.20.3, G, 24 h, semilla 20261124, formato S, residencia y fallas habilitadas, eventos/calendario deshabilitados; una ronda basta como mínimo. No repetir 2D; exportar por separado. Comparar con FAST/PRECISE sin asumir monotonía o convergencia.
+3. Realizar pruebas cortas deterministas a igual tick, sin fallas y con paros controlados, para investigar Case Packer (Blocked vs Starved/Discharging), créditos y última descarga. Revisar la persistencia independiente de 2D.
+4. Aislar la influencia aleatoria; evaluar homologación de streams de fallas por id y familia, misma semilla, sin cambiar MTBF/MTTR. No exigir igualdad de fallas por hora si difiere la exposición. Resolver defectos demostrados y registrar versiones/pruebas antes de nuevas corridas largas.
 5. Validación contra planta y evaluación aislada de etapa 2 siguen pendientes.
 
 La evaluación conjunta no equivale a homologación completa ni validación de planta.

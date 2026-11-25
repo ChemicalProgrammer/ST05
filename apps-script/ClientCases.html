@@ -395,7 +395,7 @@ async function openCase(caseId, initialView) {
         var diagramOwner=state.activeCase.simulations.find(function(item){return item.id===diagram.identity[1];});
         if(diagramOwner)diagramOwner.simulation2d=diagram;
       }
-      if(whatIfOnlySave&&state.activeCase){var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(evidenceDraft);}
+      if(whatIfOnlySave&&state.activeCase){captureSimulationView();var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(evidenceDraft);}
       var simulation=activePersistentSimulation(),preserve=preserveCommittedSimulationInputs(simulation);
       var next=preserve?caseEditorSnapshot():collectCaseEditor();if(!next)return null;
       if(!next.name.trim()||next.equipment.some(function(e){return !e.id||!e.name||!(e.nominalRatePerSecond>0);}))throw new Error(__ST_TEXT__('autosave.invalid'));

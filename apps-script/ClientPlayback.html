@@ -61,6 +61,10 @@
 
     function disposeNumericalPlayback(){
       var session=numericalPlaybackSession;
+      // Capture the measured chart window before closing the live worker.
+      if(session&&numericalPlaybackFrame()&&typeof charts!=='undefined'&&charts.captureSpeedHistory){
+        var history=charts.captureSpeedHistory();if(history)charts.restoreSpeedHistory(history);
+      }
       numericalPlaybackSession=null;numericalPlaybackEpoch++;
       if(!session)return;
       if(session.timer!==null)window.clearTimeout(session.timer);

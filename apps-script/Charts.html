@@ -210,7 +210,8 @@ window.STCharts=function(state,formatNumber,playbackView){
         var sample=samples[count===1?0:Math.floor(i*(samples.length-1)/(count-1))];
         var byId=new Map((sample.equipment||[]).map(u=>[u.id,u]));
         rows.push([sample.virtualSecond,...ids.map((id,index)=>{
-          var u=byId.get(id)||sample.equipment?.[index]||{};
+          var positional=sample.equipment?.[index];
+          var u=byId.get(id)||(positional?.id==null?positional:null)||{};
           return [u.actualRatePerSecond,u.meanRatePerSecond,u.minRatePerSecond,u.maxRatePerSecond].map(numericRate);
         })]);
       }
@@ -232,7 +233,7 @@ window.STCharts=function(state,formatNumber,playbackView){
       var endTime=all[endIndex].virtualSecond;
       var windowSeconds=STRunOptions.windowSeconds(endTime,(state.run.configuration?.shiftHours||8)*3600);
       var saved=state.run.restoredSpeedHistory;
-      if(forPlayback&&!state.run.playing&&saved?.result===result&&saved.history.endSecond===endTime&&saved.history.window===speedWindowKey(windowSeconds))return saved.samples;
+      if(forPlayback&&!state.run.playing&&!visible?.frame&&saved?.result===result&&saved.history.endSecond===endTime&&saved.history.window===speedWindowKey(windowSeconds))return saved.samples;
       if(rollingCache&&rollingCache.samples===all&&rollingCache.length===all.length
         &&rollingCache.index===endIndex&&rollingCache.window===windowSeconds
         &&rollingCache.first===all[0]&&rollingCache.last===all[endIndex])return rollingCache.recent;

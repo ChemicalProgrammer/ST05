@@ -195,7 +195,7 @@ function applyProductProfile(equipment, product) {
       if(profile.dischargeGapMm!==undefined)upstream.dischargePitchMm=length+profile.dischargeGapMm;
       const downstream={...item.processData.downstream};
       if(profile.infeedGapMm!==undefined)downstream.infeedPitchMm=length+profile.infeedGapMm;
-      if(profile.speedMmPerSecond!==undefined){accumulation.speedMode='MANUAL';accumulation.conveyorSpeedMmPerSecond=profile.speedMmPerSecond;delete accumulation.targetPopulationPercent;delete accumulation.targetOverspeedPercent;}
+      if(profile.speedMmPerSecond!==undefined){if(accumulation.speedMode!=='DYNAMIC')accumulation.speedMode='MANUAL';accumulation.conveyorSpeedMmPerSecond=profile.speedMmPerSecond;delete accumulation.targetPopulationPercent;delete accumulation.targetOverspeedPercent;}
       item.processData={...item.processData,upstream,downstream,accumulation};
     }
     return item;
@@ -794,13 +794,39 @@ function hasFormatAccumulationData(equipment) {
     !Array.isArray(equipment.processData.accumulation));
 }
 
+// The configured speed is a reference, not necessarily the normal speed.
+function resolveDynamicSpeedPair(specifiedSpeedMmPerSecond, config) {
+  const reference=config?.speedReference, percent=config?.speedPercent;
+  if(!Number.isFinite(specifiedSpeedMmPerSecond)||specifiedSpeedMmPerSecond<=0)throw Error('Dynamic mode requires a positive specified belt speed.');
+  if(!['NORMAL','MAXIMUM'].includes(reference))throw Error('Select Normal or Maximum as the specified speed reference.');
+  if(!Number.isFinite(percent)||(reference==='NORMAL'?percent<=100:percent<=0||percent>=100))
+    throw Error(reference==='NORMAL'?'Maximum speed must be greater than 100% of normal speed.':'Normal speed must be greater than 0% and less than 100% of maximum speed.');
+  const normal=reference==='NORMAL'?specifiedSpeedMmPerSecond:specifiedSpeedMmPerSecond*percent/100;
+  const maximum=reference==='MAXIMUM'?specifiedSpeedMmPerSecond:specifiedSpeedMmPerSecond*percent/100;
+  if(!Number.isFinite(maximum)||!Number.isFinite(normal)||!(maximum>normal&&normal>0))throw Error('Dynamic speed range must be positive and finite.');
+  return {speedReference:reference,speedPercent:percent,specifiedSpeedMmPerSecond,nominalSpeedMmPerSecond:normal,maxSpeedMmPerSecond:maximum};
+}
+
 function resolveConveyorZone(equipment, owner, ownerIndex) {
   const format = owner.processData?.accumulation || {};
   const upstreamControl = findNearestNonConveyor(equipment, ownerIndex - 1, -1);
   const downstreamControl = findNearestNonConveyor(equipment, ownerIndex + 1, 1);
+  let dynamicRange, dynamicSpeedError;
+  if(format.speedMode==='DYNAMIC'){
+    try{dynamicRange=resolveDynamicSpeedPair(format.conveyorSpeedMmPerSecond,owner.processData?.dynamicLineBalancing);}
+    catch(error){dynamicSpeedError=error.message;}
+  }
   const resolved = hasFlowPilotInputs(owner, format)
-    ? resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl)
+    ? resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl,dynamicRange)
     : resolveDirectPhysicalConveyor(owner, format, upstreamControl, downstreamControl);
+  if(format.speedMode==='DYNAMIC'){
+    resolved.definition.conveyorSpeedMmPerSecond=dynamicRange?.nominalSpeedMmPerSecond;
+    resolved.definition.dynamicSpeedRange=dynamicRange;
+    if(dynamicSpeedError)resolved.definition.dynamicSpeedError=dynamicSpeedError;
+    resolved.sources.conveyorSpeedMmPerSecond='calculated: dynamic normal speed from specified speed and percentage';
+    for(const key of ['packagePassSensorSeconds','sensorClearGapSeconds','sensorCycleSeconds'])delete resolved.definition[key];
+    resolved.assumptions.push('Dynamic mode uses normal speed for nominal geometry and maximum speed only during recovery.');
+  }
   if (format.speedMode === 'MANUAL' && format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined) {
     resolved.definition.conveyorSpeedMmPerSecond = format.conveyorSpeedMmPerSecond;
     resolved.sources.conveyorSpeedMmPerSecond = 'processData.accumulation.conveyorSpeedMmPerSecond';
@@ -929,7 +955,7 @@ function completeConveyorDerivedGeometry(resolved, owner, format, upstreamContro
   }
 }
 
-function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl) {
+function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl,dynamicRange) {
   const sources = {};
   const packageLength = selectValue([
     sourceValue(owner.processData?.upstream?.packageLengthMm, 'processData.upstream.packageLengthMm'),
@@ -966,7 +992,14 @@ function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamCont
     sourceValue(format.downstreamRampUpSeconds, 'processData.accumulation.downstreamRampUpSeconds'),
     sourceValue(downstreamControl?.processData?.downstream?.rampUpTimeSeconds, 'downstream processData.downstream.rampUpTimeSeconds')
   ]);
+  const dynamicPitch=dynamicRange&&packageLength.value>0
+    ?format.movingGapMm!==undefined?packageLength.value+format.movingGapMm
+      :format.productPitchMm>0?format.productPitchMm
+      :rateBpm(upstreamControl)>0?Math.max(packageLength.value+(format.accumulatedGapMm??0),dynamicRange.nominalSpeedMmPerSecond/(rateBpm(upstreamControl)/60)):undefined
+    :undefined;
   const calculation = calculateConveyorEngineering({
+    resolvedConveyorSpeedMmPerSecond:dynamicRange?.nominalSpeedMmPerSecond,
+    resolvedProductPitchMm:dynamicPitch,
     targetPopulationPercent: format.targetPopulationPercent,
     targetOverspeedPercent: format.targetOverspeedPercent,
     manualLbaMm: format.manualLbaMm,
@@ -1246,7 +1279,10 @@ function resolvePlannedStops(run) {
 // Dynamic balancing phase 1: one independently driven belt, two virtual
 // contiguous-queue thresholds. All distances are mm; native flow is packages/s.
 function resolveDynamicBeltSettings(zone, config, downstream) {
-  if(!config || config.enabled!==true)return null;
+  if(zone?.dynamicSpeedError)throw Error(zone.dynamicSpeedError);
+  const range=zone?.dynamicSpeedRange;
+  if(!range&&(!config || config.enabled!==true))return null;
+  if(range&&!config)throw Error('Configure the dynamic conveyor reserve and ramp settings.');
   const nominal=zone?.conveyorSpeedMmPerSecond, length=zone?.usableLengthMm;
   const packed=zone?.accumulatedPitchMm??zone?.productLengthMm;
   const configured=downstream?.nominalRatePerSecond;
@@ -1254,14 +1290,14 @@ function resolveDynamicBeltSettings(zone, config, downstream) {
   const rate=(downstream?.processData?.productInputRatePerSecond??configured)*
     (maximum>0&&configured>0?Math.min(1,maximum/60/configured):1);
   const low=config.lowReserveSeconds, high=config.highReserveSeconds;
-  const max=config.maxSpeedMPerMinute/0.06, boost=config.boostPercent;
+  const max=range?.maxSpeedMmPerSecond??config.maxSpeedMPerMinute/0.06, boost=range?(max/nominal-1)*100:config.boostPercent;
   const up=config.accelerationSeconds, down=config.decelerationSeconds;
   const debounce=config.confirmSeconds, dwell=config.minDwellSeconds;
   const positive=x=>Number.isFinite(x)&&x>0;
   const nonnegative=x=>Number.isFinite(x)&&x>=0;
   if(![nominal,length,packed,rate].every(positive))throw Error('Resolve belt geometry and downstream native input rate first.');
-  if(!positive(config.maxSpeedMPerMinute)||!(max>nominal))throw Error('Maximum belt speed must exceed nominal speed (m/min).');
-  if(!positive(boost)||boost>1000)throw Error('Boost must be greater than 0 and at most 1000%.');
+  if(!positive(max)||!(max>nominal))throw Error('Maximum belt speed must exceed nominal speed (m/min).');
+  if(!range&&(!positive(boost)||boost>1000))throw Error('Boost must be greater than 0 and at most 1000%.');
   if(!positive(low)||!positive(high)||high<=low)throw Error('High reserve must exceed positive low reserve.');
   if(![up,down].every(positive)||![debounce,dwell].every(nonnegative))throw Error('Use positive ramp times and nonnegative confirmation and dwell times.');
   const lowUnits=Math.ceil(rate*low),highUnits=Math.ceil(rate*high);
@@ -1269,23 +1305,33 @@ function resolveDynamicBeltSettings(zone, config, downstream) {
   if(!Number.isFinite(zone.backupSensorPositionMm)||!Number.isFinite(zone.primeSensorPositionMm)||
     highUnits<=lowUnits||!(zone.backupSensorPositionMm<highPositionMm&&highPositionMm<lowPositionMm&&lowPositionMm<zone.primeSensorPositionMm))
     throw Error('Both balancing sensors must fit strictly between Back-up and Prime; adjust reserve thresholds.');
-  const highSpeed=Math.min(max,nominal*(1+boost/100));
+  const highSpeed=range?max:Math.min(max,nominal*(1+boost/100));
   return {nominalSpeedMmPerSecond:nominal,highSpeedMmPerSecond:highSpeed,maxSpeedMmPerSecond:max,
     lowUnits,highUnits,lowPositionMm,highPositionMm,lowReserveSeconds:low,highReserveSeconds:high,
     accelerationSeconds:up,decelerationSeconds:down,confirmSeconds:debounce,minDwellSeconds:dwell};
 }
 
+function dynamicBeltEnabled(item,run){
+  const mode=item?.processData?.accumulation?.speedMode;
+  return isConveyorEquipment(item)&&(mode==='DYNAMIC'||
+    // Historical replay/API compatibility only; the editor no longer writes this flag.
+    run?.dynamicLineBalancingEnabled===true&&item?.processData?.dynamicLineBalancing?.enabled===true);
+}
 function validateDynamicBalancing(equipment,run,details){
-  if(run?.dynamicLineBalancingEnabled!==true||!Array.isArray(equipment))return;
+  if(!Array.isArray(equipment))return;
   let active=0;
   equipment.forEach((item,index)=>{
-    const config=item?.processData?.dynamicLineBalancing;
-    if(!isConveyorEquipment(item)||config?.enabled!==true)return;
+    if(!dynamicBeltEnabled(item,run))return;
     active++;
-    try{resolveDynamicBeltSettings(resolveAccumulationZoneDefinition(equipment,index).definition,config,equipment[index+1]);}
+    try{
+      const config=item.processData?.dynamicLineBalancing;
+      if(item.processData?.accumulation?.speedMode==='DYNAMIC'&&(!config||!['NORMAL','MAXIMUM'].includes(config.speedReference)))throw Error('Select Normal or Maximum as the specified speed reference.');
+      resolveDynamicBeltSettings(resolveAccumulationZoneDefinition(equipment,index).definition,config,equipment[index+1]);
+    }
     catch(error){details.push(invalid('case.equipment['+index+'].processData.dynamicLineBalancing',(item.name||item.id)+': '+error.message));}
   });
-  if(!active)details.push(invalid('run.dynamicLineBalancingEnabled','Enable and configure at least one conveyor in Dynamic balancing.'));
+  if(active&&(run?.engineId==='DES_SIMPY_EXPERIMENTAL'||run?.machineResidenceEnabled!==true))details.push(invalid('run.engineId','Dynamic conveyors require the ST discrete physical engine (machine residence enabled).'));
+  if(!active&&run?.dynamicLineBalancingEnabled===true)details.push(invalid('run.dynamicLineBalancingEnabled','Enable and configure at least one conveyor in Dynamic balancing.'));
 }
 
 function validateSimulationInput(input) {
@@ -1391,7 +1437,8 @@ function validateConveyorGeometry(allEquipment, index, path, details) {
     return;
   }
 
-  if (accumulation.speedMode !== undefined && !['AUTO', 'MANUAL'].includes(accumulation.speedMode)) details.push(invalid(path + '.processData.accumulation.speedMode', 'must be AUTO or MANUAL'));
+  if (accumulation.speedMode !== undefined && !['AUTO', 'MANUAL','DYNAMIC'].includes(accumulation.speedMode)) details.push(invalid(path + '.processData.accumulation.speedMode', 'must be AUTO, MANUAL or DYNAMIC'));
+  if(accumulation.speedMode==='DYNAMIC'&&(accumulation.targetPopulationPercent!==undefined||accumulation.targetOverspeedPercent!==undefined))details.push(invalid(path+'.processData.accumulation.speedMode','Dynamic speed cannot be combined with target Population or target Overspeed.'));
   validateOptionalNonNegative(accumulation.movingGapMm, path + '.processData.accumulation.movingGapMm', details);
   validateOptionalNonNegative(accumulation.accumulatedGapMm, path + '.processData.accumulation.accumulatedGapMm', details);
   if (accumulation.targetPopulationPercent !== undefined && !(positiveNumber(accumulation.targetPopulationPercent) && accumulation.targetPopulationPercent <= 100)) details.push(invalid(path + '.processData.accumulation.targetPopulationPercent', 'must be greater than 0 and at most 100%'));
@@ -1421,7 +1468,7 @@ function validatePhysicalZone(zone, path, details, conveyorName) {
     details.push(invalid(path + '.gapMm', 'must be a number greater than or equal to zero'));
   }
 
-  if(zone.engineering?.runtimeGeometry?.speedMode!=='MANUAL'&&zone.engineering?.calculated?.dischargePopulationPercent>100+1e-9){
+  if(!['MANUAL','DYNAMIC'].includes(zone.engineering?.runtimeGeometry?.speedMode)&&zone.engineering?.calculated?.dischargePopulationPercent>100+1e-9){
     details.push(invalid(path+'.gapMm','discharge pitch and discharge factor must leave non-overlapping package spacing in the discharge zone'));
   }
   const hasExplicitPitch = positiveNumber(zone.productPitchMm);
@@ -2126,7 +2173,7 @@ function createAccumulationZoneRuntime(owner, downstreamModel, allEquipment, own
     : physical?.capacityUnits;
   const upstreamControlEquipmentId = definition?.upstreamControlEquipmentId || owner.id;
   const downstreamControlEquipmentId = definition?.downstreamControlEquipmentId || downstreamModel.id;
-  const dynamic=physical&&run?.dynamicLineBalancingEnabled===true&&owner.processData?.dynamicLineBalancing?.enabled===true
+  const dynamic=physical&&dynamicBeltEnabled(owner,run)
     ?createDynamicBeltRuntime(resolveDynamicBeltSettings(definition,owner.processData.dynamicLineBalancing,downstreamModel)):null;
 
   return {
@@ -3767,7 +3814,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4',
+    engineVersion: runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -4743,11 +4790,12 @@ function canonicalSimulationInputSignature(input) {
   // invalidate an otherwise identical completed simulation.
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
   if(run.dynamicLineBalancingEnabled!==true)delete run.dynamicLineBalancingEnabled;
+  const dynamicMode=input.case.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
   return JSON.stringify(canonical({
-    version: SIMULATION_PROVENANCE_VERSION+(run.dynamicLineBalancingEnabled===true?'/DLB:1':''),
+    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':''),
     unitOfFlow: input.case.unitOfFlow || 'units',
     equipment: input.case.equipment.map(item=>{
-      if(!item.processData?.dynamicLineBalancing||run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true)return item;
+      if(!item.processData?.dynamicLineBalancing||item.processData?.accumulation?.speedMode==='DYNAMIC'||run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true)return item;
       const processData={...item.processData};delete processData.dynamicLineBalancing;return {...item,processData};
     }),
     run: {
@@ -5278,7 +5326,7 @@ function scenarioVariableCatalog(simulation){
       else if(!(Number(e.processData?.equipment?.maximumSpeedBpm)>0))disabledReason='Set the installed maximum speed in Equipment first.';
     }
     if(e.type==='CONVEYOR'&&path.endsWith('conveyorSpeedMmPerSecond')&&e.processData?.accumulation?.speedMode!=='MANUAL')disabledReason='Select manual conveyor speed in Equipment first.';
-    if(e.type==='CONVEYOR'&&path.endsWith('conveyorSpeedFactorPercent')&&e.processData?.accumulation?.speedMode==='MANUAL')disabledReason='Manual speed mode uses conveyor speed instead of its automatic factor.';
+    if(e.type==='CONVEYOR'&&path.endsWith('conveyorSpeedFactorPercent')&&['MANUAL','DYNAMIC'].includes(e.processData?.accumulation?.speedMode))disabledReason='Specified speed mode uses conveyor speed instead of its automatic factor.';
     return {equipmentId:e.id,path,before,after:before,unit:SCENARIO_FIELDS[path][2],external,disabledReason,catalogOnly:true};
   }));
 }
@@ -5496,7 +5544,7 @@ function planScenarios(simulation){
     checks.push(...engineering.audit.goals.map(g=>({equipmentId:e.id,rule:g.id,status:g.status})));
     const speed=c.recommendedConveyorSpeedFactorPercent;
     if(e.processData?.accumulation?.speedMode==='MANUAL'&&Number.isFinite(c.recommendedInfeedConveyorSpeedMmPerSecond))add('SPEED_BALANCE','ZERO',e,[scenarioChange(e,'processData.accumulation.conveyorSpeedMmPerSecond',c.recommendedInfeedConveyorSpeedMmPerSecond)],{recommendedSpeedMmPerSecond:c.recommendedInfeedConveyorSpeedMmPerSecond},64,'STATIC');
-    if(e.processData?.accumulation?.speedMode!=='MANUAL'&&Number.isFinite(speed)&&speed>=0&&Math.abs(speed-input.conveyorSpeedFactorPercent)>=.25){
+    if(!['MANUAL','DYNAMIC'].includes(e.processData?.accumulation?.speedMode)&&Number.isFinite(speed)&&speed>=0&&Math.abs(speed-input.conveyorSpeedFactorPercent)>=.25){
       add('SPEED_BALANCE','ZERO',e,[scenarioChange(e,'processData.accumulation.conveyorSpeedFactorPercent',Number(speed.toFixed(2)))],{recommendedSpeedMmPerSecond:c.recommendedInfeedConveyorSpeedMmPerSecond},64,'STATIC');
     }
     if(!pulseConflict&&scenarioGoal(engineering,'SENSOR_DEBOUNCE')==='WARNING'&&Number.isFinite(c.packagePassSensorSeconds)&&Number.isFinite(c.sensorClearGapSeconds)){
@@ -6784,7 +6832,7 @@ window.SimulatorEngine = {
   productPresentation:productPresentation,
   productPackSize:productPackSize,
   calculateConveyorEngineering: calculateConveyorEngineering,
-  resolveDynamicBeltSettings,
+  resolveDynamicBeltSettings,resolveDynamicSpeedPair,
   analyzeLinePerformance: analyzeLinePerformance,diagnoseLineEfficiency:diagnoseLineEfficiency
 };
 window.STScenarioDOE = {design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};

@@ -18,11 +18,12 @@ export function canonicalSimulationInputSignature(input) {
   // invalidate an otherwise identical completed simulation.
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
   if(run.dynamicLineBalancingEnabled!==true)delete run.dynamicLineBalancingEnabled;
+  const dynamicMode=input.case.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
   return JSON.stringify(canonical({
-    version: SIMULATION_PROVENANCE_VERSION+(run.dynamicLineBalancingEnabled===true?'/DLB:1':''),
+    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':''),
     unitOfFlow: input.case.unitOfFlow || 'units',
     equipment: input.case.equipment.map(item=>{
-      if(!item.processData?.dynamicLineBalancing||run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true)return item;
+      if(!item.processData?.dynamicLineBalancing||item.processData?.accumulation?.speedMode==='DYNAMIC'||run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true)return item;
       const processData={...item.processData};delete processData.dynamicLineBalancing;return {...item,processData};
     }),
     run: {

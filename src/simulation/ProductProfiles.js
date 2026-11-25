@@ -84,7 +84,7 @@ export function applyProductProfile(equipment, product) {
       if(profile.dischargeGapMm!==undefined)upstream.dischargePitchMm=length+profile.dischargeGapMm;
       const downstream={...item.processData.downstream};
       if(profile.infeedGapMm!==undefined)downstream.infeedPitchMm=length+profile.infeedGapMm;
-      if(profile.speedMmPerSecond!==undefined){accumulation.speedMode='MANUAL';accumulation.conveyorSpeedMmPerSecond=profile.speedMmPerSecond;delete accumulation.targetPopulationPercent;delete accumulation.targetOverspeedPercent;}
+      if(profile.speedMmPerSecond!==undefined){if(accumulation.speedMode!=='DYNAMIC')accumulation.speedMode='MANUAL';accumulation.conveyorSpeedMmPerSecond=profile.speedMmPerSecond;delete accumulation.targetPopulationPercent;delete accumulation.targetOverspeedPercent;}
       item.processData={...item.processData,upstream,downstream,accumulation};
     }
     return item;

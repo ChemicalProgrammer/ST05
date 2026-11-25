@@ -168,7 +168,7 @@ window.SimulatorEngine = {
   productPresentation:productPresentation,
   productPackSize:productPackSize,
   calculateConveyorEngineering: calculateConveyorEngineering,
-  resolveDynamicBeltSettings,
+  resolveDynamicBeltSettings,resolveDynamicSpeedPair,
   analyzeLinePerformance: analyzeLinePerformance,diagnoseLineEfficiency:diagnoseLineEfficiency
 };
 window.STScenarioDOE = {design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};

@@ -52,8 +52,36 @@ function hysteresisChecks(api,assert){
  return {firstBoostSecond:first.t,returnedToNominalSecond:data.find(s=>s.t>first.t&&s.c.mode==='NOMINAL').t,output:r.result.summary.outputCount};
 }
 
-test('dynamic conveyor control is opt-in, physically bounded, and preserves material balance',()=>{const api={simulateLine,inputSignature:canonicalSimulationInputSignature};checks(api,assert.ok);hysteresisChecks(api,assert.ok);});
-test('generated Apps Script browser engine implements the same controller',()=>{const host={};new Function('window',fs.readFileSync('apps-script/SimulationEngine.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1])(host);checks(host.SimulatorEngine,assert.ok);hysteresisChecks(host.SimulatorEngine,assert.ok);});
+function referenceChecks(api,assert){
+ const normal=input(false);let e=normal.case.equipment[1];
+ e.processData.accumulation.speedMode='DYNAMIC';
+ e.processData.dynamicLineBalancing={...control,speedReference:'NORMAL',speedPercent:150};
+ delete e.processData.dynamicLineBalancing.maxSpeedMPerMinute;delete e.processData.dynamicLineBalancing.boostPercent;delete e.processData.dynamicLineBalancing.enabled;
+ const a=api.simulateLine(normal);assert(a.ok,'normal reference '+JSON.stringify(a.error));
+ const bMetrics=Object.values(a.result.accumulationZoneMetrics)[0];assert(bMetrics.conveyorSpeedMmPerSecond===400,'nominal 400');assert(bMetrics.dynamicLineBalancing.highSpeedMmPerSecond===600,'max 600');
+ assert(bMetrics.dynamicLineBalancing.boostRequests>0,'mode alone enables');
+ const max=JSON.parse(JSON.stringify(normal));e=max.case.equipment[1];e.processData.accumulation.conveyorSpeedMmPerSecond=600;e.processData.dynamicLineBalancing.speedReference='MAXIMUM';e.processData.dynamicLineBalancing.speedPercent=100*400/600;
+ const b=api.simulateLine(max);assert(b.ok,'max reference '+JSON.stringify(b.error));
+ assert(b.result.summary.outputCount===a.result.summary.outputCount,'equivalent production');
+ const z=Object.values(b.result.accumulationZoneMetrics)[0];assert(Math.abs(z.conveyorSpeedMmPerSecond-400)<1e-8&&z.dynamicLineBalancing.highSpeedMmPerSecond===600,'max reference derived pair');
+ const profile=JSON.parse(JSON.stringify(max));profile.run.productCatalog[0].equipment={belt:{speedMmPerSecond:600}};
+ const c=api.simulateLine(profile);assert(c.ok,'format override '+JSON.stringify(c.error));
+ assert(Object.values(c.result.accumulationZoneMetrics)[0].dynamicLineBalancing.boostRequests>0,'format override preserves Dynamic');
+ const off=JSON.parse(JSON.stringify(normal));off.case.equipment[1].processData.accumulation.speedMode='MANUAL';
+ const d=api.simulateLine(off);assert(d.ok,'manual '+JSON.stringify(d.error));assert(!Object.values(d.result.accumulationZoneMetrics)[0].dynamicLineBalancing,'manual disables');
+ const invalid=JSON.parse(JSON.stringify(normal));invalid.case.equipment[1].processData.dynamicLineBalancing.speedPercent=100;
+ assert(!api.simulateLine(invalid).ok,'invalid normal percentage');
+ invalid.case.equipment[1].processData.dynamicLineBalancing.speedReference='MAXIMUM';
+ assert(!api.simulateLine(invalid).ok,'invalid maximum percentage');
+ const conflict=JSON.parse(JSON.stringify(normal));conflict.case.equipment[1].processData.accumulation.targetPopulationPercent=50;
+ assert(!api.simulateLine(conflict).ok,'exclusive with target population');
+ const simpy=JSON.parse(JSON.stringify(normal));simpy.run.engineId='DES_SIMPY_EXPERIMENTAL';assert(!api.simulateLine(simpy).ok,'reject unsupported engine');
+ assert(api.inputSignature(normal)!==api.inputSignature(off),'mode provenance distinct');
+ return {normal:a.result.summary.outputCount,maximum:b.result.summary.outputCount,manual:d.result.summary.outputCount,peak:bMetrics.dynamicLineBalancing.peakSpeedMmPerSecond};
+}
+
+test('dynamic conveyor control is opt-in, physically bounded, and preserves material balance',()=>{const api={simulateLine,inputSignature:canonicalSimulationInputSignature};checks(api,assert.ok);hysteresisChecks(api,assert.ok);referenceChecks(api,assert.ok);});
+test('generated Apps Script browser engine implements the same controller',()=>{const host={};new Function('window',fs.readFileSync('apps-script/SimulationEngine.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1])(host);checks(host.SimulatorEngine,assert.ok);hysteresisChecks(host.SimulatorEngine,assert.ok);referenceChecks(host.SimulatorEngine,assert.ok);});
 
 test('streamed numerical, batch and precise playback share the dynamic controller',async()=>{
  const x=input(true);const sync=simulateLine(x);assert(sync.ok);

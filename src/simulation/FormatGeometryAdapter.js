@@ -40,13 +40,39 @@ export function hasFormatAccumulationData(equipment) {
     !Array.isArray(equipment.processData.accumulation));
 }
 
+// The configured speed is a reference, not necessarily the normal speed.
+export function resolveDynamicSpeedPair(specifiedSpeedMmPerSecond, config) {
+  const reference=config?.speedReference, percent=config?.speedPercent;
+  if(!Number.isFinite(specifiedSpeedMmPerSecond)||specifiedSpeedMmPerSecond<=0)throw Error('Dynamic mode requires a positive specified belt speed.');
+  if(!['NORMAL','MAXIMUM'].includes(reference))throw Error('Select Normal or Maximum as the specified speed reference.');
+  if(!Number.isFinite(percent)||(reference==='NORMAL'?percent<=100:percent<=0||percent>=100))
+    throw Error(reference==='NORMAL'?'Maximum speed must be greater than 100% of normal speed.':'Normal speed must be greater than 0% and less than 100% of maximum speed.');
+  const normal=reference==='NORMAL'?specifiedSpeedMmPerSecond:specifiedSpeedMmPerSecond*percent/100;
+  const maximum=reference==='MAXIMUM'?specifiedSpeedMmPerSecond:specifiedSpeedMmPerSecond*percent/100;
+  if(!Number.isFinite(maximum)||!Number.isFinite(normal)||!(maximum>normal&&normal>0))throw Error('Dynamic speed range must be positive and finite.');
+  return {speedReference:reference,speedPercent:percent,specifiedSpeedMmPerSecond,nominalSpeedMmPerSecond:normal,maxSpeedMmPerSecond:maximum};
+}
+
 function resolveConveyorZone(equipment, owner, ownerIndex) {
   const format = owner.processData?.accumulation || {};
   const upstreamControl = findNearestNonConveyor(equipment, ownerIndex - 1, -1);
   const downstreamControl = findNearestNonConveyor(equipment, ownerIndex + 1, 1);
+  let dynamicRange, dynamicSpeedError;
+  if(format.speedMode==='DYNAMIC'){
+    try{dynamicRange=resolveDynamicSpeedPair(format.conveyorSpeedMmPerSecond,owner.processData?.dynamicLineBalancing);}
+    catch(error){dynamicSpeedError=error.message;}
+  }
   const resolved = hasFlowPilotInputs(owner, format)
-    ? resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl)
+    ? resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl,dynamicRange)
     : resolveDirectPhysicalConveyor(owner, format, upstreamControl, downstreamControl);
+  if(format.speedMode==='DYNAMIC'){
+    resolved.definition.conveyorSpeedMmPerSecond=dynamicRange?.nominalSpeedMmPerSecond;
+    resolved.definition.dynamicSpeedRange=dynamicRange;
+    if(dynamicSpeedError)resolved.definition.dynamicSpeedError=dynamicSpeedError;
+    resolved.sources.conveyorSpeedMmPerSecond='calculated: dynamic normal speed from specified speed and percentage';
+    for(const key of ['packagePassSensorSeconds','sensorClearGapSeconds','sensorCycleSeconds'])delete resolved.definition[key];
+    resolved.assumptions.push('Dynamic mode uses normal speed for nominal geometry and maximum speed only during recovery.');
+  }
   if (format.speedMode === 'MANUAL' && format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined) {
     resolved.definition.conveyorSpeedMmPerSecond = format.conveyorSpeedMmPerSecond;
     resolved.sources.conveyorSpeedMmPerSecond = 'processData.accumulation.conveyorSpeedMmPerSecond';
@@ -175,7 +201,7 @@ function completeConveyorDerivedGeometry(resolved, owner, format, upstreamContro
   }
 }
 
-function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl) {
+function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamControl,dynamicRange) {
   const sources = {};
   const packageLength = selectValue([
     sourceValue(owner.processData?.upstream?.packageLengthMm, 'processData.upstream.packageLengthMm'),
@@ -212,7 +238,14 @@ function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamCont
     sourceValue(format.downstreamRampUpSeconds, 'processData.accumulation.downstreamRampUpSeconds'),
     sourceValue(downstreamControl?.processData?.downstream?.rampUpTimeSeconds, 'downstream processData.downstream.rampUpTimeSeconds')
   ]);
+  const dynamicPitch=dynamicRange&&packageLength.value>0
+    ?format.movingGapMm!==undefined?packageLength.value+format.movingGapMm
+      :format.productPitchMm>0?format.productPitchMm
+      :rateBpm(upstreamControl)>0?Math.max(packageLength.value+(format.accumulatedGapMm??0),dynamicRange.nominalSpeedMmPerSecond/(rateBpm(upstreamControl)/60)):undefined
+    :undefined;
   const calculation = calculateConveyorEngineering({
+    resolvedConveyorSpeedMmPerSecond:dynamicRange?.nominalSpeedMmPerSecond,
+    resolvedProductPitchMm:dynamicPitch,
     targetPopulationPercent: format.targetPopulationPercent,
     targetOverspeedPercent: format.targetOverspeedPercent,
     manualLbaMm: format.manualLbaMm,

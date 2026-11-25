@@ -202,27 +202,35 @@ button.error-details-trigger:focus-visible, #header-error-button.error-details-t
 .table-message-dialog th,.table-message-dialog td { overflow-wrap:anywhere; }
 .table-message-dialog td:nth-child(n+3) { font-variant-numeric:tabular-nums; }
 .dialog-table-note { white-space:pre-wrap; }
-/* Case exports share dialog spacing, colors and the heading progress indicator. */
+/* Case export: a single header selector and shared checkbox-card grids. */
 .case-export-dialog { --dialog-width:820px; }
-.case-export-dialog .dialog-body { display:grid; gap:var(--space-4); }
+.case-export-dialog .dialog-heading { gap:var(--toolbar-gap); }
+.case-export-dialog .dialog-heading h2 { min-width:0; overflow-wrap:anywhere; }
+.case-export-header-tools { display:flex; align-items:center; justify-content:flex-end; gap:var(--toolbar-gap); margin-inline-start:auto; min-width:0; }
+.case-export-header-tools .case-export-mode { width:clamp(10rem,36vw,19rem); max-width:100%; min-width:0; margin:0; }
+.case-export-dialog .dialog-body { display:grid; gap:var(--space-3); }
 .case-export-dialog .dialog-body > p { margin:0; }
-.case-export-presets > button { margin:0; }
-.case-export-section legend, .case-export-section legend .case-export-check, .case-export-controls > label:not(.case-export-check), .case-export-scenarios h3 { font-size:var(--font-card); font-weight:var(--weight-semibold); line-height:var(--leading-tight); color:var(--secondary-text,var(--ink)); }
-.case-export-controls > label:not(.case-export-check) select { font-size:var(--font-input); font-weight:var(--weight-regular); color:var(--ink); }
-.case-export-help { margin:0; font-size:var(--font-secondary); color:var(--muted); }
+.case-export-section legend, .case-export-section legend .case-export-check, .case-export-group h3 { font-size:var(--font-card); font-weight:var(--weight-semibold); line-height:var(--leading-tight); color:var(--secondary-text,var(--ink)); }
+.case-export-help { margin:0; font-size:var(--font-secondary); color:var(--muted); line-height:var(--leading-body); }
 .case-export-list { display:grid; gap:var(--space-3); }
 .case-export-section { min-width:0; margin:0; padding:var(--space-3); border:var(--border-width) solid var(--line); border-radius:var(--radius-md); }
 .case-export-section legend { max-width:100%; padding:0 var(--space-2); overflow-wrap:anywhere; }
-.case-export-controls { display:grid; gap:var(--space-3); }
-.case-export-controls > label:not(.case-export-check) { display:grid; gap:var(--space-2); margin:0; }
-.case-export-controls select { width:100%; min-width:0; margin:0; }
-.case-export-check { display:flex; align-items:center; gap:var(--space-2); margin:0; font-weight:normal; }
+.case-export-controls, .case-export-group { display:grid; gap:var(--space-3); min-width:0; }
+.case-export-group-heading { display:grid; gap:var(--space-1); }
+.case-export-group-heading h3 { margin:0; }
+.case-export-option-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--toolbar-gap); min-width:0; }
+.case-export-check { display:flex; align-items:center; gap:var(--space-2); margin:0; min-width:0; font-weight:normal; overflow-wrap:anywhere; }
 .case-export-check input { flex:0 0 auto; width:auto; margin:0; }
-.case-export-scenarios { display:grid; gap:var(--space-2); border-top:var(--border-width) solid var(--line); padding-top:var(--space-3); }
-.case-export-scenarios h3,.case-export-scenarios p { margin:0; }
-.case-export-scenarios p { font-size:var(--font-secondary); }
+.case-export-check > span { min-width:0; overflow-wrap:anywhere; }
+.case-export-scenarios { border-top:var(--border-width) solid var(--line); padding-top:var(--space-3); }
+.case-export-empty { grid-column:1/-1; margin:0; font-size:var(--font-secondary); }
 .case-export-omitted .case-export-controls { opacity:.55; }
 .case-export-preview { overflow-wrap:anywhere; }
+@media(max-width:560px){
+  .case-export-option-grid { grid-template-columns:minmax(0,1fr); }
+  .case-export-header-tools { flex:0 1 auto; }
+  .case-export-header-tools .case-export-mode { width:min(52vw,19rem); }
+}
 /* Equipment failure detail uses available desktop width before scrolling. */
 .equipment-failure-dialog { --dialog-width:1100px; }
 .equipment-failure-dialog .dialog-heading h2 { min-width:0; overflow-wrap:anywhere; }

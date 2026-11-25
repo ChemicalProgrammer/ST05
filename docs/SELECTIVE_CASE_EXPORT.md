@@ -4,7 +4,7 @@
 
 Use **Settings → Case → Export case (JSON)**, or the export icon in the Case Gallery. Both open the same dialog.
 
-Choose a preset or adjust the selections directly:
+Choose a preset from the single selector in the dialog header, or adjust the checkboxes directly:
 
 | Preset | Contents |
 |---|---|
@@ -13,7 +13,9 @@ Choose a preset or adjust the selections directly:
 | Configuration only | All simulation inputs and scenario configuration; no calculated results, evaluations, supporting analysis or conversations. |
 | For review | All simulation inputs, result summaries and What-If evaluations; supporting analysis and conversations omitted by default. |
 
-Each simulation has its own inclusion checkbox, results selector, supporting-analysis checkbox, conversation checkbox and individual What-If evaluation checkboxes. Equipment, run settings, calendar and events remain included for each selected simulation. At least one simulation is required.
+The same header selector also offers custom full results, summary (final snapshot) or omission of numerical results. The custom detail level applies across simulations without resetting the simulation, 2D, analysis, conversation, scenario or additional-case choices. Each simulation can omit its own numerical results using its checkbox; changing between full and summary preserves these individual omissions. Selecting the global omission and then a result level re-enables numerical results. All checkbox groups use two columns on wider screens and one column on narrow screens.
+
+Results, What-If scenarios and Advance-only Real Data/comparisons each have a brief introduction. Scenario choices display only their names; the exported evaluations retain their original status, including engineering-review or historical states, and are not revalidated. Equipment, run settings, calendar and events remain included for each selected simulation. At least one simulation is required.
 
 The preview reports the number of selected simulations, results and evaluations, plus the size of the JSON that will be downloaded. The dialog heading uses the shared progress indicator while preparing the preview and download. A selected result summary includes aggregates and a final snapshot so that Results remains available after import; it omits chart history and individual replication records, and playback is disabled.
 

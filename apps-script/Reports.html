@@ -559,65 +559,104 @@ window.STReports=(function(){
       var focus=document.activeElement,dialog=document.createElement('dialog');dialog.className='case-export-dialog';dialog.setAttribute('aria-label','Export case');
       function el(tag,text,cls){var node=document.createElement(tag);if(text)node.textContent=text;if(cls)node.className=cls;return node;}
       function button(text,fn,cls){var node=el('button',text,cls);node.type='button';node.onclick=fn;return node;}
+      function tr(en,es){return window.STLanguage?.translate(en)||(document.documentElement.lang==='es'&&es?es:en);}
       var heading=el('header',null,'dialog-heading'),title=el('h2','Export case'),body=el('div',null,'dialog-body'),footer=el('footer',null,'dialog-actions'),closed=false,serial=0,timer,prepared=null,endActivity;
-      function finish(value){if(closed)return;closed=true;serial++;clearTimeout(timer);endActivity?.();dialog.close();dialog.remove();if(focus?.isConnected)focus.focus();resolve(value);}
-      var close=button('',function(){finish(false);},'ghost icon-button');close.innerHTML=STIcons.svg('x');close.title='Close export';close.setAttribute('aria-label',close.title);heading.append(title,close);
-      body.append(el('p','Choose the information to include. Equipment, calendar and run settings are included for every selected simulation.','chart-note'));
-      var presetRow=el('div',null,'settings-tabs case-export-presets');presetRow.setAttribute('role','group');presetRow.setAttribute('aria-label','Export presets');
-      var presetHelp=el('p','','chart-note case-export-help');presetHelp.setAttribute('aria-live','polite');body.append(presetHelp);
-      var presetDescriptions={COMPLETE:'All simulations, full numerical results, saved 2D states, scenarios, supporting analysis and conversations.',CURRENT:'Full information for the active simulation only.',CONFIGURATION:'Equipment, calendar, events and settings. Numerical results, 2D states, scenario evaluations and conversations are omitted.',REVIEW:'Inputs, numerical result summaries, saved 2D states and scenarios. Supporting analysis and conversations are omitted by default.'};presetHelp.textContent=presetDescriptions.COMPLETE;
+      function finish(value){if(closed)return;closed=true;serial++;clearTimeout(timer);endActivity?.();window.removeEventListener('st-language-change',localizeHeader);dialog.close();dialog.remove();if(focus?.isConnected)focus.focus();resolve(value);}
+      var close=button('',function(){finish(false);},'ghost icon-button');close.innerHTML=STIcons.svg('x');close.dataset.icon='x';close.title='Close export';close.setAttribute('aria-label',close.title);
+      var headerTools=el('div',null,'case-export-header-tools'),presetSelect=el('select',null,'case-export-mode');
+      presetSelect.id='case-export-mode';presetSelect.setAttribute('aria-label','Export mode');
+      var presets=el('optgroup'),details=el('optgroup');
+      function option(group,value,text){var node=el('option',text);node.value=value;group.append(node);}
+      [['COMPLETE','Complete'],['CURRENT','Current simulation'],['CONFIGURATION','Configuration only'],['REVIEW','For review']].forEach(function(pair){option(presets,pair[0],pair[1]);});
+      [['FULL','Custom · Full results'],['SUMMARY','Custom · Summary (final snapshot)'],['NONE','Custom · Omit numerical results']].forEach(function(pair){option(details,pair[0],pair[1]);});
+      presetSelect.append(presets,details);presetSelect.value='COMPLETE';headerTools.append(presetSelect,close);heading.append(title,headerTools);
+      function localizeHeader(){presets.label=tr('Export presets','Opciones de exportación');details.label=tr('Custom result detail','Detalle personalizado de resultados');}
+      localizeHeader();window.addEventListener('st-language-change',localizeHeader);
       var list=el('div',null,'case-export-list');body.append(list);
       var preview=el('p','Preparing preview…','chart-note case-export-preview');preview.setAttribute('role','status');preview.setAttribute('aria-live','polite');body.append(preview);
       var cancel=button(__ST_TEXT__('view.cancel'),function(){finish(false);},'ghost'),exportButton=button('Export JSON',async function(){
         if(!prepared)return;exportButton.disabled=true;endActivity=STDialog.beginActivity(dialog);dialog.setAttribute('aria-busy','true');
-        try{await new Promise(function(done){setTimeout(done,0);});if(closed)return;exportCompleteCase(prepared);finish(true);}catch(error){preview.textContent='Cannot export: '+error.message;}finally{endActivity?.();endActivity=null;dialog.removeAttribute('aria-busy');if(!closed)exportButton.disabled=!prepared;}
-      });footer.append(cancel,exportButton);dialog.append(heading,presetRow,body,footer);document.body.append(dialog);dialog.showModal();
-      var advanced=!basic(),selections=caseExportSelection(record,'COMPLETE'),extras=caseExportExtras('COMPLETE',advanced),presetButtons=[];
-      function extraCheck(label,key){
-        var l=el('label',null,'case-export-check st-checkbox-card'),input=el('input');input.type='checkbox';input.checked=extras[key];input.dataset.exportExtra=key;
-        input.onchange=function(){extras[key]=input.checked;markCustom();refresh();};l.append(input,document.createTextNode(label));return l;
+        try{await new Promise(function(done){setTimeout(done,0);});if(closed)return;exportCompleteCase(prepared);finish(true);}catch(error){preview.textContent=tr('Cannot export:','No se puede exportar:')+' '+error.message;}finally{endActivity?.();endActivity=null;dialog.removeAttribute('aria-busy');if(!closed)exportButton.disabled=!prepared;}
+      });footer.append(cancel,exportButton);dialog.append(heading,body,footer);document.body.append(dialog);dialog.showModal();
+      var advanced=!basic(),selections=caseExportSelection(record,'COMPLETE'),extras=caseExportExtras('COMPLETE',advanced),resultLevel='FULL';
+      function markCustom(){presetSelect.value=resultLevel;}
+      function check(text,checked,onchange,keepName){
+        var l=el('label',null,'case-export-check st-checkbox-card'),input=el('input');input.type='checkbox';input.checked=checked;
+        input.onchange=function(){onchange(input.checked);markCustom();refresh();};
+        if(keepName){var name=el('span',text);name.setAttribute('data-st-no-translate','');l.append(input,name);}
+        else l.append(input,document.createTextNode(text));
+        return l;
       }
-      function markCustom(){presetButtons.forEach(function(b){b.setAttribute('aria-pressed','false');});presetHelp.textContent='Custom selection. Only the checked simulations and information will be exported.';}
+      function extraCheck(text,key){
+        var label=check(text,extras[key],function(value){extras[key]=value;});
+        label.querySelector('input').dataset.exportExtra=key;return label;
+      }
+      function section(name,description,cls){
+        var block=el('section',null,'case-export-group '+cls),copy=el('div',null,'case-export-group-heading'),grid=el('div',null,'case-export-option-grid');
+        copy.append(el('h3',name),el('p',description,'case-export-help'));block.append(copy,grid);return {block:block,grid:grid};
+      }
       function refresh(){
-        var ticket=++serial;clearTimeout(timer);prepared=null;exportButton.disabled=true;preview.textContent='Preparing preview…';endActivity?.();endActivity=STDialog.beginActivity(dialog);dialog.setAttribute('aria-busy','true');
+        var ticket=++serial;clearTimeout(timer);prepared=null;exportButton.disabled=true;preview.textContent=tr('Preparing preview…','Preparando vista previa…');endActivity?.();endActivity=STDialog.beginActivity(dialog);dialog.setAttribute('aria-busy','true');
         timer=setTimeout(function(){if(closed||ticket!==serial)return;try{
           prepared=selectedCaseExport(record,selections,extras);var simulations=prepared.simulations,results=simulations.filter(function(sim){return sim.results;}).length,scenarios=simulations.reduce(function(sum,sim){return sum+(sim.whatIf?.evaluations?.length||0);},0),bytes=new Blob([JSON.stringify(prepared,null,2)]).size;
-          preview.textContent=simulations.length+' simulation(s) · '+results+' result(s) · '+scenarios+' scenario(s) · '+(bytes/1024/1024>=1?(bytes/1024/1024).toFixed(2)+' MB':Math.ceil(bytes/1024)+' KB');exportButton.disabled=false;
-        }catch(error){prepared=null;preview.textContent=error.message;}finally{endActivity?.();endActivity=null;dialog.removeAttribute('aria-busy');}},80);
+          preview.textContent=simulations.length+' '+tr('simulation(s)','simulaciones')+' · '+results+' '+tr('result(s)','resultados')+' · '+scenarios+' '+tr('scenario(s)','escenarios')+' · '+(bytes/1024/1024>=1?(bytes/1024/1024).toFixed(2)+' MB':Math.ceil(bytes/1024)+' KB');exportButton.disabled=false;
+        }catch(error){prepared=null;preview.textContent=tr(error.message);}finally{endActivity?.();endActivity=null;dialog.removeAttribute('aria-busy');}},80);
       }
       function draw(){
-        var tr=(en,es)=>document.documentElement.lang==='es'?es:en;
-         list.replaceChildren();(record.simulations||[]).forEach(function(sim,index){
-          var choice=selections[index],card=el('fieldset',null,'case-export-section case-export-simulation'),legend=el('legend'),include=el('input');include.type='checkbox';include.checked=choice.included;include.dataset.simulationId=sim.id;var label=el('label',null,'case-export-check st-checkbox-card st-checkbox-card--compact');label.append(include,document.createTextNode(sim.name||sim.id));legend.append(label);card.append(legend);
-          var controls=el('div',null,'case-export-controls'),resultLabel=el('label','Results'),resultSelect=el('select');resultSelect.setAttribute('aria-label',(sim.name||sim.id)+' results');[['NONE','Omit results'],['SUMMARY','Summary (final snapshot only)'],['FULL','Full results']].forEach(function(pair){var option=el('option',pair[1]);option.value=pair[0];resultSelect.append(option);});resultSelect.value=choice.results;resultSelect.disabled=!sim.results;resultLabel.append(resultSelect);controls.append(resultLabel,el('p','Summary keeps totals and a final snapshot. Full results also include available chart history and individual rounds.','case-export-help'));
-          function check(text,checked,onchange){var l=el('label',null,'case-export-check st-checkbox-card'),input=el('input');input.type='checkbox';input.checked=checked;input.onchange=function(){onchange(input.checked);markCustom();refresh();};l.append(input,document.createTextNode(text));return l;}
-          resultSelect.onchange=function(){choice.results=resultSelect.value;markCustom();refresh();};
-          var spatialCheck=check(tr('Simulation 2D results and state','Resultados y estado de Simulation 2D'),choice.simulation2d,function(value){choice.simulation2d=value;});
+        list.replaceChildren();(record.simulations||[]).forEach(function(sim,index){
+          var choice=selections[index],card=el('fieldset',null,'case-export-section case-export-simulation'),legend=el('legend'),include=el('input');include.type='checkbox';include.checked=choice.included;include.dataset.simulationId=sim.id;
+          var label=el('label',null,'case-export-check st-checkbox-card st-checkbox-card--compact'),name=el('span',sim.name||sim.id);name.setAttribute('data-st-no-translate','');label.append(include,name);legend.append(label);card.append(legend);
+          var controls=el('div',null,'case-export-controls'),results=section('Results','Select saved numerical and 2D results, analyses, and conversations.','case-export-results');
+          var numericalCheck=check('Numerical results',!!sim.results&&choice.results!=='NONE',function(value){
+            // The header determines the shared detail level; each simulation
+            // can still omit numerical results independently of its 2D state.
+            if(value&&resultLevel==='NONE')resultLevel='FULL';
+            choice.results=value?resultLevel:'NONE';
+          });
+          var numericalInput=numericalCheck.querySelector('input');numericalInput.dataset.exportNumerical=sim.id;
+          var spatialCheck=check('Simulation 2D results and state',choice.simulation2d,function(value){choice.simulation2d=value;});
           var spatialInput=spatialCheck.querySelector('input');spatialInput.dataset.exportSimulation2d=sim.id;
-          var spatialNote=sim.simulation2d?tr('Includes the saved 2D checkpoint, production and equipment times when available, plus layout and any saved representative-seed run. Independent of numerical results.','Incluye el estado guardado de 2D, producción y tiempos por equipo cuando estén disponibles, además del layout y cualquier corrida guardada con semilla representativa. Es independiente de los resultados numéricos.'):tr('No saved 2D state.','Sin estado 2D guardado.');
-          controls.append(spatialCheck,el('p',spatialNote,'case-export-help'));
-          controls.append(check(tr('Equipment analysis','Análisis de equipos'),choice.equipmentAnalysis,function(value){choice.equipmentAnalysis=value;}),
-            check(tr('Conveyor analysis','Análisis de conveyors'),choice.conveyorAnalysis,function(value){choice.conveyorAnalysis=value;}));
-          controls.append(check('Supporting analysis and diagnostics',choice.analysis,function(value){choice.analysis=value;}),el('p','Saved loss diagnostics and additional analysis used to evaluate scenarios.','case-export-help'),check('Gemini conversation',choice.chat,function(value){choice.chat=value;}));
-          var scenarios=el('div',null,'case-export-scenarios');scenarios.append(el('h3','What-If scenarios'),el('p','Choose saved evaluations. Simulations created from them are selected separately.','case-export-help'));(sim.whatIf?.evaluations||[]).forEach(function(entry,i){scenarios.append(check((entry.title||entry.searchScope||entry.tier||'Scenario')+' · '+(entry.status||'Saved'),choice.scenarioIndexes.includes(i),function(value){choice.scenarioIndexes=choice.scenarioIndexes.filter(function(n){return n!==i;});if(value)choice.scenarioIndexes.push(i);}));});if(!sim.whatIf?.evaluations?.length)scenarios.append(el('p','No saved scenarios.','chart-note'));controls.append(scenarios);card.append(controls);list.append(card);
-          function enabled(){controls.querySelectorAll('input,select').forEach(function(input){input.disabled=!choice.included||input===resultSelect&&!sim.results||input===spatialInput&&!sim.simulation2d;});card.classList.toggle('case-export-omitted',!choice.included);}include.onchange=function(){choice.included=include.checked;enabled();markCustom();refresh();};enabled();
+          results.grid.append(numericalCheck,spatialCheck,
+            check('Equipment analysis',choice.equipmentAnalysis,function(value){choice.equipmentAnalysis=value;}),
+            check('Conveyor analysis',choice.conveyorAnalysis,function(value){choice.conveyorAnalysis=value;}),
+            check('Supporting analysis and diagnostics',choice.analysis,function(value){choice.analysis=value;}),
+            check('Gemini conversation',choice.chat,function(value){choice.chat=value;}));
+          controls.append(results.block);
+          var scenarios=section('What-If scenarios','Choose saved evaluations. Simulations created from them are selected separately.','case-export-scenarios');
+          // Review/status codes belong to saved evidence, not the export
+          // selector. Do not filter or alter the stored evaluation status.
+          (sim.whatIf?.evaluations||[]).forEach(function(entry,i){
+            var item=check(entry.title||entry.searchScope||entry.tier||'Scenario',choice.scenarioIndexes.includes(i),function(value){choice.scenarioIndexes=choice.scenarioIndexes.filter(function(n){return n!==i;});if(value)choice.scenarioIndexes.push(i);},true);
+            item.querySelector('input').dataset.exportScenario=String(i);scenarios.grid.append(item);
+          });
+          if(!sim.whatIf?.evaluations?.length)scenarios.grid.append(el('p','No saved scenarios.','case-export-empty'));
+          controls.append(scenarios.block);card.append(controls);list.append(card);
+          function enabled(){controls.querySelectorAll('input').forEach(function(input){input.disabled=!choice.included||input===numericalInput&&!sim.results||input===spatialInput&&!sim.simulation2d;});card.classList.toggle('case-export-omitted',!choice.included);}
+          include.onchange=function(){choice.included=include.checked;enabled();markCustom();refresh();};enabled();
         });
-        // Case-level choices are listed after every simulation, using the
-        // same fieldset, legend, controls and spacing as the simulation cards.
         if(advanced){
-          var extrasPanel=el('fieldset',null,'case-export-section case-export-additional');
-          var controls=el('div',null,'case-export-controls');
-          extrasPanel.append(el('legend',tr('Additional case information','Información adicional del caso')));
-          controls.append(
-            extraCheck(tr('Real Data records','Registros de Real Data'),'realData'),
-            extraCheck(tr('Real Data comparisons','Comparaciones con Real Data'),'realComparisons'),
-            extraCheck(tr('Simulation comparisons','Comparaciones entre simulaciones'),'simulationComparisons'),
-            el('p',tr('Comparisons include the original observed values and calculated evidence, even if raw results or Real Data records are omitted. Only selected simulations are compared, using the active one as baseline.','Las comparaciones incluyen los valores observados originales y la evidencia calculada, incluso si se omiten los resultados completos o los registros de Real Data. Solo se comparan las simulaciones seleccionadas, usando la activa como referencia.'),'case-export-help'));
-          extrasPanel.append(controls);list.append(extrasPanel);
+          var extrasPanel=el('fieldset',null,'case-export-section case-export-additional'),controls=el('div',null,'case-export-controls');
+          extrasPanel.append(el('legend','Additional case information'));
+          var real=section('Real Data and comparisons','Choose plant records and comparisons to include.','case-export-real-data');
+          real.grid.append(extraCheck('Real Data records','realData'),extraCheck('Real Data comparisons','realComparisons'),extraCheck('Simulation comparisons','simulationComparisons'));
+          controls.append(real.block);extrasPanel.append(controls);list.append(extrasPanel);
         }
         refresh();
       }
-      [['COMPLETE','Complete'],['CURRENT','Current simulation'],['CONFIGURATION','Configuration only'],['REVIEW','For review']].forEach(function(pair){var b=button(pair[1],function(){selections=caseExportSelection(record,pair[0]);extras=caseExportExtras(pair[0],advanced);presetHelp.textContent=presetDescriptions[pair[0]];presetButtons.forEach(function(other){other.setAttribute('aria-pressed',String(other===b));});draw();},'');b.setAttribute('aria-pressed',String(pair[0]==='COMPLETE'));presetButtons.push(b);presetRow.append(b);});
+      presetSelect.onchange=function(){
+        var mode=presetSelect.value;
+        if(['COMPLETE','CURRENT','CONFIGURATION','REVIEW'].includes(mode)){
+          selections=caseExportSelection(record,mode);extras=caseExportExtras(mode,advanced);
+          resultLevel=mode==='CONFIGURATION'?'NONE':mode==='REVIEW'?'SUMMARY':'FULL';
+        }else{
+          // Changing detail never resets the selected simulations, 2D state,
+          // analyses, scenarios or extras. Re-enable numerical results after
+          // the explicit global omission, otherwise respect individual omissions.
+          var previous=resultLevel;resultLevel=mode;
+          selections.forEach(function(choice){choice.results=mode==='NONE'||previous!=='NONE'&&choice.results==='NONE'?'NONE':mode;});
+        }
+        draw();
+      };
       dialog.addEventListener('cancel',function(event){event.preventDefault();finish(false);});draw();cancel.focus();
     });
   }

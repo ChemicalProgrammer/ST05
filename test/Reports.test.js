@@ -214,7 +214,7 @@ test('export dialog supports presets, empty selection and local progress lifecyc
   const record={activeSimulationId:'a',simulations:[{id:'a',name:'A',equipment:[],results:{summary:{}},whatIf:{evaluations:[{title:'High',status:'COMPLETE'}]}},{id:'b',name:'B',equipment:[]}]};
   const pending=w.STReports.requestCaseExport(record),dialog=w.document.querySelector('.case-export-dialog');await new Promise(r=>setTimeout(r,120));assert.match(dialog.querySelector('.case-export-preview').textContent,/2 simulation/);
   const includes=dialog.querySelectorAll('legend input');for(const input of includes){input.checked=false;input.onchange();}await new Promise(r=>setTimeout(r,120));assert.match(dialog.querySelector('.case-export-preview').textContent,/at least one/);assert(dialog.querySelector('.dialog-actions button:last-child').disabled);
-  [...dialog.querySelectorAll('.case-export-presets button')].find(b=>b.textContent==='Current simulation').click();await new Promise(r=>setTimeout(r,120));assert.match(dialog.querySelector('.case-export-preview').textContent,/1 simulation/);assert.equal(dialog.querySelectorAll('legend input:checked').length,1);
+  const mode=dialog.querySelector('#case-export-mode');mode.value='CURRENT';mode.onchange();await new Promise(r=>setTimeout(r,120));assert.match(dialog.querySelector('.case-export-preview').textContent,/1 simulation/);assert.equal(dialog.querySelectorAll('legend input:checked').length,1);
   dialog.querySelector('.dialog-heading button').click();assert.equal(await pending,false);assert.equal(started,ended);assert.equal(w.document.querySelector('.case-export-dialog'),null);
  }finally{h.dom.window.close();}
 });
@@ -267,8 +267,7 @@ test('additional case information is the last shared export section, only in Adv
   assert.equal(list.querySelectorAll('fieldset.case-export-section.case-export-simulation').length,2);
   assert.equal(last.querySelectorAll('.case-export-controls input[type=checkbox]').length,3);
   assert.equal(list.nextElementSibling,dialog.querySelector('.case-export-preview'));
-  const config=[...dialog.querySelectorAll('.case-export-presets button')].find(b=>b.textContent==='Configuration only');
-  config.click();
+  const config=dialog.querySelector('#case-export-mode');config.value='CONFIGURATION';config.onchange();
   assert.equal(list.lastElementChild.querySelectorAll('[data-export-extra]:checked').length,0);
   const real=list.lastElementChild.querySelector('[data-export-extra="realData"]');
   real.checked=true;real.onchange();
@@ -305,8 +304,63 @@ test('2D results and checkpoints have an independent export choice in Basic and 
    const pending=api.requestCaseExport(record),dialog=w.document.querySelector('.case-export-dialog');
    const a=dialog.querySelector('[data-export-simulation2d="a"]'),b=dialog.querySelector('[data-export-simulation2d="b"]');
    assert(a.checked&&!a.disabled);assert(!b.checked&&b.disabled);
-   const select=a.closest('fieldset').querySelector('select');select.value='NONE';select.onchange();assert(a.checked&&!a.disabled);
+   const select=dialog.querySelector('#case-export-mode');select.value='NONE';select.onchange();
+   assert(dialog.querySelector('[data-export-simulation2d="a"]').checked&&!dialog.querySelector('[data-export-simulation2d="a"]').disabled);
+   assert(!dialog.querySelector('[data-export-numerical="a"]').checked);
    dialog.querySelector('.dialog-heading button').click();assert.equal(await pending,false);
   }
+ }finally{h.dom.window.close();}
+});
+
+test('case export uses a single header selector, compact groups and preserves saved scenario statuses',async()=>{
+ const h=setup();try{
+  const w=h.w,api=w.STReports;
+  w.STIcons={svg:()=>'<svg></svg>'};
+  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+  w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  w.STDialog={beginActivity:()=>()=>{}};
+  w.HTMLAnchorElement.prototype.click=function(){};
+  let downloaded;w.URL.createObjectURL=blob=>{downloaded=blob;return 'blob:case-export';};w.URL.revokeObjectURL=()=>{};
+  w.document.documentElement.dataset.uiMode='advance';
+  const evaluation={title:'Saved scenario',status:'ENGINEERING_REVIEW_REQUIRED',evidence:{oee:80.2}};
+  const record={name:'Export example',activeSimulationId:'a',metadata:{realData:{records:[]}},simulations:[
+    {id:'a',name:'A',equipment:[],results:{summary:{outputCount:10},replay:{samples:[{virtualSecond:1},{virtualSecond:2}]}},simulation2d:{checkpoint:{time:10}},whatIf:{evaluations:[evaluation]}},
+    {id:'b',name:'B',equipment:[],results:{summary:{outputCount:20},replay:{samples:[{virtualSecond:1},{virtualSecond:2}]}}}
+  ]};
+  const before=JSON.stringify(record),pending=api.requestCaseExport(record),dialog=w.document.querySelector('.case-export-dialog'),select=dialog.querySelector('#case-export-mode');
+  assert.equal(dialog.querySelectorAll('select').length,1);
+  assert.equal(select.closest('.dialog-heading'),dialog.querySelector('.dialog-heading'));
+  assert.deepEqual([...select.options].map(option=>option.value),['COMPLETE','CURRENT','CONFIGURATION','REVIEW','FULL','SUMMARY','NONE']);
+  assert.equal(dialog.querySelector('.case-export-presets'),null);
+  assert.equal(dialog.querySelector('.case-export-results .case-export-group-heading h3').textContent,'Results');
+  assert.equal(dialog.querySelector('.case-export-results .case-export-option-grid').querySelectorAll('input').length,6);
+  assert.equal(dialog.querySelector('.case-export-scenarios .case-export-check').textContent,'Saved scenario');
+  assert(!dialog.textContent.includes('ENGINEERING_REVIEW_REQUIRED'));
+  assert(!dialog.textContent.includes('Summary keeps totals'));
+  assert(!dialog.textContent.includes('Saved loss diagnostics'));
+  assert.equal(dialog.querySelector('.case-export-real-data .case-export-help').textContent,'Choose plant records and comparisons to include.');
+  const choose=mode=>{select.value=mode;select.onchange();};
+  choose('REVIEW');
+  assert.equal(dialog.querySelectorAll('[data-export-numerical]:checked').length,2);
+  const omit=dialog.querySelector('[data-export-numerical="b"]');omit.checked=false;omit.onchange();
+  assert.equal(select.value,'SUMMARY');
+  const extras=dialog.querySelector('[data-export-extra="realData"]');extras.checked=false;extras.onchange();
+  choose('FULL');
+  assert(!dialog.querySelector('[data-export-numerical="b"]').checked);
+  assert(!dialog.querySelector('[data-export-extra="realData"]').checked);
+  assert(dialog.querySelector('[data-export-simulation2d="a"]').checked);
+  choose('SUMMARY');
+  await new Promise(r=>setTimeout(r,120));
+  dialog.querySelector('.dialog-actions button:last-child').click();
+  assert.equal(await pending,true);
+  const json=await new Promise((resolve,reject)=>{const reader=new w.FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsText(downloaded);});
+  const saved=JSON.parse(json);
+  assert.deepEqual(saved.simulations[0].whatIf.evaluations[0],evaluation);
+  assert.equal(saved.simulations[0].results.detailCoverage.exportDetail,'SUMMARY');
+  assert.equal(saved.simulations[0].results.replay.samples.length,1);
+  assert.equal(saved.simulations[1].results,undefined);
+  assert.deepEqual(saved.simulations[0].simulation2d,record.simulations[0].simulation2d);
+  assert.equal(saved.metadata.realData,undefined);
+  assert.equal(JSON.stringify(record),before);
  }finally{h.dom.window.close();}
 });

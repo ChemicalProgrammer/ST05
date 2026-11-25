@@ -1034,6 +1034,57 @@ window.STLanguage=(function(){
   "Ejemplo siguiente": "Next sample",
   "Catálogo de tarjetas reutilizables": "Reusable card catalog"
 });
+  // Shared case-export selector and compact section labels.
+  Object.assign(translations,{
+  "Export mode": "Modo de exportación",
+  "Complete": "Completo",
+  "Current simulation": "Simulación actual",
+  "Configuration only": "Solo configuración",
+  "For review": "Para revisión",
+  "Custom result detail": "Detalle personalizado de resultados",
+  "Custom · Full results": "Personalizado · Resultados completos",
+  "Custom · Summary (final snapshot)": "Personalizado · Resumen (estado final)",
+  "Custom · Omit numerical results": "Personalizado · Omitir resultados numéricos",
+  "Numerical results": "Resultados numéricos",
+  "Simulation 2D results and state": "Resultados y estado de simulación 2D",
+  "Supporting analysis and diagnostics": "Análisis complementarios y diagnósticos",
+  "Gemini conversation": "Conversación con Gemini",
+  "Select saved numerical and 2D results, analyses, and conversations.": "Selecciona los resultados numéricos y 2D guardados, los análisis y las conversaciones.",
+  "Real Data and comparisons": "Datos reales y comparaciones",
+  "Choose plant records and comparisons to include.": "Selecciona los registros de planta y las comparaciones que deseas incluir.",
+  "Real Data records": "Registros de datos reales",
+  "Real Data comparisons": "Comparaciones con datos reales",
+  "Simulation comparisons": "Comparaciones entre simulaciones",
+  "Select at least one simulation.": "Selecciona al menos una simulación.",
+  "simulation(s)": "simulaciones",
+  "result(s)": "resultados",
+  "scenario(s)": "escenarios"
+});
+  Object.assign(englishOfSpanish,{
+  "Modo de exportación": "Export mode",
+  "Completo": "Complete",
+  "Simulación actual": "Current simulation",
+  "Solo configuración": "Configuration only",
+  "Para revisión": "For review",
+  "Detalle personalizado de resultados": "Custom result detail",
+  "Personalizado · Resultados completos": "Custom · Full results",
+  "Personalizado · Resumen (estado final)": "Custom · Summary (final snapshot)",
+  "Personalizado · Omitir resultados numéricos": "Custom · Omit numerical results",
+  "Resultados numéricos": "Numerical results",
+  "Resultados y estado de simulación 2D": "Simulation 2D results and state",
+  "Análisis complementarios y diagnósticos": "Supporting analysis and diagnostics",
+  "Conversación con Gemini": "Gemini conversation",
+  "Selecciona los resultados numéricos y 2D guardados, los análisis y las conversaciones.": "Select saved numerical and 2D results, analyses, and conversations.",
+  "Datos reales y comparaciones": "Real Data and comparisons",
+  "Selecciona los registros de planta y las comparaciones que deseas incluir.": "Choose plant records and comparisons to include.",
+  "Registros de datos reales": "Real Data records",
+  "Comparaciones con datos reales": "Real Data comparisons",
+  "Comparaciones entre simulaciones": "Simulation comparisons",
+  "Selecciona al menos una simulación.": "Select at least one simulation.",
+  "simulaciones": "simulation(s)",
+  "resultados": "result(s)",
+  "escenarios": "scenario(s)"
+});
   function applyTree(root){
     if(!root)return;
     if(root.nodeType===3){updateText(root);return;}

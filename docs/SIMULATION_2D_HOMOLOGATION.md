@@ -1,6 +1,6 @@
 # Homologación de simulación numérica y simulación 2D
 
-**Última actualización:** 24 de noviembre de 2026 (hora de México).
+**Última actualización:** 25 de noviembre de 2026 (hora de México).
 **Estado:** en progreso. Este documento es el registro vivo de la homologación; no reemplaza las pruebas ni la validación contra planta.
 
 ## 1. Objetivo y alcance
@@ -20,7 +20,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
 | Descarga y overflow | Implementado y evaluado (ambos motores; diferencias residuales pendientes) |
 | Contadores | Implementado y evaluado (balances cerrados; anomalías de clasificación pendientes) |
-| Resolución temporal | En evaluación (FAST vs PRECISE; falta sensibilidad intermedia y pruebas controladas) |
+| Resolución temporal | Sensibilidad evaluada (FAST/BALANCED/PRECISE); pruebas controladas y convergencia pendientes |
 | Validación contra planta | Pendiente |
 
 **Interpretación:** «Implementado» significa que existe una corrección publicada, no que esté validada con el caso de planta. «Implementado y evaluado» indica que se realizó una comparación posterior al cambio, no necesariamente que se alcanzó equivalencia completa. «Pendiente» no implica ausencia total de lógica existente, sino que falta su revisión sistemática de homologación.
@@ -47,7 +47,7 @@ Datos históricos de la conversación y última evidencia del archivo de caso ex
 | Simulación numérica, etapa 5 (ST_CURRENT 0.20.3, FAST) | 181,548 | 126.08 | +6.56% |
 | Simulación 2D, etapa 5 (`PHYSICAL_FLOW_7`) | 207,132 | 143.84 | +21.57% |
 | Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, PRECISE) | 192,984 | 134.02 | +13.27% |
-| Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, BALANCED) | Pendiente | Pendiente | Pendiente |
+| Simulación numérica, etapa 6 (ST_CURRENT 0.20.3, BALANCED) | 193,032 | 134.05 | +13.30% |
 
 Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores. Tras evaluar ambos motores de la etapa 4, la diferencia 2D − numérica es +25,584 botellas. La numérica histórica de 136,764 se conserva y no se usa como referencia vigente.
 
@@ -288,7 +288,55 @@ Downtime propio PRECISE, por ronda, extraído de `results.batch.rows[].equipment
 | Case Packer | 86.59 | 95.47 | 91.03 | 78 / 86 / 82 |
 | Palletizer | 39.60 | 18.00 | 22.80 | 33 / 15 / 19 |
 
-El MTBF determina una distribución de tiempo de exposición hasta falla, no una cantidad fija de fallas por día. En el perfil general actual la reparación usa MTTR fijo, con cuantización y posible truncamiento al final del horizonte. El downtime propio por máquina no tiene por qué coincidir entre réplicas. Aun si coincide, la simultaneidad, la separación temporal entre eventos y el estado de los buffers pueden modificar la producción de línea; no sumar downtime de equipos como pérdida global. Hipótesis para pruebas deterministas posteriores: mantener cantidades y duraciones de paros forzados constantes y variar solo su fase temporal/solapamiento, conservando parámetros de buffers y recuperación; comparar producción, tiempo efectivo y pérdidas de línea. Para aislar fallas aleatorias, usar streams comunes por identidad y familia de evento, sin exigir mismos instantes de falla en tiempo calendario si las exposiciones productivas difieren. Los historiales actuales tienen eventos y transiciones omitidos, por lo que no permiten atribuir exhaustivamente la variación al solapamiento real de fallas. No se ha ejecutado aún ese experimento ni se ha cambiado código. El usuario está ejecutando BALANCED; se mantiene ese experimento sin modificaciones.
+El MTBF determina una distribución de tiempo de exposición hasta falla, no una cantidad fija de fallas por día. En el perfil general actual la reparación usa MTTR fijo, con cuantización y posible truncamiento al final del horizonte. El downtime propio por máquina no tiene por qué coincidir entre réplicas. Aun si coincide, la simultaneidad, la separación temporal entre eventos y el estado de los buffers pueden modificar la producción de línea; no sumar downtime de equipos como pérdida global. Hipótesis para pruebas deterministas posteriores: mantener cantidades y duraciones de paros forzados constantes y variar solo su fase temporal/solapamiento, conservando parámetros de buffers y recuperación; comparar producción, tiempo efectivo y pérdidas de línea. Para aislar fallas aleatorias, usar streams comunes por identidad y familia de evento, sin exigir mismos instantes de falla en tiempo calendario si las exposiciones productivas difieren. Los historiales actuales tienen eventos y transiciones omitidos, por lo que no permiten atribuir exhaustivamente la variación al solapamiento real de fallas. No se ha ejecutado aún ese experimento ni se ha cambiado código. El experimento BALANCED se completó sin modificar el motor; los resultados se registran a continuación.
+
+### Evaluación de sensibilidad temporal completa — BALANCED (25 de noviembre)
+
+Fuente: `G-complete (11).json`, revisión 70, 39,331,675 bytes, SHA-256 `c4a1647610093aa2735ded3b99bdbc1bdc25456a22066d091285c5d4ef7685ec`. Comparación directa de exportaciones (9), (10), (11). Equipos idénticos en las tres y coincidentes con sus firmas de entrada; firmas de run difieren solo en numericalResolution (FAST, BALANCED y valor por defecto PRECISE). Motor ST_CURRENT 0.20.3/cache:32; tick solicitado 0.25 s, efectivos 1/20, 1/60 y 1/120 s. Duración 86,400 s, formato S de 12 botellas/caja, residencia/fallas habilitadas, eventos/calendario deshabilitados, tres rondas completas con semillas 20261124–20261126. Se confirma que la ronda representativa es 3 en las tres resoluciones, incluida la reproducción representativa guardada. 2D de (11) está Ready, tiempo 0, complete=false, firma 2D semánticamente idéntica a (9)/(10); conservar (9) como referencia 2D completa (207,132 botellas, política 7, semilla 20261124). El reinicio de captura independiente al cambiar resolución sigue pendiente de investigación.
+
+| Semilla / estadístico | FAST | BALANCED | PRECISE | BALANCED − PRECISE |
+| --- | ---: | ---: | ---: | ---: |
+| 20261124 | 181,548 | 193,032 | 192,984 | +48 |
+| 20261125 | 176,040 | 183,132 | 183,480 | −348 |
+| 20261126 (representativa) | 178,188 | 188,748 | 187,572 | +1,176 |
+| Media | 178,592 | 188,304 | 188,012 | +292 |
+| DE muestral | 2,776.14 | 4,964.91 | 4,767.25 | — |
+| Error media vs planta | +4.82% | +10.52% | +10.35% | — |
+
+BALANCED − PRECISE: +0.1553% sobre media PRECISE; diferencias individuales +0.025%, −0.190% y +0.627% aprox. Incremento medio sobre FAST de 9,712 (5.44%) y 9,420 (5.27%) respectivamente. Evidencia descriptiva de menor sensibilidad de salida al refinar de BALANCED a PRECISE que al refinar desde FAST, no prueba de convergencia en todas las métricas (n=3, sin resolución más fina ni tolerancias preestablecidas). BALANCED es candidato a opción de exploración multirréplica, requiere la mitad de ticks de PRECISE, no necesariamente la mitad de tiempo real. PRECISE se conserva para diagnóstico a igual tick 2D; FAST no se elige por cercanía fortuita a planta. No comparar media numérica o representativa directamente con única corrida 2D como si fueran muestras emparejadas.
+
+| Balance ronda 1 (botellas) | FAST | BALANCED | PRECISE | 2D |
+| --- | ---: | ---: | ---: | ---: |
+| Entrada | 185,813 | 195,489 | 195,663 | 212,424 |
+| Salida | 181,548 | 193,032 | 192,984 | 207,132 |
+| Inventario final | 1,004 | 906 | 6 | 941 |
+| Overflow | 3,261 | 1,551 | 2,673 | 4,351 |
+| Residual | 0 | 0 | 0 | 0 |
+
+BALANCED − PRECISE = −174 entrada −900 inventario adicional +1,122 menor overflow = +48 botellas. Aunque coincide casi la producción, overflow BALANCED es 41.98% menor; no son trayectorias idénticas. Brecha 2D − BALANCED = 14,100 botellas (7.30% vs BALANCED); −35 inventario adicional −2,800 overflow adicional +16,935 entrada adicional. Los balances materiales de todas las rondas numéricas cierran (clearout 0). Los 27 registros equipo/ronda de BALANCED cierran salida por estado y residual máximo absoluto de tiempo 0.000006 s.
+
+| Máquina (ronda 1) | Runtime Efficiency FAST / BALANCED / PRECISE / 2D (%) | Blocked FAST / BALANCED / PRECISE / 2D (min) |
+| --- | ---: | ---: |
+| Scrambler | 116.27 / 100.77 / 100.79 / 100.81 | 147.53 / 53.79 / 26.79 / 28.44 |
+| Virtual inlet | 88.44 / 99.51 / 99.52 / 99.97 | 0.03 / 0.04 / 0.04 / 0 |
+| Filler | 108.67 / 102.11 / 102.14 / 102.17 | 150.64 / 53.71 / 53.29 / 57.09 |
+| Case Packer | 92.86 / 98.15 / 99.19 / 99.19 | 113.42 / 142.01 / 146.33 / 0 |
+| Palletizer | 93.42 / 96.02 / 96.25 / 96.48 | 0 / 0 / 0 / 0 |
+
+| Máquina | Downtime propio BALANCED R1/R2/R3 (min) | Fallas R1/R2/R3 |
+| --- | ---: | ---: |
+| Scrambler | 345.21 / 396.99 / 369.63 | 20 / 23 / 22 |
+| Virtual inlet | 106.56 / 104.56 / 103.56 | 213 / 209 / 207 |
+| Filler | 63.02 / 54.02 / 60.32 | 70 / 60 / 67 |
+| Case Packer | 87.71 / 96.59 / 93.26 | 79 / 87 / 84 |
+| Palletizer | 39.61 / 18.00 / 22.81 | 33 / 15 / 19 |
+| Suma de tiempos de equipos (no pérdida exclusiva línea) | 642.11 / 670.16 / 649.57 | — |
+
+Diagnóstico:
+- Scrambler BALANCED tiene 53.79 min Blocked, casi doble de PRECISE pese a producción similar; Filler cambia de 640 a 1,939 descargas durante DISCHARGING al refinar tick, y Scrambler de 911 a 1,381. Debe verificarse el crédito acumulado, cuándo se admite físicamente producto, el criterio de espacio/headway y la clasificación al final del tick en pruebas cortas, incluyendo overflow. Las eficiencias aparentes >100% (BALANCED Scrambler +1,496.82 y Filler +4,004.94 botellas sobre integral productiva de diseño) persisten.
+- Case Packer BALANCED 16,105 episodios observados, 99 alcanzan BACKUP_STOP, 16,005 terminan sin observarlo y uno abierto; 150.86 min DISCHARGING, cero cajas en dicho estado; Blocked 142.01 min y Starved 14.80 min. La discrepancia Blocked frente a 2D no se resuelve refinando tick. Primero contrastar las condiciones de bloqueo de paquete, admisión parcial de botellas y pulsos Back-up con una prueba determinista.
+- Las fallas siguen dependiendo de exposición y secuencia. Ronda 2 BALANCED y PRECISE presentan suma de downtime de 670.159 y 669.993 min, con producción 183,132 vs 183,480; no es un experimento de fallas iguales ni prueba causal del solapamiento. Guardar un registro específico de inicio/fin de fallas y exposición por máquina para analizar fase, duración, solapamiento y recuperación sin depender de un historial general truncado. El replay BALANCED R1 guarda 2,000 eventos y 4,000 transiciones, omite 44,865 eventos y 932,881 transiciones; no reconstruye toda la trayectoria.
+- No se cambiaron ejecutables ni se ejecutaron nuevas simulaciones en esta actualización. La evaluación de sensibilidad de las tres resoluciones está realizada, pero quedan pruebas de convergencia/control y defectos de clasificación. No iniciar validación de planta ni más corridas largas hasta revisar los siguientes casos. El único dato real es producción agregada de 170,376 botellas, con bases de tiempo no confirmadas.
 
 ## 5. Pendientes y criterios de revisión
 
@@ -298,18 +346,18 @@ El MTBF determina una distribución de tiempo de exposición hasta falla, no una
 | Sensores | Evaluación conjunta registrada; revisar las diferencias de disparos, especialmente PAC-PAL, sin cambiar los inputs durante la homologación. |
 | Descarga y overflow | Evaluación de ambos motores registrada y balances cerrados; revisar equivalencia de eventos de descarga/parada y máximo visual como diagnóstico transversal. |
 | Contadores | Evaluación G registrada; balances cerrados. Pendiente conciliar sobreproducción aparente, atribución de última descarga a Back-up stop y duración de fases sin salida. |
-| Resolución temporal | FAST/PRECISE comparados; completar BALANCED y casos deterministas con igual tick y fallas deshabilitadas; revisar clasificación Case Packer y créditos, y después aislar discrepancias de RNG. |
+| Resolución temporal | FAST/BALANCED/PRECISE comparados; casos deterministas de igual tick, cuantización de descargas y buffers, clasificación Case Packer y créditos; comprobar tolerancias de convergencia y aislar RNG. |
 | Validación contra planta | Comparar resultados con datos reales, revisar por equipo y por turno si existen datos, y evaluar variación entre réplicas. |
 
 Estos criterios son una guía de revisión, no una especificación de cambios ya aprobados ni evidencia de defectos confirmados.
 
 ## 6. Punto de continuación
 
-1. Conservar referencias: (9) numérica FAST 181,548 botellas y 2D PHYSICAL_FLOW_7 207,132; (10) numérica PRECISE 192,984, ronda 1. No tratar la 2D Ready de (10) como resultado ni sobrescribir el histórico.
-2. Completar sensibilidad con una corrida numérica BALANCED (1/60 s), ST_CURRENT 0.20.3, G, 24 h, semilla 20261124, formato S, residencia y fallas habilitadas, eventos/calendario deshabilitados; una ronda basta como mínimo. No repetir 2D; exportar por separado. Comparar con FAST/PRECISE sin asumir monotonía o convergencia.
-3. Realizar pruebas cortas deterministas a igual tick, sin fallas y con paros controlados, para investigar Case Packer (Blocked vs Starved/Discharging), créditos y última descarga. Revisar la persistencia independiente de 2D.
-4. Aislar la influencia aleatoria; evaluar homologación de streams de fallas por id y familia, misma semilla, sin cambiar MTBF/MTTR. No exigir igualdad de fallas por hora si difiere la exposición. Resolver defectos demostrados y registrar versiones/pruebas antes de nuevas corridas largas.
-5. Validación contra planta y evaluación aislada de etapa 2 siguen pendientes.
+1. Conservar (9) FAST, (10) PRECISE y (11) BALANCED, tres réplicas cada una; ronda 3 representativa y media/dispersión registradas. Conservar 2D política 7 completa de (9), semilla 20261124. No repetir corridas largas de momento.
+2. Ejecutar pruebas cortas deterministas de ambos motores a 1/120 s sin fallas, con una máquina fuente, transferencias y envasado parcial/completo; comparar créditos, posición/entrada, salida, estados y balances. Contrastar pulsos B, última descarga, overflow y tiempos de bloqueo del Case Packer. Variar el tick con entradas/eventos idénticos, incluyendo 1/60 s y 1/20 s, para detectar cuantización sin influencia RNG.
+3. Probar paros controlados simultáneos y separados con idéntico downtime por máquina; registrar pérdidas efectivas de línea y recuperación de buffers. No usar diferencias entre réplicas como prueba causal.
+4. Homologar los streams de confiabilidad por id estable y familia de evento, incluyendo clase de falla, con pruebas de reproducibilidad y de conservación al restaurar checkpoints. Mantener MTBF/MTTR y exposición, y añadir historial específico de fallas no truncado por eventos ajenos. Investigar persistencia de corrida 2D al variar exclusivamente resolución numérica. Publicar correcciones demostradas, actualizar versiones solo según alcance.
+5. Tras las correcciones repetir ambos motores con semillas emparejadas (incluida la representativa) y pasos comparables; contrastar distribuciones con tolerancias previamente definidas. Luego validación contra planta y evaluación aislada pendiente de etapa 2.
 
 La evaluación conjunta no equivale a homologación completa ni validación de planta.
 

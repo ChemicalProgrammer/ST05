@@ -33,8 +33,9 @@
 #equipment-analysis-body table { width:100%; table-layout:auto; }
 #equipment-analysis-body :is(td,th) { padding:var(--space-2) var(--space-3); overflow-wrap:anywhere; }
 #equipment-analysis-body thead th:not(:first-child) { text-align:center; }
+#equipment-analysis-body thead th:nth-child(2) {text-align:end;}
 #equipment-analysis-body td.numeric { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-#equipment-analysis-body td.metric-unit { width:1%; white-space:nowrap; }
+#equipment-analysis-body td.analysis-table-unit {display:table-cell;width:1%;white-space:nowrap;text-align:center;vertical-align:middle;line-height:inherit;font-size:inherit;font-weight:inherit;color:var(--unit-color);margin:0;}
 .equipment-analysis-pill.st-status-pill { position:static; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); background:var(--stopped-soft); width:max-content; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .equipment-analysis-pill.st-status-pill.is-pass { background:var(--success-soft); color:var(--success); }
 .equipment-analysis-pill.st-status-pill.is-fail { background:var(--failure-soft); color:var(--danger); }
@@ -217,7 +218,7 @@ window.STEquipmentAnalysis=(function(){
       const row=make(tbody,'tr'),tip=parameterHelp(label)+(help?'\n'+help:'');row.title=tip;
       const heading=make(row,'th',label);heading.scope='row';heading.title=tip;
       const cell=make(row,'td',typeof value==='string'?value:fmt(value));cell.title=tip;if(typeof value!=='string')cell.className='numeric';
-      make(row,'td',unit).className='metric-unit';
+      make(row,'td',unit).className='analysis-table-unit';
     }
   }
   let current=null;

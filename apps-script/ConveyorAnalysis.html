@@ -38,7 +38,6 @@
 }
 #conveyor-analysis-body .analysis-section-status .sheet-import-row-status { margin:0; }
 #conveyor-analysis-body .analysis-section-status .icon { width:18px;height:18px;stroke-width:2.9;stroke-linecap:round; }
-#conveyor-analysis-body .worksheet-format-name {display:block;font-size:var(--font-secondary);font-weight:var(--weight-regular);color:var(--muted);overflow-wrap:anywhere;}
 #conveyor-analysis-body .conveyor-value-not-applicable {color:var(--muted);cursor:help;}
 #conveyor-analysis-body .table-scroll { min-width:0;max-width:100%;width:100%;overflow-x:auto;overflow-y:visible; }
 /* A consistent column model prevents long parameters or diagnostic text
@@ -58,8 +57,9 @@
 #conveyor-analysis-body :is(thead th,tbody td):not(:first-child) {padding-inline:var(--space-2);}
 #conveyor-analysis-body thead th {text-align:center;}
 #conveyor-analysis-body thead th:first-child {text-align:start;}
-#conveyor-analysis-body tbody td.numeric {text-align:end;font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere;}
-#conveyor-analysis-body td.metric-unit {text-align:center;white-space:normal;overflow-wrap:anywhere;}
+#conveyor-analysis-body thead th.numeric,#conveyor-analysis-body tbody td.numeric {text-align:end;font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere;}
+/* Unit cells are table cells, not inline KPI units (which use baseline alignment). */
+#conveyor-analysis-body td.analysis-table-unit {display:table-cell;text-align:center;vertical-align:middle;line-height:inherit;font-weight:inherit;font-size:inherit;color:var(--unit-color);white-space:normal;overflow-wrap:anywhere;margin:0;}
 #conveyor-analysis-body :is(td,th)[colspan] {text-align:start;white-space:normal;}
 #conveyor-analysis-body .conveyor-value-pending {cursor:help;text-decoration:underline dotted;text-underline-offset:.18em;color:var(--muted);}
 #conveyor-analysis-body .conveyor-value-partial {cursor:help;text-decoration:underline dotted;text-underline-offset:.18em;}
@@ -815,7 +815,8 @@ window.STConveyorAnalysis=(function(){
         if(index>0&&index<headers.length-1){
           cell.className='numeric';
           const profile=profiles?.[index-1];
-          if(profile)make(cell,'span',profile.name).className='worksheet-format-name';
+          // Keep format identity available for multi-format comparisons without a second header line.
+          if(profile&&profiles.length>1)cell.title=profile.name;
         }
       });
       return make(element,'tbody');
@@ -846,7 +847,7 @@ window.STConveyorAnalysis=(function(){
       const element=row(common,ref,label,trace.commonKeys[index]);
       const output=make(element,'td');
       output.className='numeric';
-      make(element,'td',unit).className='metric-unit';
+      make(element,'td',unit).className='analysis-table-unit';
       const reason=notApplicableReason(worksheet,trace.commonKeys[index],value);
       if(reason)renderNotApplicable(output,reason);
       else renderValue(output,value,trace.describe(trace.commonKeys[index]),Boolean(source?.partial));
@@ -883,7 +884,7 @@ window.STConveyorAnalysis=(function(){
           }
           if(!cell.title)cell.title=parameterHelp('L'+ref);
         });
-        make(element,'td',unit).className='metric-unit';
+        make(element,'td',unit).className='analysis-table-unit';
       }
     }
     const noteSpec=sections[sections.length-1];

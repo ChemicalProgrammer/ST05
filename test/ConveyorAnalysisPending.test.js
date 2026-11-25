@@ -233,7 +233,11 @@ test('subsection completeness is independent of the engineering verdict and visi
     assert.equal(groups[0].querySelector('summary .analysis-section-status').dataset.completeness,'COMPLETE');
     assert(groups.every(group=>group.querySelector('.subsection-description').textContent.length>15));
     assert(groups.every(group=>!group.querySelector('.subsection-description').textContent.startsWith('Format:')));
-    assert.equal(h.body.querySelector('[data-analysis-group="package"] .worksheet-format-name').textContent,'Complete format');
+    const table=h.body.querySelector('[data-analysis-group="package"] table');
+    assert.equal(table.querySelector('thead th.numeric').textContent,'Value');
+    assert.equal(table.querySelector('thead th.numeric').children.length,0);
+    assert(table.querySelector('tbody td:last-child').classList.contains('analysis-table-unit'));
+    assert.equal(h.body.querySelector('.worksheet-format-name'),null);
     const report=h.api.buildEvaluationExport(ctx);
     assert.equal(report.evaluations[0].sectionProgress.find(s=>s.section==='geometry').status,'COMPLETE');
   }finally{h.close();}
@@ -279,5 +283,18 @@ test('unused segments do not demand additional inputs and labels are bilingual',
     assert.match(group.querySelector('.subsection-description').textContent,/Velocidad de banda/);
     assert.match(group.querySelector('.analysis-section-status').textContent,/Completo/);
     assert.equal(group.querySelector('[data-cell="L33"] td').textContent,'No aplica');
+  }finally{h.close();}
+});
+
+test('value headers are single line and units do not use the KPI baseline class',()=>{
+  const h=harness();try{
+    h.api.open('belt',context([fixture('Format A'),fixture('Format B')]));
+    const table=h.body.querySelector('[data-analysis-group="sensors"] table');
+    const heads=[...table.querySelectorAll('thead th.numeric')];
+    assert.deepEqual(heads.map(th=>th.textContent),['Value 1','Value 2']);
+    assert.deepEqual(heads.map(th=>th.title),['Format A','Format B']);
+    assert(heads.every(th=>th.children.length===0));
+    assert.equal(h.body.querySelector('td.metric-unit'),null);
+    assert([...table.querySelectorAll('tbody td:last-child')].every(td=>td.classList.contains('analysis-table-unit')));
   }finally{h.close();}
 });

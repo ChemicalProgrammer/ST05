@@ -28,16 +28,16 @@
 .simulation2d-source { display:inline-flex; align-items:center; gap:var(--space-2); font-size:var(--font-secondary); white-space:nowrap; max-width:100%; }
 .simulation2d-source select { width:auto; min-width:0; }
 .simulation2d-source input[type=checkbox] { width:auto; margin:0; }
-#simulation2d-panel .fold-tools { align-items:center; max-width:100%; min-width:0; gap:var(--space-1); }
+#simulation2d-panel .fold-tools { align-items:center; max-width:100%; min-width:0; gap:var(--toolbar-gap); }
 #simulation2d-panel .fold-tools > * { flex:0 0 auto; margin:0; }
 #simulation2d-speed { width:max-content; min-width:0; padding-inline:6px 20px; background-position:right 4px center; background-size:13px; }
 @container (max-width:450px) {
-  #simulation2d-panel .fold-tools { gap:2px; }
+
   #simulation2d-panel .fold-tools .icon-button { --icon-button-size:var(--size-28); }
   #simulation2d-speed { font-size:12px; padding-inline:4px 16px; background-size:11px; }
 }
 @container (max-width:320px) {
-  #simulation2d-panel .fold-tools { gap:1px; }
+
   #simulation2d-panel .fold-tools .icon-button { --icon-button-size:23px;--icon-button-glyph-size:14px; }
   #simulation2d-speed { padding-inline:2px 13px; background-position:right 2px center; background-size:10px; }
 }
@@ -98,7 +98,7 @@
 .simulation2d-setting-toggles { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); gap:var(--space-3); margin:var(--space-3) 0 0; padding:0; min-width:0; border:0; }
 .simulation2d-setting-toggles label { display:flex; align-items:center; gap:var(--space-2); margin:0; font-size:var(--font-secondary); }
 .simulation2d-setting-toggles input { width:auto; margin:0; flex:0 0 auto; }
-.simulation2d-viewport-zoom { position:absolute; z-index:2; right:var(--space-2); bottom:var(--space-2); display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); border:0; background:transparent; opacity:.45; transition:opacity .18s ease; max-width:calc(100% - 2 * var(--space-2)); box-sizing:border-box; cursor:default; }
+.simulation2d-viewport-zoom { position:absolute; z-index:2; right:var(--space-2); bottom:var(--space-2); display:flex; align-items:center; gap:var(--toolbar-gap); padding:var(--space-2) var(--space-3); border:0; background:transparent; opacity:.45; transition:opacity .18s ease; max-width:calc(100% - 2 * var(--space-2)); box-sizing:border-box; cursor:default; }
 .simulation2d-viewport-zoom:hover,.simulation2d-viewport-zoom:focus-within { opacity:1; }
 .simulation2d-viewport-zoom input[type=range] { width:90px; min-width:40px; max-width:100%; margin:0; padding:0; accent-color:var(--accent); }
 .simulation2d-viewport-zoom output { min-width:5ch; margin:0; padding:0; text-align:right; color:var(--muted); font-size:var(--font-secondary); font-variant-numeric:tabular-nums; }
@@ -1919,11 +1919,17 @@ window.STSimulation2D=(function(){
     message.textContent=validation?localize2D(validation):localize2D(runState)+sourceStatus+waitingForFirst;
     if(dynamicBalancingRequested)message.textContent+=' · '+localize2D('Dynamic balancing applies only to numerical simulation; 2D runs at fixed speeds.');
     const progress=el('progress'),playbackState=el('playback-state');
-    if(progress)progress.textContent=(limitSeconds>0?Math.max(0,Math.min(100,(model?.time??0)/limitSeconds*100)):0).toFixed(1)+'%';
+    // The independent 2D engine renders its current state, not a stored
+    // future calculation. Both tracks intentionally use the same horizon.
+    const visualPercent=model&&model.time>=limitSeconds-1e-8?100:limitSeconds>0?Math.max(0,Math.min(99.9,(model?.time??0)/limitSeconds*100)):0;
+    if(progress)progress.textContent=visualPercent.toFixed(1)+'%';
+    const visualizationBar=el('visualization-bar');if(visualizationBar)visualizationBar.value=visualPercent;
     if(playbackState)playbackState.textContent=localize2D(runState);
     const elapsed=el('execution-time'),calculation=el('calculation-progress'),es=document.documentElement.lang==='es';
     if(elapsed){elapsed.textContent=(es?'Real ':'Elapsed ')+executionClockLabel(executionElapsed());elapsed.title=es?'Tiempo real de ejecución, sin pausas.':'Real execution time, excluding pauses.';}
-    if(calculation){const calculated=model&&model.time>=limitSeconds-1e-8?100:limitSeconds>0?Math.max(0,Math.min(99.9,(model?.time??0)/limitSeconds*100)):0;calculation.textContent=(es?'Cálculo ':'Calc ')+calculated.toFixed(1)+'%';calculation.title=es?'El motor 2D calcula conforme avanza la animación; no hay datos precalculados por delante.':'The 2D engine calculates as animation advances; no precomputed look-ahead buffer.';}
+    const calculated=visualPercent;
+    const calculationBar=el('calculation-bar');if(calculationBar)calculationBar.value=calculated;
+    if(calculation){calculation.textContent=calculated.toFixed(1)+'%';calculation.title=es?'El motor 2D calcula conforme avanza la animación; no hay datos precalculados por delante.':'The 2D engine calculates as animation advances; no precomputed look-ahead buffer.';if(calculationBar)calculationBar.title=calculation.title;}
     el('time').textContent=num(model?.time??0)+' s';
     const output=line.at(-1);
     el('output').textContent=num((output?.produced??0)*(output?.bottlesPerUnit??1));

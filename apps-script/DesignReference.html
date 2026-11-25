@@ -238,9 +238,9 @@
           <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Espacio medio</strong><code>--space-3</code></div>
         </div>
         <div class="design-reference-row" role="row">
-          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row" style="gap:var(--space-2)"><button type="button" class="secondary icon-button" aria-label="Ejemplo anterior" title="Ejemplo anterior">←</button><button type="button" class="secondary icon-button" aria-label="Ejemplo siguiente" title="Ejemplo siguiente">→</button></div></div>
-          <div class="design-reference-cell design-reference-explanation" role="cell">Espacio compacto entre acciones y controles cercanos. Valor actual: <output data-design-token="--space-2">—</output></div>
-          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Espacio entre controles</strong><code>--space-2</code></div>
+          <div class="design-reference-cell design-reference-preview" role="cell"><div class="design-reference-control-row" style="gap:var(--toolbar-gap)"><button type="button" class="secondary icon-button" aria-label="Ejemplo anterior" title="Ejemplo anterior">←</button><button type="button" class="secondary icon-button" aria-label="Ejemplo siguiente" title="Ejemplo siguiente">→</button></div></div>
+          <div class="design-reference-cell design-reference-explanation" role="cell">Separación uniforme entre botones y acciones de barras de herramientas. Valor actual: <output data-design-token="--toolbar-gap">—</output></div>
+          <div class="design-reference-cell design-reference-control-name" role="cell"><strong>Separación de botones</strong><code>--toolbar-gap</code></div>
         </div>
         <div class="design-reference-row" role="row">
           <div class="design-reference-cell design-reference-preview" role="cell"><button type="button" class="secondary design-reference-height-button">Control</button></div>
@@ -342,7 +342,7 @@
 .design-reference-picker-preview {display:flex;align-items:center;gap:var(--space-2);max-width:100%;}
 .design-reference-picker-preview select {width:min(180px,100%);}
 .design-reference-tabs-preview {display:flex;border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-1);max-width:100%;}
-.design-reference-control-row {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);}
+.design-reference-control-row {display:flex;flex-wrap:wrap;align-items:center;gap:var(--toolbar-gap);}
 .design-reference-control-row > label {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);font-size:var(--font-secondary);}
 .design-reference-control-row > label.checkbox-label {flex-direction:row;align-items:center;}
 .design-reference-preview > .checkbox-label {margin:0;}
@@ -409,7 +409,7 @@
 .design-reference-mini-dialog .dialog-heading {padding:var(--space-2);}
 .design-reference-mini-dialog .dialog-heading h2 {font-size:var(--font-card);margin:0;}
 .design-reference-mini-dialog .dialog-heading .icon-button {--icon-button-size:var(--size-28);}
-.design-reference-mini-dialog .dialog-actions {padding:var(--space-2);gap:var(--space-1);}
+.design-reference-mini-dialog .dialog-actions {padding:var(--space-2);gap:var(--toolbar-gap);}
 .design-reference-mini-dialog .dialog-actions button {min-height:28px;padding:var(--space-1);}
 .design-reference-native-preview {width:100%;margin:0;padding:var(--space-2);}
 .design-reference-native-preview > p {margin:var(--space-2) 0 0;}

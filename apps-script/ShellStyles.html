@@ -17,9 +17,8 @@
 .sidebar-collapsed .nav-item { justify-content: center; padding: var(--space-2); }
 .sidebar-collapsed .nav-item:hover::after,:where(html:not([data-focus-rings=off])) .sidebar-collapsed .nav-item:focus-visible::after { content: attr(aria-label); position: absolute; left: calc(100% + var(--space-3)); border: var(--border-width) solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); z-index: var(--z-overlay); box-shadow: var(--shadow-dialog); }
 .topbar {
-  --header-action-gap:var(--space-3);
-  height:var(--header-height);padding:0 var(--page-padding);
-  display:flex;align-items:center;gap:var(--header-action-gap);
+  height:var(--header-height);padding:0 var(--workspace-toolbar-inset) 0 var(--page-padding);
+  display:flex;align-items:center;gap:var(--toolbar-gap);
   border-bottom:var(--border-width) solid var(--line-strong);
   /* Same subtle, full-width secondary gradient as canonical Subsections. */
   background-color:var(--surface);
@@ -59,7 +58,7 @@
   .sidebar .nav-label,.sidebar .brand-name,.sidebar .nav-caption { display: none; }
   .sidebar .nav-item { justify-content: center; padding: var(--space-2); }
   #collapse-sidebar { display: none; } .user-chip { display: none; }
-  .workspace-content { padding: 0 var(--workspace-gutter) var(--space-6); } .topbar { padding: 0 var(--space-3); flex-direction: row; align-items: center; }
+  .workspace-content { padding: 0 var(--workspace-gutter) var(--space-6); } .topbar { padding: 0 var(--workspace-toolbar-inset) 0 var(--space-3); flex-direction: row; align-items: center; }
   .section-heading { align-items: flex-start; flex-direction: column; }
   .breadcrumb { font-size: var(--font-secondary); }
 }
@@ -70,7 +69,7 @@
 .sidebar-simulations { flex-shrink:1; }
 .topbar { min-width:0; }
 @media(max-width:600px) {
- .topbar { --header-action-gap:var(--space-1); gap:var(--header-action-gap); flex-wrap:wrap; height:auto; min-height:var(--header-height); padding-top:var(--space-2); padding-bottom:var(--space-2); }
+ .topbar { gap:var(--toolbar-gap); flex-wrap:wrap; height:auto; min-height:var(--header-height); padding-top:var(--space-2); padding-bottom:var(--space-2); }
  .topbar .breadcrumb { flex-basis:100%; }
  .topbar .button-row { flex-wrap:wrap; }
  .app-shell:not(.case-open) { padding:0; }
@@ -100,18 +99,18 @@ button#breadcrumb-case { min-width:0; padding:0 var(--space-1); border:1px solid
 #autosave-status[data-state=error] { color:var(--danger); }
 @media(max-width:760px){.sidebar,.sidebar-simulations{scrollbar-width:none;}.sidebar::-webkit-scrollbar,.sidebar-simulations::-webkit-scrollbar{display:none;}}
 /* Header simulation selector and icon actions stay beside Gemini in both modes. */
-.header-case-actions { display:flex; align-items:center; gap:var(--header-action-gap); min-width:0; margin-left:auto; }
-.simulation-toolbar { display:flex; align-items:center; gap:var(--header-action-gap); min-width:0; }
+.header-case-actions { display:flex; align-items:center; gap:var(--toolbar-gap); min-width:0; margin-left:auto; }
+.simulation-toolbar { display:flex; align-items:center; gap:var(--toolbar-gap); min-width:0; }
 .simulation-picker { display:flex; align-items:center; min-width:0; }
 #simulation-selector { width:clamp(140px,18vw,260px); max-width:100%; }
-.simulation-actions { display:flex; align-items:center; gap:var(--header-action-gap); }
+.simulation-actions { display:flex; align-items:center; gap:var(--toolbar-gap); }
 html[data-ui-mode=advance] .workspace-content > .card > .section-heading { flex-wrap:wrap; }
 @media(max-width:900px){
  .topbar { height:auto; min-height:var(--header-height); flex-wrap:wrap; padding-top:var(--space-2); padding-bottom:var(--space-2); }
  .header-case-actions { flex-wrap:wrap; }
 }
 @media(max-width:600px){
- .header-case-actions { width:100%; margin-left:0; }
+ .header-case-actions { width:100%; margin-left:0; justify-content:flex-end; }
  .simulation-toolbar { flex:1; }
  .simulation-picker { flex:1; }
  #simulation-selector { width:100%; }

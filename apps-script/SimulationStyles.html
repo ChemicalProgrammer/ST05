@@ -99,7 +99,7 @@
   @media (max-width: 980px) { .simulation-analysis-grid { grid-template-columns: 1fr; } }
   @media (max-width: 760px) { .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .run-fields, .control-event, .format-zone-grid, .zone-engineering-stats { grid-template-columns: 1fr 1fr; } .live-equipment-card__row { grid-template-columns: 1fr; } }
   @media (max-width: 600px) { .app-shell { padding-left: var(--size-16); padding-right: var(--size-16); } .topbar, .section-heading, .editor-subheading, .equipment-header, .format-zone-heading { align-items: flex-start; flex-direction: column; } .field-grid, .equipment-grid, .new-case-form, .run-fields, .control-event, .metrics-grid, .format-zone-grid { grid-template-columns: 1fr; } .case-row, .case-actions { align-items: flex-start; flex-direction: column; } .live-equipment-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } .live-equipment-controls .live-control-run { grid-column: span 1; } .accumulation-zone-details summary { align-items: flex-start; flex-wrap: wrap; } .accumulation-zone-summary-name { flex-basis: calc(100% - var(--size-22)); } }
-.event-selection-toolbar { margin-top:var(--space-3); gap:var(--space-3); flex-wrap:wrap; align-items:center; }
+.event-selection-toolbar { margin-top:var(--space-3); gap:var(--toolbar-gap); flex-wrap:wrap; align-items:center; }
 .event-selection-toolbar .checkbox-label { margin:0; }
 .event-selection-hint { margin:var(--space-2) 0; }
 .event-select-cell { width:2.5rem; min-width:2.5rem; align-self:center; text-align:center; }

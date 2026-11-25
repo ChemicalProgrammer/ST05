@@ -8,7 +8,7 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 .settings-section:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; } .settings-section p { font-size: var(--font-secondary); }
 .settings-row { display: grid; grid-template-columns: 1fr var(--size-180); gap: var(--space-4); align-items: center; margin-top: var(--space-3); }
 .settings-row select { width: 100%; } .settings-row .theme-control { margin: 0; display: contents; }
-.dialog-actions { flex-shrink:0; border-top:var(--border-width) solid var(--line); padding:var(--space-4) var(--space-5); display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-4); }
+.dialog-actions { flex-shrink:0; border-top:var(--border-width) solid var(--line); padding:var(--space-4) var(--space-5); display: flex; align-items: center; justify-content: flex-end; gap: var(--toolbar-gap); padding-top: var(--space-4); }
 #settings-error { color: var(--danger); font-size: var(--font-secondary); }
 #command-dialog { --dialog-width: var(--size-500); } .command-search { border: 0; border-radius: 0; border-bottom: var(--border-width) solid var(--line); padding: var(--space-4); }
 .command-list { overflow-y:auto; display: grid; gap: var(--space-1); padding: var(--space-2); } .command-list button { justify-content: flex-start; }

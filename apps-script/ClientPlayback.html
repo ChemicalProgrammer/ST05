@@ -26,7 +26,7 @@
       if(active&&c.startedAt===null){c.known=true;c.startedAt=performance.now();}
       if(!active&&c.startedAt!==null){c.elapsedMs+=Math.max(0,performance.now()-c.startedAt);c.startedAt=null;}
       var es=document.documentElement.lang==='es';
-      var real=es?'Real':'Elapsed', calculation=es?'Cálculo':'Calc';
+      var real=es?'Real':'Elapsed';
       timer.textContent=real+' '+executionTimeText(numericalExecutionElapsedMs());
       timer.title=es?'Tiempo real de cálculo o reproducción; excluye pausas sin cálculo activo.':'Real time spent calculating or playing; excludes pauses without active computation.';
       var result=state.run.result, reset=state.run.playbackAction==='reset'&&!pending;
@@ -34,11 +34,14 @@
       var batchOnly=pending&&!result;
       var batchValue=Math.max(0,Math.min(99.9,(Number(session?.batchProgress?.value)||0)*100));
       var percent=reset?0:result&&!result.provisional?100:result?.provisional&&target>0?Math.max(0,Math.min(99.9,(Number(result.calculatedThroughSeconds)||0)/target*100)):batchOnly?batchValue:0;
-      calc.textContent=(batchOnly&&session?.run?.rounds>1?(es?'Cálculo lote':'Batch calc'):calculation)+' '+percent.toFixed(1)+'%';
+      calc.textContent=percent.toFixed(1)+'%';
+      var calculationBar=document.getElementById('playback-calculation-bar');
+      if(calculationBar)calculationBar.value=percent;
       calc.title=es?'Avance del cálculo de la ronda mostrada. La reproducción precisa reconstruye estados bajo demanda; 100% no garantiza reproducción instantánea.':'Calculation of the displayed round. Precise playback reconstructs states on demand; 100% does not guarantee instant playback.';
       if(batchOnly&&session?.run?.rounds>1)calc.title=es?'Avance global de las rondas en cálculo.':'Overall calculation progress across rounds.';
       if(!reset&&typeof state.run.calculationWallMs==='number'&&Number.isFinite(state.run.calculationWallMs))
         calc.title+=' '+(es?'Tiempo de cálculo registrado: ':'Recorded calculation time: ')+executionTimeText(state.run.calculationWallMs)+'.';
+      if(calculationBar)calculationBar.title=calc.title;
       if(active&&numericalExecutionTimer===null)numericalExecutionTimer=window.setTimeout(function(){numericalExecutionTimer=null;syncNumericalExecutionIndicators();},250);
       if(!active&&numericalExecutionTimer!==null){window.clearTimeout(numericalExecutionTimer);numericalExecutionTimer=null;}
     }
@@ -670,8 +673,10 @@
       var clockSecond=Number.isFinite(displaySecond)?displaySecond:playbackDisplaySecond(base);
       var duration=Number(state.run.result?.durationSeconds);
       var progress=document.getElementById('playback-progress');
-      if(progress)progress.textContent=(duration>0
-        ?Math.max(0,Math.min(100,clockSecond/duration*100)).toFixed(1):'0')+'%';
+      var visualPercent=duration>0&&Number.isFinite(clockSecond)?Math.max(0,Math.min(100,clockSecond/duration*100)):0;
+      if(progress)progress.textContent=visualPercent.toFixed(1)+'%';
+      var visualizationBar=document.getElementById('playback-visualization-bar');
+      if(visualizationBar)visualizationBar.value=visualPercent;
       STTimeControls.setOutput(document.getElementById('metric-time'),clockSecond,
         {unit:'min',label:'Change virtual time unit'});
       var flowUnits=flowUnitLabels(playbackFlowUnit());
@@ -783,7 +788,9 @@
       }
       var effectiveCard=document.getElementById('metric-effective-runtime'),lossCard=document.getElementById('metric-runtime-losses');
       if (!state.run.result || !state.run.result.samples.length){
-        if(progress)progress.textContent='0%';if(effectiveCard)effectiveCard.textContent='—';if(lossCard)lossCard.textContent='—';return;
+        if(progress)progress.textContent='0.0%';
+        var visualizationBar=document.getElementById('playback-visualization-bar');if(visualizationBar)visualizationBar.value=0;
+        if(effectiveCard)effectiveCard.textContent='—';if(lossCard)lossCard.textContent='—';return;
       }
       var renderStart=performance.now();
       var scrollAnchor = state.uiView==='simulation'?captureLiveEquipmentScrollAnchor():null;

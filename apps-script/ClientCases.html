@@ -361,7 +361,8 @@ async function openCase(caseId, initialView) {
           }
         });
       var progress=document.getElementById('playback-progress');
-      if(progress)progress.textContent='0%';
+      if(progress)progress.textContent='0.0%';
+      var visualizationBar=document.getElementById('playback-visualization-bar');if(visualizationBar)visualizationBar.value=0;
       var playbackStatus=document.getElementById('playback-status');
       if(playbackStatus)playbackStatus.textContent=typeof window!=='undefined'&&window.STLanguage?.translate?.('Ready')||'Ready';
       if(typeof updateNumericalEquipmentVisibility==='function')updateNumericalEquipmentVisibility();

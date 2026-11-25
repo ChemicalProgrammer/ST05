@@ -128,7 +128,7 @@ html[data-ui-mode=advance] :is(.notice,.result-insight,.analysis-finding,.analys
 html[data-ui-mode=advance] .analysis-critical { border-left-color:var(--danger); }
 html[data-ui-mode=advance] :is(.analysis-attention,.scenario-audit-warnings,.round-warning) { border-left-color:var(--warning); }
 .json-field-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); flex-wrap:wrap; }
-.json-field-heading .button-row { margin-left:auto; padding:0; gap:var(--space-1); }
+.json-field-heading .button-row { margin-left:auto; padding:0; gap:var(--toolbar-gap); }
 /* Subsection headings and action menus use the same dimensions in every view. */
 #simulation-analysis { margin-top:0; }
 #simulation-analysis-content { margin-top:0; }
@@ -148,7 +148,7 @@ html[data-ui-mode=basic] .scenario-tier-grid { grid-template-columns:repeat(4,mi
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation { min-width:0; display:flex; flex-direction:column; padding:var(--space-3); }
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > .scenario-card-header,
 html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > h4 { margin:0 0 var(--space-4); min-height:var(--control-height); align-content:center; font-size:var(--font-card); }
-html[data-ui-mode=basic] .scenario-tier-grid .scenario-actions { margin-top:auto; padding-top:var(--space-3); gap:var(--space-1); flex-wrap:nowrap; }
+html[data-ui-mode=basic] .scenario-tier-grid .scenario-actions { margin-top:auto; padding-top:var(--space-3); gap:var(--toolbar-gap); flex-wrap:nowrap; }
 html[data-ui-mode=basic] .scenario-current { border-left:var(--state-border-width) solid var(--muted); }
 html[data-ui-mode=basic] .scenario-current .scenario-basic-metrics { padding:var(--space-3) 0; }
 
@@ -173,7 +173,26 @@ html[data-ui-mode=basic] .scenario-tier-grid > .analysis-recommendation > h4.sce
 #run-panel > .section-heading > div:first-child { display:none; }
 html[data-ui-mode=basic] #run-panel > .section-heading { display:none; }
 #basic-run-options-title { justify-content:space-between; gap:var(--space-3); }
-#playback-progress, #simulation2d-progress { color:var(--accent); font-weight:var(--weight-semibold); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* Shared dual execution progress: two independent native tracks, followed
+   by calculation / visualization percentages and the existing real clock. */
+.execution-progress-tracks {
+  display:inline-grid; grid-template-rows:repeat(2,var(--size-4)); gap:var(--size-2);
+  width:clamp(96px,11vw,152px); flex:0 0 auto; align-self:center;
+}
+.execution-progress-track {
+  appearance:none; -webkit-appearance:none; accent-color:var(--execution-progress-color); display:block; width:100%;
+  height:var(--size-4); min-height:0; border:0; padding:0; margin:0;
+  border-radius:var(--radius-pill); overflow:hidden;
+  background:var(--line);
+}
+.execution-progress-track::-webkit-progress-bar {background:var(--line);border-radius:var(--radius-pill);}
+.execution-progress-track::-webkit-progress-value {background:var(--execution-progress-color);border-radius:var(--radius-pill);}
+.execution-progress-track::-moz-progress-bar {background:var(--execution-progress-color);border-radius:var(--radius-pill);}
+.execution-progress-calculation {--execution-progress-color:var(--secondary);color:var(--secondary-text,var(--secondary));}
+.execution-progress-visualization {--execution-progress-color:var(--accent);color:var(--accent);}
+.execution-progress-percentages {display:inline-flex;align-items:baseline;gap:var(--space-1);white-space:nowrap;flex:none;}
+.execution-progress-percent {font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.execution-progress-slash {color:var(--muted);}
 .app-shell:not(.case-open) .user-chip { display:block; max-width:none; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
 #settings-dialog #case-editor-form .field-grid,#settings-dialog #case-editor-form label,#settings-dialog #case-name { width:100%; max-width:none; box-sizing:border-box; }
 
@@ -306,7 +325,7 @@ html[data-ui-mode] .scenario-config-dialog .scenario-preview-context { display:b
 .scenario-config-dialog .scenario-parameter-table th .scenario-column-select input { margin:0; flex:none; }
 .scenario-factor-count[hidden] { display:none!important; }
 @media(max-width:760px) { .scenario-search-settings .scenario-depth-panel,.scenario-search-settings .scenario-category-options,.scenario-search-settings .scenario-search-choices { grid-column:1; grid-row:auto; } }
-.scenario-config-dialog .scenario-factor-actions { display:flex; align-items:center; gap:var(--space-3); }
+.scenario-config-dialog .scenario-factor-actions { display:flex; align-items:center; gap:var(--toolbar-gap); }
 .scenario-config-dialog .scenario-factor-actions .scenario-factor-count { margin:0; flex:1; min-width:0; }
 .scenario-config-dialog .scenario-screening-activity { flex:none; margin:0; }
 .scenario-config-dialog .scenario-screening-activity[hidden] { display:none!important; }
@@ -618,7 +637,7 @@ input[type=number] { -moz-appearance:textfield; appearance:textfield; }
   display:block; width:100%; height:120px; box-sizing:border-box; }
 .live-equipment-card .numeric-equipment-chart-side .live-equipment-controls {
   display:grid; grid-template-columns:repeat(3,var(--control-height)); grid-template-rows:auto;
-  gap:var(--space-1); justify-content:end; width:100%; margin-top:var(--space-1);
+  gap:var(--toolbar-gap); justify-content:end; width:100%; margin-top:var(--space-1);
   grid-column:auto!important; grid-row:auto!important; border-top:1px solid var(--line);
   padding-top:var(--space-2); }
 .live-equipment-card .numeric-equipment-chart-side .live-equipment-controls button {
@@ -841,7 +860,7 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
 /* Event selection toolbar follows the same spacing as other sub-section toolbars. */
 #simulation-event-content {min-width:0;}
 #simulation-event-content .event-selection-toolbar {
-  display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;
+  display:flex; align-items:center; gap:var(--toolbar-gap); flex-wrap:wrap;
   margin:0!important; padding:var(--space-1) 0!important; min-height:var(--control-height);
 }
 #simulation-event-content #event-time-tools:empty {display:none;}
@@ -927,12 +946,12 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
   grid-column:auto!important;grid-row:auto!important;
   display:flex!important;flex-flow:row nowrap!important;
   align-items:center;justify-content:flex-end!important;
-  align-self:center;gap:var(--space-1)!important;flex:0 0 auto;
+  align-self:center;gap:var(--toolbar-gap)!important;flex:0 0 auto;
   width:max-content!important;min-width:0;max-width:100%;height:auto;box-sizing:border-box;
   margin:0!important;padding:0!important;background:transparent;border:0!important;
 }
 .st-equipment-control-dock {
-  display:flex;flex-flow:row nowrap;align-items:center;gap:var(--space-1);
+  display:flex;flex-flow:row nowrap;align-items:center;gap:var(--toolbar-gap);
   width:max-content;box-sizing:border-box;margin:0;padding:0;background:transparent;border:0;
 }
 :is(.live-equipment-card .numeric-equipment-control-dock,.st-equipment-control-dock) > button {
@@ -1247,7 +1266,7 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
 .fold-heading > :is(.fold-tools,.button-row),
 .fold-heading .fold-tools > .button-row {
   display:flex;align-items:center;flex-wrap:wrap;
-  gap:var(--space-2);min-width:0;max-width:100%;
+  gap:var(--toolbar-gap);min-width:0;max-width:100%;
 }
 .fold-heading > :is(.fold-tools,.button-row,select) {order:1;flex:0 1 auto;}
 .fold-heading > :is(.fold-tools,.button-row) > :is(button,details,select),
@@ -1393,7 +1412,7 @@ html[data-ui-mode=basic][data-basic-view=conveyors] #editor-panel > #equipment-s
 }
 .st-subsection.fold-native > summary.st-subsection-header > .fold-tools {
   display:flex;order:1;align-items:center;flex:0 1 auto;flex-wrap:nowrap;
-  gap:var(--space-2);min-width:0;max-width:100%;margin:0 0 0 auto;padding:0;
+  gap:var(--toolbar-gap);min-width:0;max-width:100%;margin:0 0 0 auto;padding:0;
 }
 /* En vista estrecha, se desplaza la barra horizontalmente sin partirla. */
 @media(max-width:900px){

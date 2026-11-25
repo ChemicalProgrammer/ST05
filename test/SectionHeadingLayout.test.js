@@ -157,7 +157,14 @@ test('numerical and 2D headings share the description and progress row without c
     const meta=state.closest('.subsection-playback-meta');
     assert.ok(meta,sectionId+' groups the description and progress in one row');
     const description=meta.querySelector('.subsection-description'),status=state.parentElement;
-    assert.equal(progress.parentElement,status);
+    assert.equal(progress.closest('.subsection-progress-status'),status);
+    const prefix=progressId.replace(/-progress$/,'');
+    const tracks=status.querySelector('.execution-progress-tracks');
+    const percents=status.querySelector('.execution-progress-percentages');
+    assert.deepEqual(Array.from(tracks.querySelectorAll('progress'),bar=>bar.id),[prefix+'-calculation-bar',prefix+'-visualization-bar']);
+    assert.deepEqual(Array.from(percents.querySelectorAll('output'),output=>output.id),[prefix+'-calculation-progress',progressId]);
+    assert.equal(percents.querySelector('.execution-progress-slash').textContent,'/');
+    assert.equal(status.querySelector('#'+prefix+'-execution-time').previousElementSibling,percents);
     assert.equal(status.parentElement,meta);
     assert.equal(section.querySelector('.fold-toggle').getAttribute('aria-controls'),contentId);
     assert.ok(document.getElementById(contentId));

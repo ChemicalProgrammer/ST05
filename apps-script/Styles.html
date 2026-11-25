@@ -97,7 +97,11 @@ form { display: grid; gap: var(--space-3); } summary { cursor: pointer; }
 .section-heading,.equipment-header,.editor-subheading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
 .section-heading { margin-bottom: var(--space-5); } .section-heading p { margin: 0; }
 .eyebrow { color: var(--muted); font-size: var(--font-caption); letter-spacing: var(--tracking-label); font-weight: var(--weight-semibold); margin-bottom: var(--space-2); }
-.button-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.button-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--toolbar-gap); }
+/* Nested groups must not add their own margins or a different internal gap. */
+.button-row > :is(.button-row,.equipment-filters,.equipment-view-tools) {
+  gap:var(--toolbar-gap); margin:0; padding:0;
+}
 .card { min-width: 0; margin: 0; padding: var(--space-5); background: var(--surface); border: var(--border-width) solid var(--line); border-radius: var(--radius-md); }
 .status { color: var(--muted); font-size: var(--font-secondary); padding: var(--space-2) 0; min-height: var(--control-height); }
 html:not([data-ui-mode=basic]) #status { display:none; }

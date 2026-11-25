@@ -589,3 +589,12 @@ Validación: 7/7 pruebas de EquipmentTable (incluidas vista previa de arrastre a
 `FocusPresentation.html` centraliza la presentación del foco para Basic y Advance, incluido el conveyor interactivo del inicio y del estado de conexión. El atributo `data-focus-rings` se activa con acciones reales de teclado (incluye Shift+Tab) y se desactiva al usar el puntero, perder el foco de la ventana, cambiar la visibilidad o restaurar desde caché. Solo oculta el contorno visual involuntario y los resaltados exclusivamente de foco del header; no desenfoca controles, no intercepta eventos, no altera `aria-pressed` ni los estados de selección o edición. Las reglas `:focus-visible` permanecen disponibles para navegación con teclado. No modifica la animación ni comandos del conveyor de marca.
 
 Validación: 3/3 casos focalizados de FocusPresentation ejecutados en arnés de eventos JavaScript aislado; conservan foco/valor/estado, restablecen el contorno con navegación de teclado y verifican la política CSS. Pendiente la suite completa de Node/JSDOM y la reproducción real del cambio de ventana en el navegador.
+
+
+### Espaciado uniforme de barras de herramientas y avance doble de ejecución
+
+`--toolbar-gap: var(--space-2)` (8 px por defecto) centraliza el espacio entre botones en header, subsecciones, grupos anidados, tarjetas, simulaciones numérica/2D, Registro, escenarios, casos, importación, diálogos y asistente. Se conservan los tamaños de controles compactos y los comportamientos de ajuste/scroll. El inset derecho del header usa `--workspace-toolbar-inset` = gutter exterior + inset de subsección + borde; alinea sus acciones con las barras de subsecciones de la vista principal. El catálogo de diseño muestra el token reutilizable.
+
+Las dos simulaciones comparten dos tracks nativos de avance, cálculo en secundario y visualización en primario, seguidos de porcentajes cálculo / visualización y el reloj real existente. Los IDs de salida se conservan. Se actualizan con los valores previamente calculados; el motor numérico puede tener distinto avance de cálculo y visualización y el motor 2D independiente calcula sobre el mismo horizonte que dibuja. No se cambia el motor, planificación ni persistencia de resultados. Reset e invalidación restablecen el avance. 
+
+Validación: 4/4 casos focalizados del nuevo test ToolbarAndProgress en arnés JavaScript aislado, incluyendo CSS/estructura, independencia del cálculo numérico y reset y avance 2D. Pendientes suite completa Node/JSDOM y revisión visual de alineación y tracks en el navegador real.

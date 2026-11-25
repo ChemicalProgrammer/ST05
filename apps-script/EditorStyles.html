@@ -76,7 +76,7 @@ html[data-equipment-layout=split] #equipment-list .equipment-card .equipment-hea
 .equipment-card { cursor:pointer; }
 .equipment-card:focus-visible { outline:var(--focus-width) solid var(--accent); outline-offset:var(--space-1); }
 
-.equipment-filters { display:inline-flex; align-items:center; gap:var(--space-2); padding:0; margin:0; }
+.equipment-filters { display:inline-flex; align-items:center; gap:var(--toolbar-gap); padding:0; margin:0; }
 .equipment-fields > .equipment-grid { gap:var(--space-3); }
 .equipment-fields > .equipment-grid > label { margin:0; }
 .equipment-fields > .reliability-controls { margin-block:var(--space-3) 0; }
@@ -88,7 +88,7 @@ html[data-equipment-layout=split] #equipment-list .equipment-card .equipment-hea
 
 /* Advance: compact, editable worksheet using the existing equipment inputs.
    The canonical cards remain mounted for validation, export and autosave. */
-.equipment-view-tools { display:inline-flex; align-items:center; gap:var(--space-1); flex-shrink:0; }
+.equipment-view-tools { display:inline-flex; align-items:center; gap:var(--toolbar-gap); flex-shrink:0; }
 .equipment-view-tools[hidden],#equipment-table-view[hidden],#equipment-table-view [hidden] { display:none!important; }
 html:not([data-ui-mode=advance]) #equipment-view-tools { display:none!important; }
 #equipment-section[data-equipment-editor-view=table] :is(#equipment-list,#basic-conveyor-layout) { display:none!important; }

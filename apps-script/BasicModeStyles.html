@@ -10,7 +10,7 @@ html:not([data-ui-mode=advance]) :is(#simulation-json-section,.raw-viewer:has(> 
 html:not([data-ui-mode=advance]) :is(#toggle-gemini,#gemini-chat-view,#settings-tab-gemini,#settings-page-gemini) { display:none!important; }
 html[data-ui-mode=basic] .app-shell.case-open.assistant-open { padding-right:0; }
 .topbar { height:auto; min-height:var(--header-height); flex-wrap:wrap; padding-top:var(--space-3); padding-bottom:var(--space-3); }
-#basic-section-row { display:flex; align-items:center; gap:var(--space-3); order:3; flex-basis:100%; min-width:0; }
+#basic-section-row { display:flex; align-items:center; gap:var(--toolbar-gap); order:3; flex-basis:100%; min-width:0; }
 #basic-navigation { display:flex; gap:var(--space-1); flex-wrap:wrap; flex:1; min-width:0; }
 #basic-section-row > .header-case-actions { flex-shrink:0; margin-left:auto; }
 #basic-case-actions { display:flex; align-items:center; }
@@ -45,7 +45,7 @@ html[data-ui-mode=basic][data-basic-view=vgraph] #results-body > :not(#line-perf
 html[data-ui-mode=basic][data-basic-view=vgraph] #line-performance > :not(#vgraph-profile) { display:none !important; }
 html[data-ui-mode=basic][data-basic-view=vgraph] #line-performance { margin-top:0; border-top:0; }
 html[data-equipment-layout=split][data-basic-view=conveyors] { scrollbar-gutter:stable; }
-html[data-equipment-layout=split] #equipment-list .equipment-header .button-row { flex-wrap:nowrap; gap:var(--space-1); }
+html[data-equipment-layout=split] #equipment-list .equipment-header .button-row { flex-wrap:nowrap; gap:var(--toolbar-gap); }
 #equipment-list .equipment-header .icon-button { --icon-button-size:var(--size-28); }
 /* Keep the setup controls on one compact row and use identical field tracks. */
 .topbar { padding-top:var(--space-2); padding-bottom:var(--space-2); }

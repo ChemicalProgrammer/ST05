@@ -51,6 +51,7 @@ test('Playback numeric cards refresh within 500ms independently of recorded samp
     now=elapsed;next();
     assert.equal(element('metric-time').seconds,elapsed/1000,'Virtual clock updates independently of samples');
     assert.equal(element('playback-progress').textContent,(elapsed/100).toFixed(1)+'%');
+    assert.equal(element('playback-visualization-bar').value,elapsed/100);
     assert.equal(element('metric-output').textContent,'10','No synthetic output between samples');
     assert.equal(element('metric-buffer').textContent,'5');
     assert.equal(element('playback-status').textContent,'Playing');

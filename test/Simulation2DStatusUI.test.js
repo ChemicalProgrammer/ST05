@@ -231,7 +231,7 @@ test('2D machine controls share numeric control dock dimensions and emergency ic
   const src=read('apps-script/Simulation2D.html'),numeric=read('apps-script/ClientPlayback.html'),ui=read('apps-script/UiStandards.html');
   assert.ok(src.includes("group.className='simulation2d-machine-actions st-equipment-control-dock'"));
   assert.ok(numeric.includes("controlDock.classList.add('numeric-equipment-control-dock','st-equipment-control-dock')"));
-  assert.match(ui,/\.st-equipment-control-dock\s*\{[^}]*gap:var\(--space-1\)/);
+  assert.match(ui,/\.st-equipment-control-dock\s*\{[^}]*gap:var\(--toolbar-gap\)/);
   assert.match(ui,/\.st-equipment-control-dock\) > button\s*\{[^}]*width:var\(--control-height\)/);
   assert.ok(src.includes("['EMERGENCY_STOP','warning','Emergency stop']"));
   assert.ok(numeric.includes("['emergency','warning',"));

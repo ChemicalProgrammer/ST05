@@ -20,6 +20,8 @@
   --border-width: 1px; --focus-width: 2px;
   --sidebar-width: 208px; --sidebar-collapsed: 60px; --header-height: 56px;
   --control-height: 34px; --icon-size: 16px; --dialog-width: 660px;
+  /* One gap for toolbar actions, including nested button groups. */
+  --toolbar-gap: var(--space-2);
   /* One status/evaluation pill in DOM cards and the 2D canvas. Values are
      physical pixels so canvas zoom never changes the visible badge size. */
   --status-pill-font-size: 11px; --status-pill-height: 20px;
@@ -39,6 +41,8 @@
   --subsection-header-shade: color-mix(in srgb, var(--secondary) 12%, var(--surface));
   --subsection-header-gradient: linear-gradient(180deg, var(--subsection-header-shade) 0%, var(--surface) 100%);
   --subsection-header-inset: var(--subsection-padding);
+  /* Align right-hand header actions with the workspace's subsection tools. */
+  --workspace-toolbar-inset: calc(var(--workspace-gutter) + var(--subsection-header-inset) + var(--border-width));
   /* Subsección B keeps the same horizontal inset and uses a compact header. */
   --subsection-b-header-padding-block: var(--space-2);
   --subsection-b-heading-gap: calc(var(--space-1) * .5);

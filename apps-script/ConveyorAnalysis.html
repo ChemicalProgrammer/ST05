@@ -25,6 +25,21 @@
 #conveyor-analysis-body { min-width:0; max-width:100%; overflow-y:auto; overflow-x:hidden; }
 #conveyor-analysis-body > .st-subsection { min-width:0; max-width:100%; margin:0; padding:var(--subsection-padding); }
 #conveyor-analysis-body .st-subsection > .fold-content { display:grid; gap:var(--space-3); min-width:0; }
+/* Closed native Subsection B has no empty content inset or interior divider. */
+#conveyor-analysis-body > .st-subsection:not([open]) { padding-block-end:0; }
+#conveyor-analysis-body > .st-subsection:not([open]) > .fold-content { display:none; }
+#conveyor-analysis-body > .st-subsection:not([open]) > summary.st-subsection-header {
+  border-block-end:0;
+  border-radius:calc(var(--radius-md) - var(--border-width));
+}
+#conveyor-analysis-body .analysis-section-status {
+  display:inline-flex;align-items:center;gap:var(--space-2);white-space:nowrap;
+  font-size:var(--font-secondary);font-weight:var(--weight-medium);color:var(--muted);
+}
+#conveyor-analysis-body .analysis-section-status .sheet-import-row-status { margin:0; }
+#conveyor-analysis-body .analysis-section-status .icon { width:18px;height:18px;stroke-width:2.9;stroke-linecap:round; }
+#conveyor-analysis-body .worksheet-format-name {display:block;font-size:var(--font-secondary);font-weight:var(--weight-regular);color:var(--muted);overflow-wrap:anywhere;}
+#conveyor-analysis-body .conveyor-value-not-applicable {color:var(--muted);cursor:help;}
 #conveyor-analysis-body .table-scroll { min-width:0;max-width:100%;width:100%;overflow-x:auto;overflow-y:visible; }
 /* A consistent column model prevents long parameters or diagnostic text
    from expanding the table. The wrapper scrolls only for genuinely wide
@@ -178,6 +193,7 @@ window.STConveyorAnalysis=(function(){
     return {equipmentId:model?.id||null,name:model?.name||name||'Conveyor',lineIndex:context.index,
       status:worksheet.geometry.status,statusReason:source.resolutionError||worksheet.geometry.statusReason,
       configuration,geometry:worksheet.geometry,
+      sectionProgress:sectionProgress(worksheet,context).map(spec=>({section:spec.key,title:spec.title[0],...spec.progress})),
       common:worksheet.common.map(([ref,label,unit,value,formula,governing],i)=>({
         ...jsonRow(ref,label,unit,value,formula,[parameterHelp(trace.commonKeys[i],'en'),trace.describe(trace.commonKeys[i])].filter(Boolean).join('\n\n'),Boolean(governing?.partial)),
         governingFormat:governing?.name||null
@@ -650,6 +666,92 @@ window.STConveyorAnalysis=(function(){
     return {describe,commonKeys:commonTraceKeys.slice()};
   }
 
+  // Completeness is deliberately independent of the engineering verdict:
+  // a fully calculated but inadequate design is COMPLETE and FAIL.
+  const analysisSections=[
+    {key:'package',title:['Package Details','Datos del envase'],description:['Physical package length used for transport, occupancy and sensor passage.','Longitud física del envase utilizada para transporte, población y paso por sensores.']},
+    {key:'upstream',title:['Upstream Machine Details','Datos de máquina anterior'],description:['Nominal output, discharge pitch, velocity, start-up and residual packages after a stop.','Flujo nominal, pitch y velocidad de descarga, arranque y envases residuales al paro.']},
+    {key:'downstream',title:['Downstream Machine Details','Datos de máquina siguiente'],description:['Infeed demand, pitch and ramp-up behavior that determine downstream consumption.','Demanda de entrada, pitch y rampa de arranque que determinan el consumo aguas abajo.']},
+    {key:'speed',title:['Conveyor Details - Speed Selection','Velocidades y población del conveyor'],description:['Active belt speed, zone speed factors and the resulting package population.','Velocidad de banda activa, factores por zona y población resultante de envases.']},
+    {key:'sensors',title:['Sensor Information','Información de sensores'],description:['Package passage time and Back-up blocked/clear delays used by the control.','Tiempo de paso del envase y retardos de bloqueo/liberación de Back-up utilizados por el control.']},
+    {key:'overflow',title:['Overflow Space Needed','Reserva de overflow requerida'],description:['Required space for residual and in-transit packages during an upstream stop.','Espacio requerido para envases residuales y en tránsito durante un paro aguas arriba.']},
+    {key:'recovery',title:['Recovery Position (Lrec)','Posición de recuperación (Lrec)'],description:['Restart travel times, queue consumption and the remaining useful accumulation margin.','Tiempos de tránsito al rearranque, consumo de cola y margen de acumulación útil restante.']},
+    {key:'accumulation',title:['Conveyor Accumulation Time (Tacc)','Tiempo de acumulación (Tacc)'],description:['Estimated anti-starve and anti-block protection provided by the selected accumulation zone.','Protección estimada anti-starve y anti-block de la zona de acumulación seleccionada.']},
+    {key:'infeed',title:['Recommended Downstream Infeed Speed','Velocidad recomendada de entrada'],description:['Minimum recommended belt speed from downstream input rate, infeed pitch and overspeed margin.','Velocidad mínima recomendada a partir del flujo de entrada siguiente, pitch y margen de sobrevelocidad.']}
+  ];
+  const commonSection={key:'geometry',title:['Common Geometry','Geometría común'],description:['Installed geometry, required overflow, selected sensor positions and recovery margin across applicable formats.','Geometría instalada, overflow requerido, posiciones de sensores seleccionadas y margen de recuperación entre formatos.']};
+  const notesSection={key:'notes',title:['Calculation notes','Notas de cálculo'],description:['Input definitions and engineering assumptions.','Definiciones de entradas y supuestos de ingeniería.']};
+  const localized=(pair,language)=>pair[language==='es'?1:0];
+  function notApplicableReason(worksheet,key,value,profile){
+    if(Number.isFinite(value))return null;
+    const g=worksheet.geometry;
+    if(key==='RECOVERY_POINT'&&!g.recovery.partial&&Number.isFinite(g.recovery.value)&&g.recovery.value<0)
+      return ['No recovery point exists because the available accumulation is insufficient; this is an evaluated failure, not missing data.','No existe punto de recuperación porque la acumulación disponible es insuficiente; es un fallo evaluado, no un dato faltante.'];
+    // Do not demand data for absent runout zones when belt speed comes from
+    // a direct input or a target rather than the cascade of zone factors.
+    if(profile&&(profile.speedMode==='MANUAL'||profile.targetPopulation!=null||profile.targetOverspeed!=null)){
+      const absentDischarge=g.discharge===0&&g.coding===0&&['L33','L34','L35'].includes(key);
+      const absentCoding=g.coding===0&&['L36','L37','L38','L39'].includes(key);
+      if(absentDischarge||absentCoding)return ['Not required: this runout segment is absent and the active speed source does not depend on its factor.','No requerido: este tramo no existe y la fuente de velocidad activa no depende de su factor.'];
+    }
+    return null;
+  }
+  function summarizeSectionValues(cells,emptyStatus='MISSING'){
+    const applicable=cells.filter(cell=>!cell.notApplicable),resolved=applicable.filter(cell=>Number.isFinite(cell.value)&&!cell.partial).length;
+    const partial=applicable.filter(cell=>Number.isFinite(cell.value)&&cell.partial).length;
+    const unresolved=applicable.length-resolved-partial;
+    return {status:!applicable.length?(cells.length?'NOT_APPLICABLE':emptyStatus):resolved===applicable.length?'COMPLETE':resolved+partial>0?'PENDING':'MISSING',
+      total:applicable.length,resolved,partial,unresolved,notApplicable:cells.length-applicable.length,
+      pending:applicable.filter(cell=>!Number.isFinite(cell.value)||cell.partial).map(cell=>({parameter:cell.label,format:cell.format||null,partial:Boolean(Number.isFinite(cell.value)&&cell.partial)}))};
+  }
+  function sectionProgress(worksheet,context={}){
+    const profiles=worksheet.profiles;
+    const geometryCells=worksheet.common.map(([,label,,value,,source],i)=>({
+      key:commonTraceKeys[i],label,value,partial:Boolean(source?.partial),notApplicable:notApplicableReason(worksheet,commonTraceKeys[i],value)
+    }));
+    const noApplicable=Boolean(context.designProfiles?.length)&&context.designProfiles.every(p=>p.models?.[context.index]?.processData?.productApplies===false);
+    const sections=rows.map(([title,entries],i)=>{
+      const spec=analysisSections[i],cells=entries.filter(Array.isArray).flatMap(([ref,label,,,read])=>profiles.map(p=>{
+        const value=read(p),key='L'+ref;
+        return {key,label,format:p.name,value,notApplicable:notApplicableReason(worksheet,key,value,p)};
+      }));
+      return {...spec,progress:summarizeSectionValues(cells,noApplicable?'NOT_APPLICABLE':'MISSING')};
+    });
+    return [{...commonSection,progress:summarizeSectionValues(geometryCells)},...sections,
+      {...notesSection,progress:{status:'INFORMATION',total:0,resolved:0,partial:0,unresolved:0,notApplicable:0,pending:[]}}];
+  }
+  function createSectionStatus(progress,language){
+    const es=language==='es',tr=(a,b)=>es?b:a;
+    const labels={
+      COMPLETE:tr('Complete','Completo'),PENDING:tr('Pending','Pendiente'),MISSING:tr('Missing','Sin datos'),
+      NOT_APPLICABLE:tr('Not applicable','No aplica'),INFORMATION:tr('Information','Información')
+    };
+    const states={COMPLETE:['ok','check','✓'],PENDING:['warning','warning','!'],MISSING:['error','x','×'],NOT_APPLICABLE:['info','info','i'],INFORMATION:['info','info','i']};
+    const [tone,icon,fallback]=states[progress.status];
+    const host=document.createElement('span');host.className='analysis-section-status';
+    host.dataset.completeness=progress.status;
+    const marker=document.createElement('span');marker.className='sheet-import-row-status';marker.dataset.status=tone;
+    marker.setAttribute('aria-hidden','true');
+    if(window.STIcons?.svg)marker.innerHTML=window.STIcons.svg(icon);else marker.textContent=fallback;
+    const label=document.createElement('span');label.textContent=labels[progress.status];
+    const message=[labels[progress.status]];
+    if(progress.total){
+      message.push(tr('Calculated values: ','Valores calculados: ')+progress.resolved+'/'+progress.total);
+      if(progress.partial)message.push(tr('Partial results: ','Resultados parciales: ')+progress.partial);
+      if(progress.unresolved)message.push(tr('Unresolved values: ','Valores sin resolver: ')+progress.unresolved);
+      if(progress.notApplicable)message.push(tr('Not required: ','No requeridos: ')+progress.notApplicable);
+    }else if(progress.status==='MISSING')message.push(tr('No resolved format data for this section.','No hay datos de formato resueltos en esta sección.'));
+    if(progress.pending?.length){
+      const limit=10;
+      message.push(tr('Review:','Revisar:'));
+      progress.pending.slice(0,limit).forEach(item=>message.push('• '+(item.format?item.format+' · ':'')+item.parameter+(item.partial?tr(' (partial)',' (parcial)'):'')));
+      if(progress.pending.length>limit)message.push(tr('Additional unresolved values: ','Otros valores pendientes: ')+(progress.pending.length-limit));
+    }
+    if(progress.status!=='INFORMATION')message.push(tr('Calculation completeness only; separate engineering PASS/FAIL is unchanged.','Solo indica datos calculados; la evaluación técnica PASS/FAIL es independiente.'));
+    host.title=message.join('\n');host.setAttribute('aria-label',host.title);host.append(marker,label);
+    return host;
+  }
+
   function open(name,context){
     if(!context)return;
     const dialog=document.getElementById('conveyor-analysis-dialog');
@@ -660,7 +762,9 @@ window.STConveyorAnalysis=(function(){
     currentExport={name,context,worksheet};
     const exportAll=document.getElementById('conveyor-analysis-export-all');
     if(exportAll)exportAll.disabled=!context.source?.activeProfile?.models?.some(conveyorItem);
-    const trace=createPendingTrace(worksheet,context,document.documentElement.lang==='es'?'es':'en');
+    const language=document.documentElement.lang==='es'?'es':'en';
+    const trace=createPendingTrace(worksheet,context,language);
+    const sections=sectionProgress(worksheet,context);
     body.replaceChildren();
     document.getElementById('conveyor-analysis-title').textContent='Conveyor Analysis Tool · '+name;
     function make(parent,tag,text){
@@ -671,7 +775,7 @@ window.STConveyorAnalysis=(function(){
     }
     // Encabezados breves: la descripción completa de cada formato se muestra
     // fuera de la tabla, para no forzar anchuras de columnas innecesarias.
-    function table(title,headers,verdict,profiles){
+    function table(spec,headers,verdict,profiles){
       const tools=[];
       if(verdict){
         const badge=document.createElement('span');
@@ -683,11 +787,10 @@ window.STConveyorAnalysis=(function(){
         badge.title=verdict.statusReason;
         tools.push(badge);
       }
-      const description=profiles?.length?(profiles.length===1
-        ?'Format: '+profiles[0].name
-        :profiles.map((profile,index)=>'Value '+(index+1)+': '+profile.name).join(' · ')):
-        'Installed geometry and recovery margin across applicable formats.';
-      const group=window.STSubsection.create({title,description,variant:'B',native:true,open:true,tools});
+      tools.push(createSectionStatus(spec.progress,language));
+      const group=window.STSubsection.create({title:localized(spec.title,language),description:localized(spec.description,language),variant:'B',native:true,open:true,tools});
+      group.section.dataset.analysisGroup=spec.key;
+      group.section.dataset.completeness=spec.progress.status;
       body.append(group.section);
       const heading=group.title;
       heading.id='conveyor-analysis-section-'+body.children.length;
@@ -709,7 +812,11 @@ window.STConveyorAnalysis=(function(){
       headers.forEach((header,index)=>{
         const cell=make(row,'th',header);
         cell.scope='col';
-        if(index>0&&index<headers.length-1)cell.className='numeric';
+        if(index>0&&index<headers.length-1){
+          cell.className='numeric';
+          const profile=profiles?.[index-1];
+          if(profile)make(cell,'span',profile.name).className='worksheet-format-name';
+        }
       });
       return make(element,'tbody');
     }
@@ -728,39 +835,60 @@ window.STConveyorAnalysis=(function(){
       cell.setAttribute('aria-label',cell.textContent+' · '+tip);
       cell.classList.add(!Number.isFinite(value)?'conveyor-value-pending':partial?'conveyor-value-partial':'conveyor-value-diagnostic');
     }
-    const common=table('Common Geometry',['Parameter','Value','Unit'],worksheet.geometry);
+    function renderNotApplicable(cell,reason){
+      cell.textContent=language==='es'?'No aplica':'N/A';
+      cell.classList.add('conveyor-value-not-applicable');
+      cell.title=localized(reason,language);cell.tabIndex=0;
+      cell.setAttribute('aria-label',cell.textContent+' · '+cell.title);
+    }
+    const common=table(sections[0],['Parameter','Value','Unit'],worksheet.geometry);
     worksheet.common.forEach(([ref,label,unit,value,,source],index)=>{
       const element=row(common,ref,label,trace.commonKeys[index]);
       const output=make(element,'td');
       output.className='numeric';
       make(element,'td',unit).className='metric-unit';
-      renderValue(output,value,trace.describe(trace.commonKeys[index]),Boolean(source?.partial));
+      const reason=notApplicableReason(worksheet,trace.commonKeys[index],value);
+      if(reason)renderNotApplicable(output,reason);
+      else renderValue(output,value,trace.describe(trace.commonKeys[index]),Boolean(source?.partial));
       if(!output.title)output.title=parameterHelp(trace.commonKeys[index]);
     });
-    if(!worksheet.profiles.length)make(body,'p','No applicable formats.');
-    for(const [title,entries] of worksheet.profiles.length?rows:[]){
-      const formats=table(title,['Parameter',...worksheet.profiles.map((profile,index)=>
-        worksheet.profiles.length===1?'Value':'Value '+(index+1)),'Unit'],null,worksheet.profiles);
+    if(!worksheet.profiles.length){
+      const excluded=sections[1].progress.status==='NOT_APPLICABLE';
+      const note=make(body,'p',excluded?(language==='es'?'Ningún formato aplica a este conveyor.':'No format applies to this conveyor.'):(language==='es'?'No hay datos de formato resueltos para el análisis.':'No resolved format data for this analysis.'));
+      note.className='chart-note';
+    }
+    for(const [sectionIndex,[title,entries]] of rows.entries()){
+      const spec=sections[sectionIndex+1],columns=worksheet.profiles.length?worksheet.profiles:[null];
+      const formats=table(spec,['Parameter',...columns.map((profile,index)=>
+        columns.length===1?'Value':'Value '+(index+1)),'Unit'],null,worksheet.profiles);
       for(const entry of entries){
         if(typeof entry==='string'){
           const heading=make(make(formats,'tr'),'th',entry);
-          heading.colSpan=worksheet.profiles.length+2;
+          heading.colSpan=columns.length+2;
           heading.scope='rowgroup';
           continue;
         }
         const [ref,label,unit,,read]=entry;
         const element=row(formats,'L'+ref,label);
         if(ref>=33&&ref<=41)element.dataset.zone=ref<=35?'discharge':ref<=38?'coding':'overflow';
-        worksheet.profiles.forEach((profile,index)=>{
-          const cell=make(element,'td');
-          cell.className='numeric';
-          renderValue(cell,read(profile),valueDiagnostic(worksheet,trace,'L'+ref,index));
+        columns.forEach((profile,index)=>{
+          const cell=make(element,'td');cell.className='numeric';
+          if(!profile){
+            if(spec.progress.status==='NOT_APPLICABLE')renderNotApplicable(cell,['No format applies to this conveyor.','Ningún formato aplica a este conveyor.']);
+            else renderValue(cell,undefined,language==='es'?'No se resolvieron los datos de formato. Revisa equipos y formatos.':'Format data are unresolved. Review equipment and formats.');
+          }else{
+            const value=read(profile),reason=notApplicableReason(worksheet,'L'+ref,value,profile);
+            if(reason)renderNotApplicable(cell,reason);
+            else renderValue(cell,value,valueDiagnostic(worksheet,trace,'L'+ref,index));
+          }
           if(!cell.title)cell.title=parameterHelp('L'+ref);
         });
         make(element,'td',unit).className='metric-unit';
       }
     }
-    const notes=window.STSubsection.create({title:'Calculation notes',description:'Input definitions and engineering assumptions.',variant:'B',native:true,open:true});
+    const noteSpec=sections[sections.length-1];
+    const notes=window.STSubsection.create({title:localized(noteSpec.title,language),description:localized(noteSpec.description,language),variant:'B',native:true,open:true,tools:[createSectionStatus(noteSpec.progress,language)]});
+    notes.section.dataset.analysisGroup=noteSpec.key;notes.section.dataset.completeness=noteSpec.progress.status;
     body.append(notes.section);
     make(notes.body,'p','Time to First Package After Restart is configured on the conveyor card. Positions are measured from the conveyor entry.').className='chart-note';
     make(notes.body,'p','Upstream Discharge Velocity (AF) is an optional measured value. Otherwise it is calculated from nominal machine output and discharge pitch. Overflow requires conveyor population below 100%.').className='chart-note';
@@ -792,6 +920,6 @@ window.STConveyorAnalysis=(function(){
     button.addEventListener('click',event=>{event.stopPropagation();openAnalysis();});
     paintEvaluationButton(button,null);return button;
   }
-  return {open,close,calculate,resolveProfiles,worksheetContext,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton,createPendingTrace,buildEvaluationExport,downloadEvaluation,profilePopulationHelp,parameterHelp};
+  return {open,close,calculate,resolveProfiles,worksheetContext,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton,createPendingTrace,buildEvaluationExport,downloadEvaluation,profilePopulationHelp,parameterHelp,sectionProgress,summarizeSectionValues};
 })();
 </script>

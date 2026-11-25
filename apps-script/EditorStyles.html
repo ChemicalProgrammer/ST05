@@ -61,7 +61,8 @@ html[data-equipment-layout=split] #equipment-list .equipment-card .equipment-hea
 #batch-results .report-table { overflow:auto; }
 #batch-results table { min-width:var(--size-500); }
 
-#equipment-inspector label { position:relative; padding-right:var(--space-5); }
+#equipment-inspector label { position:relative; }
+#equipment-inspector label:has(> .parameter-help) { padding-inline-end:var(--space-5); }
 #equipment-inspector .format-zone-setup { background:transparent; padding:var(--space-3) 0; border:0; border-top:var(--border-width) solid var(--line); }
 #equipment-inspector textarea { font-family:var(--font-mono); }
 .parameter-help { position:absolute; right:0; top:0; font-weight:var(--weight-regular); }

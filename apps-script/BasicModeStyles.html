@@ -110,7 +110,16 @@ html[data-ui-mode=basic] #simulation-event-home #control-events { display:none !
 }
 
 html[data-equipment-layout=split] .basic-conveyor-worksheet {
- display:grid; grid-template-columns:minmax(0,1fr); gap:var(--space-3); align-items:start;
+ display:grid; grid-template-columns:minmax(0,1fr); gap:var(--field-gap); align-items:start;
+}
+html[data-equipment-layout=split] #basic-conveyor-panel #equipment-inspector .equipment-fields > .format-zone-setup {
+ margin-block-start:var(--field-gap);
+}
+html[data-equipment-layout=split] #basic-conveyor-panel #equipment-inspector .equipment-fields > .equipment-grid:not(.reliability-controls) {
+ gap:var(--field-gap);align-items:end;
+}
+html[data-equipment-layout=split] #basic-conveyor-panel #equipment-inspector .equipment-grid > label:not(.st-checkbox-card) {
+ margin:0;padding:0;gap:var(--space-2);min-width:0;
 }
 html[data-equipment-layout=split] :is(.basic-worksheet-group,.basic-conveyor-result-column) {
  display:grid; gap:var(--space-3); min-width:0; margin:0;
@@ -118,11 +127,19 @@ html[data-equipment-layout=split] :is(.basic-worksheet-group,.basic-conveyor-res
  border-radius:var(--radius-md); background:var(--surface);
 }
 html[data-equipment-layout=split] .basic-worksheet-group {
- grid-template-columns:minmax(0,1fr);
+ grid-template-columns:minmax(0,1fr);gap:var(--field-gap);align-items:end;
 }
-html[data-equipment-layout=split] .basic-worksheet-group h4 { grid-column:1/-1; margin:0; }
-html[data-equipment-layout=split] .basic-worksheet-group label {
- display:grid; align-content:space-between; gap:var(--space-1); min-width:0;
+html[data-equipment-layout=split] .basic-worksheet-group h4 { grid-column:1/-1; margin:0;align-self:start; }
+html[data-equipment-layout=split] #basic-conveyor-panel .basic-worksheet-group > label {
+ display:grid;grid-template-rows:auto var(--control-height);align-content:end;gap:var(--space-2);
+ min-width:0;margin:0;padding:0;align-self:end;
+}
+html[data-equipment-layout=split] #basic-conveyor-panel .basic-worksheet-group > label > :is(input:not([type=checkbox]),select,output,.switchable-value) {
+ width:100%;min-width:0;height:var(--control-height);min-height:var(--control-height);box-sizing:border-box;margin:0;
+}
+html[data-equipment-layout=split] #basic-conveyor-panel .basic-worksheet-group .switchable-value {align-items:center;}
+html[data-equipment-layout=split] #basic-conveyor-panel .basic-worksheet-group .switchable-value > input[type=number] {
+ width:0;flex:1 1 0;min-width:0;box-sizing:border-box;
 }
 html[data-equipment-layout=split] .basic-worksheet-group :is(input:not([type=checkbox]),select) {
  width:100%; min-width:0; min-height:var(--control-height);

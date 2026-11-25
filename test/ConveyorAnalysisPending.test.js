@@ -28,7 +28,7 @@ function harness(){
   w.SimulatorEngine={productPackSize:f=>f.bottlesPerCase};
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
   w.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  w.eval(script('Subsection'));w.eval(script('ConveyorAnalysis'));
+  w.eval(script('Icons'));w.eval(script('Subsection'));w.eval(script('ConveyorAnalysis'));
   return {w,api:w.STConveyorAnalysis,body:w.document.getElementById('conveyor-analysis-body'),close:()=>w.close()};
 }
 test('each pending result has its own dependency trace and terminal input source',()=>{
@@ -211,5 +211,73 @@ test('manual geometry sources keep the required overflow independent and report 
     assert(all.every(row=>!/\b[FLDEIK]\d+\b/.test(row.title)));
     const badge=h.body.querySelector('.conveyor-analysis-verdict');
     assert(badge.classList.contains('is-fail'));assert.equal(badge.style.backgroundColor,'');
+  }finally{h.close();}
+});
+
+test('subsection completeness is independent of the engineering verdict and visible when collapsed',()=>{
+  const h=harness();try{
+    const profile=fixture('Complete format');
+    profile.models[1].processData.geometry.lactMm=500;
+    profile.zones[1].primeSensorPositionMm=-500;
+    const ctx=context([profile]),worksheet=h.api.calculate(ctx);
+    assert.equal(worksheet.geometry.status,'FAIL');
+    const specs=h.api.sectionProgress(worksheet,ctx);
+    assert.equal(specs.find(s=>s.key==='geometry').progress.status,'COMPLETE');
+    h.api.open('belt',ctx);
+    const groups=[...h.body.querySelectorAll('details[data-analysis-group]')];
+    assert.equal(groups.length,11);
+    assert(groups.every(group=>group.querySelector('summary .analysis-section-status .sheet-import-row-status svg')));
+    assert.equal(groups[0].querySelector('.conveyor-analysis-verdict').textContent,'FAIL');
+    assert.equal(groups[0].dataset.completeness,'COMPLETE');
+    groups[0].open=false;
+    assert.equal(groups[0].querySelector('summary .analysis-section-status').dataset.completeness,'COMPLETE');
+    assert(groups.every(group=>group.querySelector('.subsection-description').textContent.length>15));
+    assert(groups.every(group=>!group.querySelector('.subsection-description').textContent.startsWith('Format:')));
+    assert.equal(h.body.querySelector('[data-analysis-group="package"] .worksheet-format-name').textContent,'Complete format');
+    const report=h.api.buildEvaluationExport(ctx);
+    assert.equal(report.evaluations[0].sectionProgress.find(s=>s.section==='geometry').status,'COMPLETE');
+  }finally{h.close();}
+});
+test('pending and missing sections identify their unresolved parameters and formats',()=>{
+  const h=harness();try{
+    const full=fixture('Format A'),partial=fixture('Format B',{missingFirstPackage:true});
+    const ctx=context([full,partial]);
+    h.api.open('belt',ctx);
+    const recovery=h.body.querySelector('[data-analysis-group="recovery"]');
+    assert.equal(recovery.dataset.completeness,'PENDING');
+    const indicator=recovery.querySelector('.analysis-section-status');
+    assert.match(indicator.title,/Format B/);
+    assert.match(indicator.title,/Time for Upstream Machine to Make Packages in Process/);
+    assert.equal(indicator.querySelector('.sheet-import-row-status').dataset.status,'warning');
+    const missing=fixture('Missing package length');
+    delete missing.zones[1].engineering.input.packageLengthMm;delete missing.zones[1].productLengthMm;
+    h.api.open('belt',context([missing]));
+    assert.equal(h.body.querySelector('[data-analysis-group="package"]').dataset.completeness,'MISSING');
+    assert.equal(h.body.querySelector('[data-analysis-group="package"] .sheet-import-row-status').dataset.status,'error');
+    h.api.open('belt',{...context([full]),designProfiles:[]});
+    assert.equal(h.body.querySelectorAll('details[data-analysis-group]').length,11);
+    assert.equal(h.body.querySelector('[data-analysis-group="package"]').dataset.completeness,'MISSING');
+    const excluded=fixture('Excluded');excluded.models[1].processData.productApplies=false;
+    h.api.open('belt',context([excluded]));
+    assert.equal(h.body.querySelector('[data-analysis-group="package"]').dataset.completeness,'NOT_APPLICABLE');
+  }finally{h.close();}
+});
+test('unused segments do not demand additional inputs and labels are bilingual',()=>{
+  const h=harness();try{
+    const profile=fixture();
+    profile.models[1].processData.geometry.actualDischargeMm=0;
+    profile.models[1].processData.geometry.actualCodingMm=0;
+    delete profile.zones[1].engineering.input.conveyorSpeedFactorPercent;
+    delete profile.zones[1].engineering.input.codingSpeedFactorPercent;
+    const ctx=context([profile]),worksheet=h.api.calculate(ctx);
+    const speed=h.api.sectionProgress(worksheet,ctx).find(s=>s.key==='speed');
+    assert.equal(speed.progress.status,'COMPLETE');
+    assert(speed.progress.notApplicable>0);
+    h.w.document.documentElement.lang='es';
+    h.api.open('belt',ctx);
+    const group=h.body.querySelector('[data-analysis-group="speed"]');
+    assert.match(group.querySelector('.subsection-description').textContent,/Velocidad de banda/);
+    assert.match(group.querySelector('.analysis-section-status').textContent,/Completo/);
+    assert.equal(group.querySelector('[data-cell="L33"] td').textContent,'No aplica');
   }finally{h.close();}
 });

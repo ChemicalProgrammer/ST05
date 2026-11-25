@@ -1641,7 +1641,7 @@ window.STSimulation2D=(function(){
     scrapVisualTimer=null;scrapVisualModel=null;scrapVisualTime=-1;scrapVisualCounts.clear();scrapBursts.clear();
   }
   function collectScrapBursts(now){
-    if(!model||window.STBasicMode?.isBasic()||reducedMotion?.matches){clearScrapVisuals();return;}
+    if(!model||reducedMotion?.matches){clearScrapVisuals();return;}
     const fresh=scrapVisualModel!==model||model.time<scrapVisualTime;
     if(fresh){clearScrapVisuals();scrapVisualModel=model;}
     for(const item of model.line){
@@ -1656,6 +1656,23 @@ window.STSimulation2D=(function(){
     }
     scrapVisualTime=model.time;
     for(const [id,burst] of scrapBursts)if(now-burst.start>=scrapAnimationMs)scrapBursts.delete(id);
+  }
+  // Schematic occupancy; for large machines the twenty cells are proportional.
+  function drawInternalOccupancy(context,item,x,top,width,height,colors){
+    if(!item.capacityBottles||!item.inputBottleFactor||!Array.isArray(item.resident))return;
+    const capacity=Math.floor(item.capacityBottles/item.inputBottleFactor);
+    if(capacity<1)return;
+    const slots=Math.min(capacity,20),occupied=Math.min(capacity,item.resident.length);
+    const left=x+width*.12,right=x+width*.88,cell=(right-left)/slots,y=top+height*.79,h=5;
+    context.save();
+    context.fillStyle=colors.surface;context.fillRect(left-2,y-2,right-left+4,h+4);
+    for(let i=0;i<slots;i++){
+      context.strokeStyle=colors.ink;context.globalAlpha=.42;
+      context.strokeRect(left+i*cell,y,Math.max(1,cell-1),h);
+      const fill=Math.max(0,Math.min(1,occupied*slots/capacity-i));
+      if(fill){context.globalAlpha=.9;context.fillStyle=colors.accent;context.fillRect(left+i*cell,y,Math.max(0,(cell-1)*fill),h);}
+    }
+    context.restore();
   }
   function drawScrapBurst(context,item,x,top,width,height,telemetryY,colors){
     const burst=scrapBursts.get(item.id);if(!burst)return;
@@ -1879,6 +1896,7 @@ window.STSimulation2D=(function(){
         if(!detailed)window.STSimulation2DMachines.drawConveyor(context,x+width*.1,y+beltInset,width*.8,beltDepth,{belt:beltColor,surface});
         const sx=x+width/2;
         drawSignal(context,sx,top-14,signal,colors,factor);
+        drawInternalOccupancy(context,item,x,top,width,height,{surface,ink,accent});
         drawScrapBurst(context,item,x,top,width,height,telemetryY,{surface,belt:beltColor,accent,danger:colors.badges.failure.foreground});
       }
     }
@@ -2029,7 +2047,7 @@ window.STSimulation2D=(function(){
     const scrapBottles=equipment.reduce((sum,item)=>sum+(item.macroStopScrapBottles||0),0);
     const materialBalance=valid?{unit:'BOTTLES',inputBottles:input,outputBottles:bottles,inventoryBottles,overflowBottles,
       ...(scrapConfigured?{scrapBottles}:{}),residualBottles:input-bottles-inventoryBottles-overflowBottles-scrapBottles}:null;
-    return {schema:'st-simulation2d-summary-v1',controlPolicy:scrapConfigured?'PHYSICAL_FLOW_8_SCRAP2':'PHYSICAL_FLOW_8',counterPolicy:'ST_EXCLUSIVE_STATES_V1',failureOverlap:run.failureOverlap?.()??null,source,seed:finite(runSeed),round:round??null,
+    return {schema:'st-simulation2d-summary-v1',controlPolicy:scrapConfigured?'PHYSICAL_FLOW_9_SCRAP3':'PHYSICAL_FLOW_9',counterPolicy:'ST_EXCLUSIVE_STATES_V1',failureOverlap:run.failureOverlap?.()??null,source,seed:finite(runSeed),round:round??null,
       runState,durationSeconds:run.time,targetDurationSeconds:finite(limit),
       complete:runState==='Completed'&&Number.isFinite(limit)&&run.time>=limit-1e-8,
       outputEquipmentId:output?.equipmentId??null,outputUnit:output?.outputUnit??null,
@@ -2306,7 +2324,7 @@ window.STSimulation2D=(function(){
     let nextSchedule={};
     scheduleError='';
     try{nextSchedule=resolveSchedule(config);}catch(error){scheduleError=error.message;}
-    const nextSignature=canonical2DSignature([revised.some(item=>item.macroStopScrapBottles>0)?'physical-flow-8-scrap2':'physical-flow-8',next,revised,nextSchedule,scheduleError]);
+    const nextSignature=canonical2DSignature([revised.some(item=>item.macroStopScrapBottles>0)?'physical-flow-9-scrap3':'physical-flow-9',next,revised,nextSchedule,scheduleError]);
     const nextRepresentative=Number.isFinite(source?.seed)?source:null;
     const sameCase=next===key&&nextSignature===signature;
     if(sameCase&&nextRepresentative?.round===representative?.round&&nextRepresentative?.seed===representative?.seed){

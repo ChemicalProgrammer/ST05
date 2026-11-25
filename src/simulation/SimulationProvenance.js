@@ -1,6 +1,6 @@
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
-export const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.4/DES:0.5.0/cache:33';
+export const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.7/DES:0.5.0/cache:34';
 
 export function canonicalSimulationInputSignature(input) {
   function canonical(value) {
@@ -21,7 +21,7 @@ export function canonicalSimulationInputSignature(input) {
   const dynamicMode=input.case.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC');
   const macroScrap=input.case.equipment.some(item=>item.processData?.equipment?.macroStopScrapBottles>0);
   return JSON.stringify(canonical({
-    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':'')+(macroScrap?'/SCRAP:2':''),
+    version: SIMULATION_PROVENANCE_VERSION+(dynamicMode?'/DLB:2':run.dynamicLineBalancingEnabled===true?'/DLB:1':'')+(macroScrap?'/SCRAP:3':''),
     unitOfFlow: input.case.unitOfFlow || 'units',
     equipment: input.case.equipment.map(item=>{
       const inactiveDynamic=item.processData?.dynamicLineBalancing&&item.processData?.accumulation?.speedMode!=='DYNAMIC'&&!(run.dynamicLineBalancingEnabled===true&&item.processData.dynamicLineBalancing.enabled===true);

@@ -229,15 +229,21 @@ window.STSimulation2DEngine=(function(){
       const item=byId.get(id);
       if(!item)return;
       const wasRunning=running(item);
-      if(action==='EMERGENCY_STOP'){item.emergency=true;item.mode='STOP';}
+      if(action==='EMERGENCY_STOP'){item.emergency=true;item.manualResidual=0;item.mode='STOP';}
       else if(action==='RESET'&&item.emergency){item.emergency=false;item.mode='STOP';}
       else if(!item.emergency&&['RUN','AUTO','MANUAL','STOP','PAUSE'].includes(action)){
         // The last repair episode also identifies an unfinished macrostop
         // recovery after its repair timer expires. Do not charge it twice.
         const repairClass=item.failureHistory?.episodes?.at(-1)?.[2];
-        if(action==='STOP'&&item.mode!=='STOP'&&item.macroScrap&&
-          !((item.failureRemaining>0||item.repairRecoveryPending)&&['MAJOR','GENERAL'].includes(repairClass))){
-          chargeMacroStopScrap(item,'MANUAL_STOP');
+        if(action==='STOP'&&item.mode!=='STOP'&&item.kind==='machine'&&!(item.manualResidual>0)){
+          if(!((item.failureRemaining>0||item.repairRecoveryPending)&&['MAJOR','GENERAL'].includes(repairClass))){
+            chargeMacroStopScrap(item,'MANUAL_STOP');
+          }
+          if(item.capacityBottles!=null&&!activeStop&&item.failureRemaining<=0&&!item.repairRecoveryPending){
+            const downstream=line[line.indexOf(item)+1];
+            const configured=item.backupSince!==null?item.residual:Math.max(0,Math.floor(downstream?.residual??0));
+            item.manualResidual=Math.min(configured,Math.floor(item.resident.length/item.batch));
+          }
         }
         item.mode=action;
         if(!wasRunning&&running(item)&&!item.repairRecoveryPending)restart(item);
@@ -369,13 +375,14 @@ window.STSimulation2DEngine=(function(){
         downstream.admittedInputUnits++;
       }
       if(machine.capacityBottles!=null){
+        if(machine.backupSince!==null||machine.manualResidual>0)markStopVacancies(machine);
         machine.resident.splice(0,machine.batch);
         if(machine.occupancyMode==='POSITIONS')machine.positionDue.splice(0,machine.batch);
       }
       machine.ready=false;
       machine.input=0;
       machine.produced++;
-      if(machine.backupSince!==null)machine.stopDischargedUnits++;
+      if(machine.backupSince!==null||machine.manualResidual>0)machine.stopDischargedUnits++;
       if(residualDischarge)machine.residualDischargedUnits++;
       machine.recentOutput.push(time);
       return true;
@@ -405,6 +412,9 @@ window.STSimulation2DEngine=(function(){
       const s=machine.macroScrap,bottles=count*machine.inputBottleFactor;
       s.actualBottles+=bottles;s.pendingBottles-=bottles;s.nativeEquivalent+=bottles/machine.bottlesPerUnit;
     }
+    function markStopVacancies(machine){
+      machine.refillTarget=Math.max(machine.refillTarget||0,machine.resident.length);
+    }
     function chargeMacroStopScrap(machine,stopClass){
       const s=machine.macroScrap;
       if(!s||!['MAJOR','GENERAL','MANUAL_STOP'].includes(stopClass))return;
@@ -412,8 +422,10 @@ window.STSimulation2DEngine=(function(){
       const count=Math.min(machine.capacityBottles!=null?machine.resident.length:machine.input,Math.floor(s.pendingBottles/machine.inputBottleFactor));
       if(count<=0)return;
       if(machine.capacityBottles!=null){
+        markStopVacancies(machine);
         machine.resident.splice(0,count);machine.positionDue.splice(0,count);
         machine.outletCredit=0;machine.residual=Math.min(machine.residual,Math.floor(machine.resident.length/machine.batch));
+        if(machine.manualResidual>0)machine.manualResidual=Math.min(machine.manualResidual,Math.floor(machine.resident.length/machine.batch));
       }else{machine.input-=count;machine.ready=false;machine.remaining=null;}
       recordScrap(machine,count);
     }
@@ -465,7 +477,7 @@ window.STSimulation2DEngine=(function(){
           // packages (CAT L21/L52), including complete cases after packing.
           const configured=Math.max(0,Math.floor(downstream.residual??0));
           machine.residual=machine.capacityBottles==null?configured:
-            Math.min(configured,Math.floor(machine.resident.length/machine.batch));
+            machine.refillTarget>machine.resident.length?0:Math.min(configured,Math.floor(machine.resident.length/machine.batch));
           machine.residualAtTrigger=machine.residual;
         }
       }else if(machine.backupSince!==null){
@@ -540,23 +552,26 @@ window.STSimulation2DEngine=(function(){
       machine.remaining=1/machine.rate;
       machine.state=motionState;
     }
-    function stepResident(machine,upstream,downstream,seconds,factor,motionState,accelerating,stopping){
+    function stepResident(machine,upstream,downstream,seconds,factor,motionState,accelerating,stopping,manual=false){
       machine.residenceClock+=seconds;
       const capacity=Math.floor(machine.capacityBottles/machine.inputBottleFactor);
       const work=seconds*factor*machine.rate;
+      const refilling=!stopping&&machine.refillTarget>machine.resident.length;
+      if(!stopping&&!refilling&&machine.refillTarget)machine.refillTarget=0;
       if(machine.occupancyMode==='POSITIONS')machine.positionClock+=work*machine.batch;
       const ready=machine.resident[machine.batch-1]<=machine.residenceClock+epsilon
         &&(machine.occupancyMode!=='POSITIONS'||machine.positionDue[machine.batch-1]<=machine.positionClock+epsilon);
       const complete=machine.resident.length>=machine.batch;
-      const previousCredit=complete?machine.outletCredit:0;
-      const outletWork=complete&&work>0&&previousCredit<1-1e-8;
-      machine.outletCredit=complete?previousCredit+work:0;
+      const previousCredit=complete&&!refilling?machine.outletCredit:0;
+      const outletWork=complete&&!refilling&&work>0&&previousCredit<1-1e-8;
+      machine.outletCredit=complete&&!refilling?previousCredit+work:0;
       const beforeOutput=machine.produced;let admitted=0;
       let blocked=false,admissionWork=false;
-      if((!stopping||machine.residual>0)&&machine.outletCredit+1e-8>=1&&ready){
+      if(!refilling&&(!stopping||(manual?machine.manualResidual:machine.residual)>0)&&machine.outletCredit+1e-8>=1&&ready){
         if(discharge(machine,downstream,motionState==='Discharging')){
           machine.outletCredit=Math.max(0,machine.outletCredit-1);
-          if(stopping)machine.residual=Math.max(0,machine.residual-1);
+          if(manual)machine.manualResidual=Math.max(0,machine.manualResidual-1);
+          if(stopping&&(!manual||machine.backupSince!==null))machine.residual=Math.max(0,machine.residual-1);
         }else blocked=!outletWork;
       }
       machine.outletCredit=Math.min(1,machine.outletCredit);
@@ -612,6 +627,9 @@ window.STSimulation2DEngine=(function(){
         if(item.kind!=='machine')continue;
         if(item.emergency||activeStop)item.state=haltState(item);
         else if(options.failures&&item.failureRemaining>0)item.state='Failed';
+        else if(item.manualResidual>0&&item.mode!=='PAUSE'){
+          stepResident(item,line[index-1],line[index+1],seconds,1,'Discharging',false,true,true);
+        }
         else if(available(item))stepMachine(item,line[index-1],line[index+1],seconds);
         else item.state=haltState(item);
         if(item.state==='Failed')reliability.chargeFailureEpisode(item.failureHistory,seconds);

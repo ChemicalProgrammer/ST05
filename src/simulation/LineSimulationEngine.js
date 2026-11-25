@@ -649,7 +649,7 @@ function accountNumericalState(runtime,item,index){
   else if(state==='RAMPING_DOWN')state='RAMP_DOWN';
   else if(state==='BACKUP_STOPPING'){
     // Response delay is not evidence of a physical linear ramp-down.
-    state=control?.responseRemainingSeconds>0?'STOP_RESPONSE':'DISCHARGING';
+    state=!item.manualDischargeTick&&control?.responseRemainingSeconds>0?'STOP_RESPONSE':'DISCHARGING';
   }
   if(!machine&&['RUNNING','STARVED','IDLE'].includes(state)){
     const zone=runtime.zones[index];
@@ -1021,7 +1021,8 @@ function updateBackupSensorSegment(runtime, zone, seconds, occupied, atSecond) {
         // CAT L21/L52 stores native packages, including cases. The
         // residence inventory is already in output-package equivalents.
         residualRemainingUnits: upstream.residence
-          ? Math.min(Math.floor(zone.bottlesDischargedAtStop),Math.floor(upstream.residence.inventory+1e-8))
+          ? (upstream.mode==='STOP'||upstream.manualStopControl?.residualRemainingUnits>0||upstream.residence.refillTarget>upstream.residence.inventory+1e-8
+            ? 0 : Math.min(Math.floor(zone.bottlesDischargedAtStop),Math.floor(upstream.residence.inventory+1e-8)))
           : zone.bottlesDischargedAtStop
       };
     }
@@ -1110,6 +1111,24 @@ function recordMacroScrap(equipment,units){
   const s=equipment.macroScrap,bottles=Math.round(units*(equipment.outputBottleFactor||1));
   s.actualBottles+=bottles;s.pendingBottles-=bottles;s.nativeEquivalent+=units;
 }
+// Remember actual occupied inventory before a stop-induced physical loss.
+function markStopVacancies(equipment){
+  const r=equipment.residence;
+  if(r)r.refillTarget=Math.max(r.refillTarget||0,r.inventory);
+}
+function manualDischargeControl(equipment){
+  const c=equipment.manualStopControl;
+  return c?.residualRemainingUnits>1e-8&&!equipment.emergencyStopLatched&&!equipment.calendarStopped&&
+    equipment.failureRemainingSeconds<=0&&equipment.microStopRemainingSeconds<=0&&equipment.mode!=='PAUSE'?c:null;
+}
+function beginManualDischarge(runtime,equipment){
+  if(!equipment.residence||equipment.calendarStopped||equipment.failureRemainingSeconds>0||equipment.repairRestartPending)return;
+  const zone=runtime.zones.find(z=>z.physicalModelEnabled&&z.upstreamControlEquipmentId===equipment.id);
+  const backup=activeBackupControl(equipment);
+  const configured=Math.floor(backup?backup.residualRemainingUnits:zone?.bottlesDischargedAtStop||0);
+  const remaining=Math.min(configured,Math.floor(equipment.residence.inventory+1e-8));
+  if(remaining>0)equipment.manualStopControl={manual:true,responseRemainingSeconds:0,residualRemainingUnits:remaining};
+}
 function chargeMacroStopScrap(equipment,stopClass){
   const s=equipment.macroScrap,r=equipment.residence;
   if(!s||!r||!['MAJOR','GENERAL','MANUAL_STOP'].includes(stopClass))return;
@@ -1119,6 +1138,7 @@ function chargeMacroStopScrap(equipment,stopClass){
   const ratio=equipment.inputPerOutput||1,inputFactor=(equipment.outputBottleFactor||1)/ratio;
   const remove=Math.min(Math.round(r.inventory*ratio),Math.floor(s.pendingBottles/inputFactor))/ratio;
   if(!(remove>0))return;
+  markStopVacancies(equipment);
   let remaining=remove;
   const ready=Math.min(r.ready,remaining);
   r.ready=Math.round(Math.max(0,r.ready-ready)*ratio)/ratio;
@@ -1132,6 +1152,7 @@ function chargeMacroStopScrap(equipment,stopClass){
   equipment.packageRemainder=0;
   const control=activeBackupControl(equipment);
   if(control)control.residualRemainingUnits=Math.min(control.residualRemainingUnits,Math.floor(r.inventory+1e-8));
+  if(equipment.manualStopControl)equipment.manualStopControl.residualRemainingUnits=Math.min(equipment.manualStopControl.residualRemainingUnits,Math.floor(r.inventory+1e-8));
   recordMacroScrap(equipment,remove);
 }
 function rejectMacroScrapAdmission(equipment,admission){
@@ -1240,6 +1261,7 @@ function updatePlantCalendar(runtime, countTick=true) {
 function applyCommand(runtime, equipment, action) {
   if (action === 'EMERGENCY_STOP') {
     equipment.emergencyStopLatched = true;
+    equipment.manualStopControl=null;
     equipment.mode = 'STOP';
     cancelEquipmentStart(equipment);
     runtime.events.push({ type: 'EMERGENCY_STOP_APPLIED', atVirtualSecond: runtime.virtualSecond, equipmentId: equipment.id });
@@ -1266,10 +1288,13 @@ function applyCommand(runtime, equipment, action) {
   const wasOperational = isOperationalMode(equipment);
   // An explicit STOP is a macrostop, even with stochastic failures disabled.
   // Repeated STOP and a STOP during an already charged repair are idempotent.
-  if(action==='STOP'&&equipment.mode!=='STOP'&&equipment.macroScrap&&
-    !(equipment.failureRemainingSeconds>0&&['MAJOR','GENERAL'].includes(equipment.activeStopClass))&&
-    !(equipment.repairRestartPending&&['MAJOR','GENERAL'].includes(equipment.repairStopClass))){
-    chargeMacroStopScrap(equipment,'MANUAL_STOP');
+  if(action==='STOP'&&equipment.mode!=='STOP'&&!(equipment.manualStopControl?.residualRemainingUnits>0)){
+    if(!(equipment.failureRemainingSeconds>0&&['MAJOR','GENERAL'].includes(equipment.activeStopClass))&&
+      !(equipment.repairRestartPending&&['MAJOR','GENERAL'].includes(equipment.repairStopClass))){
+      chargeMacroStopScrap(equipment,'MANUAL_STOP');
+    }
+    // Scrap and conforming run-out are distinct, bounded by real inventory.
+    beginManualDischarge(runtime,equipment);
   }
   equipment.mode = action === 'RUN' ? 'AUTO' : action;
   if (!isOperationalMode(equipment)) cancelEquipmentStart(equipment);
@@ -1310,8 +1335,9 @@ function processLineFromDownstream(runtime) {
 function processEquipment(runtime, index) {
   const equipment=runtime.equipment[index];
   if(equipment.repairRestartPending&&!equipment.primeStartRequest)requestEquipmentStart(runtime,equipment,'REPAIR_COMPLETED');
-  const control=activeBackupControl(equipment);
-  const eligible=isAvailable(equipment)&&!equipment.calendarStopped&&!requiresPrime(equipment)&&!isStartDelayed(equipment);
+  const manual=manualDischargeControl(equipment);
+  const control=manual||activeBackupControl(equipment);
+  const eligible=Boolean(manual)||isAvailable(equipment)&&!equipment.calendarStopped&&!requiresPrime(equipment)&&!isStartDelayed(equipment);
   const phase=eligible&&control&&(control.responseRemainingSeconds>0||control.residualRemainingUnits>0)?'stopTransition':eligible&&!control&&isRampingUp(equipment)?'startRamp':null;
   const before=equipment.outputCount;
   processEquipmentFlow(runtime,index);
@@ -1344,7 +1370,9 @@ function processEquipmentFlow(runtime, index) {
   const equipment = runtime.equipment[index];
   const tickSeconds = runtime.run.tickSeconds;
   equipment.discreteResidentStep=Boolean(runtime.run.discretePackages&&equipment.residence);
-  if (!isAvailable(equipment)) {
+  const manual=manualDischargeControl(equipment);
+  equipment.manualDischargeTick=Boolean(manual);
+  if (!manual&&!isAvailable(equipment)) {
     recordUnavailable(equipment, tickSeconds);
     return;
   }
@@ -1357,14 +1385,14 @@ function processEquipmentFlow(runtime, index) {
     else equipment.starvedSeconds+=tickSeconds;
     return;
   }
-  if (requiresPrime(equipment)) {
+  if (!manual&&requiresPrime(equipment)) {
     equipment.actualRatePerSecond = 0;
     equipment.waitingForPrimeSeconds += tickSeconds;
     equipment.availabilityState = 'WAITING_FOR_PRIME';
     return;
   }
 
-  const control = activeBackupControl(equipment);
+  const control = manual||activeBackupControl(equipment);
   if (control && (equipment.residence||control.responseRemainingSeconds <= 0) && control.residualRemainingUnits <= 0) {
     equipment.actualRatePerSecond = 0;
     equipment.backupStopSeconds += tickSeconds;
@@ -1372,7 +1400,7 @@ function processEquipmentFlow(runtime, index) {
     return;
   }
 
-  if (isStartDelayed(equipment)) {
+  if (!manual&&isStartDelayed(equipment)) {
     equipment.actualRatePerSecond = 0;
     equipment.availabilityState = 'STARTING';
     return;
@@ -1403,12 +1431,14 @@ function processEquipmentFlow(runtime, index) {
   let flow = Math.max(0, Math.min(requestedFlow, inputAvailable, residualDischarge ? requestedFlow : downstreamSpace));
   let entries;
   let outletWork=false,blockedOutlet=false,admissionWork=false;
+  const refilling=Boolean(residence&&!control&&residence.refillTarget>residence.inventory+1e-8);
+  if(residence&&!control&&!refilling&&residence.refillTarget)residence.refillTarget=0;
   if(residence){
     residence.clock+=tickSeconds;
     // Position mode: move finite physical pockets with the machine's actual
     // attainable rate; a pocket cannot discharge before a full revolution.
     if(equipment.processData?.equipment?.occupancyMode==='POSITIONS')
-      residence.positionClock+=Math.max(0,Math.min(requestedFlow,downstreamSpace));
+      residence.positionClock+=Math.max(0,residualDischarge||refilling?requestedFlow:Math.min(requestedFlow,downstreamSpace));
     while(residence.head<residence.queue.length
       &&residence.queue[residence.head].due<=residence.clock+1e-8
       &&(residence.queue[residence.head].positionDue===undefined
@@ -1417,7 +1447,8 @@ function processEquipmentFlow(runtime, index) {
       if(runtime.run.discretePackages)residence.ready=Math.round(residence.ready*ratio)/ratio;
     }
     if(residence.head>=1024){residence.queue.splice(0,residence.head);residence.head=0;}
-    inputAvailable=residence.ready;
+    // Hold even previously ready material until actual vacancies are refilled.
+    inputAvailable=refilling?0:residence.ready;
     flow=Math.max(0,Math.min(requestedFlow,inputAvailable,residualDischarge?requestedFlow:downstreamSpace));
   }
   const completePackages=runtime.run.discretePackages||residence&&equipment.nativeOutputUnit==='cases';
@@ -1427,7 +1458,8 @@ function processEquipmentFlow(runtime, index) {
         ? incomingZone.conveyorSpeedMmPerSecond/incomingZone.accumulatedPitchMm : 0)
       : Infinity;
     if(!residence)inputAvailable=index===0?Infinity:(transportRate>0?incomingZone.waitingUnits/ratio:0);
-    const requestedPackages=residence?requestedFlow:Math.min(requestedFlow,transportRate*tickSeconds/ratio);
+    const requestedPackages=residence?(refilling?0:requestedFlow):Math.min(requestedFlow,transportRate*tickSeconds/ratio);
+    if(refilling)equipment.packageRemainder=0;
     const previousCredit=equipment.packageRemainder||0;
     const hasComplete=Boolean(residence&&residence.inventory>=1-1e-8);
     const service=hasComplete?previousCredit+requestedPackages:0;
@@ -1451,6 +1483,7 @@ function processEquipmentFlow(runtime, index) {
   }
   let admitted=0;
   if(residence){
+    if(control&&flow>0)markStopVacancies(equipment);
     residence.ready=Math.max(0,residence.ready-flow);
     residence.inventory=Math.max(0,residence.inventory-flow);
     if(runtime.run.discretePackages){
@@ -1508,6 +1541,11 @@ function processEquipmentFlow(runtime, index) {
   if (residualDischarge||residence&&control) {
     control.residualRemainingUnits = Math.max(0, control.residualRemainingUnits - flow);
     if(runtime.run.discretePackages&&control.residualRemainingUnits<1)control.residualRemainingUnits=0;
+    if(control.manual){
+      const backup=activeBackupControl(equipment);
+      if(backup)backup.residualRemainingUnits=Math.max(0,backup.residualRemainingUnits-flow);
+      if(control.residualRemainingUnits<=1e-8)equipment.manualStopControl=null;
+    }
   }
 }
 
@@ -1587,7 +1625,7 @@ function cancelEquipmentStart(equipment) {
 }
 
 function advanceEquipmentStart(runtime, equipment) {
-  if (!isAvailable(equipment) || requiresPrime(equipment) || activeBackupControl(equipment) || equipment.repairRestartPending) return;
+  if (!isAvailable(equipment) || requiresPrime(equipment) || activeBackupControl(equipment) || manualDischargeControl(equipment) || equipment.repairRestartPending) return;
   if (isStartDelayed(equipment)) {
     equipment.startDelayRemainingSeconds = Math.max(0, equipment.startDelayRemainingSeconds - runtime.run.tickSeconds);
     return;
@@ -1783,7 +1821,7 @@ export function machineOperatingRatePerSecond(equipment){
 }
 
 function recordMaterialState(equipment, requestedFlow, inputAvailable, downstreamSpace, flow, tickSeconds, control, residualDischarge) {
-  if (control && flow <= 0) equipment.backupStopSeconds += tickSeconds;
+  if (control && !control.manual && flow <= 0) equipment.backupStopSeconds += tickSeconds;
 
   if (flow > 0) {
     equipment.runningSeconds += tickSeconds;
@@ -2158,7 +2196,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: (runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.4')+(runtime.equipment.some(item=>item.macroScrap)?'-scrap2':''),
+    engineVersion: (runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.7')+(runtime.equipment.some(item=>item.macroScrap)?'-scrap3':'')+'-stoprefill1',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -2465,7 +2503,7 @@ function switchRuntimeProduct(runtime,id){
   const models=applyProductProfile(runtime.baseEquipment,product);
   models.forEach((model,i)=>{
     const e=runtime.equipment[i];e.processData=model.processData;e.nominalRatePerSecond=machineOperatingRatePerSecond(model);
-    e.startupDelaySeconds=model.startupDelaySeconds;e.restartRampUpSeconds=model.restartRampUpSeconds;e.backupControl=null;e.startupDelaySeconds=resolveStartupDelaySeconds(e);e.restartRampUpSeconds=resolveRestartRampUpSeconds(e);
+    e.startupDelaySeconds=model.startupDelaySeconds;e.restartRampUpSeconds=model.restartRampUpSeconds;e.backupControl=null;e.manualStopControl=null;e.startupDelaySeconds=resolveStartupDelaySeconds(e);e.restartRampUpSeconds=resolveRestartRampUpSeconds(e);
   });
   runtime.zones=runtime.equipment.slice(0,-1).map((owner,i)=>{
     const next=createAccumulationZoneRuntime(owner,models[i+1],models,i,runtime.run.tickSeconds,runtime.run),old=runtime.zones[i];

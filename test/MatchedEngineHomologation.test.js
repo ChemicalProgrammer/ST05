@@ -189,11 +189,11 @@ test('summary-only replications retain all histories but their average does not 
 test('independent 2D persistence compares canonical keys, not numerical resolution or key order',()=>{
  const src=read('Simulation2D'),start=src.indexOf('  function canonical2DSignature('),end=src.indexOf('  function capture(){',start);
  const signature=new Function(src.slice(start,end)+';return canonical2DSignature;')();
- const a=['physical-flow-8','same-identity',[{id:'source',rate:4,capacity:30}],{commands:[],stops:[]},''];
- const b=['physical-flow-8','same-identity',[{capacity:30,rate:4,id:'source',zoneId:'ignored'}],{stops:[],commands:[]},''];
+ const a=['physical-flow-9','same-identity',[{id:'source',rate:4,capacity:30}],{commands:[],stops:[]},''];
+ const b=['physical-flow-9','same-identity',[{capacity:30,rate:4,id:'source',zoneId:'ignored'}],{stops:[],commands:[]},''];
  assert.equal(signature(a),signature(JSON.stringify(b)));b[2][0].rate=5;assert.notEqual(signature(a),signature(b));
  assert(src.includes('canonical2DSignature(stored.signature)===signature'));
- assert(src.includes("canonical2DSignature(['physical-flow-8',next,revised,nextSchedule,scheduleError])"));
+ assert(src.includes("canonical2DSignature([revised.some(item=>item.macroStopScrapBottles>0)?'physical-flow-9-scrap3':'physical-flow-9',next,revised,nextSchedule,scheduleError])"));
 });
 
 // Resolved Line G geometry (fixture only, not a full-day plant validation).
@@ -344,3 +344,47 @@ function manualScrapChecks(api,core,assert){
 }
 
 test('individual STOP charges scrap once in both engines, independently of reliability',()=>manualScrapChecks({simulateLine},core,(ok,msg)=>assert.ok(ok,msg)));
+
+test('individual STOP drains only real residual inventory, counts scrap once and refills before normal discharge',()=>{
+ for(const [scrap,quota,mode] of [[3,2,'STORAGE'],[0,2,'STORAGE'],[3,0,'STORAGE'],[3,2,'POSITIONS']]){
+  const eq=[machine('source',4,'BOTTLES','BOTTLES',null,20),belt('belt',10,1800,900,60,60,1740,120,quota),machine('sink',8)];
+  eq[0].processData.equipment.residenceTimeSeconds=2;
+  eq[0].processData.equipment.occupancyMode=mode;
+  eq[0].processData.equipment.macroStopScrapBottles=scrap;
+  const commands=[stop('source',20,'STOP'),stop('source',20.5,'STOP'),stop('source',25,'RUN')];
+  const x=input(eq,35,{commands,sampleEverySeconds:.25});
+  const r=simulateLine(x);assert(r.ok,JSON.stringify(r.error));
+  const result=r.result,dt=result.numerics.effectiveTickSeconds,steps=t=>Math.round(t/dt);
+  const defs=definitions(eq);defs[0].residenceSeconds=2;defs[0].occupancyMode=mode;
+  const model=core.create(defs,7,undefined,{commands});
+  model.configure({failures:false,calendar:false,events:true});
+  const m=model.line[0];
+  const session=createLinePlaybackSession(x);
+  const advance=t=>{while(session.time+dt/2<t)session.advanceTo(t,{budgetMs:1000,maxTicks:10000});return session.snapshot().equipment[0];};
+  const initial=advance(20);for(let i=0;i<steps(20);i++)model.step(dt);
+  const before={inside:m.resident.length,output:m.produced};
+  for(let i=steps(20);i<steps(25);i++)model.step(dt);
+  const stopped=advance(25);
+  assert.equal(m.macroScrap?.actualBottles||0,scrap);
+  assert.equal(m.macroScrap?.stopCount||0,scrap?1:0);
+  assert.equal(m.residualDischargedUnits,quota);
+  assert.equal(m.produced-before.output,quota);
+  assert.equal(m.resident.length,before.inside-scrap-quota);
+  assert.equal(stopped.macroStopScrapBottles||0,scrap);
+  assert.equal(stopped.outputCount-initial.outputCount,quota);
+  assert.equal(stopped.internalInventoryBottles,initial.internalInventoryBottles-scrap-quota);
+  let first2D=false,firstN=false,prev=stopped;
+  for(let i=steps(25);i<steps(35);i++){
+    const inside=m.resident.length,output=m.produced;model.step(dt);
+    if(!first2D&&m.produced>output){assert(inside>=before.inside,'2D refills before output');first2D=true;}
+    const next=advance((i+1)*dt);
+    if(!firstN&&next.outputCount>prev.outputCount){assert(prev.internalInventoryBottles>=initial.internalInventoryBottles,'numerical refills before output');firstN=true;}
+    prev=next;
+  }
+  assert(first2D&&firstN,'both engines eventually discharge');
+  assert.equal(result.summary.materialBalance.residualUnits,0);
+  assert.equal(balance2D(model).residualUnits,0);
+  assert.equal(model.accountingSnapshot(m).outputOutsideProductiveUnits,0);
+  assert.equal(result.equipmentMetrics.source.stateAccounting.outputOutsideProductiveUnits,0);
+ }
+});

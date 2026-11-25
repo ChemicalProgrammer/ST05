@@ -200,6 +200,46 @@ window.STSubsection=(function(){
     append(body,spec.content);section.append(header,body);
     return configure(section,{native,header,copy,title,description,tools});
   }
+  function summarizeAnalysisValues(cells,emptyStatus='MISSING'){
+    const applicable=cells.filter(cell=>!cell.notApplicable),resolved=applicable.filter(cell=>Number.isFinite(cell.value)&&!cell.partial).length;
+    const partial=applicable.filter(cell=>Number.isFinite(cell.value)&&cell.partial).length;
+    const unresolved=applicable.length-resolved-partial;
+    return {status:!applicable.length?(cells.length?'NOT_APPLICABLE':emptyStatus):resolved===applicable.length?'COMPLETE':resolved+partial>0?'PENDING':'MISSING',
+      total:applicable.length,resolved,partial,unresolved,notApplicable:cells.length-applicable.length,
+      pending:applicable.filter(cell=>!Number.isFinite(cell.value)||cell.partial).map(cell=>({parameter:cell.label,format:cell.format||null,partial:Boolean(Number.isFinite(cell.value)&&cell.partial)}))};
+  }
+  function createAnalysisStatus(progress,language,options={}){
+    const es=language==='es',tr=(a,b)=>es?b:a;
+    const labels={
+      COMPLETE:tr('Complete','Completo'),PENDING:tr('Pending','Pendiente'),MISSING:tr('Missing','Sin datos'),
+      NOT_APPLICABLE:tr('Not applicable','No aplica')
+    };
+    const states={COMPLETE:['ok','check','✓'],PENDING:['warning','warning','!'],MISSING:['error','x','×'],NOT_APPLICABLE:['info','info','i']};
+    const [tone,icon,fallback]=states[progress.status];
+    const host=document.createElement('span');host.className='analysis-section-status';
+    host.dataset.completeness=progress.status;
+    const marker=document.createElement('span');marker.className='sheet-import-row-status';marker.dataset.status=tone;
+    marker.setAttribute('aria-hidden','true');
+    if(window.STIcons?.svg)marker.innerHTML=window.STIcons.svg(icon);else marker.textContent=fallback;
+    const label=document.createElement('span');label.textContent=labels[progress.status];
+    const message=[labels[progress.status]];
+    if(progress.total){
+      message.push(tr('Calculated values: ','Valores calculados: ')+progress.resolved+'/'+progress.total);
+      if(progress.partial)message.push(tr('Partial results: ','Resultados parciales: ')+progress.partial);
+      if(progress.unresolved)message.push(tr('Unresolved values: ','Valores sin resolver: ')+progress.unresolved);
+      if(progress.notApplicable)message.push(tr('Not required: ','No requeridos: ')+progress.notApplicable);
+    }else if(progress.status==='MISSING')message.push(options.emptyMessage||tr('No resolved data for this section.','No hay datos resueltos en esta sección.'));
+    if(options.reason)message.push(options.reason);
+    if(progress.pending?.length){
+      const limit=10;
+      message.push(tr('Review:','Revisar:'));
+      progress.pending.slice(0,limit).forEach(item=>message.push('• '+(item.format?item.format+' · ':'')+item.parameter+(item.partial?tr(' (partial)',' (parcial)'):'')));
+      if(progress.pending.length>limit)message.push(tr('Additional unresolved values: ','Otros valores pendientes: ')+(progress.pending.length-limit));
+    }
+    message.push(tr('Calculation completeness only; separate engineering PASS/FAIL is unchanged.','Solo indica datos calculados; la evaluación técnica PASS/FAIL es independiente.'));
+    host.title=message.join('\n');host.setAttribute('aria-label',host.title);host.append(marker,label);
+    return host;
+  }
   function init(root){
     const scope=root||document;
     if(scope.matches?.('.fold-card'))enhance(scope);
@@ -207,6 +247,6 @@ window.STSubsection=(function(){
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>init(),{once:true});
   else init();
-  return Object.freeze({create,enhance,init,setExpanded,userToggle,restoreAll,savedExpanded,connectCase(provider,changed){caseProvider=provider;caseChanged=changed;}});
+  return Object.freeze({create,enhance,init,summarizeAnalysisValues,createAnalysisStatus,setExpanded,userToggle,restoreAll,savedExpanded,connectCase(provider,changed){caseProvider=provider;caseChanged=changed;}});
 })();
 </script>

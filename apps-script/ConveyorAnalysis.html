@@ -32,12 +32,6 @@
   border-block-end:0;
   border-radius:calc(var(--radius-md) - var(--border-width));
 }
-#conveyor-analysis-body .analysis-section-status {
-  display:inline-flex;align-items:center;gap:var(--space-2);white-space:nowrap;
-  font-size:var(--font-secondary);font-weight:var(--weight-medium);color:var(--muted);
-}
-#conveyor-analysis-body .analysis-section-status .sheet-import-row-status { margin:0; }
-#conveyor-analysis-body .analysis-section-status .icon { width:18px;height:18px;stroke-width:2.9;stroke-linecap:round; }
 #conveyor-analysis-body .conveyor-value-not-applicable {color:var(--muted);cursor:help;}
 #conveyor-analysis-body .table-scroll { min-width:0;max-width:100%;width:100%;overflow-x:auto;overflow-y:visible; }
 /* A consistent column model prevents long parameters or diagnostic text
@@ -719,35 +713,9 @@ window.STConveyorAnalysis=(function(){
     return [{...commonSection,progress:summarizeSectionValues(geometryCells)},...sections];
   }
   function createSectionStatus(progress,language){
-    const es=language==='es',tr=(a,b)=>es?b:a;
-    const labels={
-      COMPLETE:tr('Complete','Completo'),PENDING:tr('Pending','Pendiente'),MISSING:tr('Missing','Sin datos'),
-      NOT_APPLICABLE:tr('Not applicable','No aplica')
-    };
-    const states={COMPLETE:['ok','check','✓'],PENDING:['warning','warning','!'],MISSING:['error','x','×'],NOT_APPLICABLE:['info','info','i']};
-    const [tone,icon,fallback]=states[progress.status];
-    const host=document.createElement('span');host.className='analysis-section-status';
-    host.dataset.completeness=progress.status;
-    const marker=document.createElement('span');marker.className='sheet-import-row-status';marker.dataset.status=tone;
-    marker.setAttribute('aria-hidden','true');
-    if(window.STIcons?.svg)marker.innerHTML=window.STIcons.svg(icon);else marker.textContent=fallback;
-    const label=document.createElement('span');label.textContent=labels[progress.status];
-    const message=[labels[progress.status]];
-    if(progress.total){
-      message.push(tr('Calculated values: ','Valores calculados: ')+progress.resolved+'/'+progress.total);
-      if(progress.partial)message.push(tr('Partial results: ','Resultados parciales: ')+progress.partial);
-      if(progress.unresolved)message.push(tr('Unresolved values: ','Valores sin resolver: ')+progress.unresolved);
-      if(progress.notApplicable)message.push(tr('Not required: ','No requeridos: ')+progress.notApplicable);
-    }else if(progress.status==='MISSING')message.push(tr('No resolved format data for this section.','No hay datos de formato resueltos en esta sección.'));
-    if(progress.pending?.length){
-      const limit=10;
-      message.push(tr('Review:','Revisar:'));
-      progress.pending.slice(0,limit).forEach(item=>message.push('• '+(item.format?item.format+' · ':'')+item.parameter+(item.partial?tr(' (partial)',' (parcial)'):'')));
-      if(progress.pending.length>limit)message.push(tr('Additional unresolved values: ','Otros valores pendientes: ')+(progress.pending.length-limit));
-    }
-    message.push(tr('Calculation completeness only; separate engineering PASS/FAIL is unchanged.','Solo indica datos calculados; la evaluación técnica PASS/FAIL es independiente.'));
-    host.title=message.join('\n');host.setAttribute('aria-label',host.title);host.append(marker,label);
-    return host;
+    return window.STSubsection.createAnalysisStatus(progress,language,{
+      emptyMessage:language==='es'?'No hay datos de formato resueltos en esta sección.':'No resolved format data for this section.'
+    });
   }
 
   function open(name,context){

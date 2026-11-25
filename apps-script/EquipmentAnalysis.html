@@ -11,10 +11,19 @@
 #equipment-analysis-body { min-width:0; overflow:auto; display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:var(--subsection-gap,var(--space-4)); }
 #equipment-analysis-body > .st-subsection { min-width:0; margin:0; padding:var(--subsection-padding); }
 #equipment-analysis-body .st-subsection > .fold-content { display:grid; gap:var(--space-3); min-width:0; }
+#equipment-analysis-body > .st-subsection:not([open]) {padding-block-end:0;}
+#equipment-analysis-body > .st-subsection:not([open]) > .fold-content {display:none;}
+#equipment-analysis-body > .st-subsection:not([open]) > summary.st-subsection-header {border-block-end:0;border-radius:calc(var(--radius-md) - var(--border-width));}
 #equipment-analysis-body .chart-note { margin:0; }
 #equipment-analysis-body .table-scroll { min-width:0; max-width:100%; overflow-x:auto; }
 #equipment-analysis-body .intervention-chart-scroll { overflow-x:auto; min-width:0; }
 #equipment-analysis-body .intervention-chart { display:block; width:100%; min-width:480px; max-width:780px; height:auto; margin-inline:auto; font-family:inherit; color:var(--ink); }
+#equipment-analysis-body .intervention-chart {
+  --matrix-joint-fill:color-mix(in srgb,#e34c59 30%,var(--surface));
+  --matrix-mttr-fill:color-mix(in srgb,#ef9836 29%,var(--surface));
+  --matrix-mtbf-fill:color-mix(in srgb,#e4bf2d 29%,var(--surface));
+  --matrix-keep-fill:color-mix(in srgb,#35b578 29%,var(--surface));
+}
 #equipment-analysis-body .intervention-chart text { fill:currentColor; }
 #equipment-analysis-body .intervention-chart .zone-title { font-size:14px; font-weight:600; }
 #equipment-analysis-body .intervention-chart .zone-detail { font-size:11px; }
@@ -104,6 +113,101 @@ window.STEquipmentAnalysis=(function(){
     const element=document.createElement(tag);if(text!==undefined)element.textContent=text;parent.append(element);return element;
   }
   function note(parent,text){make(parent,'p',text).className='chart-note';}
+  // Evaluate evidence completeness, not the reliability verdict. Default
+  // screening thresholds and status strings are not evidence of a completed
+  // analysis; zero measured counts and negative CAPEX effects are valid data.
+  function sectionProgress(r,equipment,simulation){
+    const summarize=window.STSubsection.summarizeAnalysisValues;
+    const cell=(label,value,notApplicable=false)=>({label,value,notApplicable});
+    const result=(cells,reason='',emptyStatus='MISSING')=>({...summarize(cells,emptyStatus),reason});
+    const na=reason=>result([],reason,'NOT_APPLICABLE');
+    const noData=reason=>result([],reason);
+    const e=equipment||{},line=simulation?.equipment||[],config=simulation?.dynamicConfig||simulation?.run||{};
+    const rel=e.noiseProfile?.reliability,split=e.processData?.equipment?.stopInputs,categories=config.reliabilityCategories||{};
+    const zero=p=>p?.mtbfMinutes===0&&p?.mttrMinutes===0;
+    const inactive=['FAILURES_DISABLED','CATEGORIES_DISABLED','NOT_APPLICABLE','CONVEYOR'].includes(r.reason)||
+      r.reason==='NO_MODELED_FAILURES'&&(split?zero(split.minor)&&zero(split.major):zero(rel));
+    const why=reasonText(r.reason);
+    const rawPairs=split?[['MINOR',split.minor],['MAJOR',split.major]].filter(([kind])=>categories[kind.toLowerCase()]!==false):[['GENERAL',rel]];
+    const rawCells=rawPairs.filter(([,pair])=>!zero(pair)).flatMap(([kind,pair])=>[
+      cell(classText(kind)+' · MTBF',pair?.mtbfMinutes>0?pair.mtbfMinutes:null),
+      cell(classText(kind)+' · MTTR',pair?.mttrMinutes>0?pair.mttrMinutes:null)
+    ]);
+    const validAssessment=r.status!=='NOT EVALUATED'&&r.mtbfMinutes>0&&r.mttrMinutes>0;
+    const effective=[cell('MTBF',r.mtbfMinutes),cell('MTTR',r.mttrMinutes)];
+    const matrix=inactive?na(why):validAssessment?result(effective):
+      result([...rawCells,cell(t('Effective MTBF','MTBF efectivo'),null),cell(t('Effective MTTR','MTTR efectivo'),null)],why);
+    const reliabilityCells=[...effective,
+      cell(t('Inherent availability','Disponibilidad inherente'),r.availability),
+      cell(t('Inherent unavailability','Indisponibilidad inherente'),r.unavailability),
+      cell('MTBF / MTTR',r.ratio),
+      cell(t('Failures per operating hour','Fallas por hora de operación'),r.failuresPerOperatingHour),
+      cell(t('Expected failures per 24 h','Fallas esperadas por 24 h'),r.failuresPerDay),
+      cell(t('Expected downtime per 24 h','Tiempo teórico de falla por 24 h'),r.downtimeMinutesPerDay)];
+    const reliability=inactive?na(why):result(validAssessment?reliabilityCells:[...rawCells,...reliabilityCells],why);
+    const p=r.thresholds||{};
+    const targets=inactive?na(why):result([
+      cell(t('Availability target','Meta de disponibilidad'),p.availabilityTarget),
+      cell(t('Minimum MTBF reference','Referencia mínima MTBF'),p.mtbfTargetMinutes),
+      cell(t('Maximum MTTR reference','Referencia máxima MTTR'),p.mttrTargetMinutes),
+      cell(t('Required MTBF at current MTTR','MTBF requerido con MTTR actual'),r.requiredMtbfMinutes),
+      cell(t('Maximum MTTR at current MTBF','MTTR máximo con MTBF actual'),r.requiredMttrMinutes),
+      cell(t('Required MTBF improvement factor','Factor de incremento requerido de MTBF'),r.mtbfImprovementFactor),
+      cell(t('Required MTTR reduction','Reducción requerida de MTTR'),r.mttrReductionPercent)
+    ],validAssessment?'':t('Screening references are available, but improvement gaps require valid MTBF and MTTR.','Las referencias están disponibles, pero las brechas requieren MTBF y MTTR válidos.'));
+    const classes=inactive?na(why):r.classes.length?result(r.classes.flatMap(c=>[
+      cell(classText(c.kind)+' · MTBF',c.mtbfMinutes),cell(classText(c.kind)+' · MTTR',c.mttrMinutes),
+      cell(classText(c.kind)+' · '+t('Event share','Proporción de eventos'),c.eventShare)
+    ])):result([...rawCells,cell(t('Active failure class model','Modelo de categorías activas'),null)],why);
+    const belt=item=>item?.type==='CONVEYOR'||item?.processData?.role==='CONVEYOR';
+    const index=line.findIndex(item=>item.id===e.id);
+    const adjacent=direction=>index<0?null:line[index+(direction==='UPSTREAM'?-1:1)];
+    const buffers=['UPSTREAM','DOWNSTREAM'].flatMap(direction=>{
+      const item=r.bufferCoverage.find(c=>c.direction===direction),prefix=direction==='UPSTREAM'?t('Upstream','Aguas arriba'):t('Downstream','Aguas abajo');
+      // A physical line boundary or directly adjacent machine does not have
+      // a conveyor reserve. An unresolved audit on a connected belt is missing.
+      const noBelt=index>=0&&!belt(adjacent(direction))&&!item?.conveyorIds?.length;
+      return [
+        cell(prefix+' · '+t('Design coverage time','Tiempo de cobertura'),item?.seconds,noBelt),
+        cell(prefix+' · FCR',item?.ratio,noBelt),
+        ...(item?.classCoverage||[]).map(c=>cell(prefix+' · FCR '+classText(c.kind),c.ratio,noBelt))
+      ];
+    });
+    const buffer=inactive?na(why):result(buffers,t('Coverage requires a valid MTTR and resolved adjacent conveyor geometry. A direction with no connected conveyor is not applicable.','La cobertura requiere MTTR válido y geometría de conveyors adyacentes resuelta. Una dirección sin conveyor conectado no aplica.'));
+    const c=r.capacity;
+    const capacity=result([
+      cell(t('Configured output rate','Velocidad configurada'),c?.configuredRatePerMinute),
+      cell(t('Installed maximum rate','Velocidad máxima instalada')+' ('+t('optional','opcional')+')',c?.maximumRatePerMinute),
+      cell(t('Line reference rate','Velocidad de referencia de línea'),c?.referenceRatePerMinute),
+      cell(t('Availability-only output rate','Velocidad equivalente por disponibilidad'),c?.availabilityOnlyRatePerMinute,inactive),
+      cell(t('Availability-only deficit vs reference','Déficit por disponibilidad vs referencia'),c?.availabilityOnlyDeficit,inactive)
+    ],t('The maximum speed is optional. Availability-adjusted capacity requires active reliability and a comparable line reference.','La velocidad máxima es opcional. La capacidad ajustada requiere confiabilidad activa y una referencia de línea comparable.'));
+    const o=r.observed;
+    const observed=o?result([
+      cell(t('Observed horizon','Horizonte observado'),o.durationSeconds),
+      cell(t('Own failures','Fallas propias'),o.failureCount),
+      cell(t('Own failure time','Tiempo en falla propia'),o.failureSeconds),
+      cell(t('Own failure share of horizon','Porcentaje del horizonte en falla propia'),o.failurePercent),
+      cell(t('Observed reliability exposure per failure','Exposición observada por falla'),o.observedExposurePerFailureMinutes,o.failureCount===0),
+      cell(t('Observed fault time per failure','Tiempo observado en falla por evento'),o.observedFaultTimePerFailureMinutes,o.failureCount===0),
+      cell(t('Micro-stop time','Tiempo de microparos'),o.microStopSeconds),
+      cell(t('Starved time','Tiempo Starved'),o.starvedSeconds),
+      cell(t('Blocked time','Tiempo Blocked'),o.blockedSeconds),
+      cell(t('Waiting for Prime','Espera de Prime'),o.waitingForPrimeSeconds),
+      cell(t('Back-up stop','Paro Back-up'),o.backupStopSeconds)
+    ],t('Only reported observations count as evidence. Per-failure ratios are not applicable when no failures occurred.','Solo las observaciones registradas cuentan como evidencia. Las relaciones por falla no aplican cuando no hubo eventos.')):
+      noData(t('Run a simulation or load a compatible completed result.','Ejecuta una simulación o carga un resultado terminado compatible.'));
+    const x=r.counterfactual;
+    const impact=x?result([
+      cell(t('Conditional OEE gain without own failures','Ganancia condicional de OEE sin fallas propias'),x.deltaOeePp),
+      cell(t('Conditional throughput gain','Ganancia condicional de throughput'),x.deltaThroughput),
+      cell(t('Exploration duration','Duración de exploración'),x.run?.durationSeconds),
+      cell(t('Replications','Réplicas'),x.run?.rounds)
+    ],t('Completeness refers only to the displayed CAPEX experiment. Technical and economic feasibility still require independent validation.','La completitud se refiere solo al experimento CAPEX mostrado. La factibilidad técnica y económica aún requiere validación independiente.')):
+      noData(t('Requires a saved, compatible matched CAPEX failure-removal experiment.','Requiere un experimento CAPEX pareado de eliminación de fallas, guardado y compatible.'));
+    return {matrix,reliability,targets,classes,buffer,capacity,observed,impact};
+  }
+
   let foldStates=new Map();
   function section(key,title,description,status){
     const tools=[];
@@ -113,8 +217,11 @@ window.STEquipmentAnalysis=(function(){
       pill.className='equipment-analysis-pill st-status-pill '+(status==='PASS'?'is-pass':status==='FAIL'?'is-fail':status==='REVIEW'?'is-review':'');
       tools.push(pill);
     }
+    const progress=current.progress[key];
+    tools.push(window.STSubsection.createAnalysisStatus(progress,es()?'es':'en',{reason:progress.reason}));
     const group=window.STSubsection.create({title,description,variant:'B',native:true,open:foldStates.get(key)??true,tools});
     group.section.dataset.analysisGroup=key;
+    group.section.dataset.completeness=progress.status;
     body.append(group.section);
     return group.body;
   }
@@ -151,10 +258,10 @@ window.STEquipmentAnalysis=(function(){
     const svg=svgNode(scroll,'svg',{class:'intervention-chart',viewBox:'0 0 735 374',role:'img','aria-label':t('Intervention matrix: MTBF versus MTTR, logarithmic axes','Matriz de intervención: MTBF frente a MTTR, ejes logarítmicos')});
     svgNode(svg,'title',{},t('Equipment reliability and intervention matrix','Matriz de confiabilidad e intervención del equipo'));
     const zones=[
-      {key:'JOINT',x:left,y:top,w:midX-left,h:midY-top,color:'var(--failure-soft,rgba(190,70,70,.12))',title:t('Joint intervention','Intervención conjunta'),detail:[t('Frequent and long failures','Fallas frecuentes y prolongadas'),t('Review rebuild / replace if Ai is low','Evaluar reconstrucción / reemplazo si Ai es baja')]},
-      {key:'MTTR',x:midX,y:top,w:right-midX,h:midY-top,color:'var(--starved-soft,rgba(190,140,30,.13))',title:t('Maintainability','Mantenibilidad'),detail:[t('Long repairs','Reparaciones prolongadas'),t('Reduce MTTR','Reducir MTTR')]},
-      {key:'MTBF',x:left,y:midY,w:midX-left,h:bottom-midY,color:'var(--starved-soft,rgba(190,140,30,.13))',title:t('Reliability','Confiabilidad'),detail:[t('Frequent failures','Fallas frecuentes'),t('Increase MTBF','Aumentar MTBF')]},
-      {key:'KEEP',x:midX,y:midY,w:right-midX,h:bottom-midY,color:'var(--success-soft,rgba(40,140,90,.12))',title:t('Keep / monitor','Conservar / monitorear'),detail:[t('Infrequent and short failures','Fallas poco frecuentes y cortas'),t('If availability target is met','Si cumple la meta de disponibilidad')]}
+      {key:'JOINT',x:left,y:top,w:midX-left,h:midY-top,color:'var(--matrix-joint-fill)',title:t('Joint intervention','Intervención conjunta'),detail:[t('Frequent and long failures','Fallas frecuentes y prolongadas'),t('Review rebuild / replace if Ai is low','Evaluar reconstrucción / reemplazo si Ai es baja')]},
+      {key:'MTTR',x:midX,y:top,w:right-midX,h:midY-top,color:'var(--matrix-mttr-fill)',title:t('Maintainability','Mantenibilidad'),detail:[t('Long repairs','Reparaciones prolongadas'),t('Reduce MTTR','Reducir MTTR')]},
+      {key:'MTBF',x:left,y:midY,w:midX-left,h:bottom-midY,color:'var(--matrix-mtbf-fill)',title:t('Reliability','Confiabilidad'),detail:[t('Frequent failures','Fallas frecuentes'),t('Increase MTBF','Aumentar MTBF')]},
+      {key:'KEEP',x:midX,y:midY,w:right-midX,h:bottom-midY,color:'var(--matrix-keep-fill)',title:t('Keep / monitor','Conservar / monitorear'),detail:[t('Infrequent and short failures','Fallas poco frecuentes y cortas'),t('If availability target is met','Si cumple la meta de disponibilidad')]}
     ];
     for(const z of zones)svgNode(svg,'rect',{x:z.x,y:z.y,width:z.w,height:z.h,fill:z.color,'data-intervention-zone':z.key});
     const tickText=v=>v>=1e6||v<.01?v.toExponential(1):fmt(v,Math.min(6,Math.max(2,Math.ceil(-Math.log10(v))+1)));
@@ -227,13 +334,14 @@ window.STEquipmentAnalysis=(function(){
     const e=simulation?.equipment?.find(x=>x.id===equipmentId);
     if(!e||e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')return;
     const report=window.STScenarios.equipmentAnalysis(simulation,equipmentId,options);
-    foldStates=new Map();body.replaceChildren();current={report,name:e.name||e.id};render();
+    foldStates=new Map();body.replaceChildren();current={report,name:e.name||e.id,equipment:e,simulation};render();
     if(!dialog.open)dialog.showModal();
     body.scrollTop=0;
   }
   function render(){
     if(!current)return;
     const r=current.report,p=r.thresholds,o=r.observed;
+    current.progress=sectionProgress(r,current.equipment,current.simulation);
     document.getElementById('equipment-analysis-title').textContent=t('Equipment Analysis Tool','Análisis de equipo')+' · '+current.name;
     const closeButton=document.getElementById('equipment-analysis-close');
     closeButton.title=t('Close equipment analysis','Cerrar análisis de equipo');closeButton.setAttribute('aria-label',closeButton.title);
@@ -267,11 +375,11 @@ window.STEquipmentAnalysis=(function(){
       [t('Required MTTR reduction','Reducción requerida de MTTR'),r.mttrReductionPercent,'%']
     ]);
     note(host,t('Default engineering references: 95%, 60 min and 10 min. They are not manufacturer or replacement standards. Targets are not verified attainable values.','Referencias iniciales de ingeniería: 95%, 60 min y 10 min. No son normas de fabricante ni de reemplazo. Los objetivos no son valores cuya factibilidad esté validada.'));
+    host=section('classes',t('Enabled failure classes','Categorías de falla activas'),t('Review the active general, minor and major failure inputs.','Revisa los datos activos de fallas generales, menores y mayores.'));
     if(r.classes.length){
-      host=section('classes',t('Enabled failure classes','Categorías de falla activas'),t('Review the active general, minor and major failure inputs.','Revisa los datos activos de fallas generales, menores y mayores.'));
       table(host,r.classes.flatMap(c=>[[classText(c.kind)+' · MTBF',c.mtbfMinutes,'min'],[classText(c.kind)+' · MTTR',c.mttrMinutes,'min'],[classText(c.kind)+' · '+t('Event share','Proporción de eventos'),pct(c.eventShare),'%']]));
       note(host,t('Effective MTBF uses the sum of class failure rates; effective MTTR is weighted by those rates. General stops are never reclassified by duration.','El MTBF efectivo utiliza la suma de tasas de falla; el MTTR efectivo se pondera por esas tasas. Las fallas generales no se reclasifican por duración.'));
-    }
+    }else note(host,reasonText(r.reason)||t('No resolved active failure categories.','No hay categorías de falla activas resueltas.'));
     host=section('buffer',t('Buffer coverage — Failure Coverage Ratio','Cobertura de acumulación — Failure Coverage Ratio'),t('Estimate how long the connected conveyors can absorb a repair.','Estima cuánto tiempo los conveyors conectados pueden absorber una reparación.'));
     if(!r.bufferCoverage.length)note(host,t('Not evaluated: active MTTR and connected conveyor geometry are required.','No evaluado: se necesitan MTTR activo y geometría de conveyors conectados.'));
     for(const c of r.bufferCoverage){
@@ -319,6 +427,6 @@ window.STEquipmentAnalysis=(function(){
   document.getElementById('equipment-analysis-close').addEventListener('click',close);
   dialog.addEventListener('close',()=>{current=null;});
   window.addEventListener('st-language-change',()=>{if(dialog.open)render();});
-  return {assess,paint,createButton,open,close,statusText};
+  return {assess,paint,createButton,open,close,statusText,sectionProgress};
 })();
 </script>

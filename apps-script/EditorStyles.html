@@ -99,21 +99,22 @@ html:not([data-ui-mode=advance]) #equipment-view-tools { display:none!important;
 .equipment-editor-table :is(th,td) { box-sizing:border-box; padding:var(--space-1) var(--space-2); border-inline-end:var(--border-width) solid var(--line); border-bottom:var(--border-width) solid var(--line); text-align:left; vertical-align:middle; overflow:hidden; }
 .equipment-editor-table tr > :last-child { border-inline-end:0; }
 .equipment-editor-table tbody tr:last-child > td { border-bottom:0; }
-.equipment-editor-table thead th { position:relative; background:color-mix(in srgb,var(--secondary) 18%,var(--surface)); color:var(--secondary-text,var(--ink)); font-weight:var(--weight-semibold); text-align:center; }
-.equipment-editor-table .equipment-table-labels th { padding-block:var(--space-2) var(--space-1); border-bottom:0; line-height:1.2; white-space:normal; overflow-wrap:anywhere; }
-.equipment-editor-table .equipment-table-units th { font-size:var(--font-secondary); font-weight:var(--weight-regular); padding-block:0 var(--space-1); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
-.equipment-editor-table .equipment-table-units { height:auto; }
-.equipment-editor-table .equipment-table-group-start { border-inline-start:var(--border-width) solid var(--secondary); }
+.equipment-editor-table thead th { position:relative; background:color-mix(in srgb,var(--secondary) 18%,var(--surface)); color:var(--secondary-text,var(--ink)); font-weight:var(--weight-semibold); text-align:center; border-inline-end:var(--border-width) solid var(--secondary); }
+.equipment-editor-table thead tr > :last-child { border-inline-end:0; }
+/* Explicitly override the global 42px table row height for ALL header rows.
+   Align labels and units toward their shared boundary with no padding gap. */
+.equipment-editor-table thead tr { height:auto; }
+.equipment-editor-table .equipment-table-groups th { padding-block:var(--space-1); border-bottom:var(--border-width) solid var(--secondary); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
+.equipment-editor-table .equipment-table-labels th { padding-block:var(--space-1) 0; border-bottom:0; vertical-align:bottom; line-height:1.1; white-space:normal; overflow-wrap:anywhere; }
+.equipment-editor-table .equipment-table-units th { font-size:var(--font-secondary); font-weight:var(--weight-regular); padding-block:0 var(--space-1); vertical-align:top; line-height:1.1; white-space:normal; overflow-wrap:anywhere; }
 .equipment-editor-table .equipment-table-center { text-align:center; }
 .equipment-editor-table td[data-column=delete] { padding-inline:var(--space-1); }
 .equipment-editor-table .equipment-table-identity { position:sticky; left:0; z-index:2; background:var(--surface); }
 .equipment-editor-table thead .equipment-table-identity { z-index:3; background:color-mix(in srgb,var(--secondary) 18%,var(--surface)); }
-.equipment-table-resize { position:absolute; right:0; top:0; bottom:0; width:8px; cursor:col-resize; touch-action:none; z-index:1; }
-.equipment-table-resize:is(:hover,:focus-visible),.equipment-table-resizing .equipment-table-resize:focus { background:var(--secondary); }
+.equipment-table-resize { position:absolute; right:0; top:0; bottom:0; width:8px; cursor:col-resize; touch-action:none; z-index:1; background:transparent; }
 .equipment-table-resize:focus-visible { outline:var(--focus-width) solid var(--secondary-text,var(--ink)); outline-offset:-2px; }
 .equipment-table-resizing { user-select:none; cursor:col-resize; }
 .equipment-table-name { display:flex; align-items:center; gap:var(--space-1); min-width:0; }
-.equipment-table-position { color:var(--muted); font-variant-numeric:tabular-nums; flex:none; }
 button.equipment-table-symbol { display:inline-flex; align-items:center; justify-content:center; color:var(--accent); flex:none; width:var(--size-28); height:var(--size-28); min-height:0; padding:0; border:0; background:transparent; box-shadow:none; cursor:grab; touch-action:none; }
 button.equipment-table-symbol:active { cursor:grabbing; }
 button.equipment-table-symbol:disabled { cursor:default; opacity:1; }

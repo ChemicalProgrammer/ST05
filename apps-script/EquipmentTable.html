@@ -269,7 +269,7 @@ window.STEquipmentTable=(function(){
   }
   function sizing(layout,descriptor){
     var {id,head,unit,cells}=descriptor;
-    var min=id==='name'?176:id==='evaluation'?76:44;
+    var min=id==='name'?152:id==='evaluation'?76:44;
     var fit=Math.max(min,measureText(head.textContent,head)+24,measureText(unit.textContent,unit)+24);
     if(id==='delete')return {min,fit};
     cells.forEach(cell=>{
@@ -284,8 +284,8 @@ window.STEquipmentTable=(function(){
         min=Math.max(min,minimum+16+(cell.querySelector('.equipment-table-checkbox:not([hidden])')?24:0));
       }
       if(id==='name'){
-        var position=cell.querySelector('.equipment-table-position');
-        var chrome=28+12+measureText(position?.textContent||'1',position||head);
+        // Only the type icon and editable name occupy the identity cell.
+        var chrome=28+4;
         width+=chrome;min=Math.max(min,96+chrome+20);
       }
       if(id==='evaluation'){
@@ -342,28 +342,48 @@ window.STEquipmentTable=(function(){
     bindResize(descriptor,layout);
     return descriptor;
   }
+  function groupHeader(row,label,count,identity=false){
+    var cell=node('th','equipment-table-group-heading',label);
+    cell.colSpan=count;
+    if(label)cell.scope='colgroup';else cell.setAttribute('aria-hidden','true');
+    if(identity)cell.classList.add('equipment-table-identity');
+    row.append(cell);
+    return cell;
+  }
   function renderTable(host,cards,conveyor,groups,showTitle){
     if(showTitle){var title=node('h4','equipment-table-heading',conveyor?tr('Conveyors','Conveyors'):tr('Equipment','Equipos'));host.append(title);}
-    var scroller=node('div','equipment-table-scroll'),table=node('table','equipment-editor-table'),head=node('thead'),top=node('tr','equipment-table-labels'),bottom=node('tr','equipment-table-units'),colgroup=node('colgroup');
+    var scroller=node('div','equipment-table-scroll'),table=node('table','equipment-editor-table'),head=node('thead'),groupRow=node('tr','equipment-table-groups'),top=node('tr','equipment-table-labels'),bottom=node('tr','equipment-table-units');
     scroller.tabIndex=0;scroller.setAttribute('role','region');scroller.setAttribute('aria-label',conveyor?tr('Conveyor table','Tabla de conveyors'):tr('Equipment table','Tabla de equipos'));
     table.setAttribute('aria-label',scroller.getAttribute('aria-label'));
     var layout={scroller,table,cards,conveyor,rows:[],columns:[]};
     tableLayouts.push(layout);
-    var name=appendColumn(layout,top,bottom,colgroup,'name',tr('Name','Nombre')),evaluation=appendColumn(layout,top,bottom,colgroup,'evaluation',tr('Evaluation','Evaluación'));
+    // Real colgroups mirror the visible spanning headings. The name,
+    // evaluation and delete columns remain independent from parameter groups.
+    var nameCols=node('colgroup'),evaluationCols=node('colgroup');
+    groupHeader(groupRow,'',1,true);groupHeader(groupRow,'',1);
+    var name=appendColumn(layout,top,bottom,nameCols,'name',tr('Name','Nombre')),evaluation=appendColumn(layout,top,bottom,evaluationCols,'evaluation',tr('Evaluation','Evaluación'));
+    table.append(nameCols,evaluationCols);
     var params=[];
-    groups.forEach(g=>g.columns.forEach((c,i)=>{
-      var descriptor=appendColumn(layout,top,bottom,colgroup,c.id,tr(c.en,c.es),tr(g.en,g.es));
-      if(i===0){descriptor.head.classList.add('equipment-table-group-start');descriptor.unit.classList.add('equipment-table-group-start');}
-      params.push({column:c,descriptor});
-    }));
-    var deletion=appendColumn(layout,top,bottom,colgroup,'delete',tr('Delete','Eliminar'));
-    head.append(top,bottom);table.append(colgroup,head);
+    groups.forEach(g=>{
+      var label=tr(g.en,g.es),cols=node('colgroup');
+      groupHeader(groupRow,label,g.columns.length);
+      g.columns.forEach(c=>{
+        var descriptor=appendColumn(layout,top,bottom,cols,c.id,tr(c.en,c.es),label);
+        params.push({column:c,descriptor});
+      });
+      table.append(cols);
+    });
+    var deleteCols=node('colgroup');
+    groupHeader(groupRow,'',1);
+    var deletion=appendColumn(layout,top,bottom,deleteCols,'delete',tr('Delete','Eliminar'));
+    table.append(deleteCols);
+    head.append(groupRow,top,bottom);table.append(head);
     var body=node('tbody');
     cards.forEach(card=>{
       var row=node('tr');row.dataset.tableEquipmentId=card.dataset.equipmentId;layout.rows.push(row);
-      var identity=node('td','equipment-table-identity'),wrap=node('div','equipment-table-name'),index=node('span','equipment-table-position',String(Number(card.dataset.index)+1)),symbol=node('button','equipment-table-symbol');
+      var identity=node('td','equipment-table-identity'),wrap=node('div','equipment-table-name'),symbol=node('button','equipment-table-symbol');
       symbol.type='button';symbol.innerHTML=window.STIcons?.equipment(type(card))||'';bindRowDrag(symbol,row,card,layout);
-      var original=source(card,'.equipment-name');wrap.append(index,symbol);
+      var original=source(card,'.equipment-name');wrap.append(symbol);
       if(original)wrap.append(makeProxy(original,card,tr('Name','Nombre')).proxy);
       else wrap.append(node('span','',card.dataset.equipmentId));
       identity.dataset.column='name';identity.append(wrap);row.append(identity);name.cells.push(identity);

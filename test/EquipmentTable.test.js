@@ -164,12 +164,19 @@ test('table preferences are separate by section, respect filters, Basic, languag
  }finally{h.close();}
 });
 
-test('two header rows, one evaluation column, deletion last, and resizable columns retain minimums',()=>{
+test('group headings span their parameters, labels and units are separate, and resizable columns retain minimums',()=>{
  const h=fixture();
  try{
    h.tableButton.click();
    const table=h.row('Filler').closest('table'),head=table.querySelector('thead');
-   assert.equal(head.querySelectorAll('tr').length,2);
+   assert.equal(head.querySelectorAll('tr').length,3);
+   const headings=[...head.querySelectorAll('.equipment-table-group-heading')].filter(th=>th.textContent);
+   assert.deepEqual(headings.map(th=>th.textContent),['General','Machine design','Reliability']);
+   assert.equal(headings.reduce((sum,th)=>sum+th.colSpan,0),head.querySelectorAll('th[data-column]').length-3);
+   const beltHead=h.row('Belt').closest('table').querySelector('thead');
+   assert([...beltHead.querySelectorAll('.equipment-table-group-heading')].some(th=>th.textContent==='Geometry'));
+   assert.equal(h.row('Filler').querySelector('.equipment-table-position'),null);
+   assert.equal(h.row('Belt').querySelector('.equipment-table-position'),null);
    assert.equal(head.querySelectorAll('th[data-column="evaluation"]').length,1);
    assert.equal(head.querySelector('th[data-column="rate"]').textContent,'Speed');
    assert.equal(head.querySelector('th[data-unit-for="rate"]').textContent,'bpm / cases/min');

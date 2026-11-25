@@ -564,3 +564,10 @@ Validación focalizada: 3/3 casos de `test/EquipmentTable.test.js` ejecutados co
 - Exactamente dos filas de encabezados (parámetro y unidad), color secundario del tema con contraste de texto existente. Se reemplaza la fila de agrupaciones por separadores de columnas y tooltip de grupo para ahorrar altura.
 - Ancho inicial basado en el contenido y tipografía, con límites de legibilidad: mínimo 68 px para inputs numéricos, 90 px para selectores y 96 px para el campo de nombre. Arrastre del borde derecho, teclado izquierda/derecha; doble clic/Home restaura ajuste automático. Anchos manuales se conservan durante la sesión por tipo de tabla y columna, incluso al alternar tarjetas/tablas. No se guardan en los datos de simulación.
 - Validación: 5/5 casos de EquipmentTable y 6/6 casos de reordenamiento del editor ejecutados con doble de DOM/arnés JavaScript aislado; pruebas nuevas de puntero, cancelación, límites y conservación del orden/modelo. Pendiente suite completa Node/JSDOM y verificación visual e interacción en navegador real.
+
+
+#### Ajuste de encabezados y densidad de tablas Advance
+
+Se restituyen las leyendas de grupo en una fila superior con colspan y colgroup reales, sin mezclar nombre del parámetro y unidad. Los tres niveles usan el color secundario; todas las divisiones verticales de encabezado usan la misma línea secundaria. Las filas de encabezado tienen altura automática y las leyendas/unidades no llevan relleno entre sí. Se elimina el número de posición visible, manteniendo el icono de tipo como punto de arrastre y el orden interno original. El área de redimensionamiento es transparente en hover (solo cambia el cursor); se conserva el foco visible para teclado, los mínimos de entrada, el ajuste automático y los anchos personalizados. Basic no cambia.
+
+Validación: 5/5 pruebas de EquipmentTable en arnés JavaScript con doble de DOM y 4/4 comprobaciones estáticas CSS/markup aprobadas. No se realizó prueba visual en navegador real.

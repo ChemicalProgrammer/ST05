@@ -251,3 +251,63 @@ test('refreshing a planner default preserves an explicit deselection',()=>{
     assert.equal(JSON.stringify(h.sim.whatIf),before);
   }finally{h.close();}
 });
+
+test('adding a machine and conveyor preserves the old CAPEX result with a visible historical warning until reevaluation',()=>{
+  const record=savedCase(),sim=record.simulations[0],entry=sim.whatIf.evaluations[0];
+  entry.status='IMPROVEMENT_REPRODUCED';entry.message='';entry.candidate={oee:55,throughput:130};
+  entry.independentCheck={passed:true,baseline:entry.baseline,candidate:entry.candidate};
+  entry.evaluatedChanges=[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}];
+  sim.equipment.push({id:'added-belt',name:'Added conveyor',type:'CONVEYOR',nominalRatePerSecond:8,initialMode:'AUTO',characteristics:{},noiseProfile:{},processData:{}},
+    {id:'added-machine',name:'Added equipment',type:'CUSTOM',nominalRatePerSecond:8,initialMode:'AUTO',characteristics:{},noiseProfile:{},processData:{equipment:{maximumSpeedBpm:600}}});
+  sim.results=null;
+  const history=JSON.stringify(sim.whatIf);
+  for(const ready of [false,true]){
+    if(ready)completeSyntheticScenarioSource(sim);
+    const h=browser(record);
+    try{
+      const badge=h.header.querySelector('.scenario-source-warning');
+      assert.equal(badge.hidden,false);assert.equal(badge.textContent,'Inputs changed');
+      assert.equal(h.host.dataset.sourceEvidence,'STALE');
+      assert.match(badge.title,/Historical result: the source simulation inputs changed/);
+      assert.equal(h.host.querySelector('.scenario-search').disabled,!ready);
+      assert.equal(h.host.querySelector('.scenario-create').disabled,true);
+      assert(h.host.querySelector('.scenario-basic-metric'));
+      assert.match(h.host.querySelector('.scenario-baseline-note').textContent,/Historical/);
+      openTrace(h);assert.equal(badge.hidden,false);
+      h.host.querySelector('.scenario-results').click();
+      assert.match(h.host.querySelector('.scenario-results-dialog .scenario-history-notice').textContent,/Historical result/);
+      assert.equal(h.w.STScenarioExplorer.evaluations(sim).length,0);
+      assert.equal(JSON.stringify(sim.whatIf),history);
+      assert.equal(h.simulationCalls(),0);
+    }finally{h.close();}
+  }
+});
+
+test('current settings cannot relabel a nested previous-source result as current',()=>{
+  const record=savedCase(),sim=record.simulations[0],old=structuredClone(sim.whatIf.evaluations[0]);
+  old.status='IMPROVEMENT_REPRODUCED';old.message='Old outcome';old.candidate={oee:55,throughput:130};
+  old.independentCheck={passed:true,baseline:old.baseline,candidate:old.candidate};
+  old.evaluatedChanges=[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}];
+  sim.equipment[0].nominalRatePerSecond+=.1;completeSyntheticScenarioSource(sim);
+  sim.whatIf.evaluations=[{...sim.whatIf.evaluations[0],sourceSignature:scenarioSignature(sim),status:'NOT_EVALUATED',baseline:null,candidate:null,evaluatedChanges:undefined,lastResult:old,progressTrace:undefined}];
+  const before=JSON.stringify(sim.whatIf),h=browser(record);
+  try{
+    assert.equal(h.header.querySelector('.scenario-source-warning').hidden,false);
+    assert.equal(h.host.dataset.sourceEvidence,'STALE');
+    assert.equal(h.host.querySelector('.scenario-create').disabled,true);
+    assert.equal(h.host.querySelector('.scenario-search').disabled,false);
+    assert.equal(h.w.STScenarioExplorer.evaluations(sim).length,0);
+    h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+    assert.equal(h.header.querySelector('.scenario-source-warning').textContent,'Datos modificados');
+    assert.equal(JSON.stringify(sim.whatIf),before);
+  }finally{h.close();}
+});
+
+test('a fresh source-compatible result has no source-change warning',()=>{
+  const record=savedCase(),h=browser(record);
+  try{
+    assert.equal(h.header.querySelector('.scenario-source-warning').hidden,true);
+    assert.equal(h.host.dataset.sourceEvidence,'CURRENT');
+    assert.equal(h.w.STScenarioExplorer.evaluations(h.sim).length,1);
+  }finally{h.close();}
+});

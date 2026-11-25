@@ -177,6 +177,10 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 
 La evaluación conjunta no equivale a homologación completa ni validación de planta.
 
+### Ajuste transversal: cámara lenta de reproducción
+
+Se incorporan 0.2× y 0.5× al componente compartido de velocidades, preservando 1× por defecto y todas las velocidades anteriores. Se elimina el mínimo artificial de 1× del reloj Live numérico y se valida que los multiplicadores sean positivos y finitos. El reloj 2D y su paso físico fijo permanecen sin cambios. Se actualiza la lista de velocidades persistibles del servidor para que coincida con el selector (manteniendo compatibilidad con 1,000,000× histórico). No cambia el motor físico, la procedencia de resultados ni el estado de las etapas. Pruebas focalizadas: 4/4 en arnés JavaScript aislado; se amplía la prueba DOM existente, no ejecutada en este arnés. La nueva corrida numérica 0.20.2 sigue pendiente.
+
 ## 7. Protocolo de mantenimiento
 
 Al retomar el trabajo, leer primero este archivo en `main` y contrastarlo con el historial de commits. Actualizarlo en el mismo commit de cada modificación de homologación cuando sea viable, o en un commit documental posterior claramente vinculado. Registrar siempre:

@@ -12,7 +12,9 @@ test('2D and numerical playback expose the same speeds and restore the new saved
     assert.deepEqual(values(numerical),values(twoD));
     assert.equal(new Set(values(numerical)).size,numerical.options.length);
     w.eval(fs.readFileSync(new URL('../apps-script/ClientUtils.html',import.meta.url),'utf8'));
-    for(const rate of [10000,20000,50000]){
+    assert.deepEqual(values(numerical).slice(0,5),[0.2,0.5,1,2,5]);
+    assert.equal(numerical.value,'1');assert.equal(twoD.value,'1');
+    for(const rate of values(numerical)){
       assert(values(numerical).includes(rate));
       for(const select of [numerical,twoD]){
         w.restorePlaybackSpeed(select,rate);assert.equal(Number(select.value),rate);

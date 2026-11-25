@@ -163,7 +163,7 @@ function normalizeSimulations_(simulations, fallbackEquipment, fallbackConfig) {
       name: typeof simulation.name === 'string' && simulation.name ? simulation.name.slice(0, 120) : 'Simulation ' + simulationLetter_(index),
       equipment: simulationEquipment,
       dynamicConfig: normalizeObject_(simulation.dynamicConfig),
-      playbackRate: [0.5,1,2,5,10,20,50,100,200,500,1000,10000,1000000].includes(Number(simulation.playbackRate))?Number(simulation.playbackRate):1,
+      playbackRate: [0.2,0.5,1,2,5,10,20,50,100,200,500,1000,2000,5000,10000,20000,50000,1000000].includes(Number(simulation.playbackRate))?Number(simulation.playbackRate):1,
       results: simulation.results == null ? null : normalizeObject_(simulation.results),
       ...(simulation.simulation2d==null?{}:{simulation2d:normalizeObject_(simulation.simulation2d)}),
       scenario: normalizeObject_(simulation.scenario),

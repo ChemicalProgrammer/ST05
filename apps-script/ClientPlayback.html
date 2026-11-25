@@ -171,7 +171,8 @@
         if(session!==numericalPlaybackSession||!state.run.playing)return;
         var now=performance.now();
         if(session.ready){
-          var rate=Math.max(1,Number(document.getElementById('run-playback-rate').value)||1);
+          var rate=Number(document.getElementById('run-playback-rate').value);
+          if(!(rate>0)||!Number.isFinite(rate))rate=1;
           session.targetSecond=Math.min(session.controller.durationSeconds,
             session.targetSecond+Math.max(0,now-session.lastWallAt)*rate/1000);
         }
@@ -316,7 +317,8 @@
       var samples = state.run.result.samples;
       var frame=samples[state.run.sampleIndex],next=samples[state.run.sampleIndex+1];
       var offset=playbackElapsed(frame);
-      var rate=Number(document.getElementById('run-playback-rate').value||1);
+      var rate=Number(document.getElementById('run-playback-rate').value);
+      if(!(rate>0)||!Number.isFinite(rate))rate=1;
       // When streaming replaces the sample object at the same virtual second,
       // retain the running clock instead of restarting its wall-time origin.
       if(playbackClock&&playbackClock.started!==null&&playbackClock.frame?.virtualSecond===frame?.virtualSecond&&playbackClock.rate===rate){

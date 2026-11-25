@@ -36,8 +36,9 @@ async function setup({remember=false,fail=false,many=false,invalidSheet=false,em
  if(many) cases=Array.from({length:60},(_,i)=>({...initial,id:'case-'+i,name:'Line '+String(i).padStart(2,'0')}));
  const copy=x=>JSON.parse(JSON.stringify(x));
  const api={
-  getBootstrap:()=>({uiMode,user:{email:'preview@example.test'},settings:stored,gemini:{configured:geminiConfigured,model:'gemini-2.5-flash',prompts:context.geminiPromptDefinitions_(),promptOverrides:stored.gemini?.prompts||{}},cases:indexedCatalog==='cold'?[]:cases.map(c=>({id:c.id,name:c.name,equipmentCount:c.equipment.length,isSimulationReady:c.equipment.length>1,updatedAt:c.updatedAt})),caseCatalog:indexedCatalog?{refreshRequired:true}:undefined}),
-  refreshCaseCatalog:()=>({cases:cases.map(c=>({id:c.id,name:c.name,revision:c.revision,equipmentCount:c.equipment.length,isSimulationReady:c.equipment.length>1,updatedAt:c.updatedAt})),hasMore:false,cursor:null}),
+  getBootstrap:()=>({uiMode,user:{email:'preview@example.test'},settings:stored,gemini:{configured:geminiConfigured,model:'gemini-2.5-flash',prompts:context.geminiPromptDefinitions_(),promptOverrides:stored.gemini?.prompts||{}},cases:indexedCatalog==='cold'?[]:cases.map(c=>({id:c.id,name:c.name,equipmentCount:c.equipment.length,isSimulationReady:c.equipment.length>1,updatedAt:c.updatedAt,archived:c.archived===true})),caseCatalog:indexedCatalog?{refreshRequired:true}:undefined}),
+  refreshCaseCatalog:()=>({cases:cases.map(c=>({id:c.id,name:c.name,revision:c.revision,equipmentCount:c.equipment.length,isSimulationReady:c.equipment.length>1,updatedAt:c.updatedAt,archived:c.archived===true})),hasMore:false,cursor:null}),
+  setCaseArchived:(id,archived)=>{const record=cases.find(c=>c.id===id);record.archived=archived;record.revision++;return {id:record.id,name:record.name,revision:record.revision,equipmentCount:record.equipment.length,isSimulationReady:record.equipment.length>1,updatedAt:record.updatedAt,archived};},
   askGemini:()=>({text:'Analysis of the saved case.'}),
   previewSheetImport:()=>({canImport:!invalidSheet,source:{schemaVersion:'plant-sheet-v1',sheetName:'Synthetic sheet',readAt:'2026-09-16',spreadsheetId:'synthetic-id'},metadata:{site:'Synthetic site',formatName:'Imported format'},equipment:copy(sourceEquipment.slice(0,3)).map((unit,index)=>({...unit,characteristics:{...unit.characteristics,criticalMachine:index===0,isPacemaker:index===0},processData:{...unit.processData,role:unit.type==='CONVEYOR'?'CONVEYOR':index===0?'CRITICAL_MACHINE':'MACHINE'}})).map((e,i)=>({...e,noiseProfile:{...e.noiseProfile,reliability:{...e.noiseProfile.reliability,mtbfMinutes:e.noiseProfile.reliability.mtbfMinutes+60}},processData:{...e.processData,equipment:{...e.processData.equipment,mtbfMinutes:e.processData.equipment.mtbfMinutes+60}},characteristics:{...e.characteristics,sourceSheetRow:i+10}})),sourceRows:[],errors:invalidSheet?[{cell:'D10:E10',message:'Supply both MTBF and MTTR.'}]:[],warnings:[],notes:['Review model assumptions.']}),
   getCase:id=>copy(cases.find(c=>c.id===id)),
@@ -1879,9 +1880,9 @@ test('UI: gallery tools share the title row in cards while delete keeps its conf
   await h.click('#case-layout');assert(h.d.getElementById('cases-list').classList.contains('grid'));
   const card=h.d.querySelector('.case-row'),tools=card.querySelector('.case-tools'),meta=card.querySelector('.case-actions');
   assert.equal(h.w.getComputedStyle(card).display,'grid');assert.equal(h.w.getComputedStyle(tools).gridRow,'1');assert.equal(h.w.getComputedStyle(tools).gridColumn,'2');assert.equal(h.w.getComputedStyle(meta).gridColumn,'1 / -1');
-  assert.equal(tools.querySelectorAll('button').length,2);assert(!meta.querySelector('button'));assert.equal(tools.querySelector('.delete-gallery-case').textContent,'');
+  assert.equal(tools.querySelectorAll('button').length,4);assert(tools.querySelector('.archive-gallery-case'));assert(!meta.querySelector('button'));assert.equal(tools.querySelector('.delete-gallery-case').textContent,'');
   await h.click('.delete-gallery-case');assert(h.d.querySelector('.message-dialog[open]'));await h.click('.message-dialog .dialog-actions button:first-child');assert.equal(h.storedCases().length,1);assert(!h.calls.includes('deleteCase'));
-  await h.click('#case-layout');assert(!h.d.getElementById('cases-list').classList.contains('grid'));assert.equal(h.d.querySelector('.case-row').querySelector('.case-tools').children.length,2);assert.deepEqual(h.errors,[]);
+  await h.click('#case-layout');assert(!h.d.getElementById('cases-list').classList.contains('grid'));assert.equal(h.d.querySelector('.case-row').querySelector('.case-tools').children.length,4);assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });
 
@@ -3430,5 +3431,28 @@ test('UI: layout appearance dialog saves bottle and liquid choices without chang
    assert.equal(dialog.querySelector('[aria-label="Pink"]').getAttribute('aria-pressed'),'true');
    await h.click('#simulation2d-appearance-dialog .dialog-actions button:first-child');
    assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});
+
+
+test('UI: archive hides a case from active gallery filters and unarchive restores it',async()=>{
+ const h=await setup({remember:true});try{
+  await waitFor(()=>h.d.querySelector('.archive-gallery-case'));
+  const before=h.storedCases()[0],filter=h.d.getElementById('case-filter');
+  await h.click('.archive-gallery-case');
+  await waitFor(()=>h.d.querySelectorAll('.case-row').length===0);
+  assert(h.storedCases()[0].archived);
+  assert.deepEqual(h.storedCases()[0].simulations,before.simulations);
+  assert.equal(h.storedCases()[0].updatedAt,before.updatedAt);
+  for(const value of ['ready','draft','archived']){
+   filter.value=value;filter.dispatchEvent(new h.w.Event('change'));
+   assert.equal(h.d.querySelectorAll('.case-row').length,value==='archived'?1:0);
+  }
+  assert.equal(h.d.querySelector('.archive-gallery-case').dataset.icon,'unarchive');
+  await h.click('.archive-gallery-case');await waitFor(()=>h.d.querySelectorAll('.case-row').length===0);
+  assert.equal(h.storedCases()[0].archived,false);
+  filter.value='all';filter.dispatchEvent(new h.w.Event('change'));assert.equal(h.d.querySelectorAll('.case-row').length,1);
+  assert.equal(h.d.querySelector('.archive-gallery-case').dataset.icon,'archive');
+  assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });

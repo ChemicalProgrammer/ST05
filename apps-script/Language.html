@@ -2195,6 +2195,24 @@ window.STLanguage=(function(){
   "Los detalles del error superan el límite del enlace de redacción. Pega el diagnóstico completo desde Copiar error antes de enviar.": "The error details exceed the compose-link limit. Please paste the complete diagnostic from Copy error before sending.",
   "El mensaje se acortó para ajustarse al enlace de Gmail. Usa Copiar error y pega todos los detalles en Gmail.": "The message is shortened to fit the Gmail link. Use Copy error and paste the full details into Gmail."
 });
+  Object.assign(translations,{
+  "Active cases": "Casos activos",
+  "Archived cases": "Casos archivados",
+  "Archive case": "Archivar caso",
+  "Unarchive case": "Desarchivar caso",
+  "Case archived.": "Caso archivado.",
+  "Case unarchived.": "Caso desarchivado.",
+  "Choose a valid archive state.": "Selecciona un estado de archivo válido."
+});
+  Object.assign(englishOfSpanish,{
+  "Casos activos": "Active cases",
+  "Casos archivados": "Archived cases",
+  "Archivar caso": "Archive case",
+  "Desarchivar caso": "Unarchive case",
+  "Caso archivado.": "Case archived.",
+  "Caso desarchivado.": "Case unarchived.",
+  "Selecciona un estado de archivo válido.": "Choose a valid archive state."
+});
   function applyTree(root){
     if(!root)return;
     if(root.nodeType===3){updateText(root);return;}

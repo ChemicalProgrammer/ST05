@@ -162,7 +162,7 @@ test('El encabezado es compacto, el estado no revela frames y las eficiencias mu
   assert.match(playback,/setPlaybackStatus\(state\.run\.playing\?'Playing':\(finished\?'Completed':\(sample\.virtualSecond>0\?'Paused':'Ready'\)\)\)/);
   assert.doesNotMatch(playback,/setPlaybackStatus\([^\n]*client\.s_frame/);
   assert.match(style,/#simulation-playback-efficiencies #basic-efficiencies > \.metric-card--featured/);
-  assert.match(style,/border-top:4px solid var\(--accent\)!important/);
+  assert.match(style,/border-top:var\(--card-accent-width\) solid var\(--accent\)!important/);
   assert.match(style,/#simulation-playback-efficiencies #basic-efficiencies > \.metric-card--featured > strong/);
   const cards=web.split('id="simulation-playback-metrics"')[1].split('</div>')[0];
   assert.equal((cards.match(/metric-card--result/g)||[]).length,10);

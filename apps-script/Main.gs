@@ -92,6 +92,9 @@ function getCompleteCaseForExport(caseId) {
   return executeServerAction_(function(user){return getCase_(caseId,user,false);});
 }
 
+function setCaseArchived(caseId, archived) {
+  return executeServerAction_(function(user){return setCaseArchived_(caseId,archived,user);});
+}
 function deleteCase(caseId) {
   return executeServerAction_(function(user) {
     return deleteCase_(caseId, user);
@@ -102,7 +105,7 @@ function saveCase(request) {
   return executeServerAction_(function(user) {
     var saved=saveCase_(request, user);
     // The client already holds the draft; return only the acknowledgement.
-    return {id:saved.id,name:saved.name,revision:saved.revision,updatedAt:saved.updatedAt,equipmentCount:saved.equipment.length};
+    return {id:saved.id,name:saved.name,revision:saved.revision,updatedAt:saved.updatedAt,equipmentCount:saved.equipment.length,archived:saved.archived===true};
   });
 }
 

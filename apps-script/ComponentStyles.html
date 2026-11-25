@@ -15,7 +15,7 @@ button { --on-accent:#fff; }
 }
 .metric-card--featured,html[data-ui-mode=basic] #basic-efficiencies > div {
   background:var(--surface-soft);border:var(--border-width) solid var(--line);
-  border-top:4px solid var(--accent);border-radius:var(--radius-md);
+  border-top:var(--card-accent-width) solid var(--accent);border-radius:var(--radius-md);
   padding:var(--space-3);min-width:0;
 }
 .metric-card--featured > strong {display:block;font-size:var(--font-kpi);line-height:1.15;margin-top:var(--space-2);font-variant-numeric:tabular-nums;}
@@ -271,7 +271,7 @@ button.app-section-tab[hidden],button.app-section-tab.hidden {display:none!impor
   display:flex;flex-direction:column;align-items:flex-start;
   gap:var(--space-2);min-width:0;
   background:var(--surface-soft);border:var(--border-width) solid var(--line);
-  border-top:4px solid var(--accent)!important;border-radius:var(--radius-md);
+  border-top:var(--card-accent-width) solid var(--accent)!important;border-radius:var(--radius-md);
   padding:var(--space-3);box-shadow:0 2px 7px color-mix(in srgb,var(--ink) 7%,transparent);
 }
 #simulation-playback-efficiencies #basic-efficiencies > .metric-card--featured > span,

@@ -44,6 +44,21 @@ function getCase_(caseId, user, migrateOnOpen) {
   return migrateOnOpen?withCaseWriteLock_(load):load();
 }
 
+// Archive is gallery metadata, not a simulation edit. Preserve manifest
+// references, legacy inline records, all result files and last-edit time.
+function setCaseArchived_(caseId, archived, user) {
+  if(typeof archived!=='boolean')throw createSimulatorError_('INVALID_CASE','Choose a valid archive state.');
+  return withCaseWriteLock_(function(){
+    var owned=getOwnedCaseFile_(caseId,user,true),record=owned.caseData;
+    if((record.archived===true)!==archived){
+      record.archived=archived;
+      record.revision=Number(record.revision||1)+1;
+      owned.file.setContent(JSON.stringify(record));
+    }
+    if(typeof updateCaseIndex_==='function')updateCaseIndex_(record,owned.file,user,false,owned.folder?record.id:null);
+    return toCaseSummary_(record,owned.file);
+  });
+}
 function deleteCase_(caseId, user) { return withCaseWriteLock_(function(){return deleteCaseUnlocked_(caseId,user);}); }
 function deleteCaseUnlocked_(caseId, user) {
   var owned = getOwnedCaseFile_(caseId, user, true);
@@ -113,6 +128,7 @@ function createNewCaseRecord_(request, user) {
     metadata: normalizeCaseMetadata_(request.metadata),
     stateIds: normalizeStringList_(request.stateIds),
     ownerEmail: user.email,
+    archived: false,
     revision: 1,
     createdAt: now,
     updatedAt: now
@@ -134,6 +150,8 @@ function buildUpdatedCase_(request, current, user) {
     metadata: request.metadata === undefined ? normalizeCaseMetadata_(current.metadata) : normalizeCaseMetadata_(request.metadata),
     stateIds: normalizeStringList_(current.stateIds),
     ownerEmail: user.email,
+    // Ordinary saves, including stale drafts, cannot change archive state.
+    archived: current.archived===true,
     revision: Number(current.revision || 0) + 1,
     createdAt: current.createdAt,
     updatedAt: new Date().toISOString()
@@ -234,6 +252,7 @@ function findCaseManifest_(folder,id){
 function caseStorageComparable_(record,refs){
   var value={};
   ['schemaVersion','id','name','unitOfFlow','equipment','engineConfig','activeSimulationId','metadata','stateIds','ownerEmail','createdAt'].forEach(function(key){value[key]=record[key];});
+  value.archived=record.archived===true;
   value.simulationFiles=refs;
   function canonical(item){if(Array.isArray(item))return item.map(canonical);if(item&&typeof item==='object'){var result={};Object.keys(item).sort().forEach(function(key){result[key]=canonical(item[key]);});return result;}return item;}
   return JSON.stringify(canonical(value));
@@ -417,6 +436,7 @@ function toCaseSummary_(caseData, file) {
     name: caseData.name,
     equipmentCount: Array.isArray(caseData.equipment) ? caseData.equipment.length : 0,
     isSimulationReady: Array.isArray(caseData.equipment) && caseData.equipment.length >= 2,
+    archived: caseData.archived===true,
     revision: Number(caseData.revision || 1),
     updatedAt: caseData.updatedAt,
     fileId: file.getId(),

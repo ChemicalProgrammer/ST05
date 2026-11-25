@@ -269,3 +269,27 @@ test('complete gallery export reads an owned case without migrating legacy files
  assert.equal(legacy.trashed,false);assert.equal(h.folder().files.size,before);assert.equal(h.folder().getFolders().hasNext(),false);
  h.seed('foreign-export','someone@example.test');assert.equal(h.ctx.getCompleteCaseForExport('foreign-export').ok,false);
 });
+
+
+test('archiving persists across catalog refresh, preserves case files and is reversible',()=>{
+ const h=runtime(),legacy=h.seed('archive-legacy');
+ const before=JSON.parse(legacy.content);h.refresh();
+ const response=h.ctx.setCaseArchived('archive-legacy',true);
+ assert(response.ok);assert.equal(response.data.archived,true);assert.equal(response.data.revision,2);
+ const after=JSON.parse(legacy.content);
+ assert.deepEqual(after.simulations,before.simulations);assert.equal(after.updatedAt,before.updatedAt);assert(!legacy.trashed);
+ assert.equal(h.ctx.getBootstrap().data.cases[0].archived,true);assert.equal(h.refresh().cases[0].archived,true);
+ assert.equal(h.ctx.setCaseArchived('archive-legacy',true).data.revision,2);
+ assert.equal(h.ctx.setCaseArchived('archive-legacy','true').ok,false);
+ assert.throws(()=>h.ctx.setCaseArchived_('archive-legacy',false,{email:'other@example.test'}),e=>e.simulatorError.code==='CASE_NOT_FOUND');
+ const draft=h.ctx.getCase_('archive-legacy',owner);draft.archived=false;draft.expectedRevision=1;
+ const saved=h.ctx.saveCase_(draft,owner);assert.equal(saved.archived,true);
+ const folder=h.folder().getFoldersByName('archive-legacy').next(),manifest=manifestFile(folder);
+ const reference=JSON.parse(manifest.content).simulationFiles[0],simulation=folder.files.get(reference.fileName),original=simulation.content;
+ h.reads.length=0;
+ const restored=h.ctx.setCaseArchived('archive-legacy',false);
+ assert(restored.ok);assert.equal(restored.data.archived,false);assert(!h.reads.includes(reference.fileName));
+ assert.equal(simulation.content,original);assert(!simulation.trashed);assert(!folder.trashed);
+ assert.deepEqual(JSON.parse(manifest.content).simulationFiles[0],reference);
+ assert.equal(h.refresh().cases[0].archived,false);
+});

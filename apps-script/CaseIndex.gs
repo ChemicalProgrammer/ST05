@@ -22,7 +22,7 @@ function caseFileModifiedAt_(file,fallback) {
 function caseCatalogEntries_(data) {
   return data.entries.filter(function(e){return typeof e.id==='string'&&/^[a-z0-9-]+$/i.test(e.id)&&typeof e.name==='string';})
     .map(function(e){return {id:e.id,name:e.name,equipmentCount:e.equipmentCount,isSimulationReady:e.isSimulationReady,
-      revision:e.revision,updatedAt:e.updatedAt,fileId:e.fileId,dataClassification:e.dataClassification};})
+      revision:e.revision,updatedAt:e.updatedAt,fileId:e.fileId,dataClassification:e.dataClassification,archived:e.archived===true};})
     .sort(function(a,b){return String(b.updatedAt).localeCompare(String(a.updatedAt));});
 }
 function getCaseCatalog_(user) {
@@ -84,11 +84,11 @@ function refreshCaseCatalog_(user,cursor) {
 
 // Called under the same user lock as the case write. A catalog failure must not
 // turn a successfully persisted case into an ambiguous failed-save response.
-function updateCaseIndex_(caseData,file,user,removed) {
+function updateCaseIndex_(caseData,file,user,removed,folderName) {
   try {
     var folder=getWorkspaceFolders_().cases,index=readCaseIndex_(folder,user);
     index.data.entries=index.data.entries.filter(function(e){return e.id!==caseData.id&&e.fileId!==file.getId();});
-    if(!removed)index.data.entries.push(Object.assign(toCaseSummary_(caseData,file),{folderName:([caseManifestName_(caseData.id),'case.json'].includes(file.getName()))?caseData.id:null,fileModifiedAt:caseFileModifiedAt_(file,caseData.updatedAt)}));
+    if(!removed)index.data.entries.push(Object.assign(toCaseSummary_(caseData,file),{folderName:folderName===undefined?(([caseManifestName_(caseData.id),'case.json'].includes(file.getName()))?caseData.id:null):folderName,fileModifiedAt:caseFileModifiedAt_(file,caseData.updatedAt)}));
     writeCaseIndex_(folder,index,user);
   }catch(error){console.error(JSON.stringify({event:'CASE_INDEX_UPDATE_FAILED',type:error?.name||'Error'}));}
 }

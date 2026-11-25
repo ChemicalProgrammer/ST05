@@ -9,9 +9,9 @@
     var whatIfOnlySave=false;
     var autosave = STAutosave({enabled:false,capture:captureForSave,send:function(payload,done){callServer('saveCase',[payload],done);},accept:function(saved){
       if (!state.activeCase || state.activeCase.id !== saved.id) return;
-      state.activeCase.revision=saved.revision;state.activeCase.updatedAt=saved.updatedAt;
+      state.activeCase.revision=saved.revision;state.activeCase.updatedAt=saved.updatedAt;if(typeof saved.archived==='boolean')state.activeCase.archived=saved.archived;
       var item=(state.bootstrap?.cases||[]).find(function(x){return x.id===saved.id;});
-      if(item){item.revision=saved.revision;item.name=saved.name;item.updatedAt=saved.updatedAt;item.equipmentCount=saved.equipmentCount??saved.equipment?.length??item.equipmentCount;item.isSimulationReady=item.equipmentCount>=2;}
+      if(item){item.revision=saved.revision;item.name=saved.name;item.updatedAt=saved.updatedAt;item.equipmentCount=saved.equipmentCount??saved.equipment?.length??item.equipmentCount;item.isSimulationReady=item.equipmentCount>=2;if(typeof saved.archived==='boolean')item.archived=saved.archived;}
     },status:function(status,error){
       state.saving=status==='saving';state.isDirty=status!=='saved';
       syncSaveButton();
@@ -111,7 +111,7 @@
       if (!await showCaseHome()) return;
       cancelCaseCatalog();
       state.requestEpoch += 1;
-      cloningCases.clear();
+      cloningCases.clear();archivingCases.clear();
       STPreferences.write('remember', null);
       document.getElementById('remember-session').checked = false;
       state.bootstrap = null;
@@ -129,7 +129,7 @@
       cancelCaseCatalog();state.requestEpoch+=1;
       callServer('resetAppSettings',[],function(response){
         if(!response.ok){done(response);return;}
-        cancelRoundSession();stopPlaybackTimer();autosave.reset();cloningCases.clear();assistant.reset();
+        cancelRoundSession();stopPlaybackTimer();autosave.reset();cloningCases.clear();archivingCases.clear();assistant.reset();
         state.activeSimulationId=null;state.isDirty=false;state.liveZoneDetails={};state.basicView=null;state.uiView='cases';state.run.commands=[];state.run.roundIndex=0;state.run.sampleIndex=0;state.run.result=null;state.run.representative=null;state.run.configuration=null;
         STEquipmentInspector.release();document.getElementById('equipment-list').replaceChildren();
         STSettings.clearDraft();
@@ -626,6 +626,31 @@ async function openCase(caseId, initialView) {
       });
     }
 
+    var archivingCases=new Map();
+    function requestCaseArchive(caseId,archived,button){
+      if(archivingCases.has(caseId)||!state.bootstrap)return;
+      var session=state.bootstrap,workspace=session.settings.workspaceRootFolderId,token={};
+      archivingCases.set(caseId,token);button.disabled=true;button.dataset.busy='true';
+      function sameWorkspace(){return state.bootstrap===session&&session.settings.workspaceRootFolderId===workspace;}
+      callServer('setCaseArchived',[caseId,archived],function(response){
+        if(!sameWorkspace())return;
+        if(!response.ok)return showError(response.error);
+        var summary=response.data,item=session.cases.find(function(c){return c.id===caseId;});
+        if(!item)session.cases.push(summary);
+        else if(Number(item.revision||0)<=Number(summary.revision||0))Object.assign(item,summary);
+        if(state.activeCase?.id===caseId&&Number(state.activeCase.revision||0)<=Number(summary.revision||0)){
+          state.activeCase.archived=summary.archived;state.activeCase.revision=summary.revision;
+        }
+        var restoreFocus=document.activeElement===button;
+        renderCases(session.cases);
+        if(restoreFocus&&!state.activeCase)document.getElementById('case-filter')?.focus();
+        setStatus(__ST_TEXT__(summary.archived?'casegallery.archived_message':'casegallery.unarchived_message'));
+      },function(){
+        if(archivingCases.get(caseId)!==token)return;
+        archivingCases.delete(caseId);button.disabled=false;delete button.dataset.busy;
+        if(sameWorkspace())document.querySelectorAll('.archive-gallery-case').forEach(function(current){if(current.dataset.caseId===caseId){current.disabled=false;delete current.dataset.busy;}});
+      });
+    }
     var exportingCases=new Set();
     function requestCaseExport(caseId,button){
       if(exportingCases.has(caseId))return;exportingCases.add(caseId);button.disabled=true;button.dataset.busy='true';
@@ -638,7 +663,7 @@ async function openCase(caseId, initialView) {
       });
     }
 
-    function renderCases(cases) { STCaseGallery.render(cases, openCase, requestCaseClone,{loading:state.catalogLoading,deleteCase:requestCaseDeletion,exportCase:requestCaseExport,exportCasePending:id=>exportingCases.has(id)}); }
+    function renderCases(cases) { STCaseGallery.render(cases, openCase, requestCaseClone,{loading:state.catalogLoading,deleteCase:requestCaseDeletion,exportCase:requestCaseExport,exportCasePending:id=>exportingCases.has(id),archiveCase:requestCaseArchive,archiveCasePending:id=>archivingCases.has(id)}); }
     var catalogGeneration=0,catalogTimer;
     function cancelCaseCatalog(){
       catalogGeneration++;clearTimeout(catalogTimer);state.catalogLoading=false;

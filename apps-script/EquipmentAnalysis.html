@@ -50,16 +50,23 @@
   --matrix-keep-fill:color-mix(in srgb,#35b578 29%,var(--surface));
 }
 #equipment-analysis-body .intervention-chart text { fill:currentColor; }
+#equipment-analysis-body .intervention-chart .zone-content {
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:100%;height:100%;box-sizing:border-box;gap:4px;text-align:center;
+  color:var(--ink);pointer-events:none;
+}
 #equipment-analysis-body .intervention-chart .zone-title {
   display:flex;align-items:center;justify-content:center;gap:6px;
-  width:100%;height:100%;font-size:14px;font-weight:var(--weight-semibold);line-height:1.15;
-  color:var(--ink);white-space:nowrap;pointer-events:none;
+  max-width:100%;font-size:14px;font-weight:var(--weight-semibold);line-height:1.15;
+  color:var(--ink);pointer-events:none;
 }
 #equipment-analysis-body .intervention-chart .zone-title .icon {
   width:16px;height:16px;flex:none;fill:none;stroke:currentColor;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
 }
-#equipment-analysis-body .intervention-chart .zone-detail { font-size:11px; }
+#equipment-analysis-body .intervention-chart .zone-detail {
+  max-width:100%;font-size:11px;line-height:1.45;text-align:center;
+}
 #equipment-analysis-body .intervention-chart .axis-text { font-size:11px; }
 #equipment-analysis-body .intervention-chart .axis-title { font-size:13px; font-weight:600; }
 #equipment-analysis-body .intervention-chart .chart-grid { stroke:var(--line); stroke-width:1; opacity:.75; }
@@ -80,15 +87,17 @@
   paint-order:stroke fill;stroke-linejoin:round;pointer-events:none;
 }
 #equipment-analysis-body .intervention-keys {
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);
-  align-items:start;gap:var(--space-4);min-width:0;
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:start;gap:0;width:100%;min-width:0;
 }
-#equipment-analysis-body .intervention-key-column {display:grid;align-content:start;gap:var(--space-2);min-width:0;}
+#equipment-analysis-body .intervention-key-column {display:grid;align-content:start;gap:var(--space-2);min-width:0;box-sizing:border-box;}
+#equipment-analysis-body .intervention-key-column:first-child {padding-inline-end:var(--space-4);}
 #equipment-analysis-body .intervention-key-heading {
-  display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-secondary);
+  display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;
+  gap:var(--space-2);font-size:var(--font-secondary);
   font-weight:var(--weight-semibold);color:var(--secondary-text,var(--ink));
 }
-#equipment-analysis-body .intervention-key-heading .icon {width:var(--font-body);height:var(--font-body);}
+#equipment-analysis-body .intervention-key-heading .icon {justify-self:center;width:var(--font-body);height:var(--font-body);}
 #equipment-analysis-body :is(.intervention-legend,.intervention-equipment-key) {
   display:grid;align-content:start;gap:var(--space-1);list-style:none;
   margin:0;padding:0;min-width:0;font-size:var(--font-secondary);
@@ -101,7 +110,7 @@
 #equipment-analysis-body .intervention-legend-item .intervention-dot {margin-block-start:.28em;}
 #equipment-analysis-body .intervention-legend-item .intervention-line {margin-block-start:.65em;}
 @media (max-width:420px) {
-  #equipment-analysis-body .intervention-keys {grid-template-columns:minmax(0,1fr);}
+  #equipment-analysis-body .intervention-key-column:first-child {padding-inline-end:var(--space-2);}
 }
 #equipment-analysis-body .intervention-dot { display:inline-block; width:10px; height:10px; background:var(--matrix-point-color,var(--muted)); border:1px solid var(--ink); border-radius:50%; flex:none; }
 #equipment-analysis-body .intervention-dot.is-current {width:12px;height:12px;outline:1px solid var(--ink);outline-offset:2px;}
@@ -391,14 +400,16 @@ window.STEquipmentAnalysis=(function(){
     svgNode(svg,'rect',{x:left,y:top,width:right-left,height:bottom-top,fill:'none',class:'chart-boundary'});
     if(g.target)svgNode(svg,'line',{...g.target,class:'availability-line','data-availability-target':r.thresholds.availabilityTarget});
     for(const z of zones){
-      const x=z.x+z.w/2,y=z.y+34;
-      // An HTML flex heading inside the SVG keeps the shared icon and its
-      // translated title centered as one unit, without measuring hidden text.
-      const heading=svgNode(svg,'foreignObject',{x:z.x+8,y:y-17,width:z.w-16,height:24,'data-zone-heading':z.key,'pointer-events':'none'});
-      const title=make(heading,'div');title.className='zone-title';
+      // Center the complete title/icon/description block in its quadrant.
+      // Equal insets preserve the geometric center; a later SVG marker layer
+      // intentionally paints on top of these passive captions.
+      const heading=svgNode(svg,'foreignObject',{x:z.x+8,y:z.y+8,width:z.w-16,height:z.h-16,'data-zone-heading':z.key,'pointer-events':'none'});
+      const content=make(heading,'div');content.className='zone-content';
+      const title=make(content,'div');title.className='zone-title';
       window.STIcons.button(title,z.icon);
       make(title,'span',z.title);
-      z.detail.forEach((label,i)=>svgNode(svg,'text',{x,y:y+20+i*16,'text-anchor':'middle',class:'zone-detail'},label));
+      const detail=make(content,'div');detail.className='zone-detail';
+      z.detail.forEach(label=>make(detail,'div',label));
     }
     // Draw peers first so the selected marker is never hidden underneath them.
     const plotted=dataset.filter(item=>validMatrixPoint(item.report));

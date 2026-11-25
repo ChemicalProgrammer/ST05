@@ -361,7 +361,20 @@ test('matrix uses two vertical legend lists, passive markers and icons before ev
   assert(matrix.querySelector('.equipment-point-ring'));
   assert(equipment.querySelector('[data-current-equipment="true"] .is-current'));
   assert.doesNotMatch(legend.textContent,/Current equipment/);
-  assert.match(style,/\.intervention-keys\s*\{[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,2fr\)/);
+  assert.match(style,/\.intervention-keys\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)[^}]*gap:0/);
+  assert.match(style,/\.intervention-key-heading\s*\{[^}]*grid-template-columns:24px minmax\(0,1fr\)/);
+  assert.match(style,/\.zone-content\s*\{[^}]*align-items:center;justify-content:center/);
+  assert.match(style,/\.zone-content\s*\{[^}]*width:100%;height:100%/);
+  for(const block of zones){
+   const rect=matrix.querySelector('[data-intervention-zone="'+block.getAttribute('data-zone-heading')+'"]');
+   const center=(el,pos,size)=>Number(el.getAttribute(pos))+Number(el.getAttribute(size))/2;
+   assert.equal(center(block,'x','width'),center(rect,'x','width'));
+   assert.equal(center(block,'y','height'),center(rect,'y','height'));
+   assert.equal(Number(block.getAttribute('height')),Number(rect.getAttribute('height'))-16);
+   assert.equal(block.querySelector('.zone-content > .zone-detail').children.length,2);
+   const markersLayer=matrix.querySelector('[data-equipment-point-layer]');
+   assert(block.compareDocumentPosition(markersLayer)&h.w.Node.DOCUMENT_POSITION_FOLLOWING);
+  }
   assert.match(style,/\.intervention-legend,\.intervention-equipment-key\)\s*\{[^}]*display:grid/);
   h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
   matrix=readMatrix();

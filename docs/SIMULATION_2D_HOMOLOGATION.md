@@ -272,6 +272,24 @@ Hallazgos y siguientes diagnósticos:
 - Scrambler PRECISE registra 21 fallas y 356.60 min de falla, 2D 15 y 258.90 min; diferencia 97.70 min. Se verificó que los motores no comparten el algoritmo ni la inicialización de RNG: numérica createEquipmentRandom usa hash de semilla, id y familia de evento y streams separados; 2D usa LCG con índice de línea y stream de máquina compartido. Misma semilla no significa misma secuencia de fallas. No atribuir todo el gap restante a una sola causa. Probar primero sin fallas y con órdenes controladas a igual tick; después alinear streams de confiabilidad por identidad y evento con pruebas de reproducibilidad, sin modificar MTBF/MTTR de entrada para calibrar.
 - La corrida (10) no valida planta: Real Data tiene una sola referencia de producción agregada, sin desglose de equipos, y la base de tiempos/producción permanece sin confirmar. Conservar el archivo previo para 2D y ambos resultados numéricos. Ningún archivo ejecutable fue modificado ni se ejecutaron nuevas simulaciones o pruebas de código en esta actualización documental.
 
+### Criterios de comparación de réplicas y distribución de fallas (25 de noviembre)
+
+A raíz de la observación del usuario, mantener tres referencias distintas: (1) comparación emparejada por semilla y configuración para cambios de motor/resolución, conservando ronda 1 (20261124) como histórico; (2) ronda representativa para inspeccionar una trayectoria individual; (3) promedio, dispersión y tamaño de muestra de todas las réplicas para evaluar rendimiento esperado y comparación estadística contra planta. No elegir retrospectivamente la ronda más cercana a la producción real. Verificado en `src/simulation/SimulationBatch.js`: closestRound selecciona la mínima distancia absoluta a producción media, desempata por distancia a OEE medio y luego por número de ronda. No selecciona por similitud del perfil de downtime de cada equipo.
+
+En archivos (9) FAST y (10) PRECISE la representativa es ronda 3, semilla 20261126 (178,188 y 187,572 botellas, respectivamente); medias de 178,592 y 188,012. Para homologar 2D, la referencia independiente existente es semilla 20261124; no comparar directamente su trayectoria con la ronda 3 como si fueran semillas emparejadas. Si se requiere una 2D representativa, usar la semilla 20261126 y documentar la diferencia de algoritmos RNG vigente. Posteriormente comparar distribuciones de ambos motores con las mismas semillas y streams homologados.
+
+Downtime propio PRECISE, por ronda, extraído de `results.batch.rows[].equipmentMetrics[].failureSeconds` del archivo (10), en minutos:
+
+| Máquina | Ronda 1 | Ronda 2 | Ronda 3 | Fallas por ronda |
+| --- | ---: | ---: | ---: | --- |
+| Scrambler | 356.60 | 396.98 | 379.72 | 21 / 23 / 22 |
+| Virtual inlet | 106.03 | 105.53 | 103.53 | 212 / 211 / 207 |
+| Filler | 63.01 | 54.01 | 60.31 | 70 / 60 / 67 |
+| Case Packer | 86.59 | 95.47 | 91.03 | 78 / 86 / 82 |
+| Palletizer | 39.60 | 18.00 | 22.80 | 33 / 15 / 19 |
+
+El MTBF determina una distribución de tiempo de exposición hasta falla, no una cantidad fija de fallas por día. En el perfil general actual la reparación usa MTTR fijo, con cuantización y posible truncamiento al final del horizonte. El downtime propio por máquina no tiene por qué coincidir entre réplicas. Aun si coincide, la simultaneidad, la separación temporal entre eventos y el estado de los buffers pueden modificar la producción de línea; no sumar downtime de equipos como pérdida global. Hipótesis para pruebas deterministas posteriores: mantener cantidades y duraciones de paros forzados constantes y variar solo su fase temporal/solapamiento, conservando parámetros de buffers y recuperación; comparar producción, tiempo efectivo y pérdidas de línea. Para aislar fallas aleatorias, usar streams comunes por identidad y familia de evento, sin exigir mismos instantes de falla en tiempo calendario si las exposiciones productivas difieren. Los historiales actuales tienen eventos y transiciones omitidos, por lo que no permiten atribuir exhaustivamente la variación al solapamiento real de fallas. No se ha ejecutado aún ese experimento ni se ha cambiado código. El usuario está ejecutando BALANCED; se mantiene ese experimento sin modificaciones.
+
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |

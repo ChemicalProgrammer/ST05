@@ -338,6 +338,44 @@ Diagnóstico:
 - Las fallas siguen dependiendo de exposición y secuencia. Ronda 2 BALANCED y PRECISE presentan suma de downtime de 670.159 y 669.993 min, con producción 183,132 vs 183,480; no es un experimento de fallas iguales ni prueba causal del solapamiento. Guardar un registro específico de inicio/fin de fallas y exposición por máquina para analizar fase, duración, solapamiento y recuperación sin depender de un historial general truncado. El replay BALANCED R1 guarda 2,000 eventos y 4,000 transiciones, omite 44,865 eventos y 932,881 transiciones; no reconstruye toda la trayectoria.
 - No se cambiaron ejecutables ni se ejecutaron nuevas simulaciones en esta actualización. La evaluación de sensibilidad de las tres resoluciones está realizada, pero quedan pruebas de convergencia/control y defectos de clasificación. No iniciar validación de planta ni más corridas largas hasta revisar los siguientes casos. El único dato real es producción agregada de 170,376 botellas, con bases de tiempo no confirmadas.
 
+### Primeras pruebas deterministas de etapa 6 — 25 de noviembre
+
+Ejecutadas directamente sobre los scripts de `main` en commit `9f364a28e8daa50c7f2d6f59b16cd7f3702c9876`: bundle `SimulationEngine.html`, motor `Simulation2DEngine.html` y función real summarize2DRun extraída de `Simulation2D.html`, en arnés JavaScript aislado. Sin cambios en ejecutables, sin suite Node/npm completa ni pruebas DOM. No es una nueva corrida G ni una validación de planta. Doce comparaciones emparejadas de motores, más una prueba focalizada de última descarga. El validador numérico rechazó la prueba de máquina única (requiere máquina, conveyor y máquina); se utilizaron líneas mínimas válidas. Los pasos FAST/BALANCED aplicados a 2D en el arnés son diagnósticos, no nuevas opciones del producto (2D de interfaz conserva 1/120 s).
+
+**Fixture A: envasado discreto.** Duración 180 s, semilla 7, sin fallas, residencia STORAGE de 0 s, formato S de 12 botellas/caja, inventarios iniciales vacíos, capacidad de entrada de 30 unidades por máquina. Fuente 4 botellas/s, empacador 1/3 cajas/s, equipo final 1/3 cajas/s. Conveyor de botellas: L=1,000 mm, v=240 mm/s, longitud/pitch móvil/compacto 60/60/60 mm, P=880 mm, B=120 mm. Conveyor de cajas: L=3,100 mm, v=541.5 mm/s, longitud/pitch móvil/compacto 310/310/310 mm, P=2,600 mm, B=979 mm. Blocked y clear delay 0.5 s, respuesta 0, residual máximo 2 unidades nativas, arranque/rampas 0. La 2D se configuró con estas mismas definiciones explícitas (sin interfaz); se verificaron los pitches, velocidad y capacidad resueltos de las zonas numéricas. Comandos vacíos para corrida libre; otras corridas con fuente STOP 60–80 s y equipo final STOP 60–80 s (simultáneos) o 100–120 s (separados).
+
+| Resolución | Entrada libre (ambos) | Salida libre (ambos) | Inventario libre (ambos) | Blocked empacador num./2D (s) |
+| --- | ---: | ---: | ---: | ---: |
+| FAST | 352 | 312 | 40 | 15.35 / 0 |
+| BALANCED | 359 | 312 | 47 | 15.833333 / 0 |
+| PRECISE | 360 | 312 | 48 | 15.85 / 0 |
+
+En las nueve comparaciones (tres resoluciones × tres calendarios de comandos) los dos motores dan el mismo balance para cada combinación y residual cero, overflow cero. Los escenarios con paros dan 276 botellas en ambos motores a todas las resoluciones, con entrada 314/320/320 e inventario 38/44/44 en FAST/BALANCED/PRECISE. Ambos equipos comandados registran exactamente 20 s STOPPED. En este fixture los patrones simultáneo y separado dan la misma salida; no generalizar un efecto del solapamiento independiente de la línea.
+
+Estados exclusivos del empacador en PRECISE libre (segundos):
+
+| Estado | Numérica | 2D |
+| --- | ---: | ---: |
+| RUNNING | 86.366667 | 87.575 |
+| WAITING_FOR_PRIME | 16.558333 | 4.166667 |
+| STARVED | 45.358333 | 72.391667 |
+| BLOCKED | 15.85 | 0 |
+| BACKUP_STOP | 15.866667 | 15.866667 |
+
+Ambos descargan 28 cajas; la salida final es 26 cajas (312 botellas). El desajuste Blocked de G es reproducible sin RNG incluso con balances idénticos, pero esta prueba no demuestra trayectorias internas idénticas ni que todo el gap G sea de clasificación. Siguiente: trazar primer tick discrepante con inventario parcial/completo, crédito de servicio, intento efectivo de descarga, espacio de entrada y latched Prime.
+
+**Fixture B: influencia temporal del paro.** Dos máquinas de 2 botellas/s, capacidad interna 1 botella cada una, conveyor L=600 mm, v=240 mm/s, longitud 60 mm, pitch móvil 120 mm y compacto 60 mm; P=540 mm, B=120 mm; blocked/clear 0.5 s, respuesta/residual/arranque/rampa 0. Horizonte 120 s, PRECISE / 1/120 s 2D, formato S, STORAGE residencia 0, fallas deshabilitadas. Fuente y equipo final STOP 30–50 s simultáneos; variante separada, fuente STOP 30–50 s y final STOP 70–90 s. Se usan comandos, no fallas propias del proceso MTBF; estos representan indisponibilidades controladas con igual tiempo de STOPPED.
+
+| Escenario | Entrada (ambos) | Salida (ambos) | Inventario (ambos) | STOPPED fuente/final (s) |
+| --- | ---: | ---: | ---: | ---: |
+| Libre | 240 | 234 | 6 | 0 / 0 |
+| Simultáneos | 200 | 194 | 6 | 20 / 20 |
+| Separados | 162 | 154 | 8 | 20 / 20 |
+
+Los tres balances y todos los estados exclusivos por equipo coinciden entre motores en este fixture. Sin overflow. Paros separados: 40 botellas menos que simultáneos; la fuente tiene 19.008333 s BACKUP_STOP y el equipo final 22.733333 s WAITING_FOR_PRIME vs 2.75 s en simultáneos. Evidencia controlada de sensibilidad a distribución temporal con downtime impuesto constante; no extrapolar magnitud a G ni considerar estos tres casos un DOE completo.
+
+**Última descarga 2D.** Prueba de un tick de 1/120 s con una unidad residente lista, crédito de salida 1, B activo, residual configurado 1 y conveyor detenido con espacio. Se descarga una botella residual, pero el estado al final del tick es Back-up stop. El registro atribuye 1 unidad a BACKUP_STOP, productiveSeconds=0 y outputOutsideProductiveUnits=1. Confirma la anomalía de atribución detectada en Virtual inlet G. La corrección debe distinguir fase de descarga y estado final sin alterar transferencia ni exposición MTBF inadvertidamente. Aún no se corrigió el código.
+
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |
@@ -354,8 +392,8 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 ## 6. Punto de continuación
 
 1. Conservar (9) FAST, (10) PRECISE y (11) BALANCED, tres réplicas cada una; ronda 3 representativa y media/dispersión registradas. Conservar 2D política 7 completa de (9), semilla 20261124. No repetir corridas largas de momento.
-2. Ejecutar pruebas cortas deterministas de ambos motores a 1/120 s sin fallas, con una máquina fuente, transferencias y envasado parcial/completo; comparar créditos, posición/entrada, salida, estados y balances. Contrastar pulsos B, última descarga, overflow y tiempos de bloqueo del Case Packer. Variar el tick con entradas/eventos idénticos, incluyendo 1/60 s y 1/20 s, para detectar cuantización sin influencia RNG.
-3. Probar paros controlados simultáneos y separados con idéntico downtime por máquina; registrar pérdidas efectivas de línea y recuperación de buffers. No usar diferencias entre réplicas como prueba causal.
+2. Primeras pruebas deterministas realizadas y registradas (12 comparaciones emparejadas). Reproducido Blocked del empacador con salida/balance iguales; trazar primer tick discrepante y corregir definición física/contable demostrada. Corregir atribución de última descarga en 2D, con prueba de regresión y paridad de trayectoria; revisar créditos y sobreproducción aparente.
+3. Primera prueba de paros simultáneos/separados realizada: confirma sensibilidad temporal en fixture B, no en fixture A. Mantener ambos como casos de regresión; ampliar a fallas propias controladas y distintas capacidades antes de atribuir efectos en G.
 4. Homologar los streams de confiabilidad por id estable y familia de evento, incluyendo clase de falla, con pruebas de reproducibilidad y de conservación al restaurar checkpoints. Mantener MTBF/MTTR y exposición, y añadir historial específico de fallas no truncado por eventos ajenos. Investigar persistencia de corrida 2D al variar exclusivamente resolución numérica. Publicar correcciones demostradas, actualizar versiones solo según alcance.
 5. Tras las correcciones repetir ambos motores con semillas emparejadas (incluida la representativa) y pasos comparables; contrastar distribuciones con tolerancias previamente definidas. Luego validación contra planta y evaluación aislada pendiente de etapa 2.
 

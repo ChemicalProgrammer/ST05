@@ -17,7 +17,7 @@ function fixture(name='Format A',options={}){
   if(options.missingFirstPackage)delete data.accumulation.restartToFirstPackageSeconds;
   const zone={usableLengthMm:10000,primeSensorPositionMm:9000,backupSensorPositionMm:500,productLengthMm:30,productPitchMm:50,
     conveyorSpeedMmPerSecond:120,upstreamControlEquipmentId:'source',downstreamControlEquipmentId:'sink',engineering:{input}};
-  return {models:[{id:'source',name:'Filler',nominalRatePerSecond:2.4},{id:'belt',type:'CONVEYOR',processData:data},{id:'sink',name:'Capper',nominalRatePerSecond:2}],
+  return {models:[{id:'source',name:'Filler',nominalRatePerSecond:options.upstreamRate??2.4},{id:'belt',type:'CONVEYOR',processData:data},{id:'sink',name:'Capper',nominalRatePerSecond:options.downstreamRate??2}],
     zones:[null,zone,null],format:{id:name,name,bottlesPerCase:options.bottlesPerCase}};
 }
 function context(profiles){
@@ -54,7 +54,7 @@ test('each pending result has its own dependency trace and terminal input source
 });
 test('multi-format partial extrema identify the affected format and invalid physical conditions',()=>{
   const h=harness();try{
-    const ctx=context([fixture('Format A'),fixture('Format B',{dischargePitch:30})]);
+    const ctx=context([fixture('Format A'),fixture('Format B',{upstreamRate:4})]);
     const worksheet=h.api.calculate(ctx),trace=h.api.createPendingTrace(worksheet,ctx);
     assert(Number.isFinite(worksheet.geometry.overflow.value));
     assert.equal(worksheet.geometry.overflow.partial,true);
@@ -72,7 +72,7 @@ test('multi-format partial extrema identify the affected format and invalid phys
 });
 test('recovery speed and missing case pack factor are distinguished from absent input rows',()=>{
   const h=harness();try{
-    let ctx=context([fixture('No speed margin',{infeedPitch:30})]);
+    let ctx=context([fixture('No speed margin',{downstreamRate:4})]);
     let worksheet=h.api.calculate(ctx),trace=h.api.createPendingTrace(worksheet,ctx);
     assert.match(trace.describe('L68',0),/Conveyor Speed must exceed Machine Package Consumption Rate/);
     ctx=context([fixture('Case format',{unit:'CASES'})]);
@@ -93,20 +93,60 @@ test('zero-length sections do not create a false dependency on their conveyor sp
   }finally{h.close();}
 });
 
-test('population at 100% from the discharge fallback is not a missing overflow input',()=>{
+test('equal package length and discharge pitch do not imply 100% belt population',()=>{
   const h=harness();try{
-    const profile=fixture('PAC-PAL',{unit:'CASES',bottlesPerCase:12,dischargePitch:30});
+    const profile=fixture('Case conveyor',{unit:'CASES',bottlesPerCase:12,dischargePitch:30,upstreamRate:.5,downstreamRate:.5});
     delete profile.models[1].processData.upstream.dischargeVelocityMPerMinute;
     const ctx=context([profile]),worksheet=h.api.calculate(ctx),p=worksheet.profiles[0];
-    assert(Math.abs(p.population-1)<1e-12);
-    assert.equal(p.dischargeVelocitySource,'CONVEYOR_SPEED_FALLBACK');
+    assert(Math.abs(p.population-.125)<1e-12);
+    assert.equal(p.rate,30);
+    assert.equal(p.highRate,30);
+    assert.equal(p.dischargeBpm,360);
+    assert.equal(p.highSpeedBpm,360);
+    assert.equal(p.dischargeVelocitySource,'NOMINAL_RATE_AND_PITCH');
+    assert.equal(p.dischargeVelocity,.9);
+    assert.equal(p.beltCapacityAtDischargePitchPackagesPerMinute,240);
+    assert(Number.isFinite(p.overflow));
+    assert.equal(worksheet.geometry.status,'PASS');
+    h.api.open('Case conveyor',ctx);
+    assert.match(h.body.querySelector('[data-cell="L41"] td').title,/AF not configured/);
+    assert.match(h.body.querySelector('[data-cell="L23"] td').title,/Configured upstream machine rate/);
+  }finally{h.close();}
+});
+test('measured AF is a local speed, and real nominal-flow saturation remains unresolved',()=>{
+  const h=harness();try{
+    const profile=fixture('Saturated',{unit:'CASES',bottlesPerCase:12,dischargePitch:30,upstreamRate:4});
+    const ctx=context([profile]),worksheet=h.api.calculate(ctx),p=worksheet.profiles[0];
+    assert.equal(p.rate,240);
+    assert.equal(p.population,1);
+    assert.equal(p.dischargeVelocity,7.2);
+    assert.equal(p.dischargeVelocitySource,'CONFIGURED_AF');
     assert.equal(worksheet.geometry.status,'NOT EVALUATED');
     assert(!Number.isFinite(p.overflow));
-    assert.match(h.api.createPendingTrace(worksheet,ctx).describe('L58',0),/AF not configured/);
+    assert.match(h.api.createPendingTrace(worksheet,ctx).describe('L58',0),/below 100%/);
     assert.match(h.api.profilePopulationHelp(p),/not a missing Overflow input/);
-    h.api.open('PAC-PAL',ctx);
-    assert.match(h.body.querySelector('[data-cell="L41"] td').title,/Conveyor speed fallback/);
-    assert.match(h.body.querySelector('[data-cell="L23"] td').title,/Configured upstream machine rate/);
+  }finally{h.close();}
+});
+test('resolved machine input/output rates, not conveyor speed, determine physical flow and infeed recommendation',()=>{
+  const h=harness();try{
+    const profile=fixture('Bottles entering packer',{dischargePitch:80,infeedPitch:100});
+    const input=profile.zones[1].engineering.input;
+    input.upstreamNominalSpeedBpm=120;input.downstreamHighSpeedBpm=144;
+    const downstream=profile.models[2];downstream.nominalRatePerSecond=.2;downstream.processData={productInputRatePerSecond:2.4,flowUnits:{input:'BOTTLES',output:'CASES'}};
+    profile.models[1].processData.upstream.dischargeVelocityMPerMinute=9.6;
+    const p=h.api.calculate(context([profile])).profiles[0];
+    assert.equal(p.rate,120);assert.equal(p.highRate,144);
+    assert.equal(p.flow,60);assert.equal(p.consumption,72);
+    assert.equal(p.population,.5);
+    assert.equal(p.infeedVelocity,14.4);
+    assert(Math.abs(h.api.recommendedSpeed(p)-15.12)<1e-10);
+    delete input.upstreamNominalSpeedBpm;delete input.downstreamHighSpeedBpm;
+    const fallback=h.api.calculate(context([profile])).profiles[0];
+    assert.equal(fallback.rate,144);assert.equal(fallback.highRate,144);
+    delete profile.models[0].nominalRatePerSecond;
+    const ctx=context([profile]),missing=h.api.calculate(ctx);
+    assert(!Number.isFinite(missing.profiles[0].population));
+    assert.match(h.api.createPendingTrace(missing,ctx).describe('L41',0),/nominal output rate/);
   }finally{h.close();}
 });
 test('JSON includes exact configuration, intermediate calculations and pending diagnostics for one or all conveyors',()=>{

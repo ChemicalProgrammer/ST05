@@ -122,19 +122,22 @@ window.STConveyorAnalysis=(function(){
   function profilePopulationHelp(p,language='en'){
     const es=language==='es',tr=(a,b)=>es?b:a,num=v=>Number.isFinite(v)?new Intl.NumberFormat(es?'es-MX':'en-US',{maximumFractionDigits:6}).format(v):'—';
     const unit=p.transportUnit==='CASES'?(es?'cajas':'cases'):(es?'botellas':'bottles');
-    const fallback=p.dischargeVelocitySource==='CONVEYOR_SPEED_FALLBACK';
     const source=p.dischargeVelocitySource==='CONFIGURED_AF'?tr('Configured Upstream Discharge Velocity (AF)','Upstream Discharge Velocity configurada (AF)'):
-      fallback?tr('Conveyor speed fallback (AF not configured)','Velocidad del conveyor usada como alternativa (AF no configurado)'):tr('Unresolved discharge velocity','Velocidad de descarga no resuelta');
+      p.dischargeVelocitySource==='NOMINAL_RATE_AND_PITCH'?tr('Calculated from nominal machine rate × discharge pitch (AF not configured)','Calculada con flujo nominal de máquina × pitch de descarga (AF no configurado)'):tr('Unresolved discharge velocity','Velocidad de descarga no resuelta');
     const lines=[
-      tr('Population = packed output rate / conveyor speed × 100.','Population = flujo de producto contiguo / velocidad del conveyor × 100.'),
+      tr('Population = native upstream output rate × package length / conveyor speed. Rates are not inferred from belt speed.','Population = flujo nativo de salida × longitud del envase / velocidad del conveyor. El flujo no se deduce de la velocidad de banda.'),
       'L16 = '+num(p.length)+' mm · L19 = '+num(p.dischargePitch)+' mm',
       'L23 = '+num(p.dischargeVelocity)+' m/min · '+source,
       'L24 = '+num(p.flow*.06)+' m/min · L40 = '+num(p.speed*.06)+' m/min',
       tr('Native discharge rate','Flujo nativo de descarga')+': '+num(p.rate)+' '+unit+'/min',
       tr('Configured upstream machine rate','Velocidad nominal configurada de la máquina anterior')+': '+num(p.upstreamRate*60)+' '+unit+'/min',
+      tr('Native downstream input rate','Flujo nativo de entrada aguas abajo')+': '+num(p.highRate)+' '+unit+'/min',
+      tr('Theoretical downstream infeed velocity','Velocidad teórica de entrada aguas abajo')+': '+num(p.infeedVelocity)+' m/min',
+      tr('Belt transport capacity at discharge pitch (not machine output)','Capacidad de banda al pitch de descarga (no es flujo de máquina)')+': '+num(p.beltCapacityAtDischargePitchPackagesPerMinute)+' '+unit+'/min',
       'L41 = '+num(p.population*100)+'%'
     ];
-    if(fallback)lines.push(tr('With the belt-speed fallback, population reduces to package length / discharge pitch. If they are equal, it reaches 100%. Compare the inferred rate with the actual upstream machine rate; verify AF rather than assuming saturation.','Con la alternativa de velocidad de banda, la población se reduce a longitud del envase / pitch de descarga. Si son iguales, alcanza 100%. Compara el flujo inferido con la velocidad real de la máquina anterior; verifica AF antes de asumir saturación.'));
+    if(p.dischargeVelocitySource==='CONFIGURED_AF'&&Number.isFinite(p.nominalDischargeVelocity)&&Math.abs(p.dischargeVelocity-p.nominalDischargeVelocity)>1e-6)
+      lines.push(tr('Configured AF differs from the theoretical discharge velocity of '+num(p.nominalDischargeVelocity)+' m/min. AF is used for local discharge velocity only; verify the measured speed and pitch if needed.','AF configurada difiere de la velocidad teórica de descarga de '+num(p.nominalDischargeVelocity)+' m/min. AF se utiliza solo como velocidad local de descarga; verifica la velocidad medida y el pitch si es necesario.'));
     if(Number.isFinite(p.population)&&p.population>=1-populationTolerance)lines.push(tr('Overflow requires population below 100%; the denominator 1 − population is zero or negative. This is a calculation condition, not a missing Overflow input.','Overflow requiere población menor que 100%; el denominador 1 − población es cero o negativo. Es una condición de cálculo, no un input Overflow faltante.'));
     return lines.join('\n');
   }
@@ -181,7 +184,7 @@ window.STConveyorAnalysis=(function(){
         populationDiagnostic:profilePopulationHelp(p,'en'),
         inputsAndIntermediateValues:p,
         sections:rows.map(([title,entries])=>({title,rows:entries.filter(Array.isArray).map(([ref,label,unit,formula,read])=>
-          jsonRow('L'+ref,label,unit,read(p),formula,trace.describe('L'+ref,i)))}))
+          jsonRow('L'+ref,label,unit,read(p),formula,['L23','L41'].includes('L'+ref)?[trace.describe('L'+ref,i),profilePopulationHelp(p,'en')].filter(Boolean).join('\n\n'):trace.describe('L'+ref,i)))}))
       }))};
   }
   function buildEvaluationExport(context,{scope='SINGLE',name,worksheet}={}){
@@ -197,7 +200,7 @@ window.STConveyorAnalysis=(function(){
     const statusCounts={PASS:0,FAIL:0,'AT LIMIT':0,'NOT EVALUATED':0};
     evaluations.forEach(e=>{statusCounts[e.status]=(statusCounts[e.status]||0)+1;});
     return {schema:'st-conveyor-analysis-v1',version:1,exportedAt:new Date().toISOString(),scope,
-      calculationModel:'CONVEYOR_ANALYSIS_WORKSHEET',source:{...source.metadata,resolutionError:source.resolutionError||null},
+      calculationModel:'CONVEYOR_ANALYSIS_WORKSHEET',calculationRevision:'NATIVE_MACHINE_FLOW_V2',source:{...source.metadata,resolutionError:source.resolutionError||null},
       configuration:source.configuration||null,
       summary:{conveyors:evaluations.length,statusCounts},
       evaluations,
@@ -215,7 +218,8 @@ window.STConveyorAnalysis=(function(){
   }
 
   function recommendedSpeed(profile){
-    return profile?.infeedPitch>0?profile.infeedPitch**2/1000*(1+profile.overspeed/100):NaN;
+    return profile?.infeedPitch>0&&profile.highRate>0&&Number.isFinite(profile.overspeed)
+      ?profile.highRate*profile.infeedPitch/1000*(1+profile.overspeed/100):NaN;
   }
   function explainVerdict(status,recovery,profiles,geometry){
     if(status==='FAIL'){
@@ -236,7 +240,8 @@ window.STConveyorAnalysis=(function(){
       const missing=[];
       for(const [label,value] of [
         ['velocidad del conveyor',p.speed],['longitud del envase',p.length],
-        ['paso de descarga',p.dischargePitch],['paso de entrada',p.infeedPitch]
+        ['paso de descarga',p.dischargePitch],['paso de entrada',p.infeedPitch],
+        ['flujo nominal de la máquina anterior',p.rate],['flujo de entrada de la máquina siguiente',p.highRate]
       ]){
         if(!(value>0))missing.push(label);
       }
@@ -271,21 +276,32 @@ window.STConveyorAnalysis=(function(){
         const dischargePitch=input.upstreamDischargePitchMm??upstream?.processData?.upstream?.dischargePitchMm;
         const infeedPitch=input.downstreamInfeedPitchMm??models[index].processData?.downstream?.infeedPitchMm??downstream?.processData?.downstream?.infeedPitchMm;
         const speed=belt.conveyorSpeedMmPerSecond;
-        // Legacy cases used the resolved conveyor speed as the discharge reference.
+        // Use the format-resolved machine rates, in native packages/min.
+        // Belt transport capacity is not machine output or downstream demand.
+        // The engineering adapter already resolves output and input rates,
+        // including bottle-to-case conversion at a packing machine.
+        const positive=v=>Number.isFinite(v)&&v>0;
+        const upstreamRate=upstream?.nominalRatePerSecond;
+        const downstreamInputRate=downstream?.processData?.productInputRatePerSecond??downstream?.nominalRatePerSecond;
+        const rate=input.upstreamNominalSpeedBpm??(upstreamRate*60);
+        const highRate=input.downstreamHighSpeedBpm??(downstreamInputRate*60);
         const configuredDischargeVelocity=models[index].processData?.upstream?.dischargeVelocityMPerMinute;
-        const dischargeVelocity=configuredDischargeVelocity>0?configuredDischargeVelocity:speed*.06;
-        const dischargeMmPerSecond=dischargeVelocity>0?dischargeVelocity/.06:NaN;
-        const rate=divide(dischargeMmPerSecond*60,dischargePitch);
-        const highRate=divide(speed*60,infeedPitch);
+        const nominalDischargeVelocity=positive(rate)&&positive(dischargePitch)?rate*dischargePitch/1000:NaN;
+        // AF is an optional local velocity override, not a second rate input.
+        // Missing AF is calculated from machine output and discharge pitch.
+        const dischargeVelocity=positive(configuredDischargeVelocity)?configuredDischargeVelocity:nominalDischargeVelocity;
+        const dischargeMmPerSecond=positive(dischargeVelocity)?dischargeVelocity/.06:NaN;
+        const infeedVelocity=positive(highRate)&&positive(infeedPitch)?highRate*infeedPitch/1000:NaN;
+        const nativeRate=positive(rate)?rate:NaN,nativeHighRate=positive(highRate)?highRate:NaN;
         const packFactor=bottlesPerFlowUnit(models[index],format);
-        const highSpeedBpm=highRate*packFactor;
-        const dischargeBpm=rate*packFactor;
+        const highSpeedBpm=nativeHighRate*packFactor;
+        const dischargeBpm=nativeRate*packFactor;
         const dischargeFactor=input.conveyorSpeedFactorPercent??data.speedAndSensors?.conveyorSpeedFactorVsDischargeVelocityPercent;
         const codingFactor=input.codingSpeedFactorPercent??data.speedAndSensors?.codingConveyorSpeedFactorVsPreviousConveyorPercent;
         const dischargeSpeed=dischargeMmPerSecond*(1+dischargeFactor/100);
         const codingSpeed=dischargeSpeed*(1+codingFactor/100);
         const firstPackage=models[index].processData?.accumulation?.restartToFirstPackageSeconds;
-        const flow=rate*length/60,consumption=highRate*length/60;
+        const flow=nativeRate*length/60,consumption=nativeHighRate*length/60;
         const population=divide(flow,speed);
         const blocked=input.blockedTimeDelaySeconds??belt.blockedTimeDelaySeconds;
         const clear=input.clearTimeDelaySeconds??belt.clearTimeDelaySeconds;
@@ -296,16 +312,21 @@ window.STConveyorAnalysis=(function(){
         const dischargeTime=segmentTime(discharge,dischargeSpeed),codingTime=segmentTime(coding,codingSpeed);
         const dischargePopulation=divide(flow,dischargeSpeed);
         const codingPopulation=divide(flow,codingSpeed);
-        const duringDelay=blocked*rate/60;
+        const duringDelay=blocked*nativeRate/60;
         const inDischarge=discharge===0?0:divide(discharge*dischargePopulation,length);
         const inCoding=coding===0?0:divide(coding*codingPopulation,length);
         const total=duringDelay+residual+inDischarge+inCoding+insurance;
         const overflow=length>0&&hasFreePopulation(population)?divide(total*length,1-population):NaN;
-        return {name:format?.name||format?.id||'Current format',formatId:format?.id,length,rate,highRate,packFactor,highSpeedBpm,dischargePitch,infeedPitch,
+        return {name:format?.name||format?.id||'Current format',formatId:format?.id,length,rate:nativeRate,highRate:nativeHighRate,packFactor,highSpeedBpm,dischargePitch,infeedPitch,
           upstreamName:upstream?.name||upstream?.id,downstreamName:downstream?.name||downstream?.id,
           transportUnit:String(models[index].processData?.flowUnits?.output??models[index].unitOfFlow??'BOTTLES').toUpperCase(),
-          dischargeVelocitySource:configuredDischargeVelocity>0?'CONFIGURED_AF':speed>0?'CONVEYOR_SPEED_FALLBACK':'UNRESOLVED',
-          configuredDischargeVelocity,engineeringInput:input,upstreamRate:upstream?.nominalRatePerSecond,downstreamInputRate:downstream?.processData?.productInputRatePerSecond??downstream?.nominalRatePerSecond,speedMode:models[index].processData?.accumulation?.speedMode,
+          dischargeVelocitySource:positive(configuredDischargeVelocity)?'CONFIGURED_AF':positive(nominalDischargeVelocity)?'NOMINAL_RATE_AND_PITCH':'UNRESOLVED',
+          rateSource:input.upstreamNominalSpeedBpm!=null?'ENGINEERING_UPSTREAM_NATIVE_RATE':'MACHINE_NOMINAL_OUTPUT_RATE',
+          highRateSource:input.downstreamHighSpeedBpm!=null?'ENGINEERING_DOWNSTREAM_NATIVE_RATE':'MACHINE_INPUT_RATE',
+          configuredDischargeVelocity,nominalDischargeVelocity,infeedVelocity,
+          dischargeCapacityPackagesPerMinute:positive(dischargePitch)?dischargeVelocity*1000/dischargePitch:NaN,
+          beltCapacityAtDischargePitchPackagesPerMinute:positive(dischargePitch)?speed*60/dischargePitch:NaN,
+          engineeringInput:input,upstreamRate,downstreamInputRate,speedMode:models[index].processData?.accumulation?.speedMode,
           targetPopulation:models[index].processData?.accumulation?.targetPopulationPercent,
           targetOverspeed:models[index].processData?.accumulation?.targetOverspeedPercent,
           speed,dischargeBpm,dischargeVelocity,dischargeSpeed,codingSpeed,dischargePopulation,codingPopulation,flow,consumption,population,blocked,clear,startup,firstPackage,residual,insurance,
@@ -368,12 +389,12 @@ window.STConveyorAnalysis=(function(){
       [19,"Upstream Machine Discharge Pitch","mm",'Input',p=>p.dischargePitch],
       [20,"Start-up Time","sec",'Input',p=>p.startup],
       [21,"Bottles Discharged at Stop","#",'Input',p=>p.residual],
-      [22,"Nominal Speed","bpm",'Discharge velocity / discharge pitch × bottles per flow unit',p=>p.dischargeBpm],
-      [23,"Package Velocity at Discharge of Upstream Machine","m/min",'Input',p=>p.dischargeVelocity],
+      [22,"Nominal Speed","bpm",'Upstream native nominal output rate × bottles per flow unit',p=>p.dischargeBpm],
+      [23,"Package Velocity at Discharge of Upstream Machine","m/min",'Configured AF, otherwise native nominal output rate × discharge pitch / 1000',p=>p.dischargeVelocity],
       [24,"Machine Output Rate (m/min of containers back to back; 100% population)","m/min",'Native discharge rate × package length / 1000',p=>p.flow*.06]
     ]],
     ["Downstream Machine Details",[
-      [27,"High Speed","bpm",'Infeed velocity / infeed pitch × bottles per flow unit',p=>p.highSpeedBpm],
+      [27,"High Speed","bpm",'Downstream native input rate × bottles per flow unit',p=>p.highSpeedBpm],
       [28,"Downstream Machine - Infeed Pitch","mm",'Input',p=>p.infeedPitch],
       [29,"Ramp up Time to Full Speed (including prime sensor delay)","sec",'Input',p=>p.ramp],
       [30,"Machine Package Consumption Rate (m/min of containers back to back; 100% population)","m/min",'Native infeed rate × package length / 1000',p=>p.consumption*.06]
@@ -413,22 +434,22 @@ window.STConveyorAnalysis=(function(){
       [64,"Time for Packages to Travel Across Coding Conveyor","sec",'=$E$8/L37/1000*60',p=>p.codingTime],
       [65,"Time for Packages to Travel Across Maximum Length Overflow Area (all formats are considered)","sec",'=$F$8/L40/1000*60',p=>p.overflowTime],
       [66,"Total Time for First Package to Reach the Back up Sensor","sec",'=SUM(L61:L65)',p=>p.arrival],
-      [67,"Reduction of queue in time for first bottle to reach back-up sensor","mm",'=L27*L16/60*L66 (reconstructed)',p=>p.consumed],
+      [67,"Reduction of queue in time for first bottle to reach back-up sensor","mm",'Native downstream input rate × L16 / 60 × L66',p=>p.consumed],
       [68,"Time from first bottle at backup sensor to first bottle reaching back of queue","sec",'=(L67/1000)/(L40-L30)*60',p=>p.catchTime],
       [69,"Reduction in queue from first bottle at back up sensor to first bottle reaching queue","mm",'=L30/60*L68*1000',p=>p.extraConsumed],
       [70,"Recovery Distance (position where first package catches the queue being consumed on start-up)","mm",'=$I$11-L69-L67',p=>p.recovery]
     ]],
     ["Calculating Conveyor Accumulation Time (Tacc)",[
       "Antistarve Accumulation (normally full) Critical machine is downstream",
-      [73,"Accumulation available on Lba","min",'=$I$11*(1-L414)/L16/L27 (L414 treated as 0)',p=>p.antiStarve/60],
+      [73,"Accumulation available on Lba","min",'Lba / package length / native downstream input rate (normally full)',p=>p.antiStarve/60],
       [74,"Accumulation available on Lba","sec",'=L73*60',p=>p.antiStarve],
       "Antiblock Accumulation (normally empty) Critical machine is upstream",
-      [75,"Accumulation available on Lba","min",'=$I$11*(1-L41)/L16/L22',p=>p.antiBlock/60],
+      [75,"Accumulation available on Lba","min",'Lba × (1 − population fraction) / package length / native upstream output rate',p=>p.antiBlock/60],
       [76,"Accumulation available on Lba","sec",'=L75*60',p=>p.antiBlock]
     ]],
     ["Calculating Downstream Machine Infeed Conveyor Speed",[
       [79,"Overspeed of conveyor vs infeed screw (5% recommended)","%",'Input',p=>p.overspeed],
-      [80,"Recommended (Minimum) Conveyor Speed","m/min",'=L28*L28/1000*(1+L79)',recommendedSpeed]
+      [80,"Recommended (Minimum) Conveyor Speed","m/min",'Native downstream input rate × L28 / 1000 × (1 + L79/100)',recommendedSpeed]
     ]]
   ];
 
@@ -495,14 +516,14 @@ window.STConveyorAnalysis=(function(){
       const set=(ref,dependencies,help)=>change(key(ref),dependencies,help);
       const internal=(ref,label,value,deps,help)=>add(key(ref),p.name+' · '+label,value,deps,help);
       internal('PACK',tr('Bottles per case (Formats)','Botellas por caja (Formats)'),p.packFactor,[],tr('Set a positive bottles-per-case quantity for this format. Required for bottle-equivalent BPM on case conveyors.','Define una cantidad positiva de botellas por caja para este formato. Se requiere para convertir el flujo de cajas a BPM equivalentes.'));
-      internal('NATIVE_OUT',tr('Native discharge rate (packages/min)','Flujo nativo de descarga (envases/min)'),p.rate,[pos('L23'),pos('L19')]);
-      internal('NATIVE_IN',tr('Native infeed rate (packages/min)','Flujo nativo de entrada (envases/min)'),p.highRate,[pos('L40'),pos('L28')]);
+      internal('NATIVE_OUT',tr('Native discharge rate (packages/min)','Flujo nativo de descarga (envases/min)'),p.rate,[],tr('Enter a positive nominal output rate for '+upstream+' in Equipment or the applicable format.','Captura una velocidad nominal de salida positiva de '+upstream+' en Equipment o el formato aplicable.'));
+      internal('NATIVE_IN',tr('Native infeed rate (packages/min)','Flujo nativo de entrada (envases/min)'),p.highRate,[],tr('Check the nominal machine speed and material flow of '+downstream+' and bottles per case if it converts bottles to cases.','Revisa velocidad nominal y flujo de material de '+downstream+' y botellas por caja si convierte botellas a cajas.'));
       set('L16',[],tr('Enter Package Length for the transported bottle/case in Formats, or the conveyor package length.','Captura Package Length de la botella/caja transportada en Formats o en el conveyor.'));
       set('L19',[],tr('Check Upstream Machine Discharge Pitch on this conveyor or '+upstream+'. A positive distance between package centers is required.','Revisa Upstream Machine Discharge Pitch en este conveyor o '+upstream+'. Se requiere una distancia positiva entre centros.'));
       set('L20',[],tr('Enter Start-up Time on the conveyor or '+upstream+'. Zero is valid if there is no delay.','Captura Start-up Time en el conveyor o '+upstream+'. Cero es válido si no existe retardo.'));
       set('L21',[],tr('Enter Bottles/Packages Discharged at Stop for '+upstream+' or the conveyor. Zero is valid when confirmed.','Captura Bottles/Packages Discharged at Stop de '+upstream+' o del conveyor. Cero es válido si se confirma.'));
       set('L22',[pos('NATIVE_OUT'),pos('PACK')]);
-      set('L23',[pos('L40')],tr('Enter Upstream Discharge Velocity (m/min) on the conveyor (AF), or resolve the conveyor speed used as its existing fallback.','Captura Upstream Discharge Velocity (m/min) del conveyor (AF), o resuelve la velocidad del conveyor que se utiliza como alternativa.'));
+      set('L23',[pos('NATIVE_OUT'),pos('L19')],tr('AF is optional: discharge velocity is calculated from the upstream nominal output rate and discharge pitch.','AF es opcional: la velocidad de descarga se calcula con el flujo nominal de salida y el pitch de descarga.'));
       set('L24',[pos('NATIVE_OUT'),pos('L16')]);
       set('L27',[pos('NATIVE_IN'),pos('PACK')]);
       set('L28',[],tr('Enter Downstream Machine Infeed Pitch on this conveyor or '+downstream+'.','Captura Downstream Machine Infeed Pitch en este conveyor o '+downstream+'.'));
@@ -519,7 +540,7 @@ window.STConveyorAnalysis=(function(){
         p.targetPopulation!=null?tr('Check target Population (greater than 0 and at most 100%), package length and nominal speed of '+upstream+'.','Revisa Population objetivo (mayor que 0 y hasta 100%), longitud del envase y velocidad nominal de '+upstream+'.'):
         p.targetOverspeed!=null?tr('Check target Overspeed, infeed pitch and speed of '+downstream+'.','Revisa Overspeed objetivo, pitch de entrada y velocidad de '+downstream+'.'):
         tr('Check Conveyor Speed or AUTO calculation inputs: '+upstream+' nominal speed, discharge pitch and speed factors.','Revisa Conveyor Speed o los inputs de cálculo AUTO: velocidad nominal de '+upstream+', pitch de descarga y factores de velocidad.');
-      // L23 may use L40 as its fallback; never point L40 back to L23.
+      // Machine rate and discharge pitch are independent of belt speed.
       const missingSpeedInputs=[];
       if(!positive(p.speed)&&p.speedMode!=='MANUAL'){
         const inputs=p.engineeringInput||{};
@@ -569,7 +590,7 @@ window.STConveyorAnalysis=(function(){
       set('L75',[needNonnegative(common('I11')),pos('L24'),below100(key('L41'))]);
       set('L76',[pdep('L75')]);
       set('L79',[],tr('Enter conveyor overspeed vs infeed screw in Speed & Sensors.','Captura Overspeed of conveyor vs infeed screw en Speed & Sensors.'));
-      set('L80',[pos('L28'),pdep('L79')]);
+      set('L80',[pos('NATIVE_IN'),pos('L28'),pdep('L79')]);
     });
     function blocked(node){
       return node.dependencies.filter(d=>{const n=nodes.get(d.key);return !n||!d.test(n.value)||n.partial;});
@@ -593,8 +614,7 @@ window.STConveyorAnalysis=(function(){
           }
           follow(child);
         }
-        // L23 is an optional explicit input as well as a speed fallback.
-        if(n.key.endsWith(':L23')&&n.help)roots.add(n.label+': '+n.help);
+        // L23 can use an explicit measured AF or be derived from the machine.
       }
       follow(node);
       const direct=immediate.map(d=>{

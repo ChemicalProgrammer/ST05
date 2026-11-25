@@ -450,7 +450,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     equipment[1].processData.upstream={dischargeVelocityMPerMinute:7.2};
     equipment[1].processData.accumulation={restartToFirstPackageSeconds:4};
     Object.assign(geometry,{primeSensorPositionMm:1500,backupSensorPositionMm:500,
-      engineering:{input:{packageLengthMm:30,upstreamNominalSpeedBpm:120,upstreamDischargePitchMm:50,downstreamInfeedPitchMm:60,
+      engineering:{input:{packageLengthMm:30,upstreamNominalSpeedBpm:120,downstreamHighSpeedBpm:120,upstreamDischargePitchMm:50,downstreamInfeedPitchMm:60,
         conveyorSpeedFactorPercent:0,codingSpeedFactorPercent:50,blockedTimeDelaySeconds:1,
         clearTimeDelaySeconds:0,upstreamStartupTimeSeconds:2,bottlesDischargedAtStop:1,insuranceFactorUnits:0},
         calculated:{dischargeZoneSpeedMmPerSecond:100,codingZoneSpeedMmPerSecond:150,downstreamConsumptionRateMmPerSecond:55}}});
@@ -508,7 +508,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     for(const label of ['Lact','Lp','Accumulation Zone (Lba)','Lbu','Discharge','Coding','Overflow','Lrec']){
       assert(currentLabels().some(text=>text.startsWith(label+' ·')));
     }
-    for(const [label,value] of [['Overflow',555],['Lbu',805],['Accumulation Zone (Lba)',695],['Lrec',-710]]){
+    for(const [label,value] of [['Overflow',380],['Lbu',630],['Accumulation Zone (Lba)',870],['Lrec',-190]]){
       assert(currentLabels().includes(label+' · '+value.toLocaleString()+' mm'+(value<0?' deficit':'')));
     }
     const dimensionLabel=prefix=>labels.slice(lastFrameOrigin).find(([text])=>text.startsWith(prefix+' ·'));
@@ -538,8 +538,8 @@ test('2D uses the representative seed to calculate new production and preserves 
 
     const close=(actual,expected)=>assert(Math.abs(actual-expected)<.0001);
     assert.deepEqual(['B','P'].map(sensorPosition),originalSensors);
-    close(marker('Design B')[2]-marker('Max Run-Out point')[2],555*beltDrawingScale);
-    close(marker('P')[2]-marker('Design B')[2],695*beltDrawingScale);
+    close(marker('Design B')[2]-marker('Max Run-Out point')[2],380*beltDrawingScale);
+    close(marker('P')[2]-marker('Design B')[2],870*beltDrawingScale);
     assert(!marker('Design P'));
     assert(overflow[3]<marker('B')[3]);
     const headings=labels.slice(lastFrameOrigin).filter(([text])=>text==='Parameter').slice(0,6);
@@ -555,7 +555,7 @@ test('2D uses the representative seed to calculate new production and preserves 
       overflowProductLengthMm:300,recoveryLengthMm:150,minimumInstalledLengthMm:2400
     });
     window.STSimulation2D.load(['case','engineering-dimensions'],equipment,null,{seed:7},null,null,null,[formats[0]]);
-    for(const [label,value] of [['Overflow',555],['Lbu',805],['Accumulation Zone (Lba)',695],['Lrec',-540],['L min',2540]]){
+    for(const [label,value] of [['Overflow',380],['Lbu',630],['Accumulation Zone (Lba)',870],['Lrec',-190],['L min',2190]]){
       assert(currentLabels().includes(label+' · '+value.toLocaleString()+' mm'+(value<0?' deficit':'')));
     }
     const analysisEl=id=>window.document.getElementById('conveyor-analysis-'+id);
@@ -570,7 +570,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert(analysis.open);
     assert.equal(analysisEl('body').querySelector('.conveyor-analysis-verdict').textContent,'FAIL');
     const failBadge=analysisEl('body').querySelector('.conveyor-analysis-verdict');
-    assert.match(failBadge.title,/Lrec es negativo.*540 mm/);
+    assert.match(failBadge.title,/Lrec es negativo.*190 mm/);
     const [, , verdictX,verdictY]=labels.slice(lastFrameOrigin).find(([text])=>text==='FAIL');
     canvas.dispatchEvent(new window.MouseEvent('pointermove',{clientX:verdictX*scale,clientY:(verdictY-3)*scale}));
     assert.equal(canvas.title,failBadge.title);
@@ -602,11 +602,11 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert.deepEqual(tableValue('Prime Sensor (actual)'),['1,500']);
     assert.deepEqual(tableValue('Discharge'),['100']);
     assert.deepEqual(tableValue('Coding'),['150']);
-    assert.deepEqual(tableValue('F8'),['555']);
-    assert.deepEqual(tableValue('Accumulation Zone (Lba)'),['695']);
+    assert.deepEqual(tableValue('F8'),['380']);
+    assert.deepEqual(tableValue('Accumulation Zone (Lba)'),['870']);
     assert.deepEqual(tableValue('L23'),['7.2']);
-    assert.deepEqual(tableValue('L22'),['144']);
-    assert.deepEqual(tableValue('L24'),['4.32']);
+    assert.deepEqual(tableValue('L22'),['120']);
+    assert.deepEqual(tableValue('L24'),['3.6']);
     assert.deepEqual(tableValue('L34'),['7.2']);
     assert.deepEqual(tableValue('L37'),['10.8']);
     assert.equal(analysisEl('body').querySelector('[data-cell="L23"] input'),null);
@@ -622,7 +622,7 @@ test('2D uses the representative seed to calculate new production and preserves 
     assert.equal(minLength[3]-totalLength[3],14);
     assert(!segments.some(({start,end,dash})=>!dash&&start[1]===minLength[3]&&end[1]===minLength[3]));
     close(extent('Lact'),2000*beltDrawingScale);
-    equipment[1].processData.geometry.lactMm=2540;
+    equipment[1].processData.geometry.lactMm=2190;
     const limit=window.STConveyorAnalysis.calculate({
       zone:geometry,data:equipment[1].processData,index:1,
       designProfiles:[{models:equipment,zones:[null,geometry]}]
@@ -691,22 +691,22 @@ test('2D uses the representative seed to calculate new production and preserves 
     for(const [cell,value] of [[51,'1.6'],[52,'2'],[53,'0'],[54,'0'],[55,'3'],[56,'6.6'],[57,'646.8'],[58,'1,162.84']]){
       assert.deepEqual(tableValue('L'+cell),[value]);
     }
-    assert.deepEqual(tableValue('L27'),['169.6']);
-    assert.deepEqual(tableValue('L30'),['16.62']);
-    assert.deepEqual(tableValue('K8'),['1,901.41']);
-    assert.deepEqual(tableValue('L (min needed)'),['4,051.59']);
+    assert.deepEqual(tableValue('L27'),['175']);
+    assert.deepEqual(tableValue('L30'),['17.15']);
+    assert.deepEqual(tableValue('K8'),['1,800.42']);
+    assert.deepEqual(tableValue('L (min needed)'),['4,152.58']);
     assert.equal(analysisEl('body').querySelector('.conveyor-analysis-verdict').textContent,'PASS');
     assert(currentLabels().includes('PASS'));
-    assert.deepEqual(tableValue('L74'),['13.68']);
+    assert.deepEqual(tableValue('L74'),['13.26']);
     assert.deepEqual(tableValue('L76'),['6.72']);
     assert.deepEqual(tableValue('L79'),['5']);
-    assert.deepEqual(tableValue('L80'),['65.63']);
+    assert.deepEqual(tableValue('L80'),['45.94']);
     analysis.close();
     buttons[1].click();
     assert.equal(analysisEl('title').textContent,'Conveyor Analysis Tool · second belt');
     assert.deepEqual(tableValue('I13'),['7,000']);
-    assert.deepEqual(tableValue('L27'),['2,035.2']);
-    assert.deepEqual(tableValue('L30'),['16.62']);
+    assert.deepEqual(tableValue('L27'),['2,100']);
+    assert.deepEqual(tableValue('L30'),['17.15']);
     assert.deepEqual(tableValue('L58'),['1,162.84']);
     analysis.close();
     const checkpointBeforeViews=JSON.stringify(records.at(-1)?.checkpoint);

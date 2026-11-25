@@ -114,3 +114,32 @@ Editor placeholders distinguish calculated values from installed overrides.
 
 This fallback changes only the previously unresolved derivatives. It does not
 modify source sheet cells or substitute calculated positions for measurements.
+
+## Worksheet native machine-flow correction
+
+The Conveyor Analysis Tool uses the resolved engineering input native
+upstream output and downstream input rates (packages/min), or the configured
+machine rates if those engineering fields are unavailable. In a resolved
+bottle-to-case profile, the downstream input rate is in bottles/min, not
+cases/min. Bottle-equivalent rates are presentation values only; physical
+flow, consumption and overflow calculations use native packages.
+
+When AF is absent, discharge velocity = native upstream nominal output
+rate × discharge pitch / 1000 (m/min). Explicit AF remains a local velocity
+override, never a replacement for the machine's nominal package rate.
+Population = native upstream output rate × package length / (1000 × belt
+speed in m/min). True saturation still makes the worksheet overflow
+calculation unresolved. A discharge pitch equal to package length does not
+by itself imply that the accumulation belt is fully populated.
+
+Minimum infeed speed = native downstream input rate × infeed pitch / 1000
+× (1 + overspeed percent / 100). JSON exports carry
+`calculationRevision: "NATIVE_MACHINE_FLOW_V2"`.
+
+This correction aligns the worksheet's flow and speed basis with the
+engineering engine. It does not yet reconcile the different overflow,
+recovery and accumulation reserve equations or change runtime geometry.
+It does not restore historical geometry or change the installed speed,
+pitch, sensor positions, or stop statistics. The worksheet PASS still
+denotes its recovery-length criterion, not comprehensive engineering
+approval.

@@ -442,10 +442,10 @@ window.STEquipmentAnalysis=(function(){
         productApplies:e.processData?.productApplies??null},
       report:{...r,bufferCoverage:coverage},completeness:sectionProgress(r,e,simulation)};
   }
-  function buildEvaluationExport(scope='SINGLE'){
-    if(!current)throw Error(t('Equipment evaluation context is unavailable.','El contexto de evaluación no está disponible.'));
+  function buildEvaluationExport(scope='SINGLE',context=current){
+    if(!context)throw Error(t('Equipment evaluation context is unavailable.','El contexto de evaluación no está disponible.'));
     if(!['SINGLE','ALL'].includes(scope))throw Error('Invalid equipment export scope.');
-    const {simulation,equipment,report,options,openedAt}=current;
+    const {simulation,equipment,report,options,openedAt}=context;
     const selected=scope==='ALL'?(simulation.equipment||[]).filter(machine):[equipment];
     const evaluations=selected.map(e=>{
       if(e.id===equipment.id)return evaluationRecord(report,e,simulation);
@@ -473,8 +473,8 @@ window.STEquipmentAnalysis=(function(){
         'Configured reliability is theoretical, observations are separately identified by basis, and CAPEX evidence is not plant validation.',
         'Live evidence is captured per equipment at dialog opening; no extra simulation is launched by export.']});
   }
-  function downloadEvaluation(scope){
-    const report=buildEvaluationExport(scope);
+  function downloadEvaluation(scope,context=current){
+    const report=buildEvaluationExport(scope,context);
     const clean=value=>String(value||'equipment').normalize('NFKD').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,100)||'equipment';
     const prefix=scope==='ALL'?'all-equipment':clean(report.evaluations[0]?.name);
     const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
@@ -491,8 +491,8 @@ window.STEquipmentAnalysis=(function(){
   }
   let current=null;
   function close(){closeExportMenu();if(dialog.open)dialog.close();}
-  function open(simulation,equipmentId,options={}){
-    if(!machine(simulation?.equipment?.find(x=>x.id===equipmentId)))return;
+  function createEvaluationContext(simulation,equipmentId,options={}){
+    if(!machine(simulation?.equipment?.find(x=>x.id===equipmentId)))throw Error(t('No equipment is available for evaluation.','No hay equipos disponibles para evaluar.'));
     // Freeze configured inputs and live evidence, without duplicating saved sample history.
     const source={...simulation,equipment:copyJSON(simulation.equipment),
       ...(simulation.dynamicConfig?{dynamicConfig:copyJSON(simulation.dynamicConfig)}:{}),
@@ -504,8 +504,19 @@ window.STEquipmentAnalysis=(function(){
     if(options.policy)snapshotOptions.policy=copyJSON(options.policy);
     const e=source.equipment.find(x=>x.id===equipmentId);
     const report=window.STScenarios.equipmentAnalysis(source,equipmentId,snapshotOptions);
+    return {report,name:e.name||e.id,equipment:e,simulation:source,options:snapshotOptions,openedAt:new Date().toISOString()};
+  }
+  function downloadLineEvaluation(simulation,options={}){
+    const first=simulation?.equipment?.find(machine);
+    if(!first)throw Error(t('There are no machines in this line.','No hay equipos en esta línea.'));
+    // Export directly from the current editor draft without opening a modal
+    // or replacing the snapshot of an already open analysis dialog.
+    return downloadEvaluation('ALL',createEvaluationContext(simulation,first.id,options));
+  }
+  function open(simulation,equipmentId,options={}){
+    if(!machine(simulation?.equipment?.find(x=>x.id===equipmentId)))return;
     closeExportMenu();
-    foldStates=new Map();body.replaceChildren();current={report,name:e.name||e.id,equipment:e,simulation:source,options:snapshotOptions,openedAt:new Date().toISOString()};render();
+    foldStates=new Map();body.replaceChildren();current=createEvaluationContext(simulation,equipmentId,options);render();
     if(!dialog.open)dialog.showModal();
     body.scrollTop=0;
   }
@@ -597,6 +608,6 @@ window.STEquipmentAnalysis=(function(){
   exportAll.addEventListener('click',()=>exportCurrent('ALL'));
   dialog.addEventListener('close',()=>{closeExportMenu();current=null;});
   window.addEventListener('st-language-change',()=>{if(dialog.open)render();});
-  return {assess,paint,createButton,open,close,statusText,sectionProgress,buildEvaluationExport,downloadEvaluation};
+  return {assess,paint,createButton,open,close,statusText,sectionProgress,buildEvaluationExport,downloadEvaluation,downloadLineEvaluation};
 })();
 </script>

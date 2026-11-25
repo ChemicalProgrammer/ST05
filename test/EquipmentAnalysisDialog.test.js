@@ -247,3 +247,20 @@ test('equipment JSON menu downloads individual and all-machine reports',()=>{
   assert.equal(blobs.length,2);assert(blobs.every(b=>b.type==='application/json'));
  }finally{h.close();}
 });
+
+test('direct editor export uses the current draft without opening or replacing the analysis dialog',()=>{
+ const h=harness();try{
+  const api=h.w.STEquipmentAnalysis,dialog=h.w.document.getElementById('equipment-analysis-dialog'),downloads=[];
+  h.w.URL.createObjectURL=()=> 'blob:test';h.w.URL.revokeObjectURL=()=>{};
+  h.w.HTMLAnchorElement.prototype.click=function(){downloads.push(this.download);};
+  const equipment=[{id:'draft',name:'Draft machine',type:'FILLER',nominalRatePerSecond:2,noiseProfile:{reliability:{mtbfMinutes:40,mttrMinutes:5}}},{id:'belt',type:'CONVEYOR'}];
+  const simulation={equipment};
+  let report=api.downloadLineEvaluation(simulation,{audits:[]});
+  assert.equal(dialog.open,false);assert.equal(report.scope,'ALL');assert.equal(report.evaluations.length,1);
+  assert.equal(report.evaluations[0].name,'Draft machine');assert.equal(report.evaluations[0].status,'FAIL');
+  h.open(40,1);report=api.downloadLineEvaluation(simulation,{audits:[]});
+  assert.equal(api.buildEvaluationExport().evaluations[0].name,'Test machine');
+  assert.equal(report.evaluations[0].name,'Draft machine');assert.equal(downloads.length,2);
+  assert.throws(()=>api.downloadLineEvaluation({equipment:[equipment[1]]}),/no machines/i);
+ }finally{h.close();}
+});

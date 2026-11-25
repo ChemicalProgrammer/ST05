@@ -301,3 +301,30 @@ test('value headers are single line and units do not use the KPI baseline class'
     assert([...table.querySelectorAll('tbody td:last-child')].every(td=>td.classList.contains('analysis-table-unit')));
   }finally{h.close();}
 });
+
+test('conveyor dialog exports one or all conveyors from each full-line entry and legacy profile context',()=>{
+ const h=harness();try{
+  const first=fixture(),belt2={...first.models[1],id:'belt2',name:'Second belt'},sink2={...first.models[2],id:'sink2'};
+  const profile={...first,models:[...first.models,belt2,sink2],zones:[...first.zones,{...first.zones[1],upstreamControlEquipmentId:'sink',downstreamControlEquipmentId:'sink2'},null]};
+  const resolved={...profile,designProfiles:[profile]};
+  const one=h.w.document.getElementById('conveyor-analysis-export-one'),all=h.w.document.getElementById('conveyor-analysis-export-all'),menu=h.w.document.getElementById('conveyor-analysis-export-menu');
+  const downloads=[],blobs=[];
+  h.w.URL.createObjectURL=b=>{blobs.push(b);return 'blob:test';};h.w.URL.revokeObjectURL=()=>{};
+  h.w.HTMLAnchorElement.prototype.click=function(){downloads.push(this.download);};
+  for(const origin of ['EQUIPMENT_EDITOR_DRAFT','NUMERICAL_SIMULATION','SIMULATION_2D']){
+    const ctx=h.api.worksheetContext(resolved,1,{origin});
+    h.api.open('belt',ctx);assert.equal(all.disabled,false);assert.equal(all.textContent,'All conveyors (JSON)');
+    menu.open=true;one.click();assert.equal(menu.open,false);
+    menu.open=true;all.click();assert.equal(menu.open,false);assert.equal(downloads.at(-1),'conveyor-analysis-all-conveyors.json');
+    assert.equal(h.api.buildEvaluationExport(ctx,{scope:'ALL'}).summary.conveyors,2);
+  }
+  const legacy=context([profile]);
+  h.api.open('belt',legacy);assert.equal(all.disabled,false);
+  assert.equal(h.api.buildEvaluationExport(legacy,{scope:'ALL'}).summary.conveyors,2);
+  h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+  assert.equal(all.textContent,'Todos los conveyors (JSON)');assert.equal(one.textContent,'Este conveyor (JSON)');
+  h.api.open('belt',{...legacy,designProfiles:[]});assert.equal(all.disabled,true);assert.equal(all.hidden,false);
+  assert.throws(()=>h.api.buildEvaluationExport({...legacy,designProfiles:[]},{scope:'ALL'}),/Full line configuration/);
+  assert.equal(blobs.length,6);assert(blobs.every(b=>b.type==='application/json'));
+ }finally{h.close();}
+});

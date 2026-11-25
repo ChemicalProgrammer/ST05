@@ -5,6 +5,12 @@ window.STEquipmentFilter=(function(){
   function reorderMode(){return current;}
   function enabled(group){return current==='all'||current===group;}
   function apply(){
+    // The export scope follows the section arrangement, not temporary card filters.
+    [['export-equipment-evaluations','equipment'],['export-conveyor-evaluations','conveyors']].forEach(function(spec){
+      var button=document.getElementById(spec[0]);if(!button)return;
+      var hide=split&&current!==spec[1]&&current!=='all';
+      button.hidden=hide;button.classList.toggle('hidden',hide);
+    });
     var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card')),visible=0,selectionHidden=false;
     cards.forEach(function(card){
       var fields=card._fields||card,type=fields.querySelector('.equipment-type')?.value;

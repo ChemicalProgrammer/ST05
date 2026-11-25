@@ -798,6 +798,14 @@ function numericInputValue(input) {
       if(!resolved?.models?.[index])resolved=unresolvedEditorConveyorProfiles(simulation);
       return window.STConveyorAnalysis.worksheetContext(resolved,index,editorConveyorExportMetadata(simulation));
     }
+    function exportEquipmentEvaluations(){
+      var button=document.getElementById('export-equipment-evaluations');
+      if(button)button.closest('.export-menu').open=false;
+      try{
+        var simulation=equipmentAnalysisEditorContext();
+        window.STEquipmentAnalysis.downloadLineEvaluation(simulation);
+      }catch(error){showError({message:error.message});}
+    }
     function exportConveyorEvaluations(){
       var button=document.getElementById('export-conveyor-evaluations');
       if(button)button.closest('.export-menu').open=false;

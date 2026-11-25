@@ -3,7 +3,7 @@
     <h2 id="conveyor-analysis-title">Conveyor Analysis Tool</h2>
     <div class="button-row conveyor-analysis-actions">
       <details id="conveyor-analysis-export-menu" class="export-menu">
-        <summary class="secondary icon-button" data-icon="upload" aria-label="Export conveyor evaluations" title="Export conveyor evaluations"></summary>
+        <summary class="secondary icon-button" data-icon="upload" aria-label="Export conveyor evaluations" title="Export conveyor evaluations" aria-expanded="false"></summary>
         <div>
           <button id="conveyor-analysis-export-one" class="ghost" type="button">This conveyor (JSON)</button>
           <button id="conveyor-analysis-export-all" class="ghost" type="button">All conveyors (JSON)</button>
@@ -200,15 +200,34 @@ window.STConveyorAnalysis=(function(){
           jsonRow('L'+ref,label,unit,read(p),formula,[parameterHelp('L'+ref,'en'),trace.describe('L'+ref,i),...(['L23','L41'].includes('L'+ref)?[profilePopulationHelp(p,'en')]:[])].filter(Boolean).join('\n\n')))}))
       }))};
   }
+  // Older worksheet callers may supply the complete line as design profiles
+  // rather than source.activeProfile. Only recover an identifiable profile;
+  // never pretend an isolated conveyor represents the whole line.
+  function fullLineExportContext(context){
+    if(!context)return context;
+    if(context.source?.activeProfile?.models?.some(conveyorItem))return context;
+    const profiles=(context.designProfiles||[]).filter(p=>Array.isArray(p.models)&&Array.isArray(p.zones)&&conveyorItem(p.models[context.index]));
+    const profile=profiles.find(p=>p.zones[context.index]===context.zone)||
+      profiles.find(p=>p.models[context.index]?.processData===context.data)||
+      (profiles.length===1?profiles[0]:null);
+    if(!profile)return context;
+    const source=context.source||{};
+    return {...context,source:{...source,metadata:{...source.metadata,contextBasis:'DESIGN_PROFILE_MATCH'},
+      activeProfile:{models:profile.models,zones:profile.zones,format:profile.format||null}}};
+  }
+  function canExportAll(context){
+    return Boolean(fullLineExportContext(context)?.source?.activeProfile?.models?.some(conveyorItem));
+  }
   function buildEvaluationExport(context,{scope='SINGLE',name,worksheet}={}){
     if(!context)throw Error('Conveyor evaluation context is unavailable.');
+    if(scope==='ALL')context=fullLineExportContext(context);
     const source=context.source||{},active=source.activeProfile;
-    if(scope==='ALL'&&!active?.models)throw Error('Full line configuration is unavailable. Open the evaluation from Equipment.');
+    if(scope==='ALL'&&!active?.models?.some(conveyorItem))throw Error('Full line configuration is unavailable. Open the evaluation from Equipment.');
     const indices=scope==='ALL'?active.models.flatMap((item,index)=>conveyorItem(item)?[index]:[]):[context.index];
     const evaluations=indices.map(index=>{
       if(index===context.index)return evaluationRecord(context,name,worksheet);
       const model=active.models[index];
-      return evaluationRecord({zone:active.zones[index]||{},data:model.processData||{},designProfiles:context.designProfiles||[],index,source},model.name);
+      return evaluationRecord({zone:active.zones?.[index]||{},data:model.processData||{},designProfiles:context.designProfiles||[],index,source},model.name);
     });
     const statusCounts={PASS:0,FAIL:0,'AT LIMIT':0,'NOT EVALUATED':0};
     evaluations.forEach(e=>{statusCounts[e.status]=(statusCounts[e.status]||0)+1;});
@@ -718,6 +737,17 @@ window.STConveyorAnalysis=(function(){
     });
   }
 
+  function syncExportActions(context){
+    const menu=document.getElementById('conveyor-analysis-export-menu'),trigger=menu.querySelector('summary');
+    const one=document.getElementById('conveyor-analysis-export-one'),all=document.getElementById('conveyor-analysis-export-all');
+    const es=document.documentElement.lang==='es';
+    trigger.title=es?'Exportar evaluaciones de conveyors':'Export conveyor evaluations';
+    trigger.setAttribute('aria-label',trigger.title);
+    one.textContent=es?'Este conveyor (JSON)':'This conveyor (JSON)';
+    all.textContent=es?'Todos los conveyors (JSON)':'All conveyors (JSON)';
+    all.disabled=!canExportAll(context);
+    all.title=all.disabled?(es?'Abre la evaluación desde la configuración de la línea completa.':'Open the evaluation from the full line configuration.'):'';
+  }
   function open(name,context){
     if(!context)return;
     const dialog=document.getElementById('conveyor-analysis-dialog');
@@ -726,8 +756,9 @@ window.STConveyorAnalysis=(function(){
     const valueText=value=>Number.isFinite(value)?number.format(value):'Pending';
     const worksheet=calculate(context);
     currentExport={name,context,worksheet};
-    const exportAll=document.getElementById('conveyor-analysis-export-all');
-    if(exportAll)exportAll.disabled=!context.source?.activeProfile?.models?.some(conveyorItem);
+    const menu=document.getElementById('conveyor-analysis-export-menu');
+    menu.open=false;menu.querySelector('summary').setAttribute('aria-expanded','false');
+    syncExportActions(context);
     const language=document.documentElement.lang==='es'?'es':'en';
     const trace=createPendingTrace(worksheet,context,language);
     const sections=sectionProgress(worksheet,context);
@@ -869,6 +900,7 @@ window.STConveyorAnalysis=(function(){
   document.getElementById('conveyor-analysis-export-one')?.addEventListener('click',()=>exportCurrent('SINGLE'));
   document.getElementById('conveyor-analysis-export-all')?.addEventListener('click',()=>exportCurrent('ALL'));
   document.getElementById('conveyor-analysis-dialog')?.addEventListener('close',()=>{currentExport=null;});
+  window.addEventListener('st-language-change',()=>{if(currentExport)syncExportActions(currentExport.context);});
   function paintEvaluationButton(button,geometry){
     const status=geometry?.status||'NOT EVALUATED',es=document.documentElement.lang==='es';
     const text=es?({'PASS':'CUMPLE','FAIL':'NO CUMPLE','AT LIMIT':'AL LÍMITE','NOT EVALUATED':'NO EVALUADO'}[status]||status):status;

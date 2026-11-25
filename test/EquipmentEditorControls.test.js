@@ -10,7 +10,8 @@ const script=name=>read(name).replace(/^\s*<script>\s*/,'').replace(/\s*<\/scrip
 async function filters(){
   const source=read('WebApp.html'),start=source.indexOf('<div class="equipment-filters"');
   const markup=source.slice(start,source.indexOf('</div>',start)+6);
-  const dom=new JSDOM(markup+'<p id="equipment-filter-empty" class="hidden"></p><div id="equipment-list"></div><aside id="inspector"></aside>',{runScripts:'outside-only'});
+  const menu=source.match(/<details class="export-menu"><summary[^>]*><\/summary><div><button id="export-equipment-json"[\s\S]*?<\/details>/)[0];
+  const dom=new JSDOM(markup+menu+'<p id="equipment-filter-empty" class="hidden"></p><div id="equipment-list"></div><aside id="inspector"></aside>',{runScripts:'outside-only'});
   const w=dom.window,d=w.document,cards=[];
   for(const [id,type]of [['a','BLOWMOLDER'],['b','CONVEYOR'],['c','FILLER']]){
     const card=d.createElement('article');card.className='equipment-card';card.dataset.equipmentId=id;
@@ -122,4 +123,37 @@ test('critical machine is the first equipment control and retains its single-sel
     second.click();assert.equal(second.checked,true);assert.equal(first.checked,false);
     assert.ok(cards.every(card=>card.querySelector('.equipment-rate').value==='480'));
   }finally{w.close();}
+});
+
+test('evaluation export actions follow separate sections, not combined card visibility',async()=>{
+  const h=await filters();
+  try{
+    const shown=()=>[...h.d.querySelectorAll('.export-menu button')].filter(b=>!b.hidden&&!b.classList.contains('hidden')).map(b=>b.id);
+    const ordinary=['export-equipment-json','export-equipment-sheet'];
+    const machine='export-equipment-evaluations',belt='export-conveyor-evaluations';
+    assert.deepEqual(shown(),[...ordinary,machine,belt]);
+    h.filter.set('equipment',true);assert.deepEqual(shown(),[...ordinary,machine]);
+    h.filter.set('conveyors',true);assert.deepEqual(shown(),[...ordinary,belt]);
+    h.filter.set('all');assert.deepEqual(shown(),[...ordinary,machine,belt]);
+    h.get('toggle-editor-machines').click();assert.deepEqual(shown(),[...ordinary,machine,belt]);
+    h.get('toggle-editor-conveyors').click();assert.deepEqual(shown(),[...ordinary,machine,belt]);
+  }finally{h.close();}
+});
+
+test('editor evaluation exports invoke the matching API with the current draft and close the menu',()=>{
+ const src=read('ClientEquipment.html'),start=src.indexOf('    function exportEquipmentEvaluations(){'),end=src.indexOf('    function refreshEquipmentReliabilityBadges(',start);
+ const menu={open:true},button={closest:()=>menu},calls=[],errors=[];
+ const draft={equipment:[{id:'e',type:'FILLER'},{id:'c',type:'CONVEYOR'}]};
+ const api=vm.runInNewContext(src.slice(start,end)+'\n({exportEquipmentEvaluations,exportConveyorEvaluations})',{
+   document:{getElementById:()=>button},equipmentAnalysisEditorContext:()=>draft,
+   editorConveyorWorksheet:(id,simulation)=>({id,simulation}),
+   window:{STEquipmentAnalysis:{downloadLineEvaluation:s=>calls.push(['equipment',s])},
+     STConveyorAnalysis:{downloadEvaluation:(ctx,options)=>calls.push(['conveyors',ctx,options.scope])}},
+   showError:e=>errors.push(e)
+ });
+ api.exportEquipmentEvaluations();assert.equal(menu.open,false);assert.equal(calls[0][0],'equipment');assert.equal(calls[0][1],draft);
+ menu.open=true;api.exportConveyorEvaluations();assert.equal(menu.open,false);assert.equal(calls[1][0],'conveyors');
+ assert.equal(calls[1][1].id,'c');assert.equal(calls[1][1].simulation,draft);assert.equal(calls[1][2],'ALL');assert.equal(errors.length,0);
+ const core=read('ClientCore.html');
+ assert.match(core,/getElementById\('export-equipment-evaluations'\)\.onclick=exportEquipmentEvaluations/);
 });

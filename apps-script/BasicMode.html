@@ -233,6 +233,17 @@ window.STBasicMode=(function(){
     metric(right,'Starve downstream',Number.isFinite(zone?.starvingEquivalentSeconds)?zone.starvingEquivalentSeconds>0?'YES':'NO':'—');
     metric(right,'Lost blocking/hr (s)',number(duration>0?zone?.blockingEquivalentSeconds/duration*3600:undefined));
     metric(right,'Lost starving/hr (s)',number(duration>0?zone?.starvingEquivalentSeconds/duration*3600:undefined));
+    var balancing=zone?.dynamicLineBalancing;
+    if(balancing){
+      metric(left,'S Low (m)',number(balancing.lowSensorPositionMm/1000));
+      metric(left,'S High (m)',number(balancing.highSensorPositionMm/1000));
+      metric(left,'Recovery speed (m/min)',number(balancing.highSpeedMmPerSecond*.06));
+      metric(right,'Average belt speed (m/min)',number(balancing.averageSpeedMmPerSecond*.06));
+      metric(right,'Peak belt speed (m/min)',number(balancing.peakSpeedMmPerSecond*.06));
+      metric(right,'Boost requests',number(balancing.boostRequests,0));
+      metric(right,'Boost time (s)',number(balancing.boostSeconds));
+      metric(right,'Speed ramp time (s)',number(balancing.rampSeconds));
+    }
     right.title='Observed equivalent loss seconds per hour; concurrent upstream blocking and downstream starving count once in Conv Loss.';
     conveyorSummary.classList.toggle('hidden',conveyorView!=='results');
     Array.from(list.querySelectorAll('.equipment-card')).forEach(function(card){if(card._fields)card._fields.dataset.balancingView=String(card===chosen&&conveyorView==='balancing');});

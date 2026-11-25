@@ -211,7 +211,9 @@ test('2D Settings reuses framed checkbox cards without replacing the input contr
   assert.match(group,/id="simulation2d-failures" type="checkbox" checked/);
   assert.match(group,/id="simulation2d-show-events" type="checkbox" aria-controls="simulation2d-events-panel"/);
   const numerical=markup.split('<div class="simulation-run-inclusions">')[1]?.split('</div>')[0]||'';
-  assert.equal((numerical.match(/class="checkbox-label st-checkbox-card"/g)||[]).length,3);
+  assert.equal((numerical.match(/class="checkbox-label st-checkbox-card"/g)||[]).length,4);
+  assert.match(numerical,/id="run-dynamic-balancing" type="checkbox">/);
+  assert.ok(!group.includes('run-dynamic-balancing'),'2D must not claim dynamic speed support');
   assert.match(styles,/label\.st-checkbox-card \{[\s\S]*?border:var\(--border-width\) solid var\(--line\)/);
   assert.match(styles,/label\.st-checkbox-card > input\[type=checkbox\] \{/);
   assert.doesNotMatch(ui,/#simulation-duration-content \.simulation-run-inclusions \.checkbox-label \{/);

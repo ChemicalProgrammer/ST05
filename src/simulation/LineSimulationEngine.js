@@ -766,9 +766,10 @@ function updateDynamicBelt(runtime,zone,stopped){
   const slope=(high-nominal)/(target>previous?c.accelerationSeconds:c.decelerationSeconds);
   const speed=target>previous?Math.min(target,previous+slope*dt):Math.max(target,previous-slope*dt);
   c.actualSpeedMmPerSecond=speed;c.targetSpeedMmPerSecond=target;
-  // A piecewise-linear ramp uses the mean speed over this integration tick.
-  // All transport and intake paths consume the same effective belt speed.
-  zone.conveyorSpeedMmPerSecond=(previous+speed)/2;
+  // Integrate the linear ramp exactly, including the part of a tick
+  // after reaching the setpoint. All physical paths use this same speed.
+  const rampTime=Math.min(dt,Math.abs(target-previous)/slope);
+  zone.conveyorSpeedMmPerSecond=((previous+speed)*rampTime/2+target*(dt-rampTime))/dt;
   c.mode=speed<target-1e-8?'RAMP_UP':speed>target+1e-8?'RAMP_DOWN':c.boost?'BOOST':'NOMINAL';
   if(Math.abs(speed-previous)>1e-8)c.rampSeconds+=dt;
   if(zone.conveyorSpeedMmPerSecond>nominal+1e-8)c.boostSeconds+=dt;else c.nominalSeconds+=dt;

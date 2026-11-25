@@ -94,3 +94,17 @@ test('disabling control events or calendar excludes them only from execution',()
  assert.equal(eventsOnly.plannedStops.length,1);
  assert.equal(original.plantCalendar.enabled,true);
 });
+
+test('dynamic balancing defaults off, restores per simulation, and locks during execution',()=>{
+ const dom=new JSDOM(fs.readFileSync('apps-script/WebApp.html','utf8'),{runScripts:'outside-only'}),w=dom.window;
+ try{
+  w.eval(fs.readFileSync('apps-script/RunOptions.html','utf8').replace(/<\/?script>/g,''));
+  const toggle=w.document.getElementById('run-dynamic-balancing');
+  assert.ok(toggle.closest('#simulation-duration-content'));assert.equal(toggle.checked,false);
+  const off={durationMode:'FIXED',durationSeconds:300},on={...off,dynamicLineBalancingEnabled:true};
+  w.STRunOptions.apply(on);assert.equal(toggle.checked,true);assert.equal(w.STRunOptions.read().dynamicLineBalancingEnabled,true);
+  w.STRunOptions.sync(true);assert.equal(toggle.disabled,true);
+  w.STRunOptions.apply(off);assert.equal(toggle.checked,false);assert.equal(toggle.disabled,false);
+  assert.equal(w.STRunOptions.read().dynamicLineBalancingEnabled,undefined);
+ }finally{w.close();}
+});

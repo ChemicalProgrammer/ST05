@@ -1,6 +1,6 @@
 # Control dinámico de velocidad y balanceo de línea — propuesta experimental
 
-Fecha: 2026-11-25. Estado: investigación y diseño propuesto; **no implementado ni validado**. Mantener intacta la referencia PHYSICAL_FLOW_8 y el plan diferido de núcleo físico único en SIMULATION_2D_HOMOLOGATION.md.
+Fecha: 2026-11-25. Estado: fase 1 numérica implementada experimentalmente; control de máquinas, segmentos independientes y 2D siguen pendientes. La validación de planta no se ha realizado. Mantener intacta la referencia PHYSICAL_FLOW_8 y el plan diferido de núcleo físico único en SIMULATION_2D_HOMOLOGATION.md.
 
 ## Evidencia industrial
 
@@ -44,3 +44,7 @@ No se han modificado archivos Apps Script, ejecutado simulaciones integrales ni 
 ## Phase 1 implementation — numerical conveyor control (2026-11-25)
 
 Implemented an optional ST discrete-physical conveyor controller. Global `dynamicLineBalancingEnabled` and per-conveyor `processData.dynamicLineBalancing.enabled` must both be true; the global option is absent/off for legacy cases. The third conveyor inspector tab configures explicit maximum speed (m/min), boost percentage, low/high reserve seconds, ramp-up/down seconds, confirmation and dwell. The controller uses a virtual contiguous outlet queue signal, not an assumed PLC photoeye program. Only nominal and recovery speeds are implemented; no below-nominal policy, equipment speed balancing, independent motor segments, or 2D dynamic control. 2D explicitly warns that it uses fixed speeds. The maximum is user-supplied; no mechanical limit is inferred. Existing interlocks override boost; no changes to machine design speed or random reliability parameters. Dynamic run provenance is tagged `/DLB:1`; legacy off signatures ignore inactive control configuration. Format changes rebuild sensor thresholds and preserve aggregate timing counters. Per-round zone telemetry includes actual/target speed, sensor states and cumulative recovery time. This is experimental; plant OEE improvement requires paired runs. See the new regression test.
+
+### Pruebas focalizadas y presentación
+
+Se añaden las comprobaciones de retorno a nominal por histéresis, inhibición con paro aguas abajo, paridad de cálculo síncrono/asíncrono, reproducción precisa y replicaciones, además del toggle de configuración. En Results del conveyor se muestran posiciones de sensores, velocidad pico/promedio, tiempo de recuperación y rampas. La integración de rampa calcula la distancia exacta para el tick incluso cuando el setpoint se alcanza antes de terminarlo. Las posiciones siguen siendo candidatas experimentales y no mediciones de planta. Los ensayos controlados no sustituyen la corrida G de 24 h.

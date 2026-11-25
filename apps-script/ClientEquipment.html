@@ -103,10 +103,13 @@
       var format=function(value){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:2}):'—';};
       var prefix=(es?'Velocidad nominal: ':'Nominal speed: ')+format(nominal)+' m/min. ';
       if(!config?.enabled){preview.textContent=prefix+(es?'Control local desactivado.':'Local control disabled.');return;}
+      if(Number.isFinite(nominal)&&!Number.isFinite(config.maxSpeedMPerMinute)){
+        preview.textContent=prefix+(es?'Ingresa un límite mecánico o experimental explícito. Referencia de prueba (+20%): ':'Enter an explicit mechanical or trial limit. Trial reference (+20%): ')+format(nominal*1.2)+' m/min';return;
+      }
       try{
         var result=window.SimulatorEngine.resolveDynamicBeltSettings(zone,config,models[index+1]);
         preview.textContent=prefix+(es?'Recuperación: ':'Recovery: ')+format(result.highSpeedMmPerSecond*.06)+' m/min · S Low: '+format(result.lowPositionMm/1000)+' m ('+result.lowUnits+') · S High: '+format(result.highPositionMm/1000)+' m ('+result.highUnits+')';
-      }catch(error){preview.textContent=prefix+error.message;}
+      }catch(error){preview.textContent=prefix+(window.STLanguage?.translate(error.message)??error.message);}
     }
 
     function createEquipmentCard(equipment, index) {

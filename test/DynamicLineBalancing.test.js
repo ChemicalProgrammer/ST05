@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {simulateLine} from '../src/simulation/LineSimulationEngine.js';
+import {simulateLine,simulateLineAsync,createLinePlaybackSession} from '../src/simulation/LineSimulationEngine.js';
+import {simulateBatch} from '../src/simulation/SimulationBatch.js';
 import {canonicalSimulationInputSignature} from '../src/simulation/SimulationProvenance.js';
 const format={id:'s',name:'S',bottlesPerCase:12,bottleLengthMm:60,caseLengthMm:310};
 const machine=(id,rate)=>({id,name:id,type:'CUSTOM',unitOfFlow:'bottles',initialMode:'AUTO',nominalRatePerSecond:rate,
@@ -39,5 +40,31 @@ function checks(api,assert){
  return {baseline:baseline.result.summary.outputCount,enabled:on.result.summary.outputCount,boostRequests:c.boostRequests,peak:c.peakSpeedMmPerSecond};
 }
 
-test('dynamic conveyor control is opt-in, physically bounded, and preserves material balance',()=>{checks({simulateLine,inputSignature:canonicalSimulationInputSignature},assert.ok);});
-test('generated Apps Script browser engine implements the same controller',()=>{const host={};new Function('window',fs.readFileSync('apps-script/SimulationEngine.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1])(host);checks(host.SimulatorEngine,assert.ok);});
+function hysteresisChecks(api,assert){
+ const x=input(true);x.case.equipment[0].nominalRatePerSecond=6;x.run.durationSeconds=180;
+ x.run.commands=[{equipmentId:'sink',action:'STOP',atVirtualSecond:60},{equipmentId:'sink',action:'RUN',atVirtualSecond:80}];
+ const r=api.simulateLine(x);assert(r.ok,'hysteresis fixture '+JSON.stringify(r.error));
+ const data=r.result.samples.flatMap(s=>s.accumulationZones.map(z=>({t:s.virtualSecond,c:z.dynamicLineBalancing}))).filter(s=>s.c);
+ for(const mode of ['RAMP_UP','BOOST','RAMP_DOWN','NOMINAL'])assert(data.some(s=>s.c.mode===mode),'observed '+mode);
+ const first=data.find(s=>s.c.mode==='BOOST');assert(data.some(s=>s.t>first.t&&s.c.mode==='NOMINAL'),'returns to nominal');
+ assert(data.filter(s=>s.t>62&&s.t<80).every(s=>!s.c.boostRequested),'downstream stop inhibits recovery');
+ assert(r.result.summary.materialBalance.residualUnits===0,'hysteresis material balance');
+ return {firstBoostSecond:first.t,returnedToNominalSecond:data.find(s=>s.t>first.t&&s.c.mode==='NOMINAL').t,output:r.result.summary.outputCount};
+}
+
+test('dynamic conveyor control is opt-in, physically bounded, and preserves material balance',()=>{const api={simulateLine,inputSignature:canonicalSimulationInputSignature};checks(api,assert.ok);hysteresisChecks(api,assert.ok);});
+test('generated Apps Script browser engine implements the same controller',()=>{const host={};new Function('window',fs.readFileSync('apps-script/SimulationEngine.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1])(host);checks(host.SimulatorEngine,assert.ok);hysteresisChecks(host.SimulatorEngine,assert.ok);});
+
+test('streamed numerical, batch and precise playback share the dynamic controller',async()=>{
+ const x=input(true);const sync=simulateLine(x);assert(sync.ok);
+ const asyncResult=await simulateLineAsync(x,{yieldBetweenChunks:false});assert(asyncResult.ok);
+ assert.deepEqual(asyncResult.result.summary,sync.result.summary);
+ assert.deepEqual(asyncResult.result.accumulationZoneMetrics,sync.result.accumulationZoneMetrics);
+ const session=createLinePlaybackSession(x);let frame;
+ while(!session.finished)frame=session.advanceTo(120,{budgetMs:100,maxTicks:8192});
+ assert.equal(frame.outputCount,sync.result.summary.outputCount);
+ assert.equal(frame.accumulationZones[0].dynamicLineBalancing.boostRequests,Object.values(sync.result.accumulationZoneMetrics)[0].dynamicLineBalancing.boostRequests);
+ const batch=await simulateBatch({...x,run:{...x.run,rounds:2}},{workerFirstRound:true,runRound:(input,options)=>simulateLineAsync(input,{...options,yieldBetweenChunks:false}),laterSummaryOnly:true});
+ assert(batch.ok);assert.equal(batch.result.batch.rows.length,2);
+ for(const row of batch.result.batch.rows)assert.ok(row.conveyorResults[0].dynamicLineBalancing.boostRequests>0);
+});

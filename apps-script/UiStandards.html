@@ -931,7 +931,11 @@ html[data-ui-mode=advance] #run-panel > .section-heading {
   width:max-content!important;min-width:0;max-width:100%;height:auto;box-sizing:border-box;
   margin:0!important;padding:0!important;background:transparent;border:0!important;
 }
-.live-equipment-card .numeric-equipment-control-dock > button {
+.st-equipment-control-dock {
+  display:flex;flex-flow:row nowrap;align-items:center;gap:var(--space-1);
+  width:max-content;box-sizing:border-box;margin:0;padding:0;background:transparent;border:0;
+}
+:is(.live-equipment-card .numeric-equipment-control-dock,.st-equipment-control-dock) > button {
   display:inline-grid;place-items:center;flex:0 0 var(--control-height);
   width:var(--control-height)!important;height:var(--control-height)!important;
   min-width:var(--control-height)!important;min-height:var(--control-height)!important;

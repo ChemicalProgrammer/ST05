@@ -19,11 +19,8 @@
 .simulation2d-fullscreen #simulation2d-canvas { flex:1; min-height:12rem; height:auto; }
 .simulation2d-diagram { position:relative; overflow:hidden; }
 #simulation2d-machine-controls { position:absolute; inset:0; pointer-events:none; }
-.simulation2d-machine-actions { position:absolute; display:flex; gap:2px; pointer-events:auto; transform:translate(-50%,-50%); }
-.simulation2d-machine-actions[hidden] { display:none; }
-.simulation2d-machine-actions .icon-button {
-  --icon-button-width:26px;--icon-button-height:22px;--icon-button-glyph-size:14px;
-}
+.simulation2d-machine-actions { position:absolute; pointer-events:auto; transform:translate(-50%,-50%); }
+.simulation2d-machine-actions[hidden] { display:none!important; }
 .simulation2d-analysis-action[hidden] { display:none; }
 #simulation2d-events-panel[hidden] { display:none; }
 #simulation2d-event-editor > .fold-card { margin:0; }
@@ -108,11 +105,12 @@
 /* Table evaluation keeps the shared pill colors, with a compact table-row height. */
 .simulation2d-analysis-action {
   --status-pill-height:16px;
-  position:absolute;z-index:2;pointer-events:auto;max-width:72px;
+  position:absolute;z-index:2;pointer-events:auto;
   transform:translateY(-50%);transform-origin:left center;
-  overflow:hidden;text-overflow:ellipsis;text-decoration:none;
+  text-decoration:none;
   color:var(--muted);background:var(--stopped-soft);cursor:pointer;
 }
+.simulation2d-analysis-action.st-status-pill {width:max-content;max-width:none;flex-shrink:0;overflow:visible;text-overflow:clip;}
 .simulation2d-analysis-action.simulation2d-verdict-pass {background:var(--success-soft);color:var(--success);}
 .simulation2d-analysis-action.simulation2d-verdict-fail {background:var(--failure-soft);color:var(--danger);}
 .simulation2d-analysis-action.simulation2d-verdict-at-limit {background:var(--starved-soft);color:var(--warning);}
@@ -130,7 +128,7 @@ window.STSimulation2D=(function(){
   const telemetryCardHeight=(53+16*18)*tableScale,telemetryRowHeight=18*tableScale;
   const telemetryColumns=[[84,99,38],[94,50,23],[128,50,54],[145,62,22]].map(columns=>columns.map(width=>width*tableScale));
   let telemetryMeasureContext;
-  const telemetryTopGap=25.5,telemetryPadding=7*tableScale,telemetryColumnGap=5*tableScale;
+  const telemetryTopGap=44,telemetryPadding=7*tableScale,telemetryColumnGap=5*tableScale;
   const parameterValueGap=telemetryColumnGap*.9,telemetryFont=12*tableScale+'px system-ui';
   const telemetryWidths=telemetryColumns.map(columns=>
     columns.reduce((sum,width)=>sum+width,0)+2*telemetryPadding+parameterValueGap+telemetryColumnGap);
@@ -546,7 +544,7 @@ window.STSimulation2D=(function(){
     window.STConveyorAnalysis.close();
     window.STEquipmentAnalysis?.close();
     const actions=[['RUN','play','Start / resume'],['PAUSE','pause','Pause'],['STOP','stop','Stop'],
-      ['EMERGENCY_STOP','error','Emergency stop'],['RESET','refresh','Reset emergency stop']];
+      ['EMERGENCY_STOP','warning','Emergency stop'],['RESET','refresh','Reset emergency stop']];
     for(const item of definitions){
       if(item.kind==='belt'){
         const button=document.createElement('button');
@@ -578,7 +576,7 @@ window.STSimulation2D=(function(){
       target.append(reliabilityButton);analysisButtons.set(item.id,reliabilityButton);
       }
       const group=document.createElement('div');
-      group.className='simulation2d-machine-actions';
+      group.className='simulation2d-machine-actions st-equipment-control-dock';
       group.setAttribute('role','group');
       group.setAttribute('aria-label',item.name+' controls');
       const buttons=new Map();
@@ -1025,17 +1023,34 @@ window.STSimulation2D=(function(){
   }
   // Dibujar la misma etiqueta con un punto y colores suaves en las tarjetas
   // y sobre el equipo; cada contexto controla su propia escala.
+  const defaultBadgeMetrics={font:'500 11px system-ui',height:20,paddingX:7,dotRadius:2,dotGap:4};
+  function readStatusPillMetrics(style){
+    const badgeSize=(name,fallback)=>parseFloat(style.getPropertyValue('--status-pill-'+name))||fallback;
+    return {
+      font:(style.getPropertyValue('--status-pill-font-weight').trim()||'500')+' '+
+        badgeSize('font-size',11)+'px '+(style.getPropertyValue('--status-pill-font-family').trim()||'system-ui'),
+      height:badgeSize('height',20),paddingX:badgeSize('padding-x',7),
+      dotRadius:badgeSize('dot-size',4)/2,dotGap:badgeSize('gap',4)
+    };
+  }
+  function statusPillLabel(state){return localize2D(state||'Stopped').toLocaleUpperCase();}
+  function statusPillWidth(context,label,metrics=defaultBadgeMetrics){
+    context.save();context.font=metrics.font;
+    const width=Math.max(14,context.measureText(label).width+2*metrics.paddingX+2*metrics.dotRadius+metrics.dotGap);
+    context.restore();return width;
+  }
   function drawStatusPill(context,state,lamp,colors,x,y,options={}){
-    const label=localize2D(state||'Stopped').toLocaleUpperCase();
+    const label=statusPillLabel(state);
     const palette=statusPillColors(lamp,colors);
-    const metrics=colors.badgeMetrics||{font:'500 11px system-ui',height:20,paddingX:7,dotRadius:2,dotGap:4};
-    const font=options.font||metrics.font;
-    const height=options.height||metrics.height,paddingX=options.paddingX??metrics.paddingX;
-    const radius=options.dotRadius??metrics.dotRadius,gap=options.dotGap??metrics.dotGap;
+    const metrics={...(colors.badgeMetrics||defaultBadgeMetrics),
+      font:options.font||colors.badgeMetrics?.font||defaultBadgeMetrics.font,
+      paddingX:options.paddingX??colors.badgeMetrics?.paddingX??defaultBadgeMetrics.paddingX,
+      dotRadius:options.dotRadius??colors.badgeMetrics?.dotRadius??defaultBadgeMetrics.dotRadius,
+      dotGap:options.dotGap??colors.badgeMetrics?.dotGap??defaultBadgeMetrics.dotGap};
+    const height=options.height||metrics.height,{paddingX,dotRadius:radius,dotGap:gap}=metrics;
+    const width=statusPillWidth(context,label,metrics);
     context.save();
-    context.font=font;
-    const calculated=context.measureText(label).width+2*paddingX+2*radius+gap;
-    const width=Math.max(14,Math.min(options.maxWidth||150,calculated));
+    context.font=metrics.font;
     const left=options.align==='right'?x-width:x-width/2,top=y-height/2;
     context.beginPath();context.roundRect(left,top,width,height,height/2);
     context.fillStyle=palette.background;context.fill();
@@ -1043,31 +1058,26 @@ window.STSimulation2D=(function(){
     context.fillStyle=palette.foreground;context.fill();
     context.fillStyle=palette.foreground;
     context.textAlign='left';context.textBaseline='middle';
-    context.fillText(label,left+paddingX+2*radius+gap,y,
-      Math.max(1,width-(2*paddingX+2*radius+gap)));
+    context.fillText(label,left+paddingX+2*radius+gap,y);
     context.restore();
   }
   // Same metrics as st-status-pill, at a fixed screen size at every canvas zoom.
-  function drawScreenStatusPill(context,state,lamp,colors,x,y,zoomFactor,maxWidth,align='center'){
+  function drawScreenStatusPill(context,state,lamp,colors,x,y,zoomFactor,align='center'){
     const factor=Math.max(.001,zoomFactor);
     context.save();
     context.translate(x,y);context.scale(1/factor,1/factor);
-    drawStatusPill(context,state,lamp,colors,0,0,{
-      maxWidth:Math.max(15,maxWidth||110),align
-    });
+    drawStatusPill(context,state,lamp,colors,0,0,{align});
     context.restore();
   }
   function drawSignal(context,x,y,signal,colors,zoomFactor){
-    drawScreenStatusPill(context,signal.state,signal.lamp,colors,x,y,zoomFactor,150);
+    drawScreenStatusPill(context,signal.state,signal.lamp,colors,x,y,zoomFactor);
   }
   // Dentro de las tablas, la etiqueta conserva proporción con las filas.
   // Solo las etiquetas sobre los equipos compensan el zoom de la cámara.
-  function drawTableStatusPill(context,state,lamp,colors,x,y,maxWidth,align='center'){
+  function drawTableStatusPill(context,state,lamp,colors,x,y,align='center'){
     context.save();
     context.translate(x,y);context.scale(tableScale,tableScale);
-    drawStatusPill(context,state,lamp,colors,0,0,{
-      height:16,maxWidth:maxWidth/tableScale,align
-    });
+    drawStatusPill(context,state,lamp,colors,0,0,{height:16,align});
     context.restore();
   }
   // Pictograma ligero sobre canvas: máquinas y bandas tienen símbolos distintos.
@@ -1267,7 +1277,17 @@ window.STSimulation2D=(function(){
   }
   function measureTelemetry(line){
     const context=telemetryMeasureContext??=canvas.getContext('2d');
+    const metrics=readStatusPillMetrics(getComputedStyle(canvas));
     context.save();
+    // Reserve the full state width in the active language before any transition.
+    const states=[...stateLamps.keys(),'Waiting','Ready','Stopped','Paused','Completed','Empty','Flowing','Accumulating',
+      ...line.map(item=>item.state).filter(Boolean)];
+    const stateWidth=Math.max(...states.map(state=>statusPillWidth(context,statusPillLabel(state),metrics)))*tableScale;
+    const verdicts=['PASS','FAIL','AT LIMIT','REVIEW','NOT EVALUATED'];
+    const verdictWidth=Math.max(...verdicts.flatMap(status=>[
+      statusPillWidth(context,localize2D(status),metrics),
+      statusPillWidth(context,window.STEquipmentAnalysis?.statusText(status)||status,metrics)
+    ]))*tableScale;
     for(const item of line){
       for(const card of telemetryData(item)){
         const columns=telemetryColumns[card.column];
@@ -1278,10 +1298,17 @@ window.STSimulation2D=(function(){
           });
         }
         context.font='600 '+telemetryFont;
-        const heading=context.measureText(localize2D(card.title||'')).width+
-          (card.verdict?context.measureText(localize2D(card.verdict)).width+28*tableScale:card.showSignal?22*tableScale:0);
+        // Include the full pill and equipment icon in the header. DOM
+        // evaluation buttons are measured before CSS zoom transforms.
+        let reserved=card.showSignal?stateWidth+16*tableScale:0;
+        if(card.column===2||card.column===3){
+          const button=analysisButtons.get(item.id),label=button?.textContent||card.verdict||'NOT EVALUATED';
+          reserved=Math.max(verdictWidth,statusPillWidth(context,localize2D(label),metrics)*tableScale,(button?.offsetWidth||0)*tableScale);
+        }
+        const title=card.showSignal?String(card.title||''):localize2D(card.title||'');
+        const heading=context.measureText(title).width+reserved+(reserved?8*tableScale:0);
         const content=columns.reduce((sum,width)=>sum+width,0)+parameterValueGap+telemetryColumnGap;
-        columns[0]+=Math.max(0,heading-content);
+        columns[0]+=Math.max(0,Math.ceil(heading-content));
       }
     }
     context.restore();
@@ -1320,22 +1347,14 @@ window.STSimulation2D=(function(){
         context.textAlign='left';
         // Igual que la cabecera numérica: nombre a la izquierda y una
         // etiqueta de estado suave alineada a la derecha.
-        const pillMaxWidth=Math.min(width*.45,110*tableScale);
         drawTableStatusPill(context,signal.state,signal.lamp,colors,
-          left+width-telemetryPadding,y+19*tableScale,pillMaxWidth,'right');
+          left+width-telemetryPadding,y+19*tableScale,'right');
         context.fillStyle=ink;context.textAlign='left';context.font='600 '+telemetryFont;
-        text(title,glyphX+16*tableScale,y+21*tableScale,
-          Math.max(8*tableScale,width-2*telemetryPadding-16*tableScale-pillMaxWidth-4*tableScale));
-      }else if(verdict){
-        // La única etiqueta PASS/FAIL pertenece a la cabecera de Geometría;
-        // reservar su ancho dentro de la tabla evita cubrir el título.
-        context.fillStyle=ink;
-        const reserved=Math.min(width*.45,76*tableScale);
-        text(localize2D(title),parameterX,y+21*tableScale,
-          Math.max(12*tableScale,width-2*telemetryPadding-reserved));
+        text(title,glyphX+16*tableScale,y+21*tableScale);
       }else if(title){
+        // The measurement pass already reserved the entire evaluation badge.
         context.fillStyle=ink;
-        text(localize2D(title),parameterX,y+21*tableScale,width-2*telemetryPadding);
+        text(localize2D(title),parameterX,y+21*tableScale);
       }
       if(!rows.length)return;
       context.textAlign='left';context.fillStyle=muted;context.font=telemetryFont;
@@ -1712,13 +1731,7 @@ window.STSimulation2D=(function(){
       [token,style.getPropertyValue('--'+token).trim()||fallback]));
     // Idénticos tokens de fondos/textos que las tarjetas numéricas .live-state.
     const color=(token,fallback)=>style.getPropertyValue('--'+token).trim()||fallback;
-    const badgeSize=(name,fallback)=>parseFloat(style.getPropertyValue('--status-pill-'+name))||fallback;
-    colors.badgeMetrics={
-      font:(style.getPropertyValue('--status-pill-font-weight').trim()||'500')+' '+
-        badgeSize('font-size',11)+'px '+(style.getPropertyValue('--status-pill-font-family').trim()||'system-ui'),
-      height:badgeSize('height',20),paddingX:badgeSize('padding-x',7),
-      dotRadius:badgeSize('dot-size',4)/2,dotGap:badgeSize('gap',4)
-    };
+    colors.badgeMetrics=readStatusPillMetrics(style);
     colors.badges={
       running:{background:color('running-soft','#e5f4ec'),foreground:color('success','#23764a')},
       starved:{background:color('starved-soft','#fff1d8'),foreground:color('warning','#916000')},
@@ -1772,7 +1785,7 @@ window.STSimulation2D=(function(){
         const cy=(telemetryY+items[index].telemetryOffset+19*tableScale)*factor;
         // El botón comparte la escala de la tabla y permanece anclado al
         // extremo derecho de su encabezado al acercar o alejar la cámara.
-        analysisButton.style.maxWidth=Math.min(72,telemetryWidths[column]*.38/tableScale)+'px';
+        analysisButton.style.maxWidth='none';
         analysisButton.style.left=cx+'px';analysisButton.style.top=cy+'px';
         analysisButton.style.transform='translate(-100%,-50%) scale('+(tableScale*factor)+')';
         analysisButton.style.transformOrigin='right center';

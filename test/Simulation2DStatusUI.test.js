@@ -11,20 +11,24 @@ function telemetryHarness(){
   const pills=source.slice(source.indexOf('  function statusPillColors('),source.indexOf('  const telemetryIconPaths='));
   const data=source.slice(source.indexOf('  function telemetryData('),source.indexOf('  function measureTelemetry('));
   const efficiency=read('apps-script/EquipmentEfficiency.html').replace(/<\/?script>/g,'');
-  const telemetry=source.slice(source.indexOf('  function drawTelemetry('),source.indexOf('  function productWidth('));
+  const telemetry=source.slice(source.indexOf('  function measureTelemetry('),source.indexOf('  function productWidth('));
   const position=source.slice(source.indexOf('      const analysisButton=analysisButtons.get(item.id);'),
     source.indexOf('      const controls=machineControls.get(item.id);'));
-  const button={style:{}};
+  const button={style:{},textContent:'NOT EVALUATED',offsetWidth:128};
   const api=vm.runInNewContext(constants+pills+efficiency+data+telemetry+`
     const item={id:'belt',kind:'belt',name:'A long equipment name',bottlesPerUnit:1,rate:2,speed:100,
       produced:159,capacityBottles:36,inputBottleFactor:1,residenceSeconds:3},
       index=0,origin=20,telemetryY=100,screenWidth=10000,h=10000;
+    const canvas={getContext:()=>recordingContext(1).context};
+    const stateLamps=new Map([['Running','running'],['Waiting for Prime','info'],['Emergency stop','failure']]);
+    measureTelemetry([item,{...item,kind:'machine',name:'A long equipment name',state:'Waiting for Prime'}]);
     const items=[{center:600,telemetryWidth:conveyorGroupWidth,telemetryOffset:7}];
     function positionAnalysis(factor){${position}}
     ({drawTelemetry,positionAnalysis,item,tableScale,telemetryRowHeight,telemetryPadding,
       telemetryColumns,telemetryWidths,
       left:origin+items[0].center-items[0].telemetryWidth/2,y:telemetryY+items[0].telemetryOffset})`,{
-    localize2D:String,num:String,window:{},scheduleOptions:{failures:{checked:false}},
+    recordingContext,getComputedStyle:()=>({getPropertyValue:()=>''}),
+    localize2D:value=>value==='Waiting for Prime'?'Esperando autorización de acumulación':String(value),num:String,window:{},scheduleOptions:{failures:{checked:false}},
     bottleStages:new Map(),bottleStageNames:['Empty'],conveyorDimensions:new Map([['belt',{status:'FAIL'}]]),
     conveyorGeometryRows:()=>[],analysisButtons:new Map([['belt',button]]),drawTelemetryIcon(){},
     strokeBox(context,left,top,width,height){context.box(left,top,width,height);},
@@ -69,7 +73,7 @@ test('2D labels above equipment retain shared screen pixel metrics at every zoom
       roundRect(x,y,width,height){rectangles.push({width:width*factor,height:height*factor});},
       arc(x,y,radius){dots.push(radius*factor);},fillText(){fonts.push(this.font);}};
     const colors={badgeMetrics:metrics};
-    drawScreenStatusPill(context,'Running','running',colors,100,80,zoom,110);
+    drawScreenStatusPill(context,'Running','running',colors,100,80,zoom);
     drawSignal(context,100,80,{state:'Running',lamp:'running'},colors,zoom);
     assert.equal(rectangles.length,2);
     for(const box of rectangles){assert.equal(box.height,24);assert.equal(box.width,67);}
@@ -81,7 +85,7 @@ test('2D labels above equipment retain shared screen pixel metrics at every zoom
 test('Equipment tables show one header status pill sized relative to their rows at every zoom',()=>{
   const harness=telemetryHarness();
   for(const kind of ['machine','belt']){
-    const signal=kind==='belt'?{state:'Accumulating',lamp:'blocked'}:{state:'Running',lamp:'running'};
+    const signal=kind==='belt'?{state:'Accumulating',lamp:'blocked'}:{state:'Waiting for Prime',lamp:'info'};
     let previous;
     for(const zoom of [.1,1,6]){
       const recorded=recordingContext(zoom);
@@ -96,9 +100,13 @@ test('Equipment tables show one header status pill sized relative to their rows 
       }
       const heading=text.find(entry=>entry.value==='A long equipment name');
       assert.ok(heading.left+heading.width<pills[0].left,'The equipment name has room before its badge');
-      const labels=text.filter(entry=>entry.value===signal.state.toUpperCase());
+      const labelText=signal.state==='Waiting for Prime'?'ESPERANDO AUTORIZACIÓN DE ACUMULACIÓN':signal.state.toUpperCase();
+      const labels=text.filter(entry=>entry.value===labelText);
       assert.equal(labels.length,1);
-      for(const label of labels)near(label.fontSize/rowHeight,11/18);
+      for(const label of labels){
+        near(label.fontSize/rowHeight,11/18);
+        near(label.width,labelText.length*label.fontSize*.55,'Pill text is never horizontally compressed');
+      }
       const dimensions=pills.map(pill=>({width:pill.width/zoom,height:pill.height/zoom}));
       if(previous)dimensions.forEach((pill,index)=>{
         near(pill.width,previous[index].width);near(pill.height,previous[index].height);
@@ -119,7 +127,8 @@ test('Geometry PASS/FAIL scales with its table and stays clear of the title',()=
     const table=recorded.tables[2],heading=recorded.text.find(entry=>entry.value==='Conveyor Geometry');
     // Evaluate the CSS transform against the widest possible button, including
     // its percentage translations and right-center origin, not just its scale.
-    const width=parseFloat(style.maxWidth),height=baseHeight;
+    assert.equal(style.maxWidth,'none','Evaluation tags have intrinsic width, without an ellipsis');
+    const width=harness.button.offsetWidth,height=baseHeight;
     const transform=style.transform.match(/^translate\(([-\d.]+)%,([-\d.]+)%\) scale\(([^)]+)\)$/);
     assert.ok(transform);assert.equal(style.transformOrigin,'right center');
     const scale=Number(transform[3]),translateX=Number(transform[1])*width/100,translateY=Number(transform[2])*height/100;
@@ -216,4 +225,15 @@ test('2D Settings reuses framed checkbox cards without replacing the input contr
   assert.match(styles,/label\.st-checkbox-card \{[\s\S]*?border:var\(--border-width\) solid var\(--line\)/);
   assert.match(styles,/label\.st-checkbox-card > input\[type=checkbox\] \{/);
   assert.doesNotMatch(ui,/#simulation-duration-content \.simulation-run-inclusions \.checkbox-label \{/);
+});
+
+test('2D machine controls share numeric control dock dimensions and emergency icon',()=>{
+  const src=read('apps-script/Simulation2D.html'),numeric=read('apps-script/ClientPlayback.html'),ui=read('apps-script/UiStandards.html');
+  assert.ok(src.includes("group.className='simulation2d-machine-actions st-equipment-control-dock'"));
+  assert.ok(numeric.includes("controlDock.classList.add('numeric-equipment-control-dock','st-equipment-control-dock')"));
+  assert.match(ui,/\.st-equipment-control-dock\s*\{[^}]*gap:var\(--space-1\)/);
+  assert.match(ui,/\.st-equipment-control-dock\) > button\s*\{[^}]*width:var\(--control-height\)/);
+  assert.ok(src.includes("['EMERGENCY_STOP','warning','Emergency stop']"));
+  assert.ok(numeric.includes("['emergency','warning',"));
+  assert.doesNotMatch(src,/\.simulation2d-machine-actions\s+\.icon-button\s*\{/);
 });

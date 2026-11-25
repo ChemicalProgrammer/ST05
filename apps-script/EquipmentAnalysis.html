@@ -146,7 +146,7 @@
 .equipment-analysis-pill:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 #equipment-analysis-body .equipment-analysis-pill { cursor:default; margin:0; vertical-align:middle; }
 .live-equipment-card .numeric-equipment-header .equipment-analysis-pill { align-self:flex-start; }
-.simulation2d-analysis-action.equipment-analysis-pill { position:absolute; max-width:72px; }
+.simulation2d-analysis-action.equipment-analysis-pill { position:absolute; width:max-content; max-width:none; overflow:visible; text-overflow:clip; }
 </style>
 <script>
 window.STEquipmentAnalysis=(function(){

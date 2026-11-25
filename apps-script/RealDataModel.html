@@ -30,8 +30,8 @@ window.STRealDataModel=(function(){
     values.total=requireInputs?record.durationSeconds:zero(record.durationSeconds);
     for(const [id,c] of Object.entries(timeCategories)){
       const branch=record.timeBreakdown?.[id],inputs=c.fields.map(([key])=>branch?.[key]);
-      const calculated=requireInputs&&!branch?.enabled?at(record,c.total)??null:
-        requireInputs&&!inputs.every(known)?null:inputs.reduce((sum,n)=>sum+zero(n),0);
+      const calculated=requireInputs&&!branch?.enabled&&known(at(record,c.total))?at(record,c.total):
+        inputs.reduce((sum,n)=>sum+zero(n),0);
       values[id]=value(id,calculated);
     }
     values.plant=value('plant',subtract(values.total,values.external));values.production=value('production',subtract(values.plant,values.decision));values.runtime=value('runtime',subtract(values.production,values.unplanned));
@@ -184,6 +184,15 @@ window.STRealDataModel=(function(){
     if(!row)row=result;
     const key=k=>average?mean(rows.map(r=>r.summary?.[k])):statsOnly?result.batch.statistics[k]?.mean??null:row.summary?.[k]??null;
     const output=key('outputCount'),duration=result.durationSeconds;
+    const rowScrap=r=>{
+      if(!r?.summary)return null;
+      const s=r.summary;
+      if(Number.isFinite(s.totalMacroStopScrapBottles))return s.totalMacroStopScrapBottles;
+      if(Number.isFinite(s.materialBalance?.scrapUnits))return s.materialBalance.scrapUnits;
+      return s.qualityAssumption==='MACROSTOP_SCRAP_ONLY_OTHER_REJECTS_NOT_MODELED'?null:0;
+    };
+    const scrapBottles=(result.engineId||result.replay?.engineId)==='DES_SIMPY_EXPERIMENTAL'?null:
+      average?mean(rows.map(rowScrap)):statsOnly?result.batch.statistics.totalMacroStopScrapBottles?.mean??(rowScrap(result)===0?0:null):rowScrap(row);
     const outputRunSeconds=outputId?(average?mean(rows.map(r=>r.equipmentMetrics?.[outputId]?.runningSeconds)):statsOnly?result.batch.equipmentStatistics?.[outputId]?.runningSeconds?.mean??null:row.equipmentMetrics?.[outputId]?.runningSeconds??null):null;
     const engine=result.engineId||result.replay?.engineId;
     const noFlow=(seconds,running)=>engine==='DES_SIMPY_EXPERIMENTAL'?null:downtimeDifference(seconds,[running]);
@@ -205,7 +214,7 @@ window.STRealDataModel=(function(){
     if(rows.length&&statistics&&statistics.n>1&&statistics.mean!==null){statistics.standardDeviation=Math.sqrt(rows.reduce((v,r)=>v+(r.summary.outputCount-statistics.mean)**2,0)/(rows.length-1));statistics.min=Math.min(...rows.map(r=>r.summary.outputCount));statistics.max=Math.max(...rows.map(r=>r.summary.outputCount));}
     const shiftRows=average?rows:statsOnly?[]:[row];
     const shifts=shiftRows.length&&shiftRows.every(r=>Array.isArray(r.shifts))?Array.from({length:Math.max(0,...shiftRows.map(r=>r.shifts.length))},(_,i)=>({outputCount:mean(shiftRows.map(r=>r.shifts[i]?.outputCount)),durationSeconds:mean(shiftRows.map(r=>r.shifts[i]?.durationSeconds))})):[];
-    return {output,duration,shifts,measuredRunSeconds:key('lineRunSeconds'),measuredEffectiveSeconds:key('lineEffectiveRuntimeSeconds'),measuredRateLossSeconds:key('lineRateLossSeconds'),rateRecoverySeconds:key('lineRateRecoverySeconds'),netRateBalanceSeconds:key('lineNetRateBalanceSeconds'),rateLossMeasured:average?rows.every(r=>hasMeasuredRateLoss(r.summary)):statsOnly?hasMeasuredRateLoss({...result.summary,...Object.fromEntries(Object.entries(result.batch.statistics).map(([k,v])=>[k,v.mean]))}):hasMeasuredRateLoss(row.summary),productAware,multiFormat,nominalRate:key('lineOeePacemakerRatePerSecond'),outputRunSeconds,outputEquipmentId:outputId||null,unit:String(result.unitOfFlow||result.replay?.unitOfFlow||'units').toUpperCase(),oee:key('lineOeePercent'),idealOutput:key('idealBottleOutput'),equipment:metrics,packFactor:factors.length===1?factors[0]:null,view:average?'Average of '+rows.length+' rounds':statsOnly?'Average of '+statistics.n+' saved rounds':row.round?'Round '+row.round:'Saved run',seed:row?.seed??result.batch?.baseSeed??result.seed,statistics,engine,engineVersion:result.replay?.engineVersion||null,completedAt:result.completedAt||null,inputSignature:result.inputSignature||result.replay?.inputSignature||null,qualityAssumption:result.summary.qualityAssumption||null,detailCoverage:result.detailCoverage||null};
+    return {output,duration,shifts,scrapBottles,measuredRunSeconds:key('lineRunSeconds'),measuredEffectiveSeconds:key('lineEffectiveRuntimeSeconds'),measuredRateLossSeconds:key('lineRateLossSeconds'),rateRecoverySeconds:key('lineRateRecoverySeconds'),netRateBalanceSeconds:key('lineNetRateBalanceSeconds'),rateLossMeasured:average?rows.every(r=>hasMeasuredRateLoss(r.summary)):statsOnly?hasMeasuredRateLoss({...result.summary,...Object.fromEntries(Object.entries(result.batch.statistics).map(([k,v])=>[k,v.mean]))}):hasMeasuredRateLoss(row.summary),productAware,multiFormat,nominalRate:key('lineOeePacemakerRatePerSecond'),outputRunSeconds,outputEquipmentId:outputId||null,unit:String(result.unitOfFlow||result.replay?.unitOfFlow||'units').toUpperCase(),oee:key('lineOeePercent'),idealOutput:key('idealBottleOutput'),equipment:metrics,packFactor:factors.length===1?factors[0]:null,view:average?'Average of '+rows.length+' rounds':statsOnly?'Average of '+statistics.n+' saved rounds':row.round?'Round '+row.round:'Saved run',seed:row?.seed??result.batch?.baseSeed??result.seed,statistics,engine,engineVersion:result.replay?.engineVersion||null,completedAt:result.completedAt||null,inputSignature:result.inputSignature||result.replay?.inputSignature||null,qualityAssumption:result.summary.qualityAssumption||null,detailCoverage:result.detailCoverage||null};
   }
   const percent=(n,d)=>Number.isFinite(n)&&Number.isFinite(d)&&d>0?100*n/d:null;
   const sumKnown=values=>values.length&&values.every(Number.isFinite)?values.reduce((a,b)=>a+b,0):null;
@@ -299,10 +308,11 @@ window.STRealDataModel=(function(){
     for(let i=0;i<3;i++)add('shift'+i,'Turno '+(i+1),'cajas',real.shiftProduction[i],sim?.shifts?.length===real.shiftProduction.filter(finite).length?(!sim.productAware&&unit==='CASES'?sim.shifts[i]?.outputCount:finite(sim.shifts[i]?.outputCount)&&pack>0?sim.shifts[i].outputCount/pack:null):null,'Producción de los límites del turno guardado. No se divide el total diario entre turnos.','Producción');
     add('standard','Standard Rate','bpm',real.referenceSpeedBpm,sim&&!sim.multiFormat&&finite(sim.nominalRate)?sim.nominalRate*60:null,'Velocidad estándar del cuello de botella para el producto. En múltiples formatos no se inventa una velocidad global media.','Inputs');
     add('pack','Botellas por caja','botellas/caja',real.bottlesPerCase,sim?.packFactor??simulation?.sourceImport?.metadata?.bottlesPerCase??null,'Factor de conversión declarado para el formato.','Inputs');
-    add('good','Producción conforme','botellas',real.aem.goodOutputUnits??(real.outputBasis==='GOOD'?realBottles:null),bottles,'Producción conforme de planta. La simulación continua supone calidad del 100 %.','Producción');
-    add('scrapUnits','Scrap','botellas',real.aem.scrapUnits,sim&&sim.engine!=='DES_SIMPY_EXPERIMENTAL'?0:null,'Scrap capturado en botellas; el simulador continuo no modela rechazos y supone cero.','Producción');
+    add('good','Producción conforme','botellas',real.aem.goodOutputUnits??(real.outputBasis==='GOOD'?realBottles:null),bottles,'Producción conforme de planta y salida buena simulada después del descarte físico.','Producción');
+    add('scrapUnits','Scrap','botellas',real.aem.scrapUnits,sim?.scrapBottles,'Scrap simulado = botellas efectivamente descartadas por paros mayores y purga posterior. Excluye overflow, clearout y scrap pendiente.','Producción');
     add('reworkUnits','Rework','botellas',real.aem.reworkUnits,sim&&sim.engine!=='DES_SIMPY_EXPERIMENTAL'?0:null,'Retrabajo capturado en botellas; cero simulado es una hipótesis, no una validación de planta.','Producción');
-    add('quality','Calidad','%',real.qualityPercent,sim&&sim.engine!=='DES_SIMPY_EXPERIMENTAL'?100:null,'Calidad reportada frente a la hipótesis del 100 % en simulación continua.','Inputs');
+    const simulatedQuality=sim?.scrapBottles===0?100:finite(bottles)&&finite(sim?.scrapBottles)?percent(bottles,bottles+sim.scrapBottles):null;
+    add('quality','Calidad','%',real.qualityPercent,simulatedQuality,'Calidad simulada respecto al scrap modelado = salida buena / (salida buena + scrap real simulado) × 100. No incluye otros rechazos.','Inputs');
 
     const realPct=(den)=>percent(realEffective,den),simPct=den=>percent(times.effective,den);
     add('ae','Asset Effectiveness (AE)','%',realPct(finite(real.durationSeconds)?real.durationSeconds/60:null),simPct(times.total),'AE = 100 × Effective Runtime / Total Time.','Indicadores');

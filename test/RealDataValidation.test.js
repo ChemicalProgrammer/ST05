@@ -97,3 +97,15 @@ test('calibration leaves missing inputs pending and preserves explicit zero from
   assert.equal(calibration(result,'adjusted'),null);
  }finally{w.close();}
 });
+
+test('scrap comparison uses actual loss per selected round and automatic calendar defaults',()=>{
+ const w=setup();try{const f=fixture();f.record.timeHierarchyEnabled=true;f.record.timeBreakdown={external:{enabled:true},decision:{enabled:true},unplanned:{enabled:true,unscheduledMaintenanceSeconds:512*60}};
+ f.record.aem.scrapUnits=100;f.result.summary.totalMacroStopScrapBottles=220;f.result.summary.totalMacroStopScrapPendingBottles=500;
+ const d=w.STRealData.compare(f.record,f.simulation,f.result,'average',{}),scrap=d.rows.find(r=>r.id==='scrapUnits');
+ assert.equal(scrap.simulated,220);assert.equal(scrap.delta,120);assert.equal(d.calibration.columns.find(c=>c.letter==='D').value,1440);
+ assert(!d.calibration.missing.some(item=>['external','decision'].includes(item.section)));
+ assert.equal(d.aemComparison.rows.find(r=>r.label==='Scrap (tiempo equivalente)').simulated,1);
+ f.result.batch={representativeRound:2,rows:[{round:1,summary:{...f.result.summary,totalMacroStopScrapBottles:220},equipmentMetrics:f.result.equipmentMetrics},{round:2,summary:{...f.result.summary,totalMacroStopScrapBottles:440},equipmentMetrics:f.result.equipmentMetrics}]};
+ for(const [view,expected] of [['average',330],['representative',440],['1',220]])assert.equal(w.STRealData.compare(f.record,f.simulation,f.result,view,{}).rows.find(r=>r.id==='scrapUnits').simulated,expected);
+ }finally{w.close();}
+});

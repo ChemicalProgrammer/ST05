@@ -171,10 +171,10 @@ window.STRealData=(function(){
     "Producción de los límites del turno guardado. No se divide el total diario entre turnos.": "Production within the saved shift boundaries. The daily total is not divided between shifts.",
     "Velocidad estándar del cuello de botella para el producto. En múltiples formatos no se inventa una velocidad global media.": "Standard bottleneck rate for the product. No average global rate is assumed across formats.",
     "Factor de conversión declarado para el formato.": "Declared conversion factor for the format.",
-    "Producción conforme de planta. La simulación continua supone calidad del 100 %.": "Good plant production. The continuous simulation assumes 100% quality.",
-    "Scrap capturado en botellas; el simulador continuo no modela rechazos y supone cero.": "Scrap entered in bottles; the continuous simulator does not model rejects and assumes zero.",
+    "Producción conforme de planta y salida buena simulada después del descarte físico.": "Good plant production and simulated good output after physical rejection.",
+    "Scrap simulado = botellas efectivamente descartadas por paros mayores y purga posterior. Excluye overflow, clearout y scrap pendiente.": "Simulated scrap = bottles physically rejected during major repairs and restart purge. Excludes overflow, clearout and pending scrap.",
     "Retrabajo capturado en botellas; cero simulado es una hipótesis, no una validación de planta.": "Rework entered in bottles; simulated zero is an assumption, not plant validation.",
-    "Calidad reportada frente a la hipótesis del 100 % en simulación continua.": "Reported quality versus the 100% quality assumption in continuous simulation.",
+    "Calidad simulada respecto al scrap modelado = salida buena / (salida buena + scrap real simulado) × 100. No incluye otros rechazos.": "Simulated quality for modeled scrap = good output / (good output + actual simulated scrap) × 100. Other rejects are excluded.",
     "Real: AU reportado (%) capturado en Registro. Simulado: 100 × Effective Runtime / Plant Available Time.": "Real: reported AU (%) entered in Record. Simulated: 100 × Effective Runtime / Plant Available Time.",
     "OE = 100 × Effective Runtime / Production Available Time. No equivale automáticamente al OEE global.": "OE = 100 × Effective Runtime / Production Available Time. It is not automatically equivalent to global OEE.",
     "Real: UPDT reportado (%) capturado en Registro. Simulado: 100 × Unplanned Downtime / (Runtime + Unplanned Downtime).": "Real: reported UPDT (%) entered in Record. Simulated: 100 × Unplanned Downtime / (Runtime + Unplanned Downtime).",
@@ -553,13 +553,11 @@ window.STRealData=(function(){
   }
   function calibrationHtml(result,interactive=true){
     const columns=result.calibration.columns;
-    const missing=result.calibration.missing||[],checks=result.calibration.checks||[];
-    const label=name=>name==='Complete simulated time and rate-loss evidence'?tr(name,'Evidencia completa de tiempos simulados y pérdidas de velocidad'):ui(name);
-    const notice=missing.length?'<div class="real-data-calibration-notice" role="status"><strong>'+tr('Missing inputs','Datos faltantes')+'</strong><p>'+tr('Calculated cells update as soon as their required inputs are known. For a reported total, select its node and enable manual entry. Enter zero only for a confirmed zero loss.','Las celdas se actualizan al completar los datos requeridos. Si conoces un total reportado, selecciona su nodo y activa la captura manual. Escribe cero solo si confirmaste que no hubo pérdida.')+'</p><ul>'+missing.map(item=>'<li>'+esc(label(item.label))+(interactive&&item.section?' <button class="ghost real-data-input-shortcut" type="button" data-real-shortcut="'+esc(item.section)+'">'+tr('Enter value','Capturar dato')+'</button>':'')+'</li>').join('')+'</ul></div>':'';
+    const checks=result.calibration.checks||[];
     const checkLabels={REPORTED_EFFECTIVE_VS_TIME_BALANCE:tr('Reported effective runtime differs from the time balance.','El tiempo efectivo reportado difiere del balance de tiempos.'),REPORTED_EFFECTIVE_VS_GOOD_PRODUCTION:tr('Reported effective runtime differs from good production / standard rate.','El tiempo efectivo reportado difiere de producción conforme / velocidad estándar.'),REPORTED_UPDT_VS_TIME_RATIO:tr('Reported UPDT differs from downtime / production available time. Check the denominator.','El UPDT reportado difiere de paro / tiempo disponible de producción. Verifica el denominador.')};
     const discrepancies=checks.length?'<div class="real-data-calibration-notice"><strong>'+tr('Reconciliation checks','Comprobaciones de conciliación')+'</strong><ul>'+checks.map(item=>'<li>'+esc(checkLabels[item.code])+' '+tr('Reported: ','Reportado: ')+fmt(item.reported)+' '+item.unit+' · '+tr('Calculated: ','Calculado: ')+fmt(item.calculated)+' '+item.unit+'</li>').join('')+'</ul></div>':'';
     const attrs=c=>' title="'+esc(displayText(c.formula))+'" aria-description="'+esc(displayText(c.formula))+'" tabindex="0"';
-    return '<div class="real-data-calibration-scroll" role="region" aria-label="'+esc(ui('Hoja de cálculo de rate loss calibrado'))+'" tabindex="0"><table class="real-data-calibration-table"><thead><tr>'+columns.map(c=>'<th scope="col"'+attrs(c)+'>'+esc(ui(c.label))+(c.unit?'<small>['+esc(c.unit==='pp'?'%':c.unit)+']</small>':'')+'</th>').join('')+'</tr></thead><tbody><tr>'+columns.map(c=>'<td data-calibration="'+esc(c.id)+'" class="'+(c.letter==='A'||c.letter==='B'?'':'numeric')+'"'+attrs(c)+'>'+((c.letter==='A'||c.letter==='B')?esc(c.value||'—'):fmt(c.value))+(c.unit==='%'?' %':'')+'</td>').join('')+'</tr></tbody></table></div><p class="chart-note">'+esc(ui(result.calibration.note))+'</p>'+notice+discrepancies;
+    return '<div class="real-data-calibration-scroll" role="region" aria-label="'+esc(ui('Hoja de cálculo de rate loss calibrado'))+'" tabindex="0"><table class="real-data-calibration-table"><thead><tr>'+columns.map(c=>'<th scope="col"'+attrs(c)+'>'+esc(ui(c.label))+(c.unit?'<small>['+esc(c.unit==='pp'?'%':c.unit)+']</small>':'')+'</th>').join('')+'</tr></thead><tbody><tr>'+columns.map(c=>'<td data-calibration="'+esc(c.id)+'" class="'+(c.letter==='A'||c.letter==='B'?'':'numeric')+'"'+attrs(c)+'>'+((c.letter==='A'||c.letter==='B')?esc(c.value||'—'):fmt(c.value))+(c.unit==='%'?' %':'')+'</td>').join('')+'</tr></tbody></table></div><p class="chart-note">'+esc(ui(result.calibration.note))+'</p>'+discrepancies;
 
   }
   function downtimeHtml(d){
@@ -635,16 +633,7 @@ window.STRealData=(function(){
     for(const [id,html] of [['real-data-comparison',data?comparisonHtml(data):''],['real-data-calibration',data?calibrationHtml(data):'']])document.getElementById(id).innerHTML=html||'<p class="empty">'+esc(ui('Sin registro seleccionado.'))+'</p>';
     STSubsection.init(comparison);
     showComparisonExplorer(comparison,selectedGroup);
-    for(const button of document.querySelectorAll('#real-data-calibration [data-real-shortcut]')){
-      button.onclick=()=>{
-        const target=[...document.querySelectorAll('#real-data-editor [data-explorer-select]')].find(n=>n.dataset.explorerSelect===button.dataset.realShortcut);
-        if(!target)return;
-        target.click();
-        const panel=document.getElementById(target.getAttribute('aria-controls'));
-        panel?.scrollIntoView?.({block:'nearest',behavior:'smooth'});
-        (panel?.querySelector('[data-time-toggle]')||panel?.querySelector('input'))?.focus();
-      };
-    }
+
   }
   function render(caseRecord,simulation,live){
     if(!state||!caseRecord)return;

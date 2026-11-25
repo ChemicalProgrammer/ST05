@@ -1842,14 +1842,44 @@ window.STSimulation2D=(function(){
     lastMachineActions.clear();for(const [id,action] of record?.machineActions||[])lastMachineActions.set(id,action);
     markPlaybackAction(record?.playbackAction??null);
   }
+  // Checkpoints deliberately omit static definitions. Store a small,
+  // self-describing result alongside them so validation never needs to guess
+  // which machine, flow unit or package factor a checkpoint row represents.
+  function summarize2DRun(run,runState,runSeed,source,round,limit,shifts){
+    if(!run||!Number.isFinite(run.time)||!Array.isArray(run.line))return null;
+    const finite=v=>Number.isFinite(v)?v:null;
+    const equipment=run.line.map(item=>{
+      const count=finite(item.produced),factor=finite(item.bottlesPerUnit);
+      return {equipmentId:item.id,name:item.name,kind:item.kind,outputUnit:item.unit,
+        bottlesPerUnit:factor,producedUnits:count,producedBottles:count!==null&&factor>0?count*factor:null,
+        state:item.state,failureCount:item.kind==='machine'?finite(item.failureCount):null,
+        durationsSeconds:Object.fromEntries(Object.entries(item.durations||{}).map(([key,value])=>[key,finite(value)])),
+        inventoryUnits:item.kind==='belt'?(Array.isArray(item.items)?item.items.length:null):
+          Array.isArray(item.resident)?item.resident.length:null};
+    });
+    const output=equipment.at(-1),bottles=output?.producedBottles??null;
+    return {schema:'st-simulation2d-summary-v1',source,seed:finite(runSeed),round:round??null,
+      runState,durationSeconds:run.time,targetDurationSeconds:finite(limit),
+      complete:runState==='Completed'&&Number.isFinite(limit)&&run.time>=limit-1e-8,
+      outputEquipmentId:output?.equipmentId??null,outputUnit:output?.outputUnit??null,
+      outputUnits:output?.producedUnits??null,outputBottles:bottles,
+      throughputBpm:run.time>0&&bottles!==null?bottles*60/run.time:null,
+      shiftOutputUnits:[...(shifts||[])].map(finite),equipment,
+      notes:['Counts are actual discrete outputs; bottle counts use each equipment output pack factor.',
+        'The 2D model holds the selected format through changeovers. Its state counters differ from the numerical engine; Waiting for Prime is included in starving.',
+        'Schedule options on the enclosing checkpoint describe settings at capture, not proof that they were unchanged throughout the run.']};
+  }
   function capture(){
     if(restoringView||!viewKey)return null;
     draw();
+    const independentModel=defaultRun?.model??model,independentState=defaultRun?.runState??runState,independentShifts=defaultRun?.shiftOutput??shiftOutput;
     return {
-      identity:JSON.parse(viewKey),layout:layoutRecord(),version:2,appearance:{...appearance},viewports:viewportCount,options:scheduleSettings(),speed:Number(el('speed').value),limitSeconds,signature,runState:defaultRun?.runState??runState,
-      shiftOutput:[...(defaultRun?.shiftOutput??shiftOutput)],checkpoint:(defaultRun?.model??model)?.snapshot()??null,
+      identity:JSON.parse(viewKey),layout:layoutRecord(),version:2,appearance:{...appearance},viewports:viewportCount,options:scheduleSettings(),speed:Number(el('speed').value),limitSeconds,signature,runState:independentState,
+      shiftOutput:[...independentShifts],checkpoint:independentModel?.snapshot()??null,
+      summary:summarize2DRun(independentModel,independentState,seed,'INDEPENDENT',null,limitSeconds,independentShifts),
       presentation:defaultRun?.presentation??presentationRecord(),source:defaultRun?'representative':'independent',
-      representativeView:defaultRun?{seed:representative.seed,round:representative.round,runState,shiftOutput:[...shiftOutput],checkpoint:model?.snapshot(),presentation:presentationRecord()}:undefined
+      representativeView:defaultRun?{seed:representative.seed,round:representative.round,runState,shiftOutput:[...shiftOutput],checkpoint:model?.snapshot(),presentation:presentationRecord(),
+        summary:summarize2DRun(model,runState,representative.seed,'REPRESENTATIVE_SEED',representative.round,limitSeconds,shiftOutput)}:undefined
     };
   }
   function checkpoint(){

@@ -281,3 +281,32 @@ test('additional case information is the last shared export section, only in Adv
   basicDialog.querySelector('.dialog-heading button').click();assert.equal(await basic,false);
  }finally{h.dom.window.close();}
 });
+
+test('2D results and checkpoints have an independent export choice in Basic and Advance',async()=>{
+ const h=setup();try{
+  const w=h.w,api=w.STReports;
+  const state2d={version:2,checkpoint:{time:86400,line:[]},summary:{outputBottles:170000},representativeView:{summary:{outputBottles:169000}}};
+  const record={activeSimulationId:'a',simulations:[{id:'a',name:'A',equipment:[],simulation2d:state2d,results:{summary:{outputCount:137228},replay:{samples:[]}}},{id:'b',name:'B',equipment:[]}]};
+  const before=JSON.stringify(record);
+  const choices=api.caseExportSelection(record,'COMPLETE');
+  assert.equal(choices[0].simulation2d,true);assert.equal(choices[1].simulation2d,false);
+  choices[0].results='NONE';
+  let out=api.selectedCaseExport(record,choices);
+  assert.equal(out.simulations[0].results,undefined);assert.deepEqual(JSON.parse(JSON.stringify(out.simulations[0].simulation2d)),state2d);
+  choices[0].results='FULL';choices[0].simulation2d=false;
+  out=api.selectedCaseExport(record,choices);
+  assert.equal(out.simulations[0].simulation2d,undefined);assert.equal(out.simulations[0].results.summary.outputCount,137228);
+  out=api.selectedCaseExport(record,api.caseExportSelection(record,'CONFIGURATION'));
+  assert.equal(out.simulations[0].simulation2d,undefined);assert.equal(out.simulations[0].results,undefined);
+  assert.equal(JSON.stringify(record),before);
+  w.STIcons={svg:()=>'<svg></svg>'};w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.STDialog={beginActivity:()=>()=>{}};
+  for(const mode of ['basic','advance']){
+   w.document.documentElement.dataset.uiMode=mode;
+   const pending=api.requestCaseExport(record),dialog=w.document.querySelector('.case-export-dialog');
+   const a=dialog.querySelector('[data-export-simulation2d="a"]'),b=dialog.querySelector('[data-export-simulation2d="b"]');
+   assert(a.checked&&!a.disabled);assert(!b.checked&&b.disabled);
+   const select=a.closest('fieldset').querySelector('select');select.value='NONE';select.onchange();assert(a.checked&&!a.disabled);
+   dialog.querySelector('.dialog-heading button').click();assert.equal(await pending,false);
+  }
+ }finally{h.dom.window.close();}
+});

@@ -102,3 +102,20 @@ test('Real Data metadata changes enable the header Save control without invalida
  state.activeCase=null;context.syncSaveButton();
  assert(Object.values(buttons).every(b=>b.disabled&&b.classList.contains('hidden')));
 });
+
+test('draft case export captures the latest owned 2D state without saving or mutating the original case',async()=>{
+ const owner={id:'s',simulation2d:{checkpoint:{time:15}}},state={activeCase:{id:'c',simulations:[owner]},activeSimulationId:'s'};
+ const button={disabled:false},sent=[];
+ const context=vm.createContext({state,cloneJson:clone,window:{STSimulation2D:{capture:()=>({identity:['c','s','format'],checkpoint:{time:42},summary:{outputBottles:120}})}},
+  document:{getElementById:id=>id==='export-complete-case'?button:{reportValidity:()=>true}},prepareCaseDraft:()=>Promise.resolve(),captureSimulationView(){},
+  STReports:{requestCaseExport:async draft=>sent.push(draft)},showError:e=>{throw e;}});
+ vm.runInContext(source.slice(source.indexOf('    async function exportCompleteCase()'),source.indexOf('    function fitCaseSave(')),context);
+ await context.exportCompleteCase();
+ assert.equal(sent[0].simulations[0].simulation2d.checkpoint.time,42);
+ assert.equal(sent[0].simulations[0].simulation2d.summary.outputBottles,120);
+ assert.equal(owner.simulation2d.checkpoint.time,15);
+ assert.equal(button.disabled,false);
+ context.window.STSimulation2D.capture=()=>({identity:['other','s'],checkpoint:{time:999}});
+ await context.exportCompleteCase();
+ assert.equal(sent[1].simulations[0].simulation2d.checkpoint.time,15);
+});

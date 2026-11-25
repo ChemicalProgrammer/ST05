@@ -385,16 +385,13 @@ async function openCase(caseId, initialView) {
         if(!document.getElementById('case-editor-form').reportValidity())return;
         await prepareCaseDraft();captureSimulationView();
         var draft=cloneJson(state.activeCase);draft.activeSimulationId=state.activeSimulationId;delete draft.expectedRevision;
+        captureCase2D(draft);
         await STReports.requestCaseExport(draft);
       }catch(error){showError(error);}finally{button.disabled=false;}
     }
     function captureForSave() {
       STProducts.validateForSave();
-      var diagram=window.STSimulation2D?.capture?.();
-      if(diagram&&state.activeCase&&diagram.identity?.[0]===state.activeCase.id){
-        var diagramOwner=state.activeCase.simulations.find(function(item){return item.id===diagram.identity[1];});
-        if(diagramOwner)diagramOwner.simulation2d=diagram;
-      }
+      captureCase2D(state.activeCase);
       if(whatIfOnlySave&&state.activeCase){captureSimulationView();var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(evidenceDraft);}
       var simulation=activePersistentSimulation(),preserve=preserveCommittedSimulationInputs(simulation);
       var next=preserve?caseEditorSnapshot():collectCaseEditor();if(!next)return null;
@@ -404,6 +401,16 @@ async function openCase(caseId, initialView) {
       else if(simulation){var before=JSON.stringify([simulation.equipment,simulation.dynamicConfig]);simulation.equipment=cloneJson(next.equipment);simulation.dynamicConfig=cloneJson(run);if(before!==JSON.stringify([simulation.equipment,simulation.dynamicConfig]))simulation.updatedAt=new Date().toISOString();captureSimulationView();}
       next.simulations=state.activeCase.simulations;
       return fitCaseSave(cloneJson(next));
+    }
+    // Use the same checkpoint capture for both Save and a draft export.
+    // Never attach a live view from another case or a removed simulation.
+    function captureCase2D(record){
+      if(!record)return;
+      var diagram=window.STSimulation2D?.capture?.();
+      if(diagram&&diagram.identity?.[0]===record.id){
+        var owner=(record.simulations||[]).find(function(item){return item.id===diagram.identity[1];});
+        if(owner)owner.simulation2d=diagram;
+      }
     }
     function fitCaseSave(draft){
       draft.activeSimulationId=state.activeSimulationId;

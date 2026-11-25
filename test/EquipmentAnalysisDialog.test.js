@@ -142,3 +142,57 @@ test('buffer coverage displays connected conveyor names instead of internal IDs 
   assert.equal(tables[1].querySelector('tbody tr:nth-child(2) td').textContent,downstream.name+', Conveyor sin nombre');
  }finally{h.close();}
 });
+
+test('buffer coverage omits inapplicable tables but preserves completed technical FAIL results',()=>{
+ const h=harness();try{
+  const machine={id:'e',name:'Machine',type:'FILLER',nominalRatePerSecond:2,noiseProfile:{reliability:{mtbfMinutes:20,mttrMinutes:12}}};
+  const belt={id:'c',name:'Discharge conveyor',type:'CONVEYOR'};
+  const simulation={equipment:[machine,belt]};
+  const audits=[{equipmentId:'c',upstreamId:'e',engineering:{calculated:{antiStarveSeconds:28.21}}}];
+  h.w.STEquipmentAnalysis.open(simulation,'e',{audits});
+  const buffer=()=>h.body.querySelector('[data-analysis-group="buffer"]');
+  assert.equal(buffer().dataset.completeness,'COMPLETE');
+  assert.equal(buffer().querySelectorAll('table').length,1);
+  assert.match(buffer().textContent,/Upstream — anti-block · Not applicable: No upstream conveyor connected/);
+  assert.doesNotMatch(buffer().textContent,/Not evaluated/i);
+  assert.match(buffer().querySelector('table').textContent,/FAIL/);
+  assert.match(buffer().querySelector('table').textContent,/Discharge conveyor/);
+  h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+  assert.match(buffer().textContent,/Aguas arriba — anti-block · No aplica/);
+  assert.equal(buffer().querySelectorAll('table').length,1);
+ }finally{h.close();}
+});
+
+test('buffer coverage differentiates unresolved geometry, missing MTTR and inapplicable directions',()=>{
+ const h=harness();try{
+  const machine={id:'e',name:'Machine',type:'FILLER',nominalRatePerSecond:2,noiseProfile:{reliability:{mtbfMinutes:20,mttrMinutes:12}}};
+  const upstream={id:'u',name:'Feed conveyor',type:'CONVEYOR'},downstream={id:'d',name:'Discharge conveyor',type:'CONVEYOR'};
+  const simulation={equipment:[upstream,machine,downstream]};
+  const api=h.w.STEquipmentAnalysis;
+  const buffer=()=>h.body.querySelector('[data-analysis-group="buffer"]');
+  const valid=[{equipmentId:'u',downstreamId:'e',engineering:{calculated:{antiBlockSeconds:800}}}];
+  api.open(simulation,'e',{audits:valid});
+  assert.equal(buffer().dataset.completeness,'PENDING');
+  assert.equal(buffer().querySelectorAll('table').length,1);
+  assert.match(buffer().textContent,/Downstream — anti-starve · Not evaluated: Connected conveyor geometry is unresolved. Connected conveyors: Discharge conveyor/);
+  assert.doesNotMatch(buffer().textContent,/Downstream — anti-starve · Not applicable/);
+  api.open(simulation,'e',{audits:[{equipmentId:'d',upstreamId:'e',engineering:null}]});
+  assert.equal(buffer().dataset.completeness,'MISSING');
+  assert.equal(buffer().querySelectorAll('table').length,0);
+  assert.match(buffer().textContent,/Feed conveyor/);
+  assert.match(buffer().textContent,/Discharge conveyor/);
+  api.open({equipment:[upstream,{...machine,noiseProfile:{reliability:{mtbfMinutes:20}}},downstream]},'e',{audits:valid});
+  assert.equal(buffer().dataset.completeness,'MISSING');
+  assert.equal(buffer().querySelectorAll('table').length,0);
+  assert.match(buffer().textContent,/Valid active MTBF and MTTR are required/);
+  api.open({equipment:[machine]},'e',{audits:[]});
+  assert.equal(buffer().dataset.completeness,'NOT_APPLICABLE');
+  assert.equal(buffer().querySelectorAll('table').length,0);
+  assert.match(buffer().textContent,/No upstream conveyor connected/);
+  assert.match(buffer().textContent,/No downstream conveyor connected/);
+  api.open({...simulation,dynamicConfig:{reliabilityEnabled:false}},'e',{audits:valid});
+  assert.equal(buffer().dataset.completeness,'NOT_APPLICABLE');
+  assert.equal(buffer().querySelectorAll('table').length,0);
+  assert.match(buffer().textContent,/Not applicable: Reliability failures are disabled/);
+ }finally{h.close();}
+});

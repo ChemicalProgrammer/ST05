@@ -140,6 +140,25 @@ window.STEquipmentAnalysis=(function(){
     const element=document.createElement(tag);if(text!==undefined)element.textContent=text;parent.append(element);return element;
   }
   function note(parent,text){make(parent,'p',text).className='chart-note';}
+  const zeroReliabilityPair=p=>p?.mtbfMinutes===0&&p?.mttrMinutes===0;
+  function reliabilityInactive(r,e){
+    const rel=e?.noiseProfile?.reliability,split=e?.processData?.equipment?.stopInputs;
+    return ['FAILURES_DISABLED','CATEGORIES_DISABLED','NOT_APPLICABLE','CONVEYOR'].includes(r.reason)||
+      r.reason==='NO_MODELED_FAILURES'&&(split?zeroReliabilityPair(split.minor)&&zeroReliabilityPair(split.major):zeroReliabilityPair(rel));
+  }
+  // Share applicability between completeness and rendering. A missing audit
+  // on an adjacent conveyor is missing evidence, not a physical absence.
+  function bufferDirections(r,equipment,simulation){
+    const line=simulation?.equipment||[],index=line.findIndex(item=>item.id===equipment?.id);
+    const belt=item=>item?.type==='CONVEYOR'||item?.processData?.role==='CONVEYOR';
+    return ['UPSTREAM','DOWNSTREAM'].map(direction=>{
+      const coverage=r.bufferCoverage.find(c=>c.direction===direction);
+      const auditedIds=coverage?.conveyorIds||[];
+      const adjacent=index<0?null:line[index+(direction==='UPSTREAM'?-1:1)];
+      const connectedIds=auditedIds.length?auditedIds:belt(adjacent)&&adjacent.id!=null?[adjacent.id]:[];
+      return {direction,coverage,connectedIds,notApplicable:index>=0&&!belt(adjacent)&&!auditedIds.length};
+    });
+  }
   // Evaluate evidence completeness, not the reliability verdict. Default
   // screening thresholds and status strings are not evidence of a completed
   // analysis; zero measured counts and negative CAPEX effects are valid data.
@@ -149,11 +168,9 @@ window.STEquipmentAnalysis=(function(){
     const result=(cells,reason='',emptyStatus='MISSING')=>({...summarize(cells,emptyStatus),reason});
     const na=reason=>result([],reason,'NOT_APPLICABLE');
     const noData=reason=>result([],reason);
-    const e=equipment||{},line=simulation?.equipment||[],config=simulation?.dynamicConfig||simulation?.run||{};
+    const e=equipment||{},config=simulation?.dynamicConfig||simulation?.run||{};
     const rel=e.noiseProfile?.reliability,split=e.processData?.equipment?.stopInputs,categories=config.reliabilityCategories||{};
-    const zero=p=>p?.mtbfMinutes===0&&p?.mttrMinutes===0;
-    const inactive=['FAILURES_DISABLED','CATEGORIES_DISABLED','NOT_APPLICABLE','CONVEYOR'].includes(r.reason)||
-      r.reason==='NO_MODELED_FAILURES'&&(split?zero(split.minor)&&zero(split.major):zero(rel));
+    const zero=zeroReliabilityPair,inactive=reliabilityInactive(r,e);
     const why=reasonText(r.reason);
     const rawPairs=split?[['MINOR',split.minor],['MAJOR',split.major]].filter(([kind])=>categories[kind.toLowerCase()]!==false):[['GENERAL',rel]];
     const rawCells=rawPairs.filter(([,pair])=>!zero(pair)).flatMap(([kind,pair])=>[
@@ -186,18 +203,12 @@ window.STEquipmentAnalysis=(function(){
       cell(classText(c.kind)+' · MTBF',c.mtbfMinutes),cell(classText(c.kind)+' · MTTR',c.mttrMinutes),
       cell(classText(c.kind)+' · '+t('Event share','Proporción de eventos'),c.eventShare)
     ])):result([...rawCells,cell(t('Active failure class model','Modelo de categorías activas'),null)],why);
-    const belt=item=>item?.type==='CONVEYOR'||item?.processData?.role==='CONVEYOR';
-    const index=line.findIndex(item=>item.id===e.id);
-    const adjacent=direction=>index<0?null:line[index+(direction==='UPSTREAM'?-1:1)];
-    const buffers=['UPSTREAM','DOWNSTREAM'].flatMap(direction=>{
-      const item=r.bufferCoverage.find(c=>c.direction===direction),prefix=direction==='UPSTREAM'?t('Upstream','Aguas arriba'):t('Downstream','Aguas abajo');
-      // A physical line boundary or directly adjacent machine does not have
-      // a conveyor reserve. An unresolved audit on a connected belt is missing.
-      const noBelt=index>=0&&!belt(adjacent(direction))&&!item?.conveyorIds?.length;
+    const buffers=bufferDirections(r,e,simulation).flatMap(({direction,coverage:item,notApplicable})=>{
+      const prefix=direction==='UPSTREAM'?t('Upstream','Aguas arriba'):t('Downstream','Aguas abajo');
       return [
-        cell(prefix+' · '+t('Design coverage time','Tiempo de cobertura'),item?.seconds,noBelt),
-        cell(prefix+' · FCR',item?.ratio,noBelt),
-        ...(item?.classCoverage||[]).map(c=>cell(prefix+' · FCR '+classText(c.kind),c.ratio,noBelt))
+        cell(prefix+' · '+t('Design coverage time','Tiempo de cobertura'),item?.seconds,notApplicable),
+        cell(prefix+' · FCR',item?.ratio,notApplicable),
+        ...(item?.classCoverage||[]).map(c=>cell(prefix+' · FCR '+classText(c.kind),c.ratio,notApplicable))
       ];
     });
     const buffer=inactive?na(why):result(buffers,t('Coverage requires a valid MTTR and resolved adjacent conveyor geometry. A direction with no connected conveyor is not applicable.','La cobertura requiere MTTR válido y geometría de conveyors adyacentes resuelta. Una dirección sin conveyor conectado no aplica.'));
@@ -358,6 +369,39 @@ window.STEquipmentAnalysis=(function(){
       make(row,'td',unit).className='analysis-table-unit';
     }
   }
+  function renderBufferCoverage(host,r,equipment,simulation){
+    if(reliabilityInactive(r,equipment)){
+      note(host,t('Not applicable','No aplica')+': '+reasonText(r.reason));
+      return;
+    }
+    const directions=bufferDirections(r,equipment,simulation);
+    const conveyorNames=new Map((simulation?.equipment||[]).map(e=>[e.id,typeof e.name==='string'?e.name.trim():'']));
+    for(const {direction,coverage:c,connectedIds,notApplicable} of directions){
+      const upstream=direction==='UPSTREAM';
+      const label=upstream?t('Upstream — anti-block','Aguas arriba — anti-block'):t('Downstream — anti-starve','Aguas abajo — anti-starve');
+      if(notApplicable){
+        const reason=upstream?t('No upstream conveyor connected.','No hay conveyor conectado aguas arriba.'):
+          t('No downstream conveyor connected.','No hay conveyor conectado aguas abajo.');
+        note(host,label+' · '+t('Not applicable','No aplica')+': '+reason);
+        continue;
+      }
+      const names=connectedIds.map(id=>conveyorNames.get(id)||t('Unnamed conveyor','Conveyor sin nombre')).join(', ');
+      const classes=c?.classCoverage||[];
+      const hasMetrics=[c?.seconds,c?.ratio,...classes.map(v=>v.ratio)].some(Number.isFinite);
+      const missingReason=!(r.mttrMinutes>0)?t('Valid active MTBF and MTTR are required.','Se necesitan MTBF y MTTR activos y válidos.'):
+        t('Connected conveyor geometry is unresolved.','La geometría de los conveyors conectados no está resuelta.');
+      if(!hasMetrics){
+        note(host,label+' · '+t('Not evaluated','No evaluado')+': '+missingReason+
+          (names?' '+t('Connected conveyors','Conveyors conectados')+': '+names+'.':''));
+        continue;
+      }
+      table(host,[[label,statusText(c.status)],[t('Connected conveyors','Conveyors conectados'),names||'—'],
+        [t('Design coverage time','Tiempo de cobertura de diseño'),c.seconds,'s'],['FCR (Tbuffer / MTTR)',c.ratio,'×'],
+        ...classes.map(v=>['FCR · '+classText(v.kind),v.ratio,'×'])]);
+      if(c.status==='NOT EVALUATED')note(host,label+' · '+missingReason);
+    }
+    if(directions.some(d=>!d.notApplicable))note(host,t('FCR ≥ 1 covers the mean repair duration using design population/free-space estimates, not live inventory.','FCR ≥ 1 cubre el tiempo medio de reparación con estimaciones de población/espacio libre de diseño, no inventario en vivo.'));
+  }
   let current=null;
   function close(){if(dialog.open)dialog.close();}
   function open(simulation,equipmentId,options={}){
@@ -411,16 +455,7 @@ window.STEquipmentAnalysis=(function(){
       note(host,t('Effective MTBF uses the sum of class failure rates; effective MTTR is weighted by those rates. General stops are never reclassified by duration.','El MTBF efectivo utiliza la suma de tasas de falla; el MTTR efectivo se pondera por esas tasas. Las fallas generales no se reclasifican por duración.'));
     }else note(host,reasonText(r.reason)||t('No resolved active failure categories.','No hay categorías de falla activas resueltas.'));
     host=section('buffer',t('Buffer coverage — Failure Coverage Ratio','Cobertura de acumulación — Failure Coverage Ratio'),t('Estimate how long the connected conveyors can absorb a repair.','Estima cuánto tiempo los conveyors conectados pueden absorber una reparación.'));
-    if(!r.bufferCoverage.length)note(host,t('Not evaluated: active MTTR and connected conveyor geometry are required.','No evaluado: se necesitan MTTR activo y geometría de conveyors conectados.'));
-    const conveyorNames=new Map((current.simulation?.equipment||[]).map(e=>[e.id,typeof e.name==='string'?e.name.trim():'']));
-    for(const c of r.bufferCoverage){
-      const connectedNames=c.conveyorIds.map(id=>conveyorNames.get(id)||t('Unnamed conveyor','Conveyor sin nombre')).join(', ')||'—';
-      const direction=c.direction==='UPSTREAM'?t('Upstream — anti-block','Aguas arriba — anti-block'):t('Downstream — anti-starve','Aguas abajo — anti-starve');
-      table(host,[[direction,statusText(c.status)],[t('Connected conveyors','Conveyors conectados'),connectedNames],
-        [t('Design coverage time','Tiempo de cobertura de diseño'),c.seconds,'s'],['FCR (Tbuffer / MTTR)',c.ratio,'×'],
-        ...c.classCoverage.map(v=>['FCR · '+classText(v.kind),v.ratio,'×'])]);
-    }
-    note(host,t('FCR ≥ 1 covers the mean repair duration using design population/free-space estimates, not live inventory. Missing geometry or a line boundary stays not evaluated.','FCR ≥ 1 cubre el tiempo medio de reparación con estimaciones de población/espacio libre de diseño, no inventario en vivo. Geometría faltante o extremo de línea queda no evaluado.'));
+    renderBufferCoverage(host,r,current.equipment,current.simulation);
     host=section('capacity',t('Capacity and line balance','Capacidad y balanceo de línea'),t('Compare installed speed and availability-adjusted capacity.','Compara la velocidad instalada y la capacidad ajustada por disponibilidad.'));
     if(r.capacity){
       const c=r.capacity,unit=c.unit==='BOTTLE_EQUIVALENTS'?t('bottle eq/min','bot eq/min'):c.unit.toLowerCase()+'/min';

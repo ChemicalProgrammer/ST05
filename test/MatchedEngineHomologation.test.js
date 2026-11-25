@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {simulateLine,simulateLineAsync} from '../src/simulation/LineSimulationEngine.js';
+import {simulateLine,simulateLineAsync,createLinePlaybackSession} from '../src/simulation/LineSimulationEngine.js';
+import {canonicalSimulationInputSignature} from '../src/simulation/SimulationProvenance.js';
 import {simulateBatch,replicationView} from '../src/simulation/SimulationBatch.js';
 import {createEquipmentRandom,equipmentRandomSeed,seededRandomStep} from '../src/simulation/SeededRandom.js';
 import {stopReliabilityProfile,createFailureHistory,startFailureEpisode,closeFailureEpisode,chargeFailureEpisode,snapshotFailureHistory,summarizeFailureOverlap} from '../src/simulation/StopReliability.js';
@@ -41,6 +42,7 @@ function definitions(eq,categories={}){
   return {id:item.id,kind:'machine',unit:output,inputUnit:input,rate:item.nominalRatePerSecond,
     designSpeedPerSecond:item.nominalRatePerSecond,batch:fac/inf,capacityBottles:item.processData.equipment.internalCapacityBottles*inf,
     residenceSeconds:0,occupancyMode:'STORAGE',inputBottleFactor:inf,bottlesPerUnit:fac,
+    ...(item.processData.equipment.macroStopScrapBottles>0?{macroStopScrapBottles:item.processData.equipment.macroStopScrapBottles}:{}),
     startDelay:0,rampSeconds:0,primeRampSeconds:eq[i-1]?.processData?.accumulation?.downstreamRampUpSeconds??0,
     failures:classes.map(c=>({stopClass:c.stopClass,rate:c.rate/60,ratePerMinute:c.rate,repairSeconds:c.mttrMinutes*60,meanExposureSeconds:profile.mtbfMinutes*60}))};
  });
@@ -58,7 +60,8 @@ function balance2D(model){
  const outputUnits=model.line.at(-1).produced*model.line.at(-1).bottlesPerUnit;
  const inventoryUnits=model.line.reduce((n,item)=>n+(item.kind==='belt'?item.items.length*item.bottlesPerUnit:item.resident.length*item.inputBottleFactor),0);
  const overflowUnits=model.line.reduce((n,item)=>n+(item.kind==='belt'?item.overflowUnits*item.bottlesPerUnit:0),0);
- return {inputUnits,outputUnits,inventoryUnits,overflowUnits,clearoutUnits:0,residualUnits:inputUnits-outputUnits-inventoryUnits-overflowUnits};
+ const configured=model.line.some(item=>item.macroScrap),scrapUnits=model.line.reduce((sum,item)=>sum+(item.macroScrap?.actualBottles||0),0);
+ return {inputUnits,outputUnits,inventoryUnits,overflowUnits,clearoutUnits:0,...(configured?{scrapUnits}:{}),residualUnits:inputUnits-outputUnits-inventoryUnits-overflowUnits-scrapUnits};
 }
 function paired(eq,seconds,extra={}){
  const data=input(eq,seconds,extra),r=simulateLine(data);assert(r.ok,JSON.stringify(r.error));
@@ -223,3 +226,68 @@ for(const [seed,reliabilityEnabled,expected] of [[20261124,false,1344],[20261124
   // throughput are checked, not a false assertion of identical trajectories.
  });
 }
+
+
+function scrapFixture(category='major',count=7){
+ const eq=timing();eq[2].processData.equipment.macroStopScrapBottles=count;
+ eq[2].processData.equipment.stopInputs={minor:{mtbfMinutes:0,mttrMinutes:0},major:{mtbfMinutes:0,mttrMinutes:0},[category]:{mtbfMinutes:.12,mttrMinutes:.06}};
+ return eq;
+}
+function scrapChecks(api,core,assert){
+ const trial=(eq,seconds=90,extra={})=>{
+  const data=input(eq,seconds,{reliabilityEnabled:true,...extra});
+  const n=api.simulateLine(data);assert(n.ok,'numerical '+JSON.stringify(n.error));
+  const dt=n.result.numerics.effectiveTickSeconds,defs=definitions(eq,data.run.reliabilityCategories),d=core.create(defs,data.run.seed,undefined,{commands:data.run.commands});
+  d.configure({failures:data.run.reliabilityEnabled,calendar:false,events:true});
+  for(let i=0;i<Math.round(seconds/dt);i++)d.step(dt);
+  assert(n.result.summary.materialBalance.residualUnits===0,'numeric balance');
+  assert(balance2D(d).residualUnits===0,'2D balance');
+  assert(JSON.stringify(n.result.summary.materialBalance)===JSON.stringify(balance2D(d)),'matched material ledger');
+  return {n:n.result,d,defs};
+ };
+ const a=trial(scrapFixture()),m=a.n.equipmentMetrics.sink,b=a.d.line[2];
+ assert(m.macroStopScrapEvents===5&&m.majorFailureCount===5,'five major repairs');
+ assert(m.macroStopScrapRequestedBottles===35,'one quota per repair');
+ assert(m.macroStopScrapBottles===22&&m.macroStopScrapPendingBottles===13,'actual and pending counted independently');
+ assert(b.macroScrap.stopCount===5&&b.macroScrap.actualBottles===22&&b.macroScrap.pendingBottles===13,'2D loss parity');
+ assert(a.n.summary.outputCount===115&&b.produced===115,'net output parity');
+ assert(m.stateAccounting.efficiency.quality===a.d.accountingSnapshot(b).efficiency.quality,'quality parity');
+ const minor=trial(scrapFixture('minor'));assert(minor.n.equipmentMetrics.sink.minorFailureCount>0,'minor repairs observed');
+ assert(minor.n.summary.totalMacroStopScrapBottles===0&&minor.d.line[2].macroScrap.requestedBottles===0,'minor excluded');
+ const no=trial(scrapFixture(),90,{reliabilityEnabled:false,commands:[stop('sink',20,'PAUSE'),stop('sink',35,'RUN')]});
+ assert(no.n.summary.totalMacroStopScrapBottles===0&&no.d.line[2].macroScrap.requestedBottles===0,'commands and disabled failures excluded');
+ const general=scrapFixture();delete general[2].processData.equipment.stopInputs;general[2].noiseProfile.reliability={mtbfMinutes:.12,mttrMinutes:.06};
+ const g=trial(general);assert(g.n.equipmentMetrics.sink.macroStopScrapEvents===g.n.equipmentMetrics.sink.generalFailureCount&&g.n.summary.totalMacroStopScrapBottles===22,'general repairs included');
+ const eq=packing();eq[4].processData.equipment.macroStopScrapBottles=24;eq[4].noiseProfile.reliability={mtbfMinutes:.15,mttrMinutes:.04};
+ const p=trial(eq,180);assert(p.n.summary.totalMacroStopScrapBottles===60&&p.d.line[4].macroScrap.actualBottles===60,'whole case losses in bottle equivalents');
+ const bad=scrapFixture();bad[2].processData.equipment.macroStopScrapBottles=-1;assert(!api.simulateLine(input(bad)).ok,'negative rejected');
+ eq[4].processData.equipment.macroStopScrapBottles=1;assert(!api.simulateLine(input(eq)).ok,'partial cases rejected');
+ const pending=trial(scrapFixture('major',1000),30);assert(pending.n.summary.totalMacroStopScrapPendingBottles===1979,'pending not fabricated as loss');
+ const saved=pending.d.snapshot(),restored=core.create(pending.defs,7,saved);
+ assert(JSON.stringify(restored.line[2].macroScrap)===JSON.stringify(pending.d.line[2].macroScrap),'checkpoint restores loss accounting');
+ const micro=timing();micro[2].processData.equipment.macroStopScrapBottles=7;micro[2].noiseProfile.microStop={probabilityPerMinute:60,minDurationSeconds:.1,maxDurationSeconds:.2};
+ const mr=api.simulateLine(input(micro,90,{reliabilityEnabled:true}));assert(mr.ok,'microstop fixture');
+ assert(mr.result.equipmentMetrics.sink.microStopSeconds>0,'microstop observed');
+ assert(mr.result.summary.totalMacroStopScrapBottles===0,'microstop excluded');
+ const zero=input(timing(),120);const baseline=api.simulateLine(zero);
+ zero.case.equipment[2].processData.equipment.macroStopScrapBottles=0;const explicit=api.simulateLine(zero);
+ assert(JSON.stringify(baseline.result)===JSON.stringify(explicit.result),'explicit zero same result as absent');
+ assert(api.canonicalSimulationInputSignature(zero)===api.canonicalSimulationInputSignature(input(timing(),120)),'zero signature same as absent');
+ return {actual:m.macroStopScrapBottles,pending:m.macroStopScrapPendingBottles,good:a.n.summary.outputCount,caseScrap:p.n.summary.totalMacroStopScrapBottles};
+}
+
+test('macrostop scrap physically removes product in both independent engines',()=>{scrapChecks({simulateLine,canonicalSimulationInputSignature},core,(ok,msg)=>assert.ok(ok,msg));});
+
+test('macrostop scrap survives asynchronous calculation, precise playback and batch replications',async()=>{
+ const x=input(scrapFixture(),90,{reliabilityEnabled:true}),sync=simulateLine(x);assert(sync.ok);
+ const asyncResult=await simulateLineAsync(x,{yieldBetweenChunks:false});assert(asyncResult.ok);
+ assert.deepEqual(asyncResult.result.summary,sync.result.summary);
+ const session=createLinePlaybackSession(x);let frame;
+ while(!session.finished)frame=session.advanceTo(90,{budgetMs:100,maxTicks:8192});
+ assert.equal(frame.outputCount,sync.result.summary.outputCount);
+ assert.equal(frame.equipment.find(e=>e.id==='sink').macroStopScrapBottles,22);
+ const batch=await simulateBatch({...x,run:{...x.run,rounds:2}},{workerFirstRound:true,runRound:(input,options)=>simulateLineAsync(input,{...options,yieldBetweenChunks:false}),laterSummaryOnly:true});
+ assert(batch.ok);assert.equal(batch.result.batch.rows.length,2);
+ assert.equal(batch.result.batch.rows[0].summary.totalMacroStopScrapBottles,22);
+ for(const row of batch.result.batch.rows){assert.equal(row.summary.materialBalance.residualUnits,0);assert.ok(row.equipmentMetrics.sink.macroStopScrapBottles>0);}
+});

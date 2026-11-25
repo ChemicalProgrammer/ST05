@@ -130,7 +130,7 @@ window.STSimulation2DEngine=(function(){
       const weightedDesign=productive>0?ideal/productive:designRate;
       const intrinsicAvailability=elapsed>0?1-(ownDowntime+time('STOPPED')+time('EMERGENCY_STOP')+time('PLANNED_STOP'))/elapsed:null;
       const intrinsicOee=intrinsicAvailability!==null&&runtimeEfficiency!==null?intrinsicAvailability*runtimeEfficiency:null;
-      // No reject stream. Keep above-design discrepancies visible, not capped.
+      // Good output already excludes physical rejects. Keep above-design discrepancies visible.
       efficiency={availability:tidy(availability),runtimeEfficiency:tidy(runtimeEfficiency),
         operationalEfficiency:tidy(operationalEfficiency),throughput:tidy(operationalEfficiency===null?null:operationalEfficiency*weightedDesign),
         productionSpeed:tidy(productive>0?output/productive:null),designSpeed:tidy(weightedDesign),

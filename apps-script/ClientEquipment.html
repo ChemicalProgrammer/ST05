@@ -836,7 +836,7 @@ function numericInputValue(input) {
           }else delete noise.reliability;
         }
         if(type!=='CONVEYOR')STEquipmentRoles.readCapacity(card._fields,data);
-        if(type==='CONVEYOR')data=mergeFormatZoneData(data,readFormatZoneInputs(card));
+        if(type==='CONVEYOR'){delete data.equipment.macroStopScrapBottles;data=mergeFormatZoneData(data,readFormatZoneInputs(card));}
         var previewInput=equipmentField(card,'.equipment-input-unit').value,previewOutput=equipmentField(card,'.equipment-unit').value;
         if(previewInput&&previewOutput)data.flowUnits={input:type==='CONVEYOR'?previewOutput:previewInput,output:previewOutput};
         if(type==='CONVEYOR'&&card._transportFlowIssue)data.transportFlowIssue=card._transportFlowIssue;else delete data.transportFlowIssue;

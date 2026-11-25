@@ -353,7 +353,7 @@ function stateAccountingSnapshot(ledger,elapsed,output,designRate,machine,exposu
     const weightedDesign=productive>0?ideal/productive:designRate;
     const intrinsicAvailability=elapsed>0?1-(ownDowntime+time('STOPPED')+time('EMERGENCY_STOP')+time('PLANNED_STOP'))/elapsed:null;
     const intrinsicOee=intrinsicAvailability!==null&&runtimeEfficiency!==null?intrinsicAvailability*runtimeEfficiency:null;
-    // No reject stream. Keep above-design discrepancies visible, not capped.
+    // Good output already excludes physical rejects. Keep above-design discrepancies visible.
     efficiency={availability:tidy(availability),runtimeEfficiency:tidy(runtimeEfficiency),
       operationalEfficiency:tidy(operationalEfficiency),throughput:tidy(operationalEfficiency===null?null:operationalEfficiency*weightedDesign),
       productionSpeed:tidy(productive>0?output/productive:null),designSpeed:tidy(weightedDesign),
@@ -2327,9 +2327,11 @@ function createEquipmentEffectiveness(equipment, elapsedSeconds) {
     : 1;
   const idealOutput = equipment.idealRunningNativeOutput ?? (Math.max(0, equipment.nominalRatePerSecond || 0) * Math.max(0, equipment.runningSeconds || 0));
   const gross=equipment.outputCount+(equipment.macroScrap?.nativeEquivalent||0);
-  const performance = idealOutput > 0 ? clampUnit(gross / idealOutput) : 0;
+  // Gross service can exceed the ideal in a finite-inventory period. Do not
+  // cap gross before multiplying by quality: that would charge rejects twice.
+  const performance = idealOutput > 0 ? (equipment.macroScrap?.actualBottles>0?gross/idealOutput:clampUnit(gross/idealOutput)) : 0;
   const quality = gross>0?equipment.outputCount/gross:1;
-  return { availability, performance, quality, oee: availability * performance * quality };
+  return { availability, performance, quality, oee: availability * clampUnit(performance * quality) };
 }
 
 function createLineEffectiveness(runtime) {

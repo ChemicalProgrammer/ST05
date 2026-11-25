@@ -163,3 +163,21 @@ test('Dynamic controls in Equipment, Results, What-If, Formats and Sheet import 
     }
   }
 });
+
+test('Color restoration buttons use a single bilingual word',()=>{
+  const buttons=['series-color-default','settings-chart-reset'].map(id=>{
+    const match=webSource.match(new RegExp('<button[^>]*id="'+id+'"[^>]*>[^<]*</button>'));
+    assert.ok(match,id);return match[0];
+  });
+  const dom=new JSDOM('<!doctype html><html lang="en"><body>'+buttons.join('')+'</body></html>',{runScripts:'outside-only'});
+  try{
+    const w=dom.window;
+    w.STPreferences={read:()=>null,write:()=>true};
+    w.eval(languageScript);
+    w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+    const labels=()=>Array.from(w.document.querySelectorAll('button'),b=>b.textContent.trim());
+    assert.deepEqual(labels(),['Restore','Restore']);
+    w.STLanguage.setLanguage('es');assert.deepEqual(labels(),['Restaurar','Restaurar']);
+    w.STLanguage.setLanguage('en');assert.deepEqual(labels(),['Restore','Restore']);
+  }finally{dom.window.close();}
+});

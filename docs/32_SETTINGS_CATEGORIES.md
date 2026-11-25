@@ -46,7 +46,7 @@ wrapping names, circular swatches and HEX values. Only actual equipment is liste
 V-Graph series colors are edited directly in the V-Graph legend: Current and
 Recommended each have a clickable circular swatch that opens the same series-color
 dialog (color map, hue, RGB, HEX and Apply/Cancel). The picker also has
-**Reset default** for the selected V-Graph series, replacing the old global reset.
+**Restore** for the selected V-Graph series, replacing the old global reset.
 The former V-Graph Series Colors section has been removed from Settings > Case.
 Colors retain the existing
 `metadata.vgraphColors.current` / `metadata.vgraphColors.recommended` fields;

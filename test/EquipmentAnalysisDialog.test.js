@@ -264,3 +264,60 @@ test('direct editor export uses the current draft without opening or replacing t
   assert.throws(()=>api.downloadLineEvaluation({equipment:[equipment[1]]}),/no machines/i);
  }finally{h.close();}
 });
+
+test('line matrix plots every valid machine on common axes and highlights only the selected equipment',()=>{
+ const h=harness();try{
+  const m=(id,name,bf,tr,type='CUSTOM')=>({id,name,type,nominalRatePerSecond:2,noiseProfile:{reliability:{mtbfMinutes:bf,mttrMinutes:tr}}});
+  const equipment=[
+   m('s','Scrambler',37.6,17.26),m('v','Virtual inlet',4.5,.5,'FEEDER'),
+   m('f','Filler',13.6,.9,'FILLER'),m('p','Case Packer',10.5,1.11,'CASE_PACKER'),
+   m('z','Palletizer',38.2,1.2,'PALLETIZER'),m('pass','Reliable machine',240,1),
+   m('far','Outlier',.001,1000000),m('missing','Missing inputs',20,undefined),
+   m('belt','Conveyor',20,1,'CONVEYOR'),{...m('role','Conveyor by role',20,1),processData:{role:'CONVEYOR'}}];
+  const simulation={equipment},api=h.w.STEquipmentAnalysis;
+  const markers=()=>[...h.body.querySelectorAll('[data-equipment-marker]')];
+  const keys=()=>[...h.body.querySelectorAll('[data-matrix-equipment-id]')];
+  const coords=()=>Object.fromEntries(markers().map(el=>[el.dataset.equipmentId,[el.getAttribute('cx'),el.getAttribute('cy')]]));
+  api.open(simulation,'f',{audits:[]});
+  assert.equal(markers().length,7);assert.equal(keys().length,8);
+  assert.deepEqual(markers().filter(el=>el.dataset.currentEquipment==='true').map(el=>el.dataset.equipmentId),['f']);
+  assert.equal(markers().at(-1).dataset.equipmentId,'f');
+  assert.equal(markers().at(-1).dataset.evaluation,'FAIL');
+  const palletizer=markers().find(el=>el.dataset.equipmentId==='z');
+  assert.equal(palletizer.dataset.evaluation,'REVIEW');assert.match(palletizer.querySelector('title').textContent,/Palletizer · REVIEW · MTBF 38.2 min · MTTR 1.2 min · Ai 96.95%/);
+  assert.equal(markers().find(el=>el.dataset.equipmentId==='pass').dataset.evaluation,'PASS');
+  assert(Number(markers().at(-1).getAttribute('r'))>Number(palletizer.getAttribute('r')));
+  assert.match(h.body.querySelector('[data-current-equipment-label]').textContent,/Filler/);
+  assert.equal(keys().find(el=>el.dataset.matrixEquipmentId==='missing').dataset.evaluation,'NOT EVALUATED');
+  assert(!markers().some(el=>['belt','role','missing'].includes(el.dataset.equipmentId)));
+  for(const el of markers()){
+   const x=Number(el.getAttribute('cx')),y=Number(el.getAttribute('cy'));
+   assert(x>75&&x<705&&y>22&&y<316);
+  }
+  const original=coords();
+  api.open(simulation,'z',{audits:[]});assert.deepEqual(coords(),original);
+  assert.deepEqual(markers().filter(el=>el.dataset.currentEquipment==='true').map(el=>el.dataset.equipmentId),['z']);
+  api.open(simulation,'missing',{audits:[]});assert.equal(markers().length,7);
+  assert.equal(markers().filter(el=>el.dataset.currentEquipment==='true').length,0);
+  assert.equal(keys().find(el=>el.dataset.currentEquipment==='true').dataset.matrixEquipmentId,'missing');
+  assert.match(h.body.querySelector('[data-analysis-group="matrix"]').textContent,/not plotted/);
+  api.open({...simulation,dynamicConfig:{reliabilityEnabled:false}},'f',{audits:[]});
+  assert.equal(markers().length,0);assert(keys().every(el=>el.dataset.evaluation==='NOT EVALUATED'));
+ }finally{h.close();}
+});
+
+test('line matrix applies the same custom screening policy and active failure categories to all points',()=>{
+ const h=harness();try{
+  const general={id:'a',name:'General machine',type:'FILLER',noiseProfile:{reliability:{mtbfMinutes:40,mttrMinutes:1}}};
+  const split={id:'b',name:'Split machine',type:'CUSTOM',noiseProfile:{reliability:{mtbfMinutes:20,mttrMinutes:3}},processData:{equipment:{stopInputs:{minor:{mtbfMinutes:40,mttrMinutes:1},major:{mtbfMinutes:40,mttrMinutes:5}}}}};
+  const policy={availabilityTarget:.98,mtbfTargetMinutes:30,mttrTargetMinutes:2};
+  const simulation={equipment:[general,split],dynamicConfig:{reliabilityCategories:{minor:true,major:false}}};
+  h.w.STEquipmentAnalysis.open(simulation,'a',{policy,audits:[]});
+  const peer=h.body.querySelector('[data-equipment-marker][data-equipment-id="b"]');
+  assert.equal(peer.dataset.evaluation,'FAIL');
+  assert.equal(Number(peer.dataset.mtbf),40);assert.equal(Number(peer.dataset.mttr),1);
+  assert.equal(Number(h.body.querySelector('[data-availability-target]').dataset.availabilityTarget),.98);
+  h.w.document.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+  assert.match(h.body.querySelector('[data-equipment-marker][data-equipment-id="b"] title').textContent,/NO CUMPLE/);
+ }finally{h.close();}
+});

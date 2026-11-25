@@ -16,8 +16,8 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 | Etapa | Estado |
 | --- | --- |
 | Startup, Prime y rampas | Implementado y evaluado |
-| Exposición a fallas | Implementado |
-| Sensores | Implementado |
+| Exposición a fallas | Implementado y evaluado (en conjunto con sensores) |
+| Sensores | Implementado y evaluado (en conjunto con exposición a fallas) |
 | Descarga y overflow | Pendiente |
 | Contadores | Parcialmente implementado |
 | Resolución temporal | Pendiente |
@@ -27,7 +27,7 @@ Tabla original confirmada por el usuario el 24 de noviembre. Se conservan las si
 
 ## 3. Resultados de referencia
 
-Datos históricos recuperados de la conversación de homologación; no recalculados ejecutando los motores en esta actualización documental.
+Datos históricos de la conversación y última evidencia del archivo de caso exportado por el usuario. No se ejecutaron nuevas corridas en esta actualización documental.
 
 - Duración: 1,440 min.
 - Semilla: `20261124`.
@@ -41,9 +41,9 @@ Datos históricos recuperados de la conversación de homologación; no recalcula
 | Simulación 2D, anterior a etapa 1 | 194,640 | 135.17 | +14.24% |
 | Simulación 2D, posterior a etapa 1 | 146,040 | 101.42 | −14.28% |
 | Simulación 2D, posterior a etapa 2 (`PHYSICAL_FLOW_4`) | Pendiente | Pendiente | Pendiente |
-| Simulación 2D, posterior a etapas 2 y 3 (`PHYSICAL_FLOW_5`) | Pendiente | Pendiente | Pendiente |
+| Simulación 2D, posterior a etapas 2 y 3 (`PHYSICAL_FLOW_5`) | 152,376 | 105.82 | −10.56% |
 
-Después de la etapa 1, la diferencia 2D − numérica es +9,276 botellas. No utilizar la producción de las versiones anteriores como resultado de la corrección de exposición a fallas.
+Después de la etapa 1, la diferencia 2D − numérica era +9,276 botellas; después de las etapas 2 y 3 es +15,612. La brecha absoluta frente a planta disminuyó de 24,336 a 18,000 botellas (+6,336 de producción, reducción de 26.04% de la brecha). La brecha entre motores aumentó. La etapa 2 no se evaluó aisladamente; no atribuir la mejora combinada solamente a sensores.
 
 ## 4. Registro de cambios publicados
 
@@ -54,6 +54,8 @@ Los commits indicados a continuación se verificaron en el historial de `main`. 
 | 2026-11-24 | Persistencia y exportación opcional del estado 2D; resumen con producción, unidades, tiempos, fallas y origen de corrida. Apoyo transversal a la validación, no una etapa adicional. | [da6c363](https://github.com/ChemicalProgrammer/ST04/commit/da6c3631e9c03ecb5f09fe1cf2072ad8e4b2ef8a) |
 | 2026-11-24 | Etapa 1: Startup, Prime y rampas; perfiles de reinicio basados en las demoras resueltas del conveyor y recuperación de Prime. Contadores por causa de reinicio. Política `PHYSICAL_FLOW_3`. | [a2951de](https://github.com/ChemicalProgrammer/ST04/commit/a2951deee814033346cec736e0542187dc622662) |
 | 2026-11-24 | Etapa 2: exposición a fallas basada en los estados productivos. Política `PHYSICAL_FLOW_4`. Se distinguen tiempo de exposición y tiempo efectivamente cargado al reloj MTBF. | [7ae1681](https://github.com/ChemicalProgrammer/ST04/commit/7ae16811fa23050e6822cd382e2c5eb6bebdaf80) |
+| 2026-11-24 | Etapa 3: homologación de sensores y nuevos diagnósticos. Política `PHYSICAL_FLOW_5`. | [cf8d1e5](https://github.com/ChemicalProgrammer/ST04/commit/cf8d1e5d8e56af28af0735e51b0c8eb6c51e06d2) |
+| 2026-11-24 | Evaluación conjunta de etapas 2 y 3 con exportación de línea G, revisión 50. Se registran resultados, balance y próximos pasos sin cambiar código. | Sección 4, evidencia de corrida G |
 
 ### Etapa 1: Startup, Prime y rampas
 
@@ -68,11 +70,11 @@ Corrección funcional de la etapa 2: `7ae16811fa23050e6822cd382e2c5eb6bebdaf80`.
 - El reloj MTBF avanza durante Running, Ramp up, Ramp down y Discharging, no simplemente por conservar producto dentro del equipo.
 - Back-up stop, Starting, Waiting for Prime, Starved, Blocked, Paused y las paradas externas no consumen exposición MTBF.
 - `reliabilityExposureSeconds` mide exposición en estados elegibles; `reliabilityChargedSeconds` mide el tiempo cargado con fallas habilitadas y perfil válido. El umbral de falla se procesa en el siguiente límite de tick.
-- La exportación distingue estos contadores y la política de control. Falta evaluar el efecto de la corrección en el caso de referencia.
+- La exportación distingue estos contadores y la política de control. Evaluada junto con etapa 3; pendiente aislar el efecto mediante una corrida de política 4.
 
 ### Etapa 3: Sensores (Prime y Back-up)
 
-Política `PHYSICAL_FLOW_5`. Se avanzó a esta etapa por petición del usuario sin recibir todavía la corrida de la etapa 2. Las dos etapas permanecen implementadas pero sin evaluación del caso de referencia; una corrida en la política 5 medirá el efecto combinado. Para aislar cada efecto usar el commit `7ae1681` como referencia de etapa 2.
+Política `PHYSICAL_FLOW_5`. Se avanzó a esta etapa por petición del usuario sin recibir todavía la corrida de la etapa 2. Las dos etapas ya tienen evaluación conjunta en la política 5, documentada a continuación. Para aislar cada efecto usar el commit `7ae1681` como referencia de etapa 2.
 
 - Referencia: `src/simulation/LineSimulationEngine.js` (avance discreto de conveyors, autorización Prime y debounce Back-up). Se modifica únicamente el motor 2D, no el motor numérico.
 - Prime exige una cola compacta y contigua desde la salida; umbral en unidades `max(1,min(floor(L/pitchAcumulado),ceil((L-P)/pitchAcumulado)))`, igual al modelo numérico. No confundir la obstrucción puntual del haz con una autorización. Una salida con Back-up activo inhibe la autorización incluso durante su tiempo de respuesta. El latch se rearma al solicitar reinicio.
@@ -81,14 +83,46 @@ Política `PHYSICAL_FLOW_5`. Se avanzó a esta etapa por petición del usuario s
 - El JSON incluye posición, haz bruto, estado de autorización Prime, unidades de cola y umbral, disparos Prime, ocupación y control Back-up, retardos, tiempo candidato y conteos de activaciones/liberaciones. Los datos instantáneos se muestrean después del movimiento y antes de transferencias. No se cambian las tarjetas ni la interfaz.
 - Archivos: `apps-script/Simulation2DEngine.html`, `apps-script/Simulation2D.html`, `test/Simulation2DSensorPolicy.test.js`, y este documento; ver el commit que introduce esta sección.
 - Pruebas: 18 casos ejecutados con el código JavaScript en un arnés aislado (aserciones y fixtures de las pruebas del repositorio, sin Node/npm); 18 pasaron. Incluye regresiones de sensores con y sin helper compartido, reinicio, MTBF, checkpoint y resumen. No se ejecutó la suite completa ni una corrida de planta.
-- Pendiente: comprobar producción, disparos y tiempos en el caso real de referencia. No alterar la etapa 4 (descarga y overflow) hasta la siguiente intervención.
+- Evaluación conjunta registrada; equivalencia entre motores todavía no demostrada. La siguiente intervención se concentra en descarga y overflow.
+
+### Evidencia de corrida G — etapas 2 y 3 (24 de noviembre)
+
+Fuente: exportación entregada por el usuario `G-complete (6).json`, caso G, Simulation A, revisión 50, SHA-256 `bc18e8d75b5ab8fe035f7a2acc0fe11ee324b77ab2117b9c462b8f133409960c`. Se registran cifras agregadas pertinentes, no el JSON completo. El resumen 2D indica `PHYSICAL_FLOW_5`, `INDEPENDENT`, `Completed`, `complete: true`, 86,400 s y semilla 20261124. Formato S de 12 botellas/caja. Fallas habilitadas; eventos y calendario deshabilitados según opciones de captura. La ronda 1 numérica guardada usa la misma semilla y duración, y su firma de equipos coincide exactamente con los equipos de la simulación guardada. El paso efectivo numérico es 0.05 s (FAST; solicitado 0.25 s), mientras que el código 2D usa 1/120 s nominal. El archivo no demuestra que las opciones se mantuvieran durante toda la corrida ni que las secuencias aleatorias sean iguales. No se volvió a ejecutar ningún motor.
+
+**Producción y referencia:** 12,698 cajas = 152,376 botellas en 2D, contra 11,397 cajas = 136,764 botellas en numérica ronda 1 y 14,198 cajas = 170,376 botellas reportadas en planta. Cociente de producción contra ideal de Filler de 316,800 botellas: 48.10% (2D) y 43.17% (numérica); no equiparar a OEE de planta sin conciliar denominadores y definiciones. Las otras rondas numéricas registran 140,256 y 134,664 botellas (semillas 20261125 y 20261126); no compararlas como si tuvieran la misma semilla.
+
+| Equipo | Producción numérica (botellas equiv.) | Producción 2D (botellas equiv.) | Fallas num. / 2D | Waiting for Prime num. / 2D (min) | Exposición MTBF num. / 2D (min) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scrambler | 143,135 | 153,348 | 16 / 11 | 0 / 0 | 486.99 / 596.75 |
+| Virtual inlet | 140,180 | 153,096 | 159 / 153 | 247.50 / 176.87 | 703.02 / 677.57 |
+| Filler | 140,180 | 152,706 | 52 / 47 | 208.78 / 157.01 | 589.88 / 679.84 |
+| Case Packer | 136,776 | 152,544 | 60 / 70 | 196.39 / 151.31 | 626.92 / 669.13 |
+| Palletizer | 136,764 | 152,376 | 23 / 18 | 740.84 / 680.91 | 668.50 / 736.92 |
+
+El rótulo de base MTBF guardado en numérica es `POSITIVE_PROCESSED_FLOW_TICKS` y en 2D `PRODUCTIVE_STATE_TICKS`; el código numérico actual carga por estados productivos (RUNNING, RAMPING_UP, BACKUP_STOPPING), por lo que el rótulo por sí solo no demuestra diferencia de algoritmo. Las exposiciones y fallas observadas difieren; pendiente revisar equivalencia de clasificación y streams/ticks. Waiting for Prime es subconjunto de starving en 2D y separado en numérica; no sumar dos veces. Tiempos de equipos pueden solaparse.
+
+| Conveyor | Activaciones Back-up num. / 2D | Activaciones Prime num. / 2D | Overflow numérico (botellas equiv.) | Inventario final 2D (botellas equiv.) |
+| --- | ---: | ---: | ---: | ---: |
+| US-LAB | 2,950 / 3,333 | 2,724 / 3,366 | 2,946 | 251 |
+| LAB-FIL | 2,576 / 3,223 | 3,444 / 3,914 | 0 | 388 |
+| FIL-CAS | 3,396 / 3,873 | 11,437 / 12,737 | 3,379 | 148 |
+| PAC-PAL | 11,398 / 12,711 | 3,664 / 4,129 | 0 | 156 |
+
+Hallazgo de sensores: PAC-PAL tiene caja de 310 mm, velocidad 541.5 mm/s y blocked/clear delay de 0.5 s. Paso del producto ≈ 0.5725 s > blocked delay. Las 12,711 activaciones Back-up frente a 12,712 cajas del Case Packer (12,666 solicitudes BACKUP_CLEAR, 25,332 s de Starting = 422.2 min) respaldan la hipótesis de paradas causadas por pulsos normales. No es confirmación de causa en planta. No modificar los datos de entrada durante homologación. Evaluar después sensibilidad de delay y geometría en Zero CAPEX.
+
+Balance de material:
+- Numérica: entrada 143,136; salida 136,764; overflow 6,325; inventario final 47; residual 0. El output de Scrambler es 143,135 y conserva 1 botella interna.
+- 2D: Scrambler produjo 153,348 con inventario interno final 0; salida 152,376; inventario final total 972 botellas equivalentes (943 en conveyors, 29 en máquinas: Virtual inlet 1, Filler 2, Case Packer 14 botellas y Palletizer 1 caja = 12 botellas). El balance reconstruido cierra exactamente. No existe contador explícito de overflow en este resumen 2D: no confundir ausencia de contador con prueba universal de ausencia de overflow.
+- Diferencia de salida = +10,212 entrada/inyección equivalente −925 inventario adicional +6,325 overflow numérico = +15,612 botellas. Descomposición aritmética, no atribución causal.
+- La etapa 4 debe distinguir intento de transferencia bloqueada, descarga física residual, espacio real a la entrada, capacidad y pérdida por overflow, con unidades nativas y equivalentes. En particular PAC-PAL usa cajas y no debe dividir por 12 una cantidad ya expresada en cajas. Revisar también el balance de las transiciones Back-up.
+- No hay tiempos reales por equipo en el registro de planta; las posiciones de sensores resueltas son datos de modelo, no necesariamente medidas. Validación contra planta sigue pendiente.
 
 ## 5. Pendientes y criterios de revisión
 
 | Etapa | Alcance de revisión pendiente |
 | --- | --- |
-| Exposición a fallas | Ejecutar la nueva corrida 2D; comparar producción y, si están disponibles, fallas y tiempo de exposición. No marcar evaluado hasta registrar el resultado. |
-| Sensores | Evaluar la política 5 en el caso de referencia y comparar los nuevos diagnósticos contra el motor numérico. |
+| Exposición a fallas | Evaluación conjunta registrada; queda pendiente aislar etapa 2 y conciliar clasificación de exposición y secuencias aleatorias. |
+| Sensores | Evaluación conjunta registrada; revisar las diferencias de disparos, especialmente PAC-PAL, sin cambiar los inputs durante la homologación. |
 | Descarga y overflow | Revisar producto descargado durante la parada, capacidad efectiva, acumulación y transferencias; comprobar conservación de producto. |
 | Contadores | Homologar definiciones, unidades y exclusividad de estados; distinguir pérdidas internas y externas, y evitar doble conteo (Waiting for Prime ya forma parte de starving en el resumen 2D). |
 | Resolución temporal | Medir sensibilidad al paso de integración y a los límites de tick; distinguir velocidad de reproducción de resolución del modelo. |
@@ -98,13 +132,13 @@ Estos criterios son una guía de revisión, no una especificación de cambios ya
 
 ## 6. Punto de continuación
 
-1. Actualizar Apps Script con el commit de la etapa 3 (política `PHYSICAL_FLOW_5`).
-2. Ejecutar únicamente la simulación 2D de referencia: 1,440 min, semilla `20261124`, mismos inputs, calendario y configuración que en la comparación anterior.
-3. Guardar y exportar el caso con los resultados numéricos y Simulation 2D. Verificar corrida completa y política 5. Registrar producción, diferencia contra numérica y planta, y diagnósticos de sensores y fallas.
-4. La política 5 contiene etapas 2 y 3; para medirlas por separado, ejecutar también la política 4 del commit `7ae1681` con idénticas condiciones. No atribuir automáticamente a sensores el cambio combinado.
-5. La siguiente etapa de implementación es Descarga y overflow. Mantener los estados de validación pendientes hasta disponer de resultados.
+1. Continuar con etapa 4: Descarga y overflow, usando el commit `cf8d1e5` y los resultados de política 5 como referencia. Revisar la diferencia de manejo de descargas residuales, pérdida por desbordamiento y conversiones de botellas/cajas antes de modificar el motor.
+2. Conservar la configuración y semilla del caso G; no ajustar parámetros para acercar artificialmente la producción a planta.
+3. Añadir pruebas de balance material, transferencias bloqueadas y descarga residual en unidades nativas y botellas equivalentes; actualizar esta bitácora en el commit.
+4. Ejecutar y exportar la siguiente corrida 2D completa (1,440 min, semilla 20261124), comparar con política 5 y numérica ronda 1. Si se modifica el motor numérico, generar una nueva referencia sin sobrescribir el histórico.
+5. Si se requiere atribución individual de etapas 2 y 3, correr política 4 (`7ae1681`) por separado. Para resolver diferencias de paso temporal, ejecutar una comparación de resolución controlada en etapa 6.
 
-No se requiere repetir todavía la corrida numérica de referencia si no cambian sus inputs o su motor.
+La evaluación conjunta no equivale a homologación completa ni validación de planta.
 
 ## 7. Protocolo de mantenimiento
 

@@ -132,7 +132,7 @@ window.STConveyorAnalysis=(function(){
   }
   function conveyorItem(item){return item&&(item.type==='CONVEYOR'||item.processData?.role==='CONVEYOR');}
   function profilePopulationHelp(p,language='en'){
-    const es=language==='es',tr=(a,b)=>es?b:a,num=v=>Number.isFinite(v)?new Intl.NumberFormat(es?'es-MX':'en-US',{maximumFractionDigits:6}).format(v):'—';
+    const es=language==='es',tr=(a,b)=>es?b:a,num=v=>Number.isFinite(v)?new Intl.NumberFormat(es?'es-MX':'en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v):'—';
     const unit=p.transportUnit==='CASES'?(es?'cajas':'cases'):(es?'botellas':'bottles');
     const source=p.dischargeVelocitySource==='CONFIGURED_AF'?tr('Configured Upstream Discharge Velocity (AF)','Upstream Discharge Velocity configurada (AF)'):
       p.dischargeVelocitySource==='NOMINAL_RATE_AND_PITCH'?tr('Calculated from nominal machine rate × discharge pitch (AF not configured)','Calculada con flujo nominal de máquina × pitch de descarga (AF no configurado)'):tr('Unresolved discharge velocity','Velocidad de descarga no resuelta');
@@ -255,7 +255,7 @@ window.STConveyorAnalysis=(function(){
   }
   function explainVerdict(status,recovery,profiles,geometry){
     if(status==='FAIL'){
-      const deficit=(-recovery.value).toLocaleString(undefined,{maximumFractionDigits:2});
+      const deficit=(-recovery.value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
       return recovery.name+': Lrec es negativo. Faltan '+deficit+' mm de acumulación útil para cubrir el rearranque.';
     }
     if(status!=='NOT EVALUATED')return 'Lact vs L min';
@@ -506,7 +506,7 @@ window.STConveyorAnalysis=(function(){
     const entry=parameterDefinitions[key];return entry?entry[language==='es'?1:0]:'';
   }
   function createPendingTrace(worksheet,context={},language='en'){
-    const es=language==='es',tr=(en,spanish)=>es?spanish:en,formatNumber=n=>new Intl.NumberFormat(es?'es-MX':'en-US',{maximumFractionDigits:3}).format(n);
+    const es=language==='es',tr=(en,spanish)=>es?spanish:en,formatNumber=n=>new Intl.NumberFormat(es?'es-MX':'en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
     const translate=value=>window.STLanguage?.current?.()===language?window.STLanguage.translate(value):value;
     const g=worksheet.geometry,profiles=worksheet.profiles,nodes=new Map(),common=(key)=>'common:'+key,local=(i,key)=>i+':'+key;
     const finite=Number.isFinite,positive=v=>finite(v)&&v>0,nonnegative=v=>finite(v)&&v>=0;
@@ -752,7 +752,7 @@ window.STConveyorAnalysis=(function(){
     if(!context)return;
     const dialog=document.getElementById('conveyor-analysis-dialog');
     const body=document.getElementById('conveyor-analysis-body');
-    const number=new Intl.NumberFormat(undefined,{maximumFractionDigits:2});
+    const number=new Intl.NumberFormat(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
     const valueText=value=>Number.isFinite(value)?number.format(value):'Pending';
     const worksheet=calculate(context);
     currentExport={name,context,worksheet};

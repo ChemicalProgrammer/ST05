@@ -393,7 +393,7 @@
         var value=Math.max(0,Math.min(.999,Number(p.value)||0));
         progress.value=value;
         var slots=Math.min(p.total,SimulatorEngine.concurrency?.(session.run.engineId)||1);
-        var message=p.completed+' / '+p.total+' '+(es?'rondas completas':'rounds complete')+' · '+(value*100).toFixed(1)+'% · '+(slots>1?(es?'Hasta ':'Up to ')+slots+(es?' en paralelo':' in parallel'):(es?'Cálculo secuencial':'Sequential calculation'));
+        var message=p.completed+' / '+p.total+' '+(es?'rondas completas':'rounds complete')+' · '+(value*100).toFixed(2)+'% · '+(slots>1?(es?'Hasta ':'Up to ')+slots+(es?' en paralelo':' in parallel'):(es?'Cálculo secuencial':'Sequential calculation'));
         if(p.stage)message+=' · '+(p.stage==='representative'?(es?'Preparando ronda representativa ':'Preparing representative round ')+p.round:(es?'Preparando resultados':'Preparing results'));
         if(p.detail&&Number.isFinite(session.run.effectiveRuntimeTargetSeconds))message+=' · Effective Runtime '+(Number.isFinite(p.detail.accumulatedSeconds)?formatMinutes(p.detail.accumulatedSeconds):'—')+' / '+formatMinutes(session.run.effectiveRuntimeTargetSeconds)+' · '+(es?'Calendario ':'Calendar ')+formatMinutes(p.detail.elapsedSeconds)+' · '+(es?'Producción ':'Output ')+formatNumber(p.detail.outputCount);
         label.textContent=message;
@@ -513,7 +513,7 @@
         var isSpanish=window.STLanguage?.current()==='es';
         var tr=value=>window.STLanguage?.translate(value)??value;
         try{
-          var run=STRunOptions.read(),c=run.durationOptions,fmt=n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:3});
+          var run=STRunOptions.read(),c=run.durationOptions,fmt=n=>Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
           var description=c.method==='SHIFTS'?fmt(c.shiftCount)+' '+(isSpanish?'turno(s)':'shift(s)')+' × '+fmt(c.shiftHours)+' h':
             c.method==='DATES'?c.start+' → '+c.end+' ('+c.timeZone+')':tr('Elapsed time');
           periodNote.textContent=tr('Simulation period:')+' '+description+' = '+fmt(run.durationSeconds/3600)+' h ('+fmt(run.durationSeconds/60)+' min).';

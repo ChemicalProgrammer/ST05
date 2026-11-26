@@ -212,7 +212,7 @@ window.STRealData=(function(){
   let lastStatus=null;
   let state,actions,context,owner='',selection='average',data=null,revision=0;
   const editorSelections=new Map(),editorFolders=new Map();
-  const selected=new Map(),fmt=v=>finite(v)?v.toLocaleString(undefined,{maximumFractionDigits:2}):'—';
+  const selected=new Map(),fmt=v=>finite(v)?v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
   const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
   const records=()=>state?.activeCase?.metadata?.realData?.records||[];
@@ -326,7 +326,7 @@ window.STRealData=(function(){
     for(const output of document.querySelectorAll('[data-time-value]')){
       const id=output.dataset.timeValue;if(output.tagName==='INPUT'){
         const manual=M.timeMode(record,id),wasManual=output.dataset.inputMode==='true';output.readOnly=!manual;output.classList.toggle('calculated-value',!manual);output.dataset.inputMode=String(manual);
-        if(document.activeElement!==output||!manual||manual!==wasManual)output.value=manual&&record.timeOverrides?.[id]?.valueSeconds===null?'':finite(h.values[id])?Number((h.values[id]/60).toFixed(6)):'';
+        if(document.activeElement!==output||!manual||manual!==wasManual)output.value=manual&&record.timeOverrides?.[id]?.valueSeconds===null?'':finite(h.values[id])?(manual?Number((h.values[id]/60).toPrecision(15)):(h.values[id]/60).toFixed(2)):'';
         const toggle=document.querySelector('[data-time-toggle="'+id+'"]');toggle.checked=manual;
       }else output.querySelector('.metric-number').textContent=fmt(h.values[id]==null?null:h.values[id]/60);
     }

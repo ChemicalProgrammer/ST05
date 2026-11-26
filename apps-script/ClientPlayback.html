@@ -34,7 +34,7 @@
       var batchOnly=pending&&!result;
       var batchValue=Math.max(0,Math.min(99.9,(Number(session?.batchProgress?.value)||0)*100));
       var percent=reset?0:result&&!result.provisional?100:result?.provisional&&target>0?Math.max(0,Math.min(99.9,(Number(result.calculatedThroughSeconds)||0)/target*100)):batchOnly?batchValue:0;
-      calc.textContent=percent.toFixed(1)+'%';
+      calc.textContent=percent.toFixed(2)+'%';
       var calculationBar=document.getElementById('playback-calculation-bar');
       if(calculationBar)calculationBar.value=percent;
       calc.title=es?'Avance del cálculo de la ronda mostrada. La reproducción precisa reconstruye estados bajo demanda; 100% no garantiza reproducción instantánea.':'Calculation of the displayed round. Precise playback reconstructs states on demand; 100% does not guarantee instant playback.';
@@ -674,7 +674,7 @@
       var duration=Number(state.run.result?.durationSeconds);
       var progress=document.getElementById('playback-progress');
       var visualPercent=duration>0&&Number.isFinite(clockSecond)?Math.max(0,Math.min(100,clockSecond/duration*100)):0;
-      if(progress)progress.textContent=visualPercent.toFixed(1)+'%';
+      if(progress)progress.textContent=visualPercent.toFixed(2)+'%';
       var visualizationBar=document.getElementById('playback-visualization-bar');
       if(visualizationBar)visualizationBar.value=visualPercent;
       STTimeControls.setOutput(document.getElementById('metric-time'),clockSecond,

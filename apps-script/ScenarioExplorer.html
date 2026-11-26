@@ -623,7 +623,7 @@ window.STScenarioExplorer=(function(){
       return {bar,fill,text,coveredText};
     }
     function paintProgressCapsule(view,value,elapsedMs,state,label){
-      var percent=Number.isFinite(value)?Math.max(0,Math.min(100,value)):null,percentText=percent===null?'—':percent.toFixed(1)+'%',time=elapsedLabel(elapsedMs),text=percentText+' · '+time;
+      var percent=Number.isFinite(value)?Math.max(0,Math.min(100,value)):null,percentText=percent===null?'—':percent.toFixed(2)+'%',time=elapsedLabel(elapsedMs),text=percentText+' · '+time;
       view.bar.style.setProperty('--scenario-progress',(percent??0)+'%');view.bar.style.setProperty('--scenario-progress-color',progressColor(percent,state));
       if(view.text.textContent!==text)view.text.textContent=text;if(view.coveredText.textContent!==text)view.coveredText.textContent=text;
       view.bar.dataset.indeterminate=String(percent===null&&state==='Running');view.bar.setAttribute('aria-label',label);
@@ -838,7 +838,7 @@ window.STScenarioExplorer=(function(){
       function progressText(label){return window.STLanguage?.translate(label)||label;}
       function updateProgress(){var now=Date.now(),percent=ended?100:Math.min(99.9,Math.floor(1000*(completed+batchFraction)/Math.max(1,maximum))/10);tracePercent=percent;traceSummary.elapsedMs=Math.max(0,now-started);var seconds=Math.floor(traceSummary.elapsedMs/1000);progress.textContent=stage+' · '+completed+' / up to '+maximum+' simulation batches (including baseline and confirmation) · '+previewRun.rounds+' round(s) each · Elapsed '+Math.floor(seconds/60)+'m '+seconds%60+'s.'+(stage==='Finished'||stage==='Stopped'?'':(searchCanFinish?(finishRequested?' Finishing the current batch; Stop now cancels.':' Use Stop to finish searching and validate the best found.'):' Use Stop to cancel validation.')+' Create becomes available after confirmation.'+(all?' Last meaningful gain: '+Math.floor((Date.now()-lastGainAt)/1000)+'s ago.':''));
         if(!['Finished','Stopped','Failed'].includes(stage))captureTrace();paintTrace(false);
-        if((stage==='Comparing finalists'||stage==='Screening finalists')&&rankingProgress&&!cancelled?.()){var currentFraction=activeFractions.size?Math.min(1,batchFraction/activeFractions.size):1;status.textContent=(rankingProgress.index?progressText('Candidate')+' '+rankingProgress.index+' / '+rankingProgress.total:progressText('Baseline'))+' · '+Number((previewRun.durationSeconds/60).toFixed(2))+' min × '+previewRun.rounds+' '+progressText('Rounds')+' · '+progressText('Current batch')+': '+(100*currentFraction).toFixed(1)+'%';}
+        if((stage==='Comparing finalists'||stage==='Screening finalists')&&rankingProgress&&!cancelled?.()){var currentFraction=activeFractions.size?Math.min(1,batchFraction/activeFractions.size):1;status.textContent=(rankingProgress.index?progressText('Candidate')+' '+rankingProgress.index+' / '+rankingProgress.total:progressText('Baseline'))+' · '+Number((previewRun.durationSeconds/60).toFixed(2))+' min × '+previewRun.rounds+' '+progressText('Rounds')+' · '+progressText('Current batch')+': '+(100*currentFraction).toFixed(2)+'%';}
       }
       var clock=setInterval(updateProgress,1000);
       async function measured(changes,offset,model=source,measurementRun=previewRun){

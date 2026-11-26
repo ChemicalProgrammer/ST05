@@ -110,7 +110,7 @@ window.STReports=(function(){
     },1);
     var x=function(time){return left+time/end*width;};
     var y=function(v){return top+height-v/maximum*height;};
-    var number=new Intl.NumberFormat('es-MX',{maximumFractionDigits:2});
+    var number=new Intl.NumberFormat('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
     var ticks='',path='',bounds='',drawing=false;
     for(var i=0;i<=4;i++){
       var f=i/4,gridY=y(maximum*f),gridX=x(end*f);

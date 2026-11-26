@@ -91,3 +91,14 @@ test('runout length from design transit time, manual blank zero',()=>{
   check('discharge-runout');assert.equal(read().dischargeRunoutLengthMm,0);assert(f('discharge-runout-time').closest('label').hidden);
  }finally{h.close();}
 });
+
+test('Minimal follows the Basic conveyor speed policy even though it uses the Advance table',()=>{
+ const h=harness();try{
+  h.w.STBasicMode.isBasic=()=>true;
+  h.w.STBasicMode.isBasicEditor=()=>false;
+  h.f('speed-mode').value='AUTO';h.f('belt-speed').value='30';h.f('population-enabled').checked=true;h.sync();
+  assert.equal(h.f('speed-mode').value,'MANUAL');assert(h.f('speed-mode').closest('label').hidden);
+  assert(!h.f('belt-speed').readOnly);assert.equal(h.read().conveyorSpeedMmPerSecond,500);
+  assert.equal(h.read().targetPopulationPercent,undefined);assert.equal(h.read().speedMode,'MANUAL');
+ }finally{h.close();}
+});

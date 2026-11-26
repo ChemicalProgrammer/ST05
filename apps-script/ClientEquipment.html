@@ -280,8 +280,13 @@
         ['acc-factor','Acc Zone factor (%)','Speed increase relative to the coding zone.','number']
       ].forEach(function(spec) {
         var label = document.createElement('label'); label.textContent = spec[1]; label.title = spec[2];
-        var control = document.createElement(spec[3] === 'select' ? 'select' : 'input');
+        // Simplified workspaces have no speed-mode combobox. Keep a hidden
+        // canonical value for the existing editor/serialization contract.
+        var fixedSpeed=spec[0]==='speed-mode'&&conveyorManualSpeedOnly();
+        var control = document.createElement(spec[3] === 'select'&&!fixedSpeed ? 'select' : 'input');
         control.className = 'format-zone-' + spec[0];
+        if(fixedSpeed){control.type='hidden';control.value='MANUAL';label.hidden=true;label.classList.add('conveyor-speed-mode-field');label.append(control);grid.append(label);return;}
+        if(spec[0]==='speed-mode')label.classList.add('conveyor-speed-mode-field');
         if (spec[3] === 'select') [['AUTO',__ST_TEXT__('conveyor.auto')],['MANUAL',__ST_TEXT__('conveyor.manual')]].forEach(function(option) {
           var item = document.createElement('option'); item.value = option[0]; item.textContent = option[1]; control.appendChild(item);
         });
@@ -289,8 +294,8 @@
         label.appendChild(control); grid.appendChild(label);
       });
       var mode=equipmentField(card,'.format-zone-speed-mode');
-      if(!(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())||card._dynamicSavedMode){
-        var option=document.createElement('option');option.value='DYNAMIC';option.textContent=(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())?'Dynamic (configured in Advance)':'Dynamic';option.disabled=Boolean((window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic()));mode.append(option);
+      if(mode.tagName==='SELECT'&&!conveyorManualSpeedOnly()){
+        var option=document.createElement('option');option.value='DYNAMIC';option.textContent='Dynamic';mode.append(option);
       }
       var referenceLabel=document.createElement('label'),reference=document.createElement('select');
       referenceLabel.textContent='Specified speed reference';referenceLabel.className='dynamic-speed-control';reference.className='format-zone-dynamic-reference';
@@ -328,8 +333,14 @@
       input.required=required&&role==='INPUT';input.classList.toggle('calculated-value',role==='OUTPUT');
       if(role==='OUTPUT')input.setAttribute('aria-readonly','true');else input.removeAttribute('aria-readonly');
     }
+    function conveyorManualSpeedOnly(){
+      // MINIMAL shares Advance's table, but its speed policy is Basic.
+      var workspace=typeof state!=='undefined'?state?.bootstrap?.uiMode:undefined;
+      if(workspace)return !['ADVANCE','ADVANCED'].includes(String(workspace).toUpperCase());
+      return Boolean(window.STBasicMode?.isBasic?.()??window.STBasicMode?.isBasicEditor?.());
+    }
     function syncSwitchableFields(card){
-      var speedMode=equipmentField(card,'.format-zone-speed-mode'),basic=Boolean((window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic()));
+      var speedMode=equipmentField(card,'.format-zone-speed-mode'),basic=conveyorManualSpeedOnly();
       if(basic)speedMode.value='MANUAL';
       var modeLabel=speedMode.closest?.('label');if(modeLabel)modeLabel.hidden=basic;
       var dynamic=speedMode.value==='DYNAMIC';
@@ -444,7 +455,7 @@ function populateFormatZoneInputs(card, equipment) {
         accumulationSecondsEnabled: Number.isFinite(formatZone.declaredAccumulationSeconds),
         accumulationSeconds: formatZone.declaredAccumulationSeconds??formatZone.inputValues?.declaredAccumulationSeconds,
         restartFirstPackage: formatZone.restartToFirstPackageSeconds,
-        speedMode: formatZone.speedMode || ((window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())?'MANUAL':'AUTO'),
+        speedMode: formatZone.speedMode || (conveyorManualSpeedOnly()?'MANUAL':'AUTO'),
         beltSpeed: formatZone.conveyorSpeedMmPerSecond??formatZone.inputValues?.beltSpeedMmPerSecond,
         movingGapEnabled: formatZone.inputValues?.movingGapManual??(formatZone.movingGapMm!==undefined||formatZone.gapMm!==undefined||(Number.isFinite(formatZone.productPitchMm)&&Number.isFinite(upstream.packageLengthMm??formatZone.productLengthMm))||formatZone.inputValues?.movingGapMm!==undefined),
         movingGap: formatZone.movingGapMm??formatZone.gapMm??(Number.isFinite(formatZone.productPitchMm)&&Number.isFinite(upstream.packageLengthMm??formatZone.productLengthMm)?formatZone.productPitchMm-(upstream.packageLengthMm??formatZone.productLengthMm):undefined)??formatZone.inputValues?.movingGapMm,
@@ -474,7 +485,9 @@ function populateFormatZoneInputs(card, equipment) {
         values.startup=firstDefinedValue(values.startup,up?.processData?.upstream?.startupTimeSeconds,0);
         values.infeed=firstDefinedValue(values.infeed,down?.processData?.downstream?.infeedPitchMm);
         values.downstreamRamp=firstDefinedValue(values.downstreamRamp,down?.processData?.downstream?.rampUpTimeSeconds,0);
-        // Preserve the resolved normal belt speed when editing an older Auto/target/Dynamic case in Basic.
+      }
+      if(conveyorManualSpeedOnly()&&equipment.type==='CONVEYOR'){
+        // Preserve the resolved normal belt speed when editing an older Auto/target/Dynamic case in Basic or Minimal.
         if(values.beltSpeed===undefined||values.speedMode!=='MANUAL'||values.populationEnabled||values.overspeedEnabled){
           try{
             var audit=STScenarios.audit({equipment:state.activeCase.equipment}).find(function(item){return item.equipmentId===equipment.id;});
@@ -621,7 +634,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
     function readFormatZoneInputs(card) {
       function manualFieldValue(key){var field=equipmentField(card,'.format-zone-'+key),text=field?.dataset.manualValue;return text!==undefined&&text!==''&&Number.isFinite(Number(text))?Number(text):undefined;}
       function useManual(key){var toggle=equipmentField(card,'.format-zone-'+key+'-enabled');return !toggle||toggle.checked&&!toggle.disabled;}
-      var basic=(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic()),mode=basic?'MANUAL':equipmentField(card,'.format-zone-speed-mode').value||'AUTO',target=!basic&&(equipmentField(card,'.format-zone-population-enabled').checked||equipmentField(card,'.format-zone-overspeed-enabled').checked);
+      var basic=conveyorManualSpeedOnly(),mode=basic?'MANUAL':equipmentField(card,'.format-zone-speed-mode').value||'AUTO',target=!basic&&(equipmentField(card,'.format-zone-population-enabled').checked||equipmentField(card,'.format-zone-overspeed-enabled').checked);
       var beltSpeed=!target&&['MANUAL','DYNAMIC'].includes(mode)?numericInputValue(equipmentField(card,'.format-zone-belt-speed')):undefined;
       var storedSpeed=manualFieldValue('belt-speed');
       if(beltSpeed!==undefined)beltSpeed=Number((beltSpeed/.06).toPrecision(15));if(storedSpeed!==undefined)storedSpeed=Number((storedSpeed/.06).toPrecision(15));

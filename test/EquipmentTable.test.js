@@ -385,3 +385,15 @@ test('Basic omits Machine design; collapsed headers span all rows and keep resiz
   assert.equal(original.value,'5');assert.equal(h.calls.dirty,0);
  }finally{h.close();}
 });
+
+test('Minimal mixed table does not project a conveyor speed-mode column, even from a legacy visible source',()=>{
+ const h=fixture();try{
+  h.tableButton.click();assert(h.cell('Belt','speed-mode').querySelector('select'));
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  assert.equal(h.cell('Belt','speed-mode'),null);
+  assert.equal(h.host.querySelector('th[data-column="speed-mode"]'),null);
+  assert(h.cell('Belt','belt-speed').querySelector('input'));
+  h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync('equipment',false);
+  assert(h.cell('Belt','speed-mode').querySelector('select'));
+ }finally{h.close();}
+});

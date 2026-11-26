@@ -235,5 +235,9 @@ html[data-equipment-layout=split] .basic-conveyor-heading .basic-conveyor-tabs {
 /* Macrostop scrap is an Advance-only machine design field. */
 html[data-ui-mode=basic] .advanced-scrap-field,.advanced-scrap-field[hidden]{display:none!important;}
 html[data-ui-mode=advance][data-equipment-layout=split] .basic-machine .equipment-grid > label.advanced-scrap-field:not([hidden]){display:grid!important;}
+/* Defense in depth: simplified workspaces never show a speed-mode selector,
+   including an inspector reparented by the split equipment layout. */
+html[data-ui-mode=basic] .conveyor-speed-mode-field,
+html[data-ui-mode=basic] label:has(> .format-zone-speed-mode) { display:none!important; }
 </style>
 

@@ -328,7 +328,7 @@ test('draft mode rejects malformed physical input objects and declared invalid n
       const incoming=draftConfiguration();incoming.simulation.equipment[1].processData[group]=value;
       assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/must be an object/,group+' '+JSON.stringify(value));
     }
-    for(const [group,key] of [['geometry','lactMm'],['upstream','packageLengthMm'],['downstream','infeedPitchMm'],['speedAndSensors','blockedTimeDelaySeconds'],['accumulation','conveyorSpeedMmPerSecond'],['accumulation','movingGapMm']])for(const value of [-1,'100',false]){
+    for(const [group,key] of [['geometry','lactMm'],['upstream','packageLengthMm'],['downstream','infeedPitchMm'],['speedAndSensors','blockedTimeDelaySeconds'],['accumulation','conveyorSpeedMmPerSecond'],['accumulation','upstreamStopResponseSeconds']])for(const value of [-1,'100',false]){
       const incoming=draftConfiguration();incoming.simulation.equipment[1].processData[group]??={};incoming.simulation.equipment[1].processData[group][key]=value;
       assert.throws(()=>h.w.STConfigurationEditor.validate(JSON.stringify(incoming),h.current),/non-negative number or null/,group+'.'+key);
     }

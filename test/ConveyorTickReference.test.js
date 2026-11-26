@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createLinePlaybackSession} from '../src/simulation/LineSimulationEngine.js';
 
-// Captured from the prior engine, before fusing conveyor passes or reusing a
-// stationary packed queue. This is an independent trajectory anchor, not a
-// comparison between two execution modes of the newly optimized algorithm.
-const reference=JSON.parse(fs.readFileSync(new URL('./fixtures/conveyor-tick-reference.json',import.meta.url),'utf8'));
+// Model-versioned trajectory after derived moving pitch and fixed packed spacing.
+// The historical pre-policy fixture remains unchanged for provenance; this
+// baseline protects the new behavior and is not independent plant validation.
+const reference=JSON.parse(fs.readFileSync(new URL('./fixtures/conveyor-tick-reference-derived-pitch.json',import.meta.url),'utf8'));
 function projection(frame){
   return JSON.parse(JSON.stringify([frame.virtualSecond,frame.outputCount,frame.effectiveRuntimeSeconds,
     frame.runtimeLossSeconds,frame.buffers,

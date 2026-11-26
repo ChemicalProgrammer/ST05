@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {JSDOM} from 'jsdom';
 const src=fs.readFileSync('apps-script/ClientEquipment.html','utf8');
 const slice=(a,b)=>src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)+a.length));
-const fields=['population','lba','backup','overspeed','speed-mode','belt-speed','moving-gap','acc-factor','discharge-velocity','speed-factor','coding-factor','accumulated-gap','insurance','lact','lp-prime','package-length','discharge-pitch','discharge-runout','reject-runout','blocked-delay','clear-delay','stop-response','residual','downstream-ramp','restart-first-package','startup','infeed','accumulation-seconds','discharge-runout-time','reject-runout-time'];
+const fields=['population','lba','backup','overspeed','speed-mode','belt-speed','moving-gap','acc-factor','discharge-velocity','speed-factor','coding-factor','insurance','lact','lp-prime','package-length','discharge-pitch','discharge-runout','reject-runout','blocked-delay','clear-delay','stop-response','residual','downstream-ramp','restart-first-package','startup','infeed','accumulation-seconds','discharge-runout-time','reject-runout-time'];
 function harness(){
  const dom=new JSDOM('<article><div class="equipment-fields"></div></article>',{runScripts:'outside-only'}),w=dom.window,d=w.document,card=d.querySelector('article');
  card._fields=card.firstChild;
@@ -13,8 +13,8 @@ function harness(){
   control.className='format-zone-'+key;
   if(key==='speed-mode'){for(const mode of ['AUTO','MANUAL'])control.add(new w.Option(mode,mode));}else control.type='number';
   label.append(control);card._fields.append(label);
-  if(['population','lba','backup','overspeed','accumulation-seconds','discharge-velocity','moving-gap','discharge-runout','reject-runout'].includes(key)){
-   const toggleLabel=d.createElement('label'),toggle=d.createElement('input');toggle.type='checkbox';toggle.checked=['moving-gap','discharge-runout','reject-runout'].includes(key);toggle.className=control.className+'-enabled';toggleLabel.append(toggle);card._fields.append(toggleLabel);
+  if(['population','lba','backup','overspeed','accumulation-seconds','discharge-velocity','discharge-runout','reject-runout'].includes(key)){
+   const toggleLabel=d.createElement('label'),toggle=d.createElement('input');toggle.type='checkbox';toggle.checked=['discharge-runout','reject-runout'].includes(key);toggle.className=control.className+'-enabled';toggleLabel.append(toggle);card._fields.append(toggleLabel);
   }
  }
  card.dataset.index='0';
@@ -46,13 +46,13 @@ test('speed target stores only active inputs and restores manual speed and facto
   assert(Math.abs(read().inputValues.beltSpeedMmPerSecond-541.5)<1e-8);
   check('overspeed');assert(!f('population-enabled').checked);assert(f('population').readOnly);
   f('overspeed-enabled').checked=false;sync();
-  assert.equal(f('belt-speed').value,'32.49');assert.equal(f('moving-gap').value,'20');assert(!f('belt-speed').readOnly);
+  assert.equal(f('belt-speed').value,'32.49');assert(f('moving-gap').readOnly);assert.equal(read().movingGapMm,undefined);assert(!f('belt-speed').readOnly);
   f('speed-mode').value='AUTO';sync();
   assert(f('belt-speed').readOnly);assert.equal(f('acc-factor').value,'15');assert.equal(read().accFactorPercent,15);
  }finally{h.close();}
 });
 
-test('declared accumulation, discharge velocity and moving gap keep independent manual references',()=>{
+test('declared accumulation and discharge velocity retain manual references; moving gap is always output',()=>{
  const h=harness();try{
   const {f,check,sync,read}=h;sync();
   assert(f('accumulation-seconds').readOnly);assert(f('discharge-velocity').readOnly);
@@ -63,10 +63,10 @@ test('declared accumulation, discharge velocity and moving gap keep independent 
   assert.equal(read().declaredAccumulationSeconds,undefined);assert.equal(read().inputValues.declaredAccumulationSeconds,45);
   check('accumulation-seconds');assert.equal(f('accumulation-seconds').value,'45');
   check('discharge-velocity');f('discharge-velocity').value='26';sync();assert.equal(read().dischargeVelocityMPerMinute,26);
-  f('moving-gap').value='12';sync();f('moving-gap-enabled').checked=false;sync();f('moving-gap').value='22';
-  assert(f('moving-gap').readOnly);assert.equal(read().movingGapMm,undefined);check('moving-gap');assert.equal(read().movingGapMm,12);
-  check('population');assert(f('moving-gap-enabled').disabled);assert.equal(read().movingGapMm,undefined);
-  f('population-enabled').checked=false;sync();assert.equal(read().movingGapMm,12);
+  f('moving-gap').value='12';sync();assert(f('moving-gap').readOnly);assert.equal(f('moving-gap-enabled'),null);assert.equal(f('accumulated-gap'),null);
+  assert.equal(read().movingGapMm,undefined);assert.equal(read().accumulatedGapMm,undefined);assert.equal(read().inputValues.movingGapMm,undefined);
+  check('population');assert(f('moving-gap').readOnly);assert.equal(read().movingGapMm,undefined);
+  f('population-enabled').checked=false;sync();assert(f('moving-gap').readOnly);
  }finally{h.close();}
 });
 
@@ -109,7 +109,7 @@ test('Compact Basic hides discharge override, Stop Response and accumulation fac
   h.f('discharge-velocity-enabled').checked=true;h.f('discharge-velocity').value='26';
   h.f('discharge-velocity').dataset.manualValue='26';h.f('discharge-velocity').dataset.inputMode='true';
   h.f('stop-response').value='3';h.f('acc-factor').value='12';
-  h.sync();assert(h.f('discharge-velocity').closest('label').hidden);
+  h.sync();assert(h.f('discharge-velocity').closest('label').hidden);assert(h.f('moving-gap').closest('label').hidden);
   assert(h.f('discharge-velocity-enabled').disabled);
   assert.equal(h.read().dischargeVelocityMPerMinute,undefined);
   assert.equal(h.read().inputValues.dischargeVelocityMPerMinute,26);
@@ -121,7 +121,7 @@ test('Compact Basic hides discharge override, Stop Response and accumulation fac
   assert.equal(h.read().accFactorPercent,undefined);assert.equal(h.read().inputValues.accFactorPercent,12);
   h.f('acc-factor').value='40'; // calculated output must not replace the retained Auto input
   h.w.STMinimalMode.isMinimal=()=>false;h.sync();
-  assert(!h.f('discharge-velocity').closest('label').hidden);
+  assert(!h.f('discharge-velocity').closest('label').hidden);assert(!h.f('moving-gap').closest('label').hidden);assert(h.f('moving-gap').readOnly);
   assert(!h.f('stop-response').closest('label').hidden);assert(!h.f('acc-factor').closest('label').hidden);
   assert.equal(h.read().dischargeVelocityMPerMinute,26);assert.equal(h.read().upstreamStopResponseSeconds,3);
   assert(h.f('acc-factor').readOnly);assert.equal(h.read().inputValues.accFactorPercent,12);

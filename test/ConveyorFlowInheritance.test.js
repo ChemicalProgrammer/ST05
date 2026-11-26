@@ -27,7 +27,7 @@ test('format resolution derives conveyor transport before choosing the material-
  const line=[m('US','BOTTLES'),c('before'),m('PAC','BOTTLES','CASES'),c('after'),m('PAL','CASES')];
  const catalog={version:3,products:[{id:'p',name:'P',equipment:{after:{movingGapMm:999},before:{movingGapMm:5}}}],formats:[{id:'f',name:'F',productId:'p',bottlesPerCase:12,case:{lengthMm:100},equipment:{after:{inputUnit:'BOTTLES',outputUnit:'BOTTLES',speedMmPerSecond:200}}}]};
  const before=JSON.stringify(catalog),format=resolvePackingFormats(catalog,line)[0];
- assert.equal(format.equipment.before.outputUnit,'BOTTLES');assert.equal(format.equipment.before.movingGapMm,5);
+ assert.equal(format.equipment.before.outputUnit,'BOTTLES');assert.equal(format.equipment.before.movingGapMm,undefined);
  assert.equal(format.equipment.after.outputUnit,'CASES');assert.equal(format.equipment.after.movingGapMm,undefined);assert.equal(format.equipment.after.speedMmPerSecond,200);
  assert.equal(JSON.stringify(catalog),before);
 });

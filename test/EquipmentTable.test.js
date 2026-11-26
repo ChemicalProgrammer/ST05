@@ -341,3 +341,40 @@ test('mixed table combines material flow and transport, and groups collapse with
   assert.equal(toggle().getAttribute('aria-expanded'),'true');assert.equal(h.cell('Filler','mtbf').querySelector('input').value,'5');
  }finally{h.close();}
 });
+
+test('Basic omits Machine design; collapsed headers span all rows and keep resizable widths through animation',()=>{
+ const h=fixture();try{
+  const compact=h.d.createElement('div');compact.id='minimal-equipment-table-host';h.d.body.append(compact);
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  assert(!h.host.querySelector('button[data-group-id="mixed:Machine design"]'));
+  assert(!h.host.querySelector('th[data-column=capacity]'));
+  const toggle=()=>h.host.querySelector('button[data-group-id="mixed:Reliability"]');
+  const table=()=>h.host.querySelector('table');
+  const folded=()=>h.host.querySelector('th[data-column="folded-Reliability"]');
+  const handle=()=>folded().querySelector('.equipment-table-resize');
+  const frames=new Map();let serial=0,time=0;
+  h.w.matchMedia=()=>({matches:false});
+  h.w.requestAnimationFrame=fn=>{frames.set(++serial,fn);return serial;};h.w.cancelAnimationFrame=id=>frames.delete(id);
+  function tick(ms){time+=ms;const current=Array.from(frames.values());frames.clear();current.forEach(fn=>fn(time));}
+  function finish(){tick(0);tick(1000);}
+  const original=h.a._fields.querySelector('.reliability-mtbfMinutes'),expandedWidth=parseFloat(table().style.width);
+  const generalHandle=h.host.querySelector('th[data-column=mtbf] .equipment-table-resize');
+  const custom=Number(generalHandle.getAttribute('aria-valuenow'))+8;
+  generalHandle.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+  const before=parseFloat(table().style.width);
+  toggle().click();
+  assert.equal(folded().rowSpan,3);assert.equal(folded().colSpan,1);assert.equal(folded().querySelectorAll('.equipment-table-resize').length,1);
+  assert(!table().querySelector('th[data-unit-for="folded-Reliability"]'));
+  assert(Math.abs(parseFloat(table().style.width)-before)<1);
+  tick(0);tick(60);const intermediate=parseFloat(table().style.width);assert(intermediate<before);
+  tick(1000);assert(parseFloat(table().style.width)<intermediate);
+  const width=()=>Number(handle().getAttribute('aria-valuenow'));
+  const collapsedWidth=width();assert(collapsedWidth>44);assert(!table().classList.contains('equipment-table-group-animating'));
+  handle().dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.equal(width(),collapsedWidth+8);
+  toggle().click();finish();
+  assert.equal(Number(h.host.querySelector('th[data-column=mtbf] .equipment-table-resize').getAttribute('aria-valuenow')),custom);
+  toggle().click();finish();assert.equal(width(),collapsedWidth+8);
+  h.w.matchMedia=()=>({matches:true});toggle().click();assert.equal(frames.size,0);
+  assert.equal(original.value,'5');assert.equal(h.calls.dirty,0);
+ }finally{h.close();}
+});

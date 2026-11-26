@@ -60,7 +60,27 @@ function validateDynamicBalancing(equipment,run,details){
   if(!active&&run?.dynamicLineBalancingEnabled===true)details.push(invalid('run.dynamicLineBalancingEnabled','Enable and configure at least one conveyor in Dynamic balancing.'));
 }
 
+// Basic ignores advanced machine-design measurements without altering the
+// persisted installation. Validators, runtimes and evidence use this same
+// projection; unrelated reliability, flow and speed fields remain.
+export function projectMachineDesign(equipment,run){
+  if(run?.machineDesignEnabled!==false||!Array.isArray(equipment))return equipment;
+  return equipment.map(unit=>{
+    const design=unit?.processData?.equipment;
+    if(!design||typeof design!=='object'||Array.isArray(design))return unit;
+    const processData={...unit.processData},next={...design};
+    for(const key of ['internalCapacityBottles','occupancyMode','residenceTimeSeconds','recoveryTimeSeconds','macroStopScrapBottles'])delete next[key];
+    if(Object.keys(next).length)processData.equipment=next;else delete processData.equipment;
+    return {...unit,processData};
+  });
+}
+export function projectMachineDesignInput(input){
+  return input?.run?.machineDesignEnabled===false&&Array.isArray(input?.case?.equipment)
+    ?{...input,case:{...input.case,equipment:projectMachineDesign(input.case.equipment,input.run)}}:input;
+}
+
 export function validateSimulationInput(input) {
+  input=projectMachineDesignInput(input);
   const details = [];
   try { const resolvedProducts=validateProductSetup(input);if(resolvedProducts.length){for(const resolved of resolvedProducts){validateCase({...input.case,equipment:resolved.equipment},details,resolved.product);validateDynamicBalancing(resolved.equipment,input.run,details);}}else {validateCase(input?.case, details);validateDynamicBalancing(input?.case?.equipment,input?.run,details);} } catch(error) { details.push(invalid('run.productCatalog',error.message)); }
   validateRun(input?.run, details);
@@ -299,6 +319,7 @@ function validateRun(run, details) {
     details.push(required('run'));
     return;
   }
+  if(run.machineDesignEnabled!==undefined&&typeof run.machineDesignEnabled!=='boolean')details.push(invalid('run.machineDesignEnabled','must be a boolean'));
   if(run.dynamicLineBalancingEnabled!==undefined&&typeof run.dynamicLineBalancingEnabled!=='boolean')details.push(invalid('run.dynamicLineBalancingEnabled','must be a boolean'));
   if(run.dynamicLineBalancingEnabled===true&&(run.engineId==='DES_SIMPY_EXPERIMENTAL'||run.machineResidenceEnabled!==true))details.push(invalid('run.dynamicLineBalancingEnabled','Dynamic balancing requires the ST discrete physical engine (machine residence enabled).'));
   if (run.eventsEnabled !== undefined && typeof run.eventsEnabled !== 'boolean') details.push(invalid('run.eventsEnabled','must be a boolean'));

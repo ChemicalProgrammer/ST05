@@ -1,8 +1,11 @@
+import {projectMachineDesignInput} from './SimulationValidation.js';
+
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
 export const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.7/DES:0.5.0/cache:34';
 
 export function canonicalSimulationInputSignature(input) {
+  input=projectMachineDesignInput(input);
   function canonical(value) {
     if (Array.isArray(value)) return value.map(canonical);
     if (value && typeof value === 'object') return Object.fromEntries(
@@ -14,6 +17,7 @@ export function canonicalSimulationInputSignature(input) {
   const run = {...input.run};
   // Enabled/default reliability are equivalent; disabled reliability is not.
   if (run.reliabilityEnabled !== false) delete run.reliabilityEnabled;
+  if(run.machineDesignEnabled!==false)delete run.machineDesignEnabled;
   // PRECISE preserves the historical step. Explicitly choosing it must not
   // invalidate an otherwise identical completed simulation.
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;

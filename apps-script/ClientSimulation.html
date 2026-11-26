@@ -295,7 +295,7 @@
 
     function renderSimulationAnalysis() {
       var simulation=activePersistentSimulation(),target=document.getElementById('simulation-analysis-content');
-      if(!simulation||window.STMinimalMode?.isMinimal()&&!simulation.results?.summary){target.textContent='';toggle('simulation-analysis',false);return;}
+      if(!simulation||window.STMinimalMode?.isMinimal()&&(!simulation.results?.summary||simulation.dynamicConfig?.machineDesignEnabled!==false)){target.textContent='';toggle('simulation-analysis',false);return;}
       if(window.STMinimalMode?.isSearching())return;
       if(simulation.dynamicConfig?.engineId==='DES_SIMPY_EXPERIMENTAL'){STWhatIf.unavailable(simulation,target,'What-If is not yet validated for the experimental SimPy model. Use Results to compare throughput and equipment states, or choose the current engine for What-If.');toggle('simulation-analysis',true);return;}
       STWhatIf.render(simulation,target,createWhatIfScenario);toggle('simulation-analysis',true);
@@ -933,7 +933,7 @@
       delete calendar.durationSource;
       delete calendar.needsApply;
       return {
-        ...extras,...STProducts.runFields(),machineResidenceEnabled:true,plannedStops:state.run.plannedStops===undefined?undefined:cloneJson(state.run.plannedStops),
+        ...extras,...STProducts.runFields(),machineResidenceEnabled:true,machineDesignEnabled:window.STMinimalMode?.isMinimal()?false:undefined,plannedStops:state.run.plannedStops===undefined?undefined:cloneJson(state.run.plannedStops),
         plantCalendar:calendar.enabled?{...calendar,totalMinutes:durationSeconds/60}:calendar,
         engineId:activePersistentSimulation()?.dynamicConfig?.engineId,
         numericalResolution:activePersistentSimulation()?.dynamicConfig?.numericalResolution,

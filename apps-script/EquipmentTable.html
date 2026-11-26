@@ -86,7 +86,7 @@ window.STEquipmentTable=(function(){
   // columns. Machine-only and conveyor-only cells are explicitly inapplicable.
   function mixedGroups(cards){
     var general=group('General','General',[col('type','.equipment-type','Type','Tipo'),...machineGeneral.columns.slice(1).map(c=>({...c,kind:['rate','flow'].includes(c.id)?null:'machine'}))]);
-    var groups=[general,{...physical,columns:physical.columns.map(c=>({...c,kind:'machine'}))},
+    var groups=[general,
       ...[geometry,upstream,downstream,speeds,dynamic].map(g=>({...g,columns:g.columns.map(c=>({...c,kind:'conveyor'}))})),{...reliability(false),columns:reliability(false).columns.map(c=>({...c,kind:'machine'}))}];
     return groups.map(g=>({...g,columns:g.columns.filter(c=>cards.some(card=>columnApplies(c,card)&&c.selectors.some(sel=>applicable(source(card,sel),card))))})).filter(g=>g.columns.length);
   }
@@ -362,6 +362,7 @@ window.STEquipmentTable=(function(){
   }
   function sizing(layout,descriptor){
     var {id,head,unit,cells}=descriptor;
+    if(descriptor.collapsed){var width=Math.max(44,measureText(descriptor.labelNode.textContent,descriptor.labelNode)+36);return {min:width,fit:width};}
     var min=id==='name'?152:id==='evaluation'?76:44;
     var fit=Math.max(min,measureText(head.textContent,head)+24,measureText(unit.textContent,unit)+24);
     if(id==='delete')return {min,fit};
@@ -390,6 +391,7 @@ window.STEquipmentTable=(function(){
     return {min,fit:Math.max(min,Math.min(340,fit))};
   }
   function applyWidths(layout){
+    cancelGroupMotion(layout);
     var total=0;
     layout.columns.forEach(c=>{
       var custom=manualWidths.get(widthKey(layout,c.id)),value=clampWidth(custom??c.fit,c.min);
@@ -399,6 +401,7 @@ window.STEquipmentTable=(function(){
     layout.table.style.width=total+'px';
   }
   function fitColumns(layout){
+    if(layout.groupMotion)return;
     measureText.styles=new Map();
     layout.columns.forEach(c=>Object.assign(c,sizing(layout,c)));
     applyWidths(layout);
@@ -407,13 +410,14 @@ window.STEquipmentTable=(function(){
     var handle=descriptor.handle,label=tr('Resize column','Cambiar ancho de columna')+' · '+descriptor.head.textContent;
     handle.title=label+' · '+tr('Double-click to auto-fit','Doble clic para autoajustar');handle.setAttribute('aria-label',label);handle.setAttribute('role','separator');handle.setAttribute('aria-orientation','vertical');handle.tabIndex=0;
     function set(width){manualWidths.set(widthKey(layout,descriptor.id),clampWidth(width,descriptor.min));applyWidths(layout);}
-    function reset(){manualWidths.delete(widthKey(layout,descriptor.id));fitColumns(layout);}
+    function reset(){cancelGroupMotion(layout);manualWidths.delete(widthKey(layout,descriptor.id));fitColumns(layout);}
     handle.addEventListener('dblclick',e=>{e.preventDefault();reset();});
     handle.addEventListener('keydown',e=>{
       if(!['ArrowLeft','ArrowRight','Home'].includes(e.key))return;
       e.preventDefault();if(e.key==='Home')reset();else set(descriptor.width+(e.key==='ArrowLeft'?-8:8));
     });
     handle.addEventListener('pointerdown',e=>{
+      if(layout.groupMotion)applyWidths(layout);
       var x=e.clientX,initial=descriptor.width,old=manualWidths.get(widthKey(layout,descriptor.id)),moved=false;
       function move(ev){if(!moved&&Math.abs(ev.clientX-x)<2)return;moved=true;set(initial+ev.clientX-x);}
       function clear(){layout.table.classList.remove('equipment-table-resizing');}
@@ -436,6 +440,43 @@ window.STEquipmentTable=(function(){
     return descriptor;
   }
   function groupKey(layout,name){return (layout.conveyor===null?'mixed':layout.conveyor?'conveyors':'equipment')+':'+name;}
+  // Animate the actual table width rather than scale its text. The source
+  // editor remains mounted; only the projection's column widths change.
+  function cancelGroupMotion(layout){
+    if(!layout.groupMotion)return;
+    window.cancelAnimationFrame?.(layout.groupMotion.frame);
+    layout.groupMotion=null;layout.table.classList.remove('equipment-table-group-animating');
+  }
+  function groupWidth(layout,id){
+    return layout.columns.filter(c=>c.groupId===id).reduce((total,c)=>total+(parseFloat(c.col.style.width)||c.width),0);
+  }
+  function animateGroupWidth(layout,id,from,scrollLeft){
+    var targets=layout.columns.filter(c=>c.groupId===id),to=targets.reduce((total,c)=>total+c.width,0);
+    var duration=motionOptions().duration;
+    if(reducedMotion()||!window.requestAnimationFrame||!targets.length||!(from>0&&to>0&&duration>0)||Math.abs(from-to)<1)return;
+    var motion={frame:null,start:null},fixed=layout.columns.filter(c=>c.groupId!==id).reduce((total,c)=>total+c.width,0);
+    cancelGroupMotion(layout);layout.groupMotion=motion;layout.table.classList.add('equipment-table-group-animating');
+    function paint(width){
+      targets.forEach(c=>{c.col.style.width=(width*c.width/to)+'px';});
+      layout.table.style.width=(fixed+width)+'px';
+    }
+    function frame(time){
+      if(layout.groupMotion!==motion||!layout.table.isConnected){cancelGroupMotion(layout);return;}
+      if(motion.start===null)motion.start=time;
+      var t=Math.min(1,Math.max(0,(time-motion.start)/duration)),ease=1-Math.pow(1-t,3);
+      paint(from+(to-from)*ease);
+      if(t<1)motion.frame=window.requestAnimationFrame(frame);
+      else{cancelGroupMotion(layout);fitColumns(layout);}
+    }
+    paint(from);layout.scroller.scrollLeft=scrollLeft;motion.frame=window.requestAnimationFrame(frame);
+  }
+  function toggleGroup(host,layout,groupId,collapsed){
+    var from=groupWidth(layout,groupId),scroll=layout.scroller.scrollLeft;
+    collapsedGroups.set(groupId,!collapsed);signature='';refresh();
+    var replacement=tableLayouts.find(l=>l.conveyor===layout.conveyor&&l.columns.some(c=>c.groupId===groupId));
+    if(replacement)animateGroupWidth(replacement,groupId,from,scroll);
+    Array.from(host.querySelectorAll('button[data-group-id]')).find(b=>b.dataset.groupId===groupId)?.focus({preventScroll:true});
+  }
   function groupHeader(row,label,count,identity=false){
     var cell=node('th','equipment-table-group-heading',label);
     cell.colSpan=count;
@@ -465,13 +506,20 @@ window.STEquipmentTable=(function(){
       groupHead.removeAttribute('aria-hidden');groupHead.scope='colgroup';groupHead.dataset.groupId=groupId;
       var toggle=node('button','equipment-table-group-toggle');toggle.type='button';toggle.dataset.groupId=groupId;
       toggle.setAttribute('aria-expanded',String(!collapsed));toggle.title=collapsed?tr('Expand columns','Expandir columnas'):tr('Collapse columns','Colapsar columnas');
-      toggle.append(node('span','',label),node('span','equipment-table-group-chevron',collapsed?'▸':'▾'));groupHead.append(toggle);
-      toggle.onclick=function(){collapsedGroups.set(groupId,!collapsed);signature='';refresh();Array.from(host.querySelectorAll('button[data-group-id]')).find(b=>b.dataset.groupId===groupId)?.focus({preventScroll:true});};
-      var columns=collapsed?[{id:'folded-'+g.en,en:g.en,es:g.es,selectors:[],collapsed:true}]:g.columns;
-      columns.forEach(c=>{
+      var labelNode=node('span','equipment-table-group-label',label),chevron=node('span','equipment-table-group-chevron',collapsed?'▸':'▾');
+      chevron.setAttribute('aria-hidden','true');toggle.append(labelNode,chevron);groupHead.append(toggle);
+      toggle.onclick=function(){toggleGroup(host,layout,groupId,collapsed);};
+      if(collapsed){
+        // One header spanning the group, field-name and unit rows.
+        var id='folded-'+g.en,col=node('col'),handle=node('span','equipment-table-resize');
+        groupHead.rowSpan=3;groupHead.dataset.column=id;groupHead.classList.add('equipment-table-folded-header');
+        groupHead.append(handle);cols.append(col);
+        var descriptor={id,col,head:groupHead,unit:null,handle,cells:[],min:44,fit:80,width:80,collapsed:true,labelNode,groupId};
+        layout.columns.push(descriptor);bindResize(descriptor,layout);
+        params.push({column:{id,selectors:[],collapsed:true},descriptor});
+      }else g.columns.forEach(c=>{
         var descriptor=appendColumn(layout,top,bottom,cols,c.id,tr(c.en,c.es),label);
-        if(c.collapsed){descriptor.head.classList.add('equipment-table-folded-column');descriptor.unit.classList.add('equipment-table-folded-column');}
-        params.push({column:c,descriptor});
+        descriptor.groupId=groupId;params.push({column:c,descriptor});
       });
       table.append(cols);
     });
@@ -512,7 +560,7 @@ window.STEquipmentTable=(function(){
       if(rebuild){
         var scrolls=Array.from(host.querySelectorAll('.equipment-table-scroll')).map(n=>n.scrollLeft);
         var focused=document.activeElement,focusBinding=bindings.find(b=>b.proxy===focused),focusAction=rowActions.find(a=>a.symbol===focused);
-        gesture?.cancel();
+        gesture?.cancel();tableLayouts.forEach(cancelGroupMotion);
         signature=next;renderedCards=cards;bindings=[];rowActions=[];tableLayouts=[];host.replaceChildren();
         kinds.forEach((items,i)=>{if(items.length)renderTable(host,items,mixed?null:i===1,groups[i],!mixed&&!separate&&kinds.every(g=>g.length));});
         if(!cards.length&&!list.querySelector('.equipment-card'))host.append(node('p','empty',list.querySelector('.empty')?.textContent||tr('No equipment.','Sin equipos.')));
@@ -601,7 +649,7 @@ window.STEquipmentTable=(function(){
     }
     active=next;
     if(active)refresh();
-    else{gesture?.cancel();host.replaceChildren();signature='';renderedCards=[];bindings=[];rowActions=[];tableLayouts=[];}
+    else{gesture?.cancel();tableLayouts.forEach(cancelGroupMotion);host.replaceChildren();signature='';renderedCards=[];bindings=[];rowActions=[];tableLayouts=[];}
   }
   return {sync:sync,refresh:refresh,wantsTable:wantsTable};
 })();

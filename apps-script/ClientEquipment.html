@@ -841,7 +841,7 @@ function numericInputValue(input) {
         var critical=type!=='CONVEYOR'&&equipmentField(card,'.equipment-pacemaker').checked;
         characteristics.isPacemaker=critical;data.role=type==='CONVEYOR'?'CONVEYOR':critical?'PACEMAKER':'MACHINE';data.machineType=type;
         data.equipment=Object.assign({},data.equipment);
-        [['maximum-speed','maximumSpeedBpm'],['recovery-time','recoveryTimeSeconds']].forEach(function(spec){var input=equipmentField(card,'.equipment-'+spec[0]);if(input.value==='')delete data.equipment[spec[1]];else data.equipment[spec[1]]=Number(input.value);});
+        (window.STMinimalMode?.isMinimal()?[['maximum-speed','maximumSpeedBpm']]:[['maximum-speed','maximumSpeedBpm'],['recovery-time','recoveryTimeSeconds']]).forEach(function(spec){var input=equipmentField(card,'.equipment-'+spec[0]);if(input.value==='')delete data.equipment[spec[1]];else data.equipment[spec[1]]=Number(input.value);});
         if(type==='CONVEYOR'){delete noise.reliability;delete data.equipment.stopInputs;}
         else if(!data.equipment.stopInputs){
           var bf=equipmentField(card,'.reliability-mtbfMinutes').value,tr=equipmentField(card,'.reliability-mttrMinutes').value;

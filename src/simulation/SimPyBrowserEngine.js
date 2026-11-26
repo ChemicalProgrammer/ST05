@@ -1,7 +1,7 @@
 import { machineOperatingRatePerSecond } from './LineSimulationEngine.js';
 import { stopReliabilityProfile } from './StopReliability.js';
 import { resolveAccumulationZoneDefinition, isConveyorEquipment } from './FormatGeometryAdapter.js';
-import { validateSimulationInput } from './SimulationValidation.js';
+import { validateSimulationInput,projectMachineDesignInput } from './SimulationValidation.js';
 
 export const CURRENT_ENGINE_ID = 'ST_CURRENT';
 export const SIMPY_ENGINE_ID = 'DES_SIMPY_EXPERIMENTAL';
@@ -11,6 +11,7 @@ export const PYODIDE_INDEX_URLS = [PYODIDE_INDEX_URL, 'https://unpkg.com/pyodide
 // This adapter deliberately records the physical model changes. A library switch
 // cannot make discrete products equivalent to ST's spatial fluid conveyors.
 export function adaptSimPyInput(input) {
+  input=projectMachineDesignInput(input);
   const validation = validateSimulationInput(input);
   if (!validation.ok) throw Object.assign(new Error((validation.error?.message || 'Invalid simulation input')+' '+(validation.error?.details||[]).map(d=>d.path+': '+(d.reason||d.message||'invalid value')).join('; ')), {code:'INVALID_DES_INPUT',details:validation.error?.details});
   const equipment=input.case.equipment, machines=[], conveyors=[], ignored=[];
@@ -34,7 +35,7 @@ export function adaptSimPyInput(input) {
     } else {
       if(Object.keys(model.noiseProfile||{}).some(key=>!['reliability','microStop'].includes(key)))throw new Error('SimPy does not support this machine noise profile: '+model.name);
       const design=model.processData?.equipment;
-      const residence=input.run.machineResidenceEnabled||design?.internalCapacityBottles!=null
+      const residence=input.run.machineDesignEnabled!==false&&(input.run.machineResidenceEnabled||design?.internalCapacityBottles!=null)
         ?{internalCapacityBottles:design?.internalCapacityBottles??30}:{};
       machines.push({...residence,id:model.id,name:model.name,rateBpm:machineOperatingRatePerSecond(model)*60,initialMode:model.initialMode??'AUTO',
         critical:Boolean(model.characteristics?.isPacemaker||model.processData?.role==='PACEMAKER'||model.type==='PACEMAKER'),

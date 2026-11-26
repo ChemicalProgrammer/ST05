@@ -1,6 +1,7 @@
 <script>
 window.STEquipmentRoles=(function(){
   function readCapacity(fields,data){
+    if(window.STMinimalMode?.isMinimal())return true;
     var input=fields.querySelector('.equipment-internal-capacity');
     if(!input.checkValidity())return false;
     data.equipment=data.equipment||{};
@@ -82,7 +83,9 @@ window.STEquipmentRoles=(function(){
     if(type==='CONVEYOR'&&data.equipment)delete data.equipment.macroStopScrapBottles;
     if(type!=='CONVEYOR'){
       if(!readCapacity(fields,data))return false;
-      for(var spec of [['maximum-speed','maximumSpeedBpm'],['recovery-time','recoveryTimeSeconds'],['residence-time','residenceTimeSeconds']]){
+      var specs=[['maximum-speed','maximumSpeedBpm']];
+      if(!window.STMinimalMode?.isMinimal())specs.push(['recovery-time','recoveryTimeSeconds'],['residence-time','residenceTimeSeconds']);
+      for(var spec of specs){
         var input=fields.querySelector('.equipment-'+spec[0]);
         if(!input.checkValidity())return false;
         if(input.value==='')delete data.equipment[spec[1]];else data.equipment[spec[1]]=Number(input.value);

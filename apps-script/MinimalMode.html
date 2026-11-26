@@ -21,7 +21,9 @@ window.STMinimalMode=(function(){
   function owner(){return actions.simulation();}
   function ownerKey(){return state.activeCase&&owner()?state.activeCase.id+'|'+owner().id:null;}
   function result(){var sim=owner(),r=sim?.results;
-    return r?.summary&&r.replicationStatus?.state==='COMPLETE'?r:null;
+    if(!r?.summary||r.replicationStatus?.state!=='COMPLETE'||sim.dynamicConfig?.machineDesignEnabled!==false)return null;
+    // An archived result from the full machine model is not a Basic result.
+    try{return JSON.parse(r.inputSignature).run?.machineDesignEnabled===false?r:null;}catch(_){return null;}
   }
   function reviewRequired(sim){
     var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));

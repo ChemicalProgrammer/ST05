@@ -3,7 +3,7 @@ import { stopReliabilityProfile, selectReliabilityStop, createFailureHistory, st
 import { applyProductProfile, productUnitFactor, productFlowUnit, productPackSize } from './ProductProfiles.js';
 import { plantCalendarSchedule, resolvePlannedStops } from './PlantCalendarSchedule.js';
 import { createEquipmentRandom } from './SeededRandom.js';
-import { validateSimulationInput, resolveDynamicBeltSettings,dynamicBeltEnabled } from './SimulationValidation.js';
+import { validateSimulationInput, resolveDynamicBeltSettings,dynamicBeltEnabled,projectMachineDesignInput } from './SimulationValidation.js';
 import { isConveyorEquipment, resolveAccumulationZoneDefinition } from './FormatGeometryAdapter.js';
 
 // Prepare field names once rather than concatenate them for every packet/tick.
@@ -228,12 +228,13 @@ export async function simulateLineAsync(input, options = {}) {
 }
 
 function createRuntime(input) {
+  input=projectMachineDesignInput(input);
   const numerics=resolveSimulationNumerics(input.run);
   if(input.run.machineResidenceEnabled)input={...input,run:{...input.run,discretePackages:true,tickSeconds:numerics.effectiveTickSeconds}};
   const product=input.run.productCatalog?.find(p=>p.id===(input.run.initialFormatId??input.run.initialProductId));
   const baseEquipment=input.case.equipment;
   if(product)input={...input,case:{...input.case,equipment:applyProductProfile(baseEquipment,product)}};
-  const equipment = input.case.equipment.map((model) => createEquipmentRuntime(model, input.run.seed, input.run.reliabilityEnabled !== false, input.run.reliabilityCategories,input.run.machineResidenceEnabled));
+  const equipment = input.case.equipment.map((model) => createEquipmentRuntime(model, input.run.seed, input.run.reliabilityEnabled !== false, input.run.reliabilityCategories,input.run.machineDesignEnabled!==false&&input.run.machineResidenceEnabled));
   const zones = equipment.slice(0, -1).map((equipment, index) => createAccumulationZoneRuntime(
     equipment,
     input.case.equipment[index + 1],

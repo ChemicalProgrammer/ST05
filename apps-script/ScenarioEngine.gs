@@ -4,6 +4,7 @@ var STScenarioEngine_ = (function(){
 const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.7/DES:0.5.0/cache:34';
 
 function canonicalSimulationInputSignature(input) {
+  input=projectMachineDesignInput(input);
   function canonical(value) {
     if (Array.isArray(value)) return value.map(canonical);
     if (value && typeof value === 'object') return Object.fromEntries(
@@ -15,6 +16,7 @@ function canonicalSimulationInputSignature(input) {
   const run = {...input.run};
   // Enabled/default reliability are equivalent; disabled reliability is not.
   if (run.reliabilityEnabled !== false) delete run.reliabilityEnabled;
+  if(run.machineDesignEnabled!==false)delete run.machineDesignEnabled;
   // PRECISE preserves the historical step. Explicitly choosing it must not
   // invalidate an otherwise identical completed simulation.
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;
@@ -1260,7 +1262,27 @@ function validateDynamicBalancing(equipment,run,details){
   if(!active&&run?.dynamicLineBalancingEnabled===true)details.push(invalid('run.dynamicLineBalancingEnabled','Enable and configure at least one conveyor in Dynamic balancing.'));
 }
 
+// Basic ignores advanced machine-design measurements without altering the
+// persisted installation. Validators, runtimes and evidence use this same
+// projection; unrelated reliability, flow and speed fields remain.
+function projectMachineDesign(equipment,run){
+  if(run?.machineDesignEnabled!==false||!Array.isArray(equipment))return equipment;
+  return equipment.map(unit=>{
+    const design=unit?.processData?.equipment;
+    if(!design||typeof design!=='object'||Array.isArray(design))return unit;
+    const processData={...unit.processData},next={...design};
+    for(const key of ['internalCapacityBottles','occupancyMode','residenceTimeSeconds','recoveryTimeSeconds','macroStopScrapBottles'])delete next[key];
+    if(Object.keys(next).length)processData.equipment=next;else delete processData.equipment;
+    return {...unit,processData};
+  });
+}
+function projectMachineDesignInput(input){
+  return input?.run?.machineDesignEnabled===false&&Array.isArray(input?.case?.equipment)
+    ?{...input,case:{...input.case,equipment:projectMachineDesign(input.case.equipment,input.run)}}:input;
+}
+
 function validateSimulationInput(input) {
+  input=projectMachineDesignInput(input);
   const details = [];
   try { const resolvedProducts=validateProductSetup(input);if(resolvedProducts.length){for(const resolved of resolvedProducts){validateCase({...input.case,equipment:resolved.equipment},details,resolved.product);validateDynamicBalancing(resolved.equipment,input.run,details);}}else {validateCase(input?.case, details);validateDynamicBalancing(input?.case?.equipment,input?.run,details);} } catch(error) { details.push(invalid('run.productCatalog',error.message)); }
   validateRun(input?.run, details);
@@ -1499,6 +1521,7 @@ function validateRun(run, details) {
     details.push(required('run'));
     return;
   }
+  if(run.machineDesignEnabled!==undefined&&typeof run.machineDesignEnabled!=='boolean')details.push(invalid('run.machineDesignEnabled','must be a boolean'));
   if(run.dynamicLineBalancingEnabled!==undefined&&typeof run.dynamicLineBalancingEnabled!=='boolean')details.push(invalid('run.dynamicLineBalancingEnabled','must be a boolean'));
   if(run.dynamicLineBalancingEnabled===true&&(run.engineId==='DES_SIMPY_EXPERIMENTAL'||run.machineResidenceEnabled!==true))details.push(invalid('run.dynamicLineBalancingEnabled','Dynamic balancing requires the ST discrete physical engine (machine residence enabled).'));
   if (run.eventsEnabled !== undefined && typeof run.eventsEnabled !== 'boolean') details.push(invalid('run.eventsEnabled','must be a boolean'));
@@ -1932,7 +1955,7 @@ function scenarioSignature(simulation){
   // CaseService normalizes each equipment record on write. Hash only the
   // persisted input fields and sort nested keys so JSON editor formatting and
   // key insertion order cannot invalidate a proposal with identical inputs.
-  const equipment=(simulation.equipment||[]).map(unit=>({
+  const equipment=projectMachineDesign(simulation.equipment||[],simulation.dynamicConfig).map(unit=>({
     id:unit.id,type:unit.type,name:typeof unit.name==='string'?unit.name.trim():unit.name,
     nominalRatePerSecond:Number(unit.nominalRatePerSecond),initialMode:unit.initialMode,
     characteristics:unit.characteristics&&typeof unit.characteristics==='object'?unit.characteristics:{},
@@ -1941,6 +1964,7 @@ function scenarioSignature(simulation){
   }));
   const config=simulation.dynamicConfig&&typeof simulation.dynamicConfig==='object'&&!Array.isArray(simulation.dynamicConfig)?{...simulation.dynamicConfig}:{};
   delete config.chartWindow;
+  if(config.machineDesignEnabled!==false)delete config.machineDesignEnabled;
   if(config.numericalResolution==='PRECISE')delete config.numericalResolution;
   const unitOfFlow=simulation.unitOfFlow||simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||'units';
   const text=JSON.stringify(stableScenarioValue(["SCENARIO_STREAMS_V5",SIMULATION_PROVENANCE_VERSION,simulation.id,unitOfFlow,equipment,config]));
@@ -1952,7 +1976,7 @@ function scenarioActiveProduct(simulation){
   return Array.isArray(run.productCatalog)?run.productCatalog.find(product=>product.id===id):undefined;
 }
 function scenarioEngineeringEquipment(simulation){
-  const equipment=simulation.equipment||[],product=scenarioActiveProduct(simulation);
+  const equipment=projectMachineDesign(simulation.equipment||[],simulation.dynamicConfig||simulation.run),product=scenarioActiveProduct(simulation);
   // The runtime applies the active format before resolving conveyor geometry.
   // In particular, a Case Packer's bottle input rate differs from its case output.
   // Apply the same profile on copies; persisted rates and proposal baselines stay native.
@@ -2290,6 +2314,7 @@ function scenarioProposalNeeds(simulation){
   return needs.sort((a,b)=>(a.availabilityOnlyBpm??a.configuredBpm)-(b.availabilityOnlyBpm??b.configuredBpm));
 }
 function planScenarios(simulation){
+  if(simulation.dynamicConfig?.machineDesignEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
   const audit=scenarioAudit(simulation),engineeringEquipment=scenarioEngineeringEquipment(simulation),diagnosis=diagnoseScenarioLosses(simulation);
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
   const result=diagnosis.status==='OBSERVED'?simulation.results:null;

@@ -1,7 +1,7 @@
 import { analyzeLinePerformance, diagnoseLineEfficiency } from './LinePerformanceAnalysis.js';
 import { calculateConveyorEngineering } from '../simulation/ConveyorEngineering.js';
 import { resolveAccumulationZoneDefinition } from '../simulation/FormatGeometryAdapter.js';
-import { validateSimulationInput } from '../simulation/SimulationValidation.js';
+import { validateSimulationInput,projectMachineDesign } from '../simulation/SimulationValidation.js';
 import { SIMULATION_PROVENANCE_VERSION } from '../simulation/SimulationProvenance.js';
 import { applyProductProfile, productUnitFactor } from '../simulation/ProductProfiles.js';
 import { scenarioSourceReadiness } from './ScenarioReadiness.js';
@@ -90,7 +90,7 @@ export function scenarioSignature(simulation){
   // CaseService normalizes each equipment record on write. Hash only the
   // persisted input fields and sort nested keys so JSON editor formatting and
   // key insertion order cannot invalidate a proposal with identical inputs.
-  const equipment=(simulation.equipment||[]).map(unit=>({
+  const equipment=projectMachineDesign(simulation.equipment||[],simulation.dynamicConfig).map(unit=>({
     id:unit.id,type:unit.type,name:typeof unit.name==='string'?unit.name.trim():unit.name,
     nominalRatePerSecond:Number(unit.nominalRatePerSecond),initialMode:unit.initialMode,
     characteristics:unit.characteristics&&typeof unit.characteristics==='object'?unit.characteristics:{},
@@ -99,6 +99,7 @@ export function scenarioSignature(simulation){
   }));
   const config=simulation.dynamicConfig&&typeof simulation.dynamicConfig==='object'&&!Array.isArray(simulation.dynamicConfig)?{...simulation.dynamicConfig}:{};
   delete config.chartWindow;
+  if(config.machineDesignEnabled!==false)delete config.machineDesignEnabled;
   if(config.numericalResolution==='PRECISE')delete config.numericalResolution;
   const unitOfFlow=simulation.unitOfFlow||simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||'units';
   const text=JSON.stringify(stableScenarioValue(["SCENARIO_STREAMS_V5",SIMULATION_PROVENANCE_VERSION,simulation.id,unitOfFlow,equipment,config]));
@@ -110,7 +111,7 @@ function scenarioActiveProduct(simulation){
   return Array.isArray(run.productCatalog)?run.productCatalog.find(product=>product.id===id):undefined;
 }
 function scenarioEngineeringEquipment(simulation){
-  const equipment=simulation.equipment||[],product=scenarioActiveProduct(simulation);
+  const equipment=projectMachineDesign(simulation.equipment||[],simulation.dynamicConfig||simulation.run),product=scenarioActiveProduct(simulation);
   // The runtime applies the active format before resolving conveyor geometry.
   // In particular, a Case Packer's bottle input rate differs from its case output.
   // Apply the same profile on copies; persisted rates and proposal baselines stay native.
@@ -448,6 +449,7 @@ export function scenarioProposalNeeds(simulation){
   return needs.sort((a,b)=>(a.availabilityOnlyBpm??a.configuredBpm)-(b.availabilityOnlyBpm??b.configuredBpm));
 }
 export function planScenarios(simulation){
+  if(simulation.dynamicConfig?.machineDesignEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
   const audit=scenarioAudit(simulation),engineeringEquipment=scenarioEngineeringEquipment(simulation),diagnosis=diagnoseScenarioLosses(simulation);
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
   const result=diagnosis.status==='OBSERVED'?simulation.results:null;

@@ -54,7 +54,7 @@ window.STEquipmentTable=(function(){
     zone('infeed','Infeed pitch (mm)','Pitch de entrada (mm)'),zone('downstream-ramp','Ramp up (s)','Rampa de arranque (s)')]);
   var speeds=group('Speed & sensors','Velocidad y sensores',[
     zone('speed-mode','Speed mode','Modo de velocidad'),zone('belt-speed','Belt speed (m/min)','Vel. de banda (m/min)'),
-    zone('moving-gap','Moving gap (mm)','Separación en movimiento (mm)',true),zone('accumulated-gap','Accumulated gap (mm)','Separación acumulada (mm)'),
+    zone('moving-gap','Moving gap (mm)','Separación en movimiento (mm)'),
     zone('population','Population (%)','Población (%)',true),zone('overspeed','Overspeed (%)','Sobrevelocidad (%)',true),
     zone('speed-factor','Discharge factor (%)','Factor de descarga (%)'),zone('coding-factor','Coding factor (%)','Factor de codificado (%)'),
     zone('acc-factor','Accumulation factor (%)','Factor de acumulación (%)'),zone('blocked-delay','Block delay (s)','Retardo de bloqueo (s)'),
@@ -74,7 +74,7 @@ window.STEquipmentTable=(function(){
     if(!control||control.type==='hidden')return false;
     // Compact Basic never projects hidden engineering details, even from a
     // legacy visible source card. Standard and Advance keep their fields.
-    if(minimal(current)&&['format-zone-speed-mode','format-zone-discharge-velocity','format-zone-discharge-velocity-enabled','format-zone-stop-response','format-zone-acc-factor'].some(name=>control.classList.contains(name)))return false;
+    if(minimal(current)&&['format-zone-speed-mode','format-zone-discharge-velocity','format-zone-discharge-velocity-enabled','format-zone-stop-response','format-zone-acc-factor','format-zone-moving-gap'].some(name=>control.classList.contains(name)))return false;
     if((control.classList.contains('equipment-maximum-speed')||control.classList.contains('format-zone-restart-first-package'))&&!['ADVANCE','ADVANCED'].includes(String(current?.bootstrap?.uiMode||'').toUpperCase()))return false;
     // Original fields can be in a hidden card or inspector by design; only
     // semantic per-field hiding (general/split, dynamic, type) matters here.

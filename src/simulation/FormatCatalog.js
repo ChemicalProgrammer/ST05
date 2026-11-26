@@ -50,7 +50,7 @@ function resolveLegacyPackingFormats(catalog){
     for(const id of new Set([...Object.keys(product.equipment||{}),...Object.keys(box.equipment||{}),...Object.keys(format.equipment||{})])){
       const local=format.equipment?.[id]||{},input=local.inputUnit||'BOTTLES',output=local.outputUnit||input;
       const shared=input!==output?{}:(output==='CASES'?box.equipment?.[id]:product.equipment?.[id])||{};
-      const active=profile=>{const result=JSON.parse(JSON.stringify(profile));if(result.enabled===false||result.applies===false){for(const key of Object.keys(result))if(!['inputUnit','outputUnit'].includes(key))delete result[key];}delete result.enabled;return result;};
+      const active=profile=>{const result=JSON.parse(JSON.stringify(profile));delete result.movingGapMm;delete result.accumulatedGapMm;if(result.enabled===false||result.applies===false){for(const key of Object.keys(result))if(!['inputUnit','outputUnit'].includes(key))delete result[key];}delete result.enabled;return result;};
       profiles[id]={...active(shared),...active(local)};
     }
     return {id:format.id,formatId:format.id,name:format.name,productId:product.id,productName:product.name,boxId:box.id,boxName:box.name,
@@ -60,8 +60,20 @@ function resolveLegacyPackingFormats(catalog){
   });
 }
 // Version 3 owns packaging dimensions and case behavior directly on each format.
+function stripLegacyCatalogGaps(record){
+  for(const profile of Object.values(record?.equipment||{})){
+    if(profile&&typeof profile==='object'&&!Array.isArray(profile)){
+      delete profile.movingGapMm;delete profile.accumulatedGapMm;
+    }
+  }
+  return record;
+}
 export function normalizeFormatCatalog(metadata={},equipment){
-  if(metadata.formatCatalog?.version>=3)return JSON.parse(JSON.stringify(metadata.formatCatalog));
+  if(metadata.formatCatalog?.version>=3){
+    const catalog=JSON.parse(JSON.stringify(metadata.formatCatalog));
+    for(const record of [...(catalog.products||[]),...(catalog.formats||[]),...(catalog.boxes||[])])stripLegacyCatalogGaps(record);
+    return catalog;
+  }
   const previous=legacyCatalog(metadata,equipment),snapshots=resolveLegacyPackingFormats(previous);
   const catalog={version:3,products:previous.products,formats:previous.formats.map((format,index)=>{
     const resolved=snapshots[index],profiles={};for(const [id,p] of Object.entries(resolved.equipment)){const units={inputUnit:p.inputUnit||'BOTTLES',outputUnit:p.outputUnit||p.inputUnit||'BOTTLES'};profiles[id]=units.inputUnit==='BOTTLES'&&units.outputUnit==='BOTTLES'?JSON.parse(JSON.stringify(format.equipment?.[id]||units)):p;}
@@ -69,11 +81,12 @@ export function normalizeFormatCatalog(metadata={},equipment){
   })};
   // Keep pre-migration input records for recovery; run snapshots and IDs are never rewritten.
   if(previous.products.length||previous.boxes.length||previous.formats.length)catalog.legacyCatalog=JSON.parse(JSON.stringify(previous));
+  for(const record of [...catalog.products,...catalog.formats])stripLegacyCatalogGaps(record);
   return catalog;
 }
 export function resolvePackingFormats(catalog,equipment){
   if((catalog.version||1)<3)return resolveLegacyPackingFormats(catalog);
-  const active=profile=>{const p=JSON.parse(JSON.stringify(profile||{}));if(p.enabled===false||p.applies===false)for(const key of Object.keys(p))if(!['inputUnit','outputUnit'].includes(key))delete p[key];delete p.enabled;return p;};
+  const active=profile=>{const p=JSON.parse(JSON.stringify(profile||{}));delete p.movingGapMm;delete p.accumulatedGapMm;if(p.enabled===false||p.applies===false)for(const key of Object.keys(p))if(!['inputUnit','outputUnit'].includes(key))delete p[key];delete p.enabled;return p;};
   return catalog.formats.map(format=>{
     const product=catalog.products.find(p=>p.id===format.productId);if(!product)throw Error((format.name||'Format')+': select an existing product.');
     const box=format.case||{},profiles={};
@@ -125,7 +138,7 @@ function validateMaterialRecord(record,kind){
   for(const value of Object.values(record.equipment||{})){
     if(!value||Array.isArray(value)||typeof value!=='object')throw Error('Equipment settings must be objects.');
     for(const key of ['enabled','applies'])if(value[key]!==undefined&&typeof value[key]!=='boolean')throw Error(key+' must be a checkbox value.');
-    for(const key of MATERIAL_PROFILE_KEYS.filter(k=>!['enabled','applies'].includes(k)))if(value[key]!==undefined&&(!Number.isFinite(value[key])||value[key]<0||(['ratePerMinute','speedMmPerSecond'].includes(key)&&value[key]===0)))throw Error(record.name+': '+key+' must be '+(['ratePerMinute','speedMmPerSecond'].includes(key)?'positive.':'nonnegative.'));
+    for(const key of MATERIAL_PROFILE_KEYS.filter(k=>!['enabled','applies','movingGapMm','accumulatedGapMm'].includes(k)))if(value[key]!==undefined&&(!Number.isFinite(value[key])||value[key]<0||(['ratePerMinute','speedMmPerSecond'].includes(key)&&value[key]===0)))throw Error(record.name+': '+key+' must be '+(['ratePerMinute','speedMmPerSecond'].includes(key)?'positive.':'nonnegative.'));
   }
   const shape=kind==='formats'?record.case||{}:kind==='boxes'?record:record.bottle||{};
   for(const key of ['lengthMm','widthMm','heightMm'])if(shape[key]!==undefined&&(!Number.isFinite(shape[key])||shape[key]<=0))throw Error(record.name+': dimensions must be positive.');
@@ -136,7 +149,7 @@ function validateMaterialRecord(record,kind){
 export function materialConfiguration(kind,record,equipment=[]){
   if(!['products','boxes','formats'].includes(kind))throw Error('Choose a product or format configuration.');
   validateMaterialRecord(record,kind);
-  return {schema:kind==='formats'?'st-material-configuration-v2':'st-material-configuration-v1',kind,record:JSON.parse(JSON.stringify(record))};
+  return {schema:kind==='formats'?'st-material-configuration-v2':'st-material-configuration-v1',kind,record:stripLegacyCatalogGaps(JSON.parse(JSON.stringify(record)))};
 }
 export function readMaterialConfiguration(text,kind,currentId,equipment=[]){
   if(text.length>1048576)throw Error('Configuration exceeds 1 MB.');
@@ -155,5 +168,5 @@ export function readMaterialConfiguration(text,kind,currentId,equipment=[]){
     if(kind==='formats')for(const side of ['inputUnit','outputUnit'])if(profile[side]!==undefined&&!['BOTTLES','CASES'].includes(profile[side]))throw Error('Invalid physical unit.');
     result.equipment[id]={...profile};
   }
-  validateMaterialRecord(result,kind);return result;
+  validateMaterialRecord(result,kind);return stripLegacyCatalogGaps(result);
 }

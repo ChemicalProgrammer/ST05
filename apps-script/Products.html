@@ -100,7 +100,8 @@ window.STProducts=(function(){
       var target=document.getElementById('products-workspace');if(target)target._formatIdentity=identity();
       if(hooks.edited)hooks.edited();else hooks.changed(false);
     }
-    dialog.addEventListener('input',commit);dialog.addEventListener('change',commit);
+    var refreshMovingGaps=function(){};
+    dialog.addEventListener('input',function(){commit();refreshMovingGaps();});dialog.addEventListener('change',function(){commit();refreshMovingGaps();});
     var error=document.createElement('p');error.className='notice product-error hidden';error.setAttribute('role','alert');
     function showError(message){error.textContent=message;error.classList.remove('hidden');}
     // Crea un bloque plegable y devuelve su cuerpo y su barra de herramientas.
@@ -111,7 +112,7 @@ window.STProducts=(function(){
         Formats:'Associate a product with packaging dimensions and production units.',
         'Products & Formats':'Edit the selected product or packing format and its dimensions.',
         Machines:'Override machine operating rates and start-up behavior for the selected product or format.',
-        Conveyors:'Override conveyor speeds, transported units, and bottle or case spacing.'
+        Conveyors:'Override conveyor speeds, transported units, and discharge/infeed spacing.'
       };
       var group=STSubsection.create({title:text,description:guidance[text]||'Review the settings for '+text.toLowerCase()+'.',
         native:false,open:true,persistKey:'products:'+sectionKey,contentId:id('formats-subsection'),
@@ -268,11 +269,27 @@ window.STProducts=(function(){
       table(machineInputs,'Machines',['Equipment','Use settings','Output unit','Rate (output/min)','Startup (s)','Ramp up (s)',''],machines,function(row,e){name(row,e);applies(row,e);textCell(row,usage(e));var p=profile(e);inputCell(row,e,p,'ratePerMinute','Rate ('+STFlowUnits.labels(unit(e,'output',kind==='formats'?record:null)).rate+')',{min:'0.001'});inputCell(row,e,p,'startupSeconds','Startup (s)');inputCell(row,e,p,'rampSeconds','Ramp up (s)');defaults(row,e);disable(row,e);});
       var conveyorInputs=section('Conveyors').content;
       note(conveyorInputs,kind==='formats'?'Conveyor transport units follow the connected machines’ Material flow. Unchecked rows inherit installed defaults.':'Unchecked rows inherit installed defaults. Geometry and sensors remain in Conveyors. Dynamic speed overrides use the selected Normal or Maximum reference.');
-      table(conveyorInputs,'Conveyors',['Conveyor','Use settings','Transported unit','Moving gap (mm)','Accumulated gap (mm)','Discharge gap (mm)','Infeed gap (mm)','Specified speed (m/min)',''],belts,function(row,e){name(row,e);applies(row,e);textCell(row,usage(e));var p=profile(e);[['movingGapMm','Moving gap (mm)'],['accumulatedGapMm','Accumulated gap (mm)'],['dischargeGapMm','Discharge gap (mm)'],['infeedGapMm','Infeed gap (mm)'],['speedMmPerSecond','Specified speed (m/min)',{min:'0.001',scale:.06}]].forEach(spec=>inputCell(row,e,p,spec[0],spec[1],spec[2]));defaults(row,e);disable(row,e);});
+      var showMovingGap=String(state?.bootstrap?.uiMode||'MINIMAL').toUpperCase()!=='MINIMAL';
+      var movingGapOutputs=[];
+      table(conveyorInputs,'Conveyors',['Conveyor','Use settings','Transported unit',...(showMovingGap?['Moving gap (mm)']:[]),'Discharge gap (mm)','Infeed gap (mm)','Specified speed (m/min)',''],belts,function(row,e){
+        name(row,e);applies(row,e);textCell(row,usage(e));var p=profile(e);
+        if(showMovingGap){var td=document.createElement('td');td.className='numeric';td.title=tr('Calculated from belt speed and upstream nominal package rate; varies by format.');td.textContent='—';row.append(td);movingGapOutputs.push({id:e.id,cell:td});}
+        [['dischargeGapMm','Discharge gap (mm)'],['infeedGapMm','Infeed gap (mm)'],['speedMmPerSecond','Specified speed (m/min)',{min:'0.001',scale:.06}]].forEach(spec=>inputCell(row,e,p,spec[0],spec[1],spec[2]));defaults(row,e);disable(row,e);
+      });
+      refreshMovingGaps=function(){
+        if(!movingGapOutputs.length)return;
+        try{
+          var snapshots=SimulatorEngine.resolvePackingFormats(draft,all).filter(f=>kind==='formats'?f.id===record.id:f.productId===record.id);
+          var models=snapshots.map(f=>SimulatorEngine.applyProductProfile(all,f));
+          movingGapOutputs.forEach(function(o){var gaps=models.map(m=>{var index=m.findIndex(e=>e.id===o.id);return SimulatorEngine.resolveProductConveyor(m,index)?.gapMm;});
+            o.cell.textContent=gaps.length&&gaps.every(g=>Number.isFinite(g)&&Math.abs(g-gaps[0])<1e-6)?gaps[0].toFixed(2):'—';
+          });
+        }catch(_){movingGapOutputs.forEach(o=>o.cell.textContent='—');}
+      };refreshMovingGaps();
     }
 
     function draw(){
-      body.replaceChildren();error.classList.add('hidden');body.append(error);
+      refreshMovingGaps=function(){};body.replaceChildren();error.classList.add('hidden');body.append(error);
       renderMaterial(simple==='single'?'products':currentTab);dialog.querySelectorAll('input,select,button').forEach(function(c){c.dataset.formatDisabled=String(c.disabled);if(hooks.locked())c.disabled=true;});commit();
     }
     if(!inline){dialog.addEventListener('close',function(){dialog.remove();focus?.focus();},{once:true});dialog.showModal();}draw();

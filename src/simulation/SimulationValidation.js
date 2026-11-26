@@ -199,8 +199,6 @@ function validateConveyorGeometry(allEquipment, index, path, details) {
 
   if (accumulation.speedMode !== undefined && !['AUTO', 'MANUAL','DYNAMIC'].includes(accumulation.speedMode)) details.push(invalid(path + '.processData.accumulation.speedMode', 'must be AUTO, MANUAL or DYNAMIC'));
   if(accumulation.speedMode==='DYNAMIC'&&(accumulation.targetPopulationPercent!==undefined||accumulation.targetOverspeedPercent!==undefined))details.push(invalid(path+'.processData.accumulation.speedMode','Dynamic speed cannot be combined with target Population or target Overspeed.'));
-  validateOptionalNonNegative(accumulation.movingGapMm, path + '.processData.accumulation.movingGapMm', details);
-  validateOptionalNonNegative(accumulation.accumulatedGapMm, path + '.processData.accumulation.accumulatedGapMm', details);
   if (accumulation.targetPopulationPercent !== undefined && !(positiveNumber(accumulation.targetPopulationPercent) && accumulation.targetPopulationPercent <= 100)) details.push(invalid(path + '.processData.accumulation.targetPopulationPercent', 'must be greater than 0 and at most 100%'));
   if(accumulation.targetOverspeedPercent!==undefined&&!(Number.isFinite(accumulation.targetOverspeedPercent)&&accumulation.targetOverspeedPercent>=0&&accumulation.targetOverspeedPercent<=1000))details.push(invalid(path+'.processData.accumulation.targetOverspeedPercent','must be between 0 and 1000%'));
   if(accumulation.targetOverspeedPercent!==undefined&&accumulation.targetPopulationPercent!==undefined)details.push(invalid(path+'.processData.accumulation','choose either target Population or target Overspeed, not both'));
@@ -234,7 +232,7 @@ function validatePhysicalZone(zone, path, details, conveyorName) {
   const hasExplicitPitch = positiveNumber(zone.productPitchMm);
   const hasLengthAndGap = positiveNumber(zone.productLengthMm) && nonNegativeNumber(zone.gapMm);
   if (!hasExplicitPitch && !hasLengthAndGap) {
-    details.push(invalid(path, conveyorName+': moving pitch could not be derived. Provide package length and a valid belt speed with upstream machine rate, or a measured pitch/gap.'));
+    details.push(invalid(path, conveyorName+': moving pitch could not be derived. Provide package length and a valid belt speed with upstream machine rate, and upstream machine rate.'));
   }
 
   if (zone.accumulatedPitchMm !== undefined && (!positiveNumber(zone.accumulatedPitchMm) || zone.accumulatedPitchMm < (zone.productLengthMm || 0) || zone.accumulatedPitchMm > (zone.productPitchMm ?? zone.productLengthMm + zone.gapMm))) {

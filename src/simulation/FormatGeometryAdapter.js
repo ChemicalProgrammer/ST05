@@ -80,25 +80,7 @@ function resolveConveyorZone(equipment, owner, ownerIndex) {
     resolved.assumptions.push('Manual belt speed overrides the engineering speed calculation.');
   }
   const definition = resolved.definition;
-  if (isFiniteNumber(definition.productLengthMm) && isFiniteNumber(format.movingGapMm) && (format.productSpacingOverride===true || format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined)) {
-    definition.productPitchMm = definition.productLengthMm + format.movingGapMm;
-    definition.gapMm = format.movingGapMm;
-    resolved.sources.productPitchMm = 'product length + processData.accumulation.movingGapMm';
-    for (const key of ['packagePassSensorSeconds', 'sensorClearGapSeconds', 'sensorCycleSeconds']) delete definition[key];
-  }
-  definition.accumulatedPitchMm = format.accumulatedPitchMm ??
-    (isFiniteNumber(definition.productLengthMm) ? definition.productLengthMm + (format.accumulatedGapMm ?? 0) : definition.productPitchMm);
-  resolved.sources.accumulatedPitchMm = format.accumulatedPitchMm !== undefined ? 'processData.accumulation.accumulatedPitchMm' : 'product length + accumulated gap (default 0 mm)';
-  const sheetPitch = owner.processData?.upstream?.dischargePitchMm;
-  if ((format.useSheetDesignPitch || owner.characteristics?.sourceSheetLayout === 'plant-sheet-v2') &&
-      format.movingGapMm === undefined && format.gapMm === undefined && format.productPitchMm === undefined &&
-      format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined &&
-      Number.isFinite(sheetPitch) && sheetPitch >= definition.productLengthMm) {
-    definition.productPitchMm = sheetPitch;
-    definition.gapMm = sheetPitch - definition.productLengthMm;
-    resolved.sources.productPitchMm = 'Sheet conveyor design pitch';
-    for (const key of ['packagePassSensorSeconds', 'sensorClearGapSeconds', 'sensorCycleSeconds']) delete definition[key];
-  }
+  // Legacy moving/accumulated gaps and pitch overrides are not physical inputs.
   completeConveyorDerivedGeometry(resolved, owner, format, upstreamControl, downstreamControl);
   if (definition.engineering) {
     // Runtime geometry may override worksheet speed/spacing. Preserve the
@@ -131,26 +113,19 @@ function completeConveyorDerivedGeometry(resolved, owner, format, upstreamContro
   set('usableLengthMm',format.usableLengthMm,'processData.accumulation.usableLengthMm');
   set('productLengthMm',format.productLengthMm,'processData.accumulation.productLengthMm');
   set('productLengthMm',upstream.packageLengthMm,'processData.upstream.packageLengthMm');
-  if(!isDefined(d.productPitchMm)){
-    set('productPitchMm',format.productPitchMm,'processData.accumulation.productPitchMm');
-    if(!isDefined(d.productPitchMm)&&positive(d.productLengthMm)&&isFiniteNumber(format.gapMm))
-      set('productPitchMm',d.productLengthMm+format.gapMm,'calculated: package length + declared gap');
-    // If the worksheet factor is missing but the installed belt speed is
-    // known, the steady-feed pitch is v / q. A belt slower than the packed
-    // feed is capacity-limited, so its theoretical moving pitch is the
-    // packed pitch, not a negative inter-package gap.
-    const rate=upstreamControl?.nominalRatePerSecond;
-    if(!isDefined(d.productPitchMm)&&positive(d.productLengthMm)&&positive(d.conveyorSpeedMmPerSecond)&&positive(rate)){
-      const packed=positive(d.accumulatedPitchMm)?Math.max(d.productLengthMm,d.accumulatedPitchMm):d.productLengthMm;
-      const pitch=Math.max(packed,d.conveyorSpeedMmPerSecond/rate);
-      if(set('productPitchMm',pitch,'calculated: actual belt speed / upstream package rate, limited by packed pitch')){
-        resolved.assumptions.push('Missing moving pitch: calculated from actual belt velocity and upstream nominal package rate; packed spacing is the capacity-limited lower bound. This is modeled spacing, not a measured pitch.');
-      }
+  // All speed policies share the same native steady-feed spacing calculation.
+  // The packed limit is contact between adjacent packages (zero accumulated gap).
+  const rate=upstreamControl?.nominalRatePerSecond;
+  delete d.productPitchMm;delete d.gapMm;delete d.accumulatedPitchMm;
+  delete s.productPitchMm;delete s.gapMm;delete s.accumulatedPitchMm;
+  for(const key of ['packagePassSensorSeconds','sensorClearGapSeconds','sensorCycleSeconds']){delete d[key];delete s[key];}
+  if(positive(d.productLengthMm)){
+    set('accumulatedPitchMm',d.productLengthMm,'calculated: package length (zero accumulated gap)');
+    if(positive(d.conveyorSpeedMmPerSecond)&&positive(rate)){
+      const pitch=Math.max(d.productLengthMm,d.conveyorSpeedMmPerSecond/rate);
+      set('productPitchMm',pitch,'calculated: actual belt speed / upstream nominal package rate, limited by package length');
+      set('gapMm',pitch-d.productLengthMm,'calculated: moving pitch - package length');
     }
-  }
-  if(positive(d.productPitchMm)&&positive(d.productLengthMm)){
-    set('gapMm',d.productPitchMm-d.productLengthMm,'calculated: effective moving pitch - package length');
-    set('accumulatedPitchMm',d.productLengthMm+(format.accumulatedGapMm??0),'calculated: package length + accumulated gap');
   }
   set('primeSensorPositionMm',format.primeSensorPositionMm,'processData.accumulation.primeSensorPositionMm');
   if(!isDefined(d.primeSensorPositionMm)&&isFiniteNumber(d.usableLengthMm)&&isFiniteNumber(geometry.lpPrimeMm))
@@ -238,14 +213,9 @@ function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamCont
     sourceValue(format.downstreamRampUpSeconds, 'processData.accumulation.downstreamRampUpSeconds'),
     sourceValue(downstreamControl?.processData?.downstream?.rampUpTimeSeconds, 'downstream processData.downstream.rampUpTimeSeconds')
   ]);
-  const dynamicPitch=dynamicRange&&packageLength.value>0
-    ?format.movingGapMm!==undefined?packageLength.value+format.movingGapMm
-      :format.productPitchMm>0?format.productPitchMm
-      :rateBpm(upstreamControl)>0?Math.max(packageLength.value+(format.accumulatedGapMm??0),dynamicRange.nominalSpeedMmPerSecond/(rateBpm(upstreamControl)/60)):undefined
-    :undefined;
+  const manualSpeed=format.speedMode==='MANUAL'&&format.targetPopulationPercent===undefined&&format.targetOverspeedPercent===undefined?format.conveyorSpeedMmPerSecond:undefined;
   const calculation = calculateConveyorEngineering({
-    resolvedConveyorSpeedMmPerSecond:dynamicRange?.nominalSpeedMmPerSecond,
-    resolvedProductPitchMm:dynamicPitch,
+    resolvedConveyorSpeedMmPerSecond:dynamicRange?.nominalSpeedMmPerSecond??manualSpeed,
     targetPopulationPercent: format.targetPopulationPercent,
     targetOverspeedPercent: format.targetOverspeedPercent,
     manualLbaMm: format.manualLbaMm,
@@ -330,19 +300,6 @@ function resolveDirectPhysicalConveyor(owner, format, upstreamControl, downstrea
     sourceValue(format.productLengthMm, 'processData.accumulation.productLengthMm'),
     sourceValue(owner.processData?.upstream?.packageLengthMm, 'processData.upstream.packageLengthMm')
   ]);
-  const gap = selectValue([
-    sourceValue(format.gapMm, 'processData.accumulation.gapMm')
-  ]);
-  const explicitPitch = selectValue([
-    sourceValue(format.productPitchMm, 'processData.accumulation.productPitchMm')
-  ]);
-  const pitch = selectValue([
-    explicitPitch,
-    sourceValue(
-      sumNumericValues(productLength.value, gap.value),
-      productLength.source && gap.source ? productLength.source + ' + ' + gap.source : undefined
-    )
-  ]);
   const conveyorSpeed = selectValue([
     sourceValue(format.conveyorSpeedMmPerSecond, 'processData.accumulation.conveyorSpeedMmPerSecond')
   ]);
@@ -380,8 +337,6 @@ function resolveDirectPhysicalConveyor(owner, format, upstreamControl, downstrea
   };
   assignIfDefined(definition, 'usableLengthMm', usableLength.value, sources, usableLength.source);
   assignIfDefined(definition, 'productLengthMm', productLength.value, sources, productLength.source);
-  assignIfDefined(definition, 'gapMm', gap.value, sources, gap.source);
-  assignIfDefined(definition, 'productPitchMm', pitch.value, sources, pitch.source);
   assignIfDefined(definition, 'conveyorSpeedMmPerSecond', conveyorSpeed.value, sources, conveyorSpeed.source);
   assignIfDefined(definition, 'primeSensorPositionMm', primeSensor.value, sources, primeSensor.source);
   assignIfDefined(definition, 'backupSensorPositionMm', backupSensor.value, sources, backupSensor.source);

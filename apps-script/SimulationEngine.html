@@ -188,12 +188,7 @@ function applyProductProfile(equipment, product) {
       const length=productPresentation(product,productFlowUnit(item)).lengthMm??item.processData.upstream?.packageLengthMm??item.processData.accumulation?.productLengthMm;
       const upstream={...item.processData.upstream,packageLengthMm:length},accumulation={...item.processData.accumulation};
       if(accumulation.productLengthMm!==undefined)accumulation.productLengthMm=length;
-      if(accumulation.productPitchMm!==undefined&&profile.movingGapMm!==undefined)accumulation.productPitchMm=length+profile.movingGapMm;
-      if(profile.movingGapMm!==undefined)accumulation.productSpacingOverride=true;
-      for(const key of ['movingGapMm','accumulatedGapMm'])if(profile[key]!==undefined)accumulation[key]=profile[key];
-      if ((product.formatId ?? product.id)?.startsWith('sheet-format-') && Number.isFinite(profile.dischargeGapMm)) {
-        accumulation.useSheetDesignPitch = true;
-      }
+      for(const key of ['movingGapMm','accumulatedGapMm','gapMm','productPitchMm','accumulatedPitchMm','productSpacingOverride','useSheetDesignPitch'])delete accumulation[key];
       if(profile.dischargeGapMm!==undefined)upstream.dischargePitchMm=length+profile.dischargeGapMm;
       const downstream={...item.processData.downstream};
       if(profile.infeedGapMm!==undefined)downstream.infeedPitchMm=length+profile.infeedGapMm;
@@ -221,7 +216,7 @@ function validateProductDefinitions(products,equipment=[],options={}){
       if(profile.applies!==undefined&&typeof profile.applies!=='boolean')throw Error(p.name+' / '+id+': applicability must be a checkbox value.');
       for(const key of ['inputUnit','outputUnit'])if(profile[key]!==undefined&&!PRODUCT_FLOW_UNITS.includes(profile[key]))throw Error(p.name+' / '+id+': select a bottle or case presentation.');
       if(profile.applies===false)continue;
-      for(const key of ['movingGapMm','accumulatedGapMm','dischargeGapMm','infeedGapMm','startupSeconds','rampSeconds'])if(profile[key]!==undefined&&!nonnegative(profile[key]))throw Error(p.name+' / '+id+': '+key+' must be nonnegative.');
+      for(const key of ['dischargeGapMm','infeedGapMm','startupSeconds','rampSeconds'])if(profile[key]!==undefined&&!nonnegative(profile[key]))throw Error(p.name+' / '+id+': '+key+' must be nonnegative.');
       for(const key of ['ratePerMinute','speedMmPerSecond'])if(profile[key]!==undefined&&!positive(profile[key]))throw Error(p.name+' / '+id+': '+key+' must be positive.');
     }
   }
@@ -309,7 +304,7 @@ function resolveLegacyPackingFormats(catalog){
     for(const id of new Set([...Object.keys(product.equipment||{}),...Object.keys(box.equipment||{}),...Object.keys(format.equipment||{})])){
       const local=format.equipment?.[id]||{},input=local.inputUnit||'BOTTLES',output=local.outputUnit||input;
       const shared=input!==output?{}:(output==='CASES'?box.equipment?.[id]:product.equipment?.[id])||{};
-      const active=profile=>{const result=JSON.parse(JSON.stringify(profile));if(result.enabled===false||result.applies===false){for(const key of Object.keys(result))if(!['inputUnit','outputUnit'].includes(key))delete result[key];}delete result.enabled;return result;};
+      const active=profile=>{const result=JSON.parse(JSON.stringify(profile));delete result.movingGapMm;delete result.accumulatedGapMm;if(result.enabled===false||result.applies===false){for(const key of Object.keys(result))if(!['inputUnit','outputUnit'].includes(key))delete result[key];}delete result.enabled;return result;};
       profiles[id]={...active(shared),...active(local)};
     }
     return {id:format.id,formatId:format.id,name:format.name,productId:product.id,productName:product.name,boxId:box.id,boxName:box.name,
@@ -319,8 +314,20 @@ function resolveLegacyPackingFormats(catalog){
   });
 }
 // Version 3 owns packaging dimensions and case behavior directly on each format.
+function stripLegacyCatalogGaps(record){
+  for(const profile of Object.values(record?.equipment||{})){
+    if(profile&&typeof profile==='object'&&!Array.isArray(profile)){
+      delete profile.movingGapMm;delete profile.accumulatedGapMm;
+    }
+  }
+  return record;
+}
 function normalizeFormatCatalog(metadata={},equipment){
-  if(metadata.formatCatalog?.version>=3)return JSON.parse(JSON.stringify(metadata.formatCatalog));
+  if(metadata.formatCatalog?.version>=3){
+    const catalog=JSON.parse(JSON.stringify(metadata.formatCatalog));
+    for(const record of [...(catalog.products||[]),...(catalog.formats||[]),...(catalog.boxes||[])])stripLegacyCatalogGaps(record);
+    return catalog;
+  }
   const previous=legacyCatalog(metadata,equipment),snapshots=resolveLegacyPackingFormats(previous);
   const catalog={version:3,products:previous.products,formats:previous.formats.map((format,index)=>{
     const resolved=snapshots[index],profiles={};for(const [id,p] of Object.entries(resolved.equipment)){const units={inputUnit:p.inputUnit||'BOTTLES',outputUnit:p.outputUnit||p.inputUnit||'BOTTLES'};profiles[id]=units.inputUnit==='BOTTLES'&&units.outputUnit==='BOTTLES'?JSON.parse(JSON.stringify(format.equipment?.[id]||units)):p;}
@@ -328,11 +335,12 @@ function normalizeFormatCatalog(metadata={},equipment){
   })};
   // Keep pre-migration input records for recovery; run snapshots and IDs are never rewritten.
   if(previous.products.length||previous.boxes.length||previous.formats.length)catalog.legacyCatalog=JSON.parse(JSON.stringify(previous));
+  for(const record of [...catalog.products,...catalog.formats])stripLegacyCatalogGaps(record);
   return catalog;
 }
 function resolvePackingFormats(catalog,equipment){
   if((catalog.version||1)<3)return resolveLegacyPackingFormats(catalog);
-  const active=profile=>{const p=JSON.parse(JSON.stringify(profile||{}));if(p.enabled===false||p.applies===false)for(const key of Object.keys(p))if(!['inputUnit','outputUnit'].includes(key))delete p[key];delete p.enabled;return p;};
+  const active=profile=>{const p=JSON.parse(JSON.stringify(profile||{}));delete p.movingGapMm;delete p.accumulatedGapMm;if(p.enabled===false||p.applies===false)for(const key of Object.keys(p))if(!['inputUnit','outputUnit'].includes(key))delete p[key];delete p.enabled;return p;};
   return catalog.formats.map(format=>{
     const product=catalog.products.find(p=>p.id===format.productId);if(!product)throw Error((format.name||'Format')+': select an existing product.');
     const box=format.case||{},profiles={};
@@ -384,7 +392,7 @@ function validateMaterialRecord(record,kind){
   for(const value of Object.values(record.equipment||{})){
     if(!value||Array.isArray(value)||typeof value!=='object')throw Error('Equipment settings must be objects.');
     for(const key of ['enabled','applies'])if(value[key]!==undefined&&typeof value[key]!=='boolean')throw Error(key+' must be a checkbox value.');
-    for(const key of MATERIAL_PROFILE_KEYS.filter(k=>!['enabled','applies'].includes(k)))if(value[key]!==undefined&&(!Number.isFinite(value[key])||value[key]<0||(['ratePerMinute','speedMmPerSecond'].includes(key)&&value[key]===0)))throw Error(record.name+': '+key+' must be '+(['ratePerMinute','speedMmPerSecond'].includes(key)?'positive.':'nonnegative.'));
+    for(const key of MATERIAL_PROFILE_KEYS.filter(k=>!['enabled','applies','movingGapMm','accumulatedGapMm'].includes(k)))if(value[key]!==undefined&&(!Number.isFinite(value[key])||value[key]<0||(['ratePerMinute','speedMmPerSecond'].includes(key)&&value[key]===0)))throw Error(record.name+': '+key+' must be '+(['ratePerMinute','speedMmPerSecond'].includes(key)?'positive.':'nonnegative.'));
   }
   const shape=kind==='formats'?record.case||{}:kind==='boxes'?record:record.bottle||{};
   for(const key of ['lengthMm','widthMm','heightMm'])if(shape[key]!==undefined&&(!Number.isFinite(shape[key])||shape[key]<=0))throw Error(record.name+': dimensions must be positive.');
@@ -395,7 +403,7 @@ function validateMaterialRecord(record,kind){
 function materialConfiguration(kind,record,equipment=[]){
   if(!['products','boxes','formats'].includes(kind))throw Error('Choose a product or format configuration.');
   validateMaterialRecord(record,kind);
-  return {schema:kind==='formats'?'st-material-configuration-v2':'st-material-configuration-v1',kind,record:JSON.parse(JSON.stringify(record))};
+  return {schema:kind==='formats'?'st-material-configuration-v2':'st-material-configuration-v1',kind,record:stripLegacyCatalogGaps(JSON.parse(JSON.stringify(record)))};
 }
 function readMaterialConfiguration(text,kind,currentId,equipment=[]){
   if(text.length>1048576)throw Error('Configuration exceeds 1 MB.');
@@ -414,7 +422,7 @@ function readMaterialConfiguration(text,kind,currentId,equipment=[]){
     if(kind==='formats')for(const side of ['inputUnit','outputUnit'])if(profile[side]!==undefined&&!['BOTTLES','CASES'].includes(profile[side]))throw Error('Invalid physical unit.');
     result.equipment[id]={...profile};
   }
-  validateMaterialRecord(result,kind);return result;
+  validateMaterialRecord(result,kind);return stripLegacyCatalogGaps(result);
 }
 
 
@@ -486,7 +494,10 @@ function calculate(values) {
   const dischargePopulationPercent = safeDivide(machineOutputRateMmPerSecond, dischargeZoneSpeedMmPerSecond, 100);
   const codingPopulationPercent = safeDivide(machineOutputRateMmPerSecond, codingZoneSpeedMmPerSecond, 100);
   const populationPercent = safeDivide(machineOutputRateMmPerSecond, conveyorSpeedMmPerSecond, 100);
-  const effectiveProductPitchMm = values.resolvedProductPitchMm ?? safeDivide(values.packageLengthMm, populationPercent, 100);
+  const nominalPitchMm = values.resolvedProductPitchMm ?? safeDivide(conveyorSpeedMmPerSecond, values.upstreamNominalSpeedBpm, 60);
+  // Physical spacing cannot be negative: an underspeed belt is capacity-limited.
+  const effectiveProductPitchMm = isFiniteNumber(nominalPitchMm) && isFiniteNumber(values.packageLengthMm)
+    ? Math.max(values.packageLengthMm, nominalPitchMm) : undefined;
   const productGapMm = isFiniteNumber(effectiveProductPitchMm) && isFiniteNumber(values.packageLengthMm)
     ? effectiveProductPitchMm - values.packageLengthMm
     : undefined;
@@ -836,25 +847,7 @@ function resolveConveyorZone(equipment, owner, ownerIndex) {
     resolved.assumptions.push('Manual belt speed overrides the engineering speed calculation.');
   }
   const definition = resolved.definition;
-  if (isFiniteNumber(definition.productLengthMm) && isFiniteNumber(format.movingGapMm) && (format.productSpacingOverride===true || format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined)) {
-    definition.productPitchMm = definition.productLengthMm + format.movingGapMm;
-    definition.gapMm = format.movingGapMm;
-    resolved.sources.productPitchMm = 'product length + processData.accumulation.movingGapMm';
-    for (const key of ['packagePassSensorSeconds', 'sensorClearGapSeconds', 'sensorCycleSeconds']) delete definition[key];
-  }
-  definition.accumulatedPitchMm = format.accumulatedPitchMm ??
-    (isFiniteNumber(definition.productLengthMm) ? definition.productLengthMm + (format.accumulatedGapMm ?? 0) : definition.productPitchMm);
-  resolved.sources.accumulatedPitchMm = format.accumulatedPitchMm !== undefined ? 'processData.accumulation.accumulatedPitchMm' : 'product length + accumulated gap (default 0 mm)';
-  const sheetPitch = owner.processData?.upstream?.dischargePitchMm;
-  if ((format.useSheetDesignPitch || owner.characteristics?.sourceSheetLayout === 'plant-sheet-v2') &&
-      format.movingGapMm === undefined && format.gapMm === undefined && format.productPitchMm === undefined &&
-      format.targetPopulationPercent === undefined && format.targetOverspeedPercent === undefined &&
-      Number.isFinite(sheetPitch) && sheetPitch >= definition.productLengthMm) {
-    definition.productPitchMm = sheetPitch;
-    definition.gapMm = sheetPitch - definition.productLengthMm;
-    resolved.sources.productPitchMm = 'Sheet conveyor design pitch';
-    for (const key of ['packagePassSensorSeconds', 'sensorClearGapSeconds', 'sensorCycleSeconds']) delete definition[key];
-  }
+  // Legacy moving/accumulated gaps and pitch overrides are not physical inputs.
   completeConveyorDerivedGeometry(resolved, owner, format, upstreamControl, downstreamControl);
   if (definition.engineering) {
     // Runtime geometry may override worksheet speed/spacing. Preserve the
@@ -887,26 +880,19 @@ function completeConveyorDerivedGeometry(resolved, owner, format, upstreamContro
   set('usableLengthMm',format.usableLengthMm,'processData.accumulation.usableLengthMm');
   set('productLengthMm',format.productLengthMm,'processData.accumulation.productLengthMm');
   set('productLengthMm',upstream.packageLengthMm,'processData.upstream.packageLengthMm');
-  if(!isDefined(d.productPitchMm)){
-    set('productPitchMm',format.productPitchMm,'processData.accumulation.productPitchMm');
-    if(!isDefined(d.productPitchMm)&&positive(d.productLengthMm)&&isFiniteNumber(format.gapMm))
-      set('productPitchMm',d.productLengthMm+format.gapMm,'calculated: package length + declared gap');
-    // If the worksheet factor is missing but the installed belt speed is
-    // known, the steady-feed pitch is v / q. A belt slower than the packed
-    // feed is capacity-limited, so its theoretical moving pitch is the
-    // packed pitch, not a negative inter-package gap.
-    const rate=upstreamControl?.nominalRatePerSecond;
-    if(!isDefined(d.productPitchMm)&&positive(d.productLengthMm)&&positive(d.conveyorSpeedMmPerSecond)&&positive(rate)){
-      const packed=positive(d.accumulatedPitchMm)?Math.max(d.productLengthMm,d.accumulatedPitchMm):d.productLengthMm;
-      const pitch=Math.max(packed,d.conveyorSpeedMmPerSecond/rate);
-      if(set('productPitchMm',pitch,'calculated: actual belt speed / upstream package rate, limited by packed pitch')){
-        resolved.assumptions.push('Missing moving pitch: calculated from actual belt velocity and upstream nominal package rate; packed spacing is the capacity-limited lower bound. This is modeled spacing, not a measured pitch.');
-      }
+  // All speed policies share the same native steady-feed spacing calculation.
+  // The packed limit is contact between adjacent packages (zero accumulated gap).
+  const rate=upstreamControl?.nominalRatePerSecond;
+  delete d.productPitchMm;delete d.gapMm;delete d.accumulatedPitchMm;
+  delete s.productPitchMm;delete s.gapMm;delete s.accumulatedPitchMm;
+  for(const key of ['packagePassSensorSeconds','sensorClearGapSeconds','sensorCycleSeconds']){delete d[key];delete s[key];}
+  if(positive(d.productLengthMm)){
+    set('accumulatedPitchMm',d.productLengthMm,'calculated: package length (zero accumulated gap)');
+    if(positive(d.conveyorSpeedMmPerSecond)&&positive(rate)){
+      const pitch=Math.max(d.productLengthMm,d.conveyorSpeedMmPerSecond/rate);
+      set('productPitchMm',pitch,'calculated: actual belt speed / upstream nominal package rate, limited by package length');
+      set('gapMm',pitch-d.productLengthMm,'calculated: moving pitch - package length');
     }
-  }
-  if(positive(d.productPitchMm)&&positive(d.productLengthMm)){
-    set('gapMm',d.productPitchMm-d.productLengthMm,'calculated: effective moving pitch - package length');
-    set('accumulatedPitchMm',d.productLengthMm+(format.accumulatedGapMm??0),'calculated: package length + accumulated gap');
   }
   set('primeSensorPositionMm',format.primeSensorPositionMm,'processData.accumulation.primeSensorPositionMm');
   if(!isDefined(d.primeSensorPositionMm)&&isFiniteNumber(d.usableLengthMm)&&isFiniteNumber(geometry.lpPrimeMm))
@@ -994,14 +980,9 @@ function resolveFlowPilotConveyor(owner, format, upstreamControl, downstreamCont
     sourceValue(format.downstreamRampUpSeconds, 'processData.accumulation.downstreamRampUpSeconds'),
     sourceValue(downstreamControl?.processData?.downstream?.rampUpTimeSeconds, 'downstream processData.downstream.rampUpTimeSeconds')
   ]);
-  const dynamicPitch=dynamicRange&&packageLength.value>0
-    ?format.movingGapMm!==undefined?packageLength.value+format.movingGapMm
-      :format.productPitchMm>0?format.productPitchMm
-      :rateBpm(upstreamControl)>0?Math.max(packageLength.value+(format.accumulatedGapMm??0),dynamicRange.nominalSpeedMmPerSecond/(rateBpm(upstreamControl)/60)):undefined
-    :undefined;
+  const manualSpeed=format.speedMode==='MANUAL'&&format.targetPopulationPercent===undefined&&format.targetOverspeedPercent===undefined?format.conveyorSpeedMmPerSecond:undefined;
   const calculation = calculateConveyorEngineering({
-    resolvedConveyorSpeedMmPerSecond:dynamicRange?.nominalSpeedMmPerSecond,
-    resolvedProductPitchMm:dynamicPitch,
+    resolvedConveyorSpeedMmPerSecond:dynamicRange?.nominalSpeedMmPerSecond??manualSpeed,
     targetPopulationPercent: format.targetPopulationPercent,
     targetOverspeedPercent: format.targetOverspeedPercent,
     manualLbaMm: format.manualLbaMm,
@@ -1086,19 +1067,6 @@ function resolveDirectPhysicalConveyor(owner, format, upstreamControl, downstrea
     sourceValue(format.productLengthMm, 'processData.accumulation.productLengthMm'),
     sourceValue(owner.processData?.upstream?.packageLengthMm, 'processData.upstream.packageLengthMm')
   ]);
-  const gap = selectValue([
-    sourceValue(format.gapMm, 'processData.accumulation.gapMm')
-  ]);
-  const explicitPitch = selectValue([
-    sourceValue(format.productPitchMm, 'processData.accumulation.productPitchMm')
-  ]);
-  const pitch = selectValue([
-    explicitPitch,
-    sourceValue(
-      sumNumericValues(productLength.value, gap.value),
-      productLength.source && gap.source ? productLength.source + ' + ' + gap.source : undefined
-    )
-  ]);
   const conveyorSpeed = selectValue([
     sourceValue(format.conveyorSpeedMmPerSecond, 'processData.accumulation.conveyorSpeedMmPerSecond')
   ]);
@@ -1136,8 +1104,6 @@ function resolveDirectPhysicalConveyor(owner, format, upstreamControl, downstrea
   };
   assignIfDefined(definition, 'usableLengthMm', usableLength.value, sources, usableLength.source);
   assignIfDefined(definition, 'productLengthMm', productLength.value, sources, productLength.source);
-  assignIfDefined(definition, 'gapMm', gap.value, sources, gap.source);
-  assignIfDefined(definition, 'productPitchMm', pitch.value, sources, pitch.source);
   assignIfDefined(definition, 'conveyorSpeedMmPerSecond', conveyorSpeed.value, sources, conveyorSpeed.source);
   assignIfDefined(definition, 'primeSensorPositionMm', primeSensor.value, sources, primeSensor.source);
   assignIfDefined(definition, 'backupSensorPositionMm', backupSensor.value, sources, backupSensor.source);
@@ -1475,8 +1441,6 @@ function validateConveyorGeometry(allEquipment, index, path, details) {
 
   if (accumulation.speedMode !== undefined && !['AUTO', 'MANUAL','DYNAMIC'].includes(accumulation.speedMode)) details.push(invalid(path + '.processData.accumulation.speedMode', 'must be AUTO, MANUAL or DYNAMIC'));
   if(accumulation.speedMode==='DYNAMIC'&&(accumulation.targetPopulationPercent!==undefined||accumulation.targetOverspeedPercent!==undefined))details.push(invalid(path+'.processData.accumulation.speedMode','Dynamic speed cannot be combined with target Population or target Overspeed.'));
-  validateOptionalNonNegative(accumulation.movingGapMm, path + '.processData.accumulation.movingGapMm', details);
-  validateOptionalNonNegative(accumulation.accumulatedGapMm, path + '.processData.accumulation.accumulatedGapMm', details);
   if (accumulation.targetPopulationPercent !== undefined && !(positiveNumber(accumulation.targetPopulationPercent) && accumulation.targetPopulationPercent <= 100)) details.push(invalid(path + '.processData.accumulation.targetPopulationPercent', 'must be greater than 0 and at most 100%'));
   if(accumulation.targetOverspeedPercent!==undefined&&!(Number.isFinite(accumulation.targetOverspeedPercent)&&accumulation.targetOverspeedPercent>=0&&accumulation.targetOverspeedPercent<=1000))details.push(invalid(path+'.processData.accumulation.targetOverspeedPercent','must be between 0 and 1000%'));
   if(accumulation.targetOverspeedPercent!==undefined&&accumulation.targetPopulationPercent!==undefined)details.push(invalid(path+'.processData.accumulation','choose either target Population or target Overspeed, not both'));
@@ -1510,7 +1474,7 @@ function validatePhysicalZone(zone, path, details, conveyorName) {
   const hasExplicitPitch = positiveNumber(zone.productPitchMm);
   const hasLengthAndGap = positiveNumber(zone.productLengthMm) && nonNegativeNumber(zone.gapMm);
   if (!hasExplicitPitch && !hasLengthAndGap) {
-    details.push(invalid(path, conveyorName+': moving pitch could not be derived. Provide package length and a valid belt speed with upstream machine rate, or a measured pitch/gap.'));
+    details.push(invalid(path, conveyorName+': moving pitch could not be derived. Provide package length and a valid belt speed with upstream machine rate, and upstream machine rate.'));
   }
 
   if (zone.accumulatedPitchMm !== undefined && (!positiveNumber(zone.accumulatedPitchMm) || zone.accumulatedPitchMm < (zone.productLengthMm || 0) || zone.accumulatedPitchMm > (zone.productPitchMm ?? zone.productLengthMm + zone.gapMm))) {
@@ -4918,7 +4882,7 @@ function createSimPyBrowserEngine(host, files) {
 
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
-const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.7/DES:0.5.0/cache:34';
+const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.7/DES:0.5.0/cache:35';
 
 function canonicalSimulationInputSignature(input) {
   input=projectMachineDesignInput(input);

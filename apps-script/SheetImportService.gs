@@ -650,6 +650,8 @@ function readLegacySheetCatalog_(sheet){
       if(!id||!text(2))throw Error('Enter an ID and a name.');
       var profiles=json(13,{});
       if(!profiles||Array.isArray(profiles)||typeof profiles!=='object')throw Error('Equipment profiles must be a JSON object keyed by Equipment ID.');
+      // Accept historical catalog records, but never import manual conveyor gaps.
+      Object.values(profiles).forEach(function(profile){if(profile&&typeof profile==='object'&&!Array.isArray(profile)){delete profile.movingGapMm;delete profile.accumulatedGapMm;}});
       var record={id:id,name:text(2),equipment:profiles};
       var shape={lengthMm:number(7,0),widthMm:number(8,0),heightMm:number(9,0)};
       if(product){

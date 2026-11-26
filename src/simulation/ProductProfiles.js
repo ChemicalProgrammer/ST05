@@ -75,12 +75,7 @@ export function applyProductProfile(equipment, product) {
       const length=productPresentation(product,productFlowUnit(item)).lengthMm??item.processData.upstream?.packageLengthMm??item.processData.accumulation?.productLengthMm;
       const upstream={...item.processData.upstream,packageLengthMm:length},accumulation={...item.processData.accumulation};
       if(accumulation.productLengthMm!==undefined)accumulation.productLengthMm=length;
-      if(accumulation.productPitchMm!==undefined&&profile.movingGapMm!==undefined)accumulation.productPitchMm=length+profile.movingGapMm;
-      if(profile.movingGapMm!==undefined)accumulation.productSpacingOverride=true;
-      for(const key of ['movingGapMm','accumulatedGapMm'])if(profile[key]!==undefined)accumulation[key]=profile[key];
-      if ((product.formatId ?? product.id)?.startsWith('sheet-format-') && Number.isFinite(profile.dischargeGapMm)) {
-        accumulation.useSheetDesignPitch = true;
-      }
+      for(const key of ['movingGapMm','accumulatedGapMm','gapMm','productPitchMm','accumulatedPitchMm','productSpacingOverride','useSheetDesignPitch'])delete accumulation[key];
       if(profile.dischargeGapMm!==undefined)upstream.dischargePitchMm=length+profile.dischargeGapMm;
       const downstream={...item.processData.downstream};
       if(profile.infeedGapMm!==undefined)downstream.infeedPitchMm=length+profile.infeedGapMm;
@@ -108,7 +103,7 @@ export function validateProductDefinitions(products,equipment=[],options={}){
       if(profile.applies!==undefined&&typeof profile.applies!=='boolean')throw Error(p.name+' / '+id+': applicability must be a checkbox value.');
       for(const key of ['inputUnit','outputUnit'])if(profile[key]!==undefined&&!PRODUCT_FLOW_UNITS.includes(profile[key]))throw Error(p.name+' / '+id+': select a bottle or case presentation.');
       if(profile.applies===false)continue;
-      for(const key of ['movingGapMm','accumulatedGapMm','dischargeGapMm','infeedGapMm','startupSeconds','rampSeconds'])if(profile[key]!==undefined&&!nonnegative(profile[key]))throw Error(p.name+' / '+id+': '+key+' must be nonnegative.');
+      for(const key of ['dischargeGapMm','infeedGapMm','startupSeconds','rampSeconds'])if(profile[key]!==undefined&&!nonnegative(profile[key]))throw Error(p.name+' / '+id+': '+key+' must be nonnegative.');
       for(const key of ['ratePerMinute','speedMmPerSecond'])if(profile[key]!==undefined&&!positive(profile[key]))throw Error(p.name+' / '+id+': '+key+' must be positive.');
     }
   }

@@ -66,7 +66,10 @@ function calculate(values) {
   const dischargePopulationPercent = safeDivide(machineOutputRateMmPerSecond, dischargeZoneSpeedMmPerSecond, 100);
   const codingPopulationPercent = safeDivide(machineOutputRateMmPerSecond, codingZoneSpeedMmPerSecond, 100);
   const populationPercent = safeDivide(machineOutputRateMmPerSecond, conveyorSpeedMmPerSecond, 100);
-  const effectiveProductPitchMm = values.resolvedProductPitchMm ?? safeDivide(values.packageLengthMm, populationPercent, 100);
+  const nominalPitchMm = values.resolvedProductPitchMm ?? safeDivide(conveyorSpeedMmPerSecond, values.upstreamNominalSpeedBpm, 60);
+  // Physical spacing cannot be negative: an underspeed belt is capacity-limited.
+  const effectiveProductPitchMm = isFiniteNumber(nominalPitchMm) && isFiniteNumber(values.packageLengthMm)
+    ? Math.max(values.packageLengthMm, nominalPitchMm) : undefined;
   const productGapMm = isFiniteNumber(effectiveProductPitchMm) && isFiniteNumber(values.packageLengthMm)
     ? effectiveProductPitchMm - values.packageLengthMm
     : undefined;

@@ -179,12 +179,12 @@ window.STEquipmentInspector=(function(){
   "format-zone-accumulation-seconds": ["Full useful zone protection = floor(LBA / packed pitch) / native downstream rate in packages/s. Manual value is a declared reference, not a runtime capacity override.","Protección con zona útil llena = parte entera de LBA / pitch acumulado, dividida por flujo nativo aguas abajo en envases/s. Manual es referencia declarada, no cambia capacidad del motor."],
   "equipment-macrostop-scrap": ["Bottle loss when an applicable macro stop occurs; deducted by the machine model.","Pérdida de botellas por macroparo aplicable; descontada por el modelo del equipo."],
   "format-zone-moving-gap": [
-    "Optional free space between moving packages (mm), not center-to-center pitch. Target modes calculate spacing.",
-    "Separación libre opcional entre productos en movimiento (mm), no pitch centro a centro. Los modos objetivo calculan separación."
+    "Calculated free space between moving packages (mm): moving pitch minus package length. No manual override.",
+    "Separación libre calculada entre productos en movimiento (mm): pitch de transporte menos longitud del envase. No editable."
   ],
   "format-zone-accumulated-gap": [
-    "Gap between accumulated packages (mm). Zero means contact; use measured nonzero spacing if applicable.",
-    "Separación entre envases acumulados (mm). Cero significa contacto; usa separación medida no nula si aplica."
+    "Accumulated packages are in contact; gap is fixed at zero.",
+    "Los envases acumulados están en contacto; separación fija de cero."
   ],
   "format-zone-population": [
     "Nominal occupied belt length (%), not initial inventory. Target sets belt speed; otherwise calculated from native flow and actual speed.",

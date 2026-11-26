@@ -262,6 +262,10 @@
         ['overspeed-enabled','Set target Overspeed','Sets belt speed relative to downstream infeed; exclusive with target Population.','checkbox'],
         ['overspeed','Conveyor overspeed (%)','Automatic: actual infeed speed margin. Manual: target margin sets belt speed.','number'],
         ['lba','LBA (mm)','Useful accumulation length; must fit after Prime and required overflow reserves.','number'],
+        ['accumulation-seconds-enabled','Use declared accumulation time','Manual reference from the plant sheet; does not alter physical capacity.','checkbox'],
+        ['accumulation-seconds','Accumulation (s)','Manual: declared reference. Calculated: full useful accumulation zone at downstream design consumption; does not alter physical capacity.','number'],
+        ['discharge-velocity-enabled','Set discharge velocity','Manual local discharge velocity for the engineering worksheet.','checkbox'],
+        ['moving-gap-enabled','Set moving gap','Manual product gap; automatic uses resolved conveyor geometry.','checkbox'],
         ['speed-mode',__ST_TEXT__('conveyor.speed_mode'),__ST_TEXT__('conveyor.help_speed_mode'),'select'],
         ['belt-speed',(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())?__ST_TEXT__('conveyor.belt_speed_m_min'):__ST_TEXT__('conveyor.belt_speed'),__ST_TEXT__('conveyor.help_belt_speed'),'number'],
         ['moving-gap',__ST_TEXT__('conveyor.moving_gap'),__ST_TEXT__('conveyor.help_moving_gap'),'number'],
@@ -303,12 +307,14 @@
     }
 
     function prepareSwitchableFields(card){
-      ['population','lba','backup','overspeed'].forEach(function(key){
-        var input=equipmentField(card,'.format-zone-'+key),toggle=equipmentField(card,'.format-zone-'+key+'-enabled'),label=input.closest('label');
+      ['population','lba','backup','overspeed','accumulation-seconds','discharge-velocity','moving-gap'].forEach(function(key){
+        var input=equipmentField(card,'.format-zone-'+key),toggle=equipmentField(card,'.format-zone-'+key+'-enabled');
+        if(!input||!toggle)return;
+        var label=input.closest('label');
         var oldLabel=toggle.closest('label');toggle.remove();oldLabel.remove();
         var group=document.createElement('span');group.className='switchable-value';group.append(toggle,input);label.appendChild(group);
         input.id='conveyor-'+card.dataset.index+'-'+key;label.htmlFor=input.id;toggle.setAttribute('aria-label','Use manual '+key);toggle.title='Checked: manual input. Unchecked: calculated output.';
-        function exclusiveTarget(){if(toggle.checked){var other={population:'overspeed',overspeed:'population',lba:'backup',backup:'lba'}[key];equipmentField(card,'.format-zone-'+other+'-enabled').checked=false;}}
+        function exclusiveTarget(){if(toggle.checked){var other={population:'overspeed',overspeed:'population',lba:'backup',backup:'lba'}[key];if(other)equipmentField(card,'.format-zone-'+other+'-enabled').checked=false;}}
         toggle.addEventListener('input',exclusiveTarget);toggle.addEventListener('change',exclusiveTarget);
       });
     }
@@ -337,7 +343,18 @@
         field.dataset.inputMode=String(editable);
         conveyorFieldRole(field,editable?(optional?'OPTIONAL':'INPUT'):'OUTPUT',!optional);
       }
-      switchField('belt-speed',manual,false);switchField('moving-gap',!target,true);switchField('acc-factor',!target&&!manual,true);
+      switchField('belt-speed',manual,false);switchField('acc-factor',!target&&!manual,true);
+      // Independent overrides retain manual values without persisting derived outputs.
+      ['accumulation-seconds','discharge-velocity','moving-gap'].forEach(function(key){
+        var field=equipmentField(card,'.format-zone-'+key),toggle=equipmentField(card,'.format-zone-'+key+'-enabled');
+        if(!field||!toggle){if(key==='moving-gap'&&field)switchField(key,!target,true);return;}
+        toggle.disabled=key==='moving-gap'&&target;
+        var enabled=toggle.checked&&!toggle.disabled,was=field.dataset.inputMode==='true';
+        if(enabled&&!was&&field.dataset.manualValue!==undefined&&field.dataset.manualValue!=='')field.value=field.dataset.manualValue;
+        if(enabled||was)field.dataset.manualValue=field.value;
+        field.dataset.inputMode=String(enabled);
+        conveyorFieldRole(field,enabled?'INPUT':'OUTPUT',true);
+      });
       var reference=equipmentField(card,'.format-zone-dynamic-reference'),percent=equipmentField(card,'.format-zone-dynamic-percent'),summary=equipmentField(card,'.format-zone-dynamic-range');
       if(reference&&percent&&summary){
         [reference,percent,summary].forEach(function(field){field.closest('label').hidden=!dynamic||basic;});
@@ -355,7 +372,7 @@
         }
         var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!dynamic||basic||equipmentField(card,'.equipment-type')?.value!=='CONVEYOR';
       }
-      ['discharge-velocity','speed-factor','coding-factor','accumulated-gap','insurance'].forEach(function(key){conveyorFieldRole(equipmentField(card,'.format-zone-'+key),'OPTIONAL');});
+      ['speed-factor','coding-factor','accumulated-gap','insurance'].forEach(function(key){conveyorFieldRole(equipmentField(card,'.format-zone-'+key),'OPTIONAL');});
       window.STEquipmentInspector?.refreshHelp?.(card);
     }
 
@@ -407,11 +424,15 @@ function populateFormatZoneInputs(card, equipment) {
         lpPrime: geometry.lpPrimeMm??(Number.isFinite(formatZone.usableLengthMm)&&Number.isFinite(formatZone.primeSensorPositionMm)?formatZone.usableLengthMm-formatZone.primeSensorPositionMm:undefined),
         packageLength: upstream.packageLengthMm??formatZone.productLengthMm,
         dischargePitch: upstream.dischargePitchMm,
-        dischargeVelocity: upstream.dischargeVelocityMPerMinute,
+        dischargeVelocityEnabled: Number.isFinite(upstream.dischargeVelocityMPerMinute),
+        dischargeVelocity: upstream.dischargeVelocityMPerMinute??formatZone.inputValues?.dischargeVelocityMPerMinute,
+        accumulationSecondsEnabled: Number.isFinite(formatZone.declaredAccumulationSeconds),
+        accumulationSeconds: formatZone.declaredAccumulationSeconds??formatZone.inputValues?.declaredAccumulationSeconds,
         restartFirstPackage: formatZone.restartToFirstPackageSeconds,
         speedMode: formatZone.speedMode || ((window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())?'MANUAL':'AUTO'),
         beltSpeed: formatZone.conveyorSpeedMmPerSecond??formatZone.inputValues?.beltSpeedMmPerSecond,
-        movingGap: formatZone.movingGapMm??formatZone.inputValues?.movingGapMm??formatZone.gapMm??(Number.isFinite(formatZone.productPitchMm)&&Number.isFinite(upstream.packageLengthMm??formatZone.productLengthMm)?formatZone.productPitchMm-(upstream.packageLengthMm??formatZone.productLengthMm):undefined),
+        movingGapEnabled: formatZone.inputValues?.movingGapManual??(formatZone.movingGapMm!==undefined||formatZone.gapMm!==undefined||(Number.isFinite(formatZone.productPitchMm)&&Number.isFinite(upstream.packageLengthMm??formatZone.productLengthMm))||formatZone.inputValues?.movingGapMm!==undefined),
+        movingGap: formatZone.movingGapMm??formatZone.gapMm??(Number.isFinite(formatZone.productPitchMm)&&Number.isFinite(upstream.packageLengthMm??formatZone.productLengthMm)?formatZone.productPitchMm-(upstream.packageLengthMm??formatZone.productLengthMm):undefined)??formatZone.inputValues?.movingGapMm,
         accumulatedGap: firstDefinedValue(formatZone.accumulatedGapMm, formatZone.accumulatedPitchMm !== undefined ? formatZone.accumulatedPitchMm - firstDefinedValue(upstream.packageLengthMm, formatZone.productLengthMm) : 0),
         speedFactor: firstDefinedValue(formatZone.conveyorSpeedFactorPercent, equipment.processData?.speedAndSensors?.conveyorSpeedFactorVsDischargeVelocityPercent),
         backup: formatZone.backupSensorPositionMm??formatZone.inputValues?.backupPositionMm,
@@ -446,7 +467,12 @@ function populateFormatZoneInputs(card, equipment) {
         if (input) input.value = values[key] === undefined || values[key] === null ? '' : values[key];
       });
       ['population','lba','backup','overspeed'].forEach(function(key){var input=equipmentField(card,'.format-zone-'+key);input.dataset.manualValue=input.value;input.dataset.inputMode=String(equipmentField(card,'.format-zone-'+key+'-enabled').checked);});
-      ['belt-speed','moving-gap','acc-factor'].forEach(function(key){var input=equipmentField(card,'.format-zone-'+key);input.dataset.manualValue=input.value;input.dataset.inputMode='true';});
+      ['belt-speed','acc-factor'].forEach(function(key){var input=equipmentField(card,'.format-zone-'+key);input.dataset.manualValue=input.value;input.dataset.inputMode='true';});
+      ['accumulation-seconds','discharge-velocity','moving-gap'].forEach(function(key){
+        var input=equipmentField(card,'.format-zone-'+key),toggle=equipmentField(card,'.format-zone-'+key+'-enabled');
+        if(!input||!toggle)return;
+        input.dataset.manualValue=input.value;input.dataset.inputMode=String(toggle.checked);
+      });
     }
 
 function updateFormatZoneVisibility(card) {
@@ -545,7 +571,14 @@ function applyConveyorOutputs(card,d,values,zone,profile){
       var speed=zone?.conveyorSpeedMmPerSecond??d.conveyorSpeedMmPerSecond,prime=zone?.primeSensorPositionMm??d.primeSensorPositionMm;
       var backup=zone?.backupSensorPositionMm??d.actualBackupSensorPositionMm;
       var pitch=zone?.productPitchMm??d.effectiveProductPitchMm,length=zone?.productLengthMm??values.packageLengthMm;
-      set('backup',backup);set('lba',Number.isFinite(prime)&&Number.isFinite(backup)?prime-backup:d.usefulAccumulationLengthMm);
+      var lba=Number.isFinite(prime)&&Number.isFinite(backup)?prime-backup:d.usefulAccumulationLengthMm;
+      set('backup',backup);set('lba',lba);
+      var packed=zone?.accumulatedPitchMm??(length+(values.accumulatedGapMm??0));
+      var downstreamRate=profile?.highRate>0?profile.highRate/60:(length>0?d.downstreamConsumptionRateMmPerSecond/length:NaN);
+      // Full useful zone only; native packages, not bottle-equivalent counts.
+      // This reference is not a runtime override or an anti-block estimate.
+      set('accumulation-seconds',lba>=0&&packed>0&&downstreamRate>0?Math.floor(lba/packed)/downstreamRate:NaN);
+      set('discharge-velocity',profile?.nominalDischargeVelocity??d.upstreamDischargeVelocityMmPerSecond*.06);
       set('belt-speed',speed*((window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())?.06:1));set('moving-gap',pitch-length);
       set('population',speed>0?d.machineOutputRateMmPerSecond/speed*100:NaN);
       set('overspeed',d.downstreamInfeedRateMmPerSecond>0?(speed/d.downstreamInfeedRateMmPerSecond-1)*100:NaN);
@@ -557,14 +590,16 @@ function applyConveyorOutputs(card,d,values,zone,profile){
     }
 
     function readFormatZoneInputs(card) {
-      function manualFieldValue(key){var text=equipmentField(card,'.format-zone-'+key).dataset.manualValue;return text!==undefined&&text!==''&&Number.isFinite(Number(text))?Number(text):undefined;}
+      function manualFieldValue(key){var field=equipmentField(card,'.format-zone-'+key),text=field?.dataset.manualValue;return text!==undefined&&text!==''&&Number.isFinite(Number(text))?Number(text):undefined;}
+      function useManual(key){var toggle=equipmentField(card,'.format-zone-'+key+'-enabled');return !toggle||toggle.checked&&!toggle.disabled;}
       var basic=(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic()),mode=equipmentField(card,'.format-zone-speed-mode').value||'AUTO',target=equipmentField(card,'.format-zone-population-enabled').checked||equipmentField(card,'.format-zone-overspeed-enabled').checked;
       var beltSpeed=!target&&['MANUAL','DYNAMIC'].includes(mode)?numericInputValue(equipmentField(card,'.format-zone-belt-speed')):undefined;
       var storedSpeed=manualFieldValue('belt-speed');
       if(basic){if(beltSpeed!==undefined)beltSpeed=Number((beltSpeed/.06).toPrecision(15));if(storedSpeed!==undefined)storedSpeed=Number((storedSpeed/.06).toPrecision(15));}
       return {
         dynamicLineBalancing:typeof readDynamicBalancing==='function'?readDynamicBalancing(card):undefined,
-        inputValues:{populationPercent:manualFieldValue('population'),lbaMm:manualFieldValue('lba'),overspeedPercent:manualFieldValue('overspeed'),backupPositionMm:manualFieldValue('backup'),beltSpeedMmPerSecond:storedSpeed,movingGapMm:manualFieldValue('moving-gap'),accFactorPercent:manualFieldValue('acc-factor')},
+        inputValues:{populationPercent:manualFieldValue('population'),lbaMm:manualFieldValue('lba'),overspeedPercent:manualFieldValue('overspeed'),backupPositionMm:manualFieldValue('backup'),beltSpeedMmPerSecond:storedSpeed,movingGapMm:manualFieldValue('moving-gap'),movingGapManual:equipmentField(card,'.format-zone-moving-gap-enabled')?.checked,accFactorPercent:manualFieldValue('acc-factor'),declaredAccumulationSeconds:manualFieldValue('accumulation-seconds'),dischargeVelocityMPerMinute:manualFieldValue('discharge-velocity')},
+        declaredAccumulationSeconds:useManual('accumulation-seconds')?numericInputValue(equipmentField(card,'.format-zone-accumulation-seconds')):undefined,
         targetOverspeedPercent:equipmentField(card,'.format-zone-overspeed-enabled').checked?numericInputValue(equipmentField(card,'.format-zone-overspeed')):undefined,
         targetPopulationPercent: equipmentField(card,'.format-zone-population-enabled').checked ? numericInputValue(equipmentField(card,'.format-zone-population')) : undefined,
         manualLbaMm: equipmentField(card,'.format-zone-lba-enabled').checked ? numericInputValue(equipmentField(card,'.format-zone-lba')) : undefined,
@@ -575,7 +610,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
         conveyorSpeedFactorPercent: numericInputValue(equipmentField(card, '.format-zone-speed-factor')),
         speedMode: mode,
         conveyorSpeedMmPerSecond: beltSpeed,
-        movingGapMm: !target?numericInputValue(equipmentField(card, '.format-zone-moving-gap')):undefined,
+        movingGapMm: !target&&useManual('moving-gap')?numericInputValue(equipmentField(card, '.format-zone-moving-gap')):undefined,
         accumulatedGapMm: numericInputValue(equipmentField(card, '.format-zone-accumulated-gap')),
         backupSensorPositionMm: !equipmentField(card,'.format-zone-lba-enabled').checked&&equipmentField(card,'.format-zone-backup-enabled').checked?numericInputValue(equipmentField(card,'.format-zone-backup')):undefined,
         dischargeRunoutLengthMm: numericInputValue(equipmentField(card, '.format-zone-discharge-runout')),
@@ -586,7 +621,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
         upstreamStopResponseSeconds: numericInputValue(equipmentField(card, '.format-zone-stop-response')),
         bottlesDischargedAtStop: numericInputValue(equipmentField(card, '.format-zone-residual')),
         downstreamRampUpSeconds: numericInputValue(equipmentField(card, '.format-zone-downstream-ramp')),
-        dischargeVelocityMPerMinute: numericInputValue(equipmentField(card,'.format-zone-discharge-velocity')),
+        dischargeVelocityMPerMinute: useManual('discharge-velocity')?numericInputValue(equipmentField(card,'.format-zone-discharge-velocity')):undefined,
         restartToFirstPackageSeconds: numericInputValue(equipmentField(card,'.format-zone-restart-first-package')),
         upstreamStartupTimeSeconds: numericInputValue(equipmentField(card, '.format-zone-startup')),
         downstreamInfeedPitchMm: numericInputValue(equipmentField(card, '.format-zone-infeed')),
@@ -636,6 +671,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
         bottlesDischargedAtStop: values.bottlesDischargedAtStop,
         downstreamRampUpSeconds: values.downstreamRampUpSeconds
       });
+      if(Object.prototype.hasOwnProperty.call(values,'declaredAccumulationSeconds'))result.accumulation.declaredAccumulationSeconds=values.declaredAccumulationSeconds;
       var basic=(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic());
       if(basic)result.accumulation.useNominalDesignSpeed=true;
       result.upstream.startupTimeSeconds=values.upstreamStartupTimeSeconds;
@@ -1000,7 +1036,14 @@ function numericInputValue(input) {
           var conveyorValues=readFormatZoneInputs(card);
           if(equipmentField(card,'.format-zone-backup-enabled').checked&&conveyorValues.backupSensorPositionMm===undefined){showError({message:'Enter the installed Back-up position or disable its manual input.'});return false;}
           if(equipmentField(card,'.format-zone-lba-enabled').checked&&conveyorValues.manualLbaMm===undefined){showError({message:'Enter LBA or disable its manual input.'});return false;}
-          if(conveyorValues.dischargeVelocityMPerMinute!==undefined&&!(conveyorValues.dischargeVelocityMPerMinute>0)){
+          if(equipmentField(card,'.format-zone-accumulation-seconds-enabled')?.checked&&!(conveyorValues.declaredAccumulationSeconds>=0)){
+             showError({message:'Enter an accumulation time of zero or greater, or disable manual input.'});return false;
+           }
+           var gapToggle=equipmentField(card,'.format-zone-moving-gap-enabled');
+           if(gapToggle?.checked&&!gapToggle.disabled&&!(conveyorValues.movingGapMm>=0)){
+             showError({message:'Enter a moving gap of zero or greater, or disable manual input.'});return false;
+           }
+           if((equipmentField(card,'.format-zone-discharge-velocity-enabled')?.checked||conveyorValues.dischargeVelocityMPerMinute!==undefined)&&!(conveyorValues.dischargeVelocityMPerMinute>0)){
             showError({message:'Upstream Discharge Velocity must be greater than zero.'});return false;
           }
           if(conveyorValues.restartToFirstPackageSeconds!==undefined&&!(conveyorValues.restartToFirstPackageSeconds>=0)){

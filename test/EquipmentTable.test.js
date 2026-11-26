@@ -62,6 +62,9 @@ function fixture(){
     }else{
       field(fields,'equipment-transport-unit','Bottle',{tag:'output'});
       field(fields,'format-zone-lact',1000,{type:'number'});
+      const accumulationToggle=field(fields,'format-zone-accumulation-seconds-enabled',false,{type:'checkbox'});
+      const accumulation=field(fields,'format-zone-accumulation-seconds',15,{type:'number',readOnly:true});
+      accumulationToggle.addEventListener('change',()=>{accumulation.readOnly=!accumulationToggle.checked;});
       field(fields,'format-zone-belt-speed',500,{type:'number',readOnly:true});
       const toggle=field(fields,'format-zone-population-enabled',false,{type:'checkbox'});
       const target=field(fields,'format-zone-population',40,{type:'number',readOnly:true});
@@ -118,6 +121,10 @@ test('conveyor table mirrors calculated values, manual switches and conditional 
  const h=fixture();
  try{
    h.tableButton.click();
+   const accumulation=h.cell('Belt','accumulation-seconds'),accToggle=accumulation.querySelector('input[type="checkbox"]'),accValue=accumulation.querySelector('input[type="number"]');
+   assert.equal(accValue.value,'15');assert(accValue.readOnly);
+   accToggle.checked=true;emit(h,accToggle,'change');assert(!accValue.readOnly);
+   accValue.value='45';emit(h,accValue);assert.equal(h.b._fields.querySelector('.format-zone-accumulation-seconds').value,'45');
    const population=h.cell('Belt','population'),manual=population.querySelector('input[type="checkbox"]'),value=population.querySelector('input[type="number"]');
    assert.equal(value.readOnly,true);
    value.value='99';emit(h,value);assert.equal(h.b._fields.querySelector('.format-zone-population').value,'40');

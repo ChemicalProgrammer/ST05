@@ -44,16 +44,17 @@ window.STEquipmentTable=(function(){
   var geometry=group('Geometry','Geometría',[
     zone('lact','Lact (mm)','Lact (mm)'),zone('lp-prime','Lp (mm)','Lp (mm)'),zone('package-length','Package length (mm)','Longitud del envase (mm)'),
     zone('discharge-runout','Discharge (mm)','Descarga (mm)'),zone('reject-runout','Coding (mm)','Codificado (mm)'),
-    zone('backup','Back-up (mm)','Back-up (mm)',true),zone('lba','LBA (mm)','LBA (mm)',true)]);
+    zone('backup','Back-up (mm)','Back-up (mm)',true),zone('lba','LBA (mm)','LBA (mm)',true),
+    zone('accumulation-seconds','Accumulation (s)','Acumulación (s)',true)]);
   var upstream=group('Upstream','Equipo anterior',[
-    zone('discharge-pitch','Discharge pitch (mm)','Pitch de descarga (mm)'),zone('discharge-velocity','Discharge velocity (m/min)','Vel. de descarga (m/min)'),
+    zone('discharge-pitch','Discharge pitch (mm)','Pitch de descarga (mm)'),zone('discharge-velocity','Discharge velocity (m/min)','Vel. de descarga (m/min)',true),
     zone('startup','Startup (s)','Arranque (s)'),zone('restart-first-package','First package after restart (s)','Primer envase al rearrancar (s)'),
     zone('residual','Bottles at stop (pkgs)','Descarga al paro (unid.)'),zone('stop-response','Stop response (s)','Respuesta de paro (s)')]);
   var downstream=group('Downstream','Equipo siguiente',[
     zone('infeed','Infeed pitch (mm)','Pitch de entrada (mm)'),zone('downstream-ramp','Ramp up (s)','Rampa de arranque (s)')]);
   var speeds=group('Speed & sensors','Velocidad y sensores',[
     zone('speed-mode','Speed mode','Modo de velocidad'),zone('belt-speed','Belt speed (mm/s)','Vel. de banda (mm/s)'),
-    zone('moving-gap','Moving gap (mm)','Separación en movimiento (mm)'),zone('accumulated-gap','Accumulated gap (mm)','Separación acumulada (mm)'),
+    zone('moving-gap','Moving gap (mm)','Separación en movimiento (mm)',true),zone('accumulated-gap','Accumulated gap (mm)','Separación acumulada (mm)'),
     zone('population','Population (%)','Población (%)',true),zone('overspeed','Overspeed (%)','Sobrevelocidad (%)',true),
     zone('speed-factor','Discharge factor (%)','Factor de descarga (%)'),zone('coding-factor','Coding factor (%)','Factor de codificado (%)'),
     zone('acc-factor','Accumulation factor (%)','Factor de acumulación (%)'),zone('blocked-delay','Block delay (s)','Retardo de bloqueo (s)'),

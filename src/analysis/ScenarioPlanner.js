@@ -27,7 +27,7 @@ export function scenarioStopDataCoverage(simulation,equipment){
     (pair.mtbfMinutes>0&&pair.mttrMinutes>0||pair.mtbfMinutes===0&&pair.mttrMinutes===0);
   const mode=split!==undefined?(['minor','major'].every(kind=>validPair(split?.[kind]))?'SPLIT':'INVALID_SPLIT'):
     reliability?.mtbfMinutes>0&&reliability?.mttrMinutes>0?'GENERAL':'NOT_CONFIGURED';
-  const enabled=simulation?.dynamicConfig?.reliabilityEnabled!==false&&!!reliability;
+  const enabled=equipment?.type!=='CONVEYOR'&&equipment?.processData?.role!=='CONVEYOR'&&simulation?.dynamicConfig?.reliabilityEnabled!==false&&!!reliability;
   const categories=simulation?.dynamicConfig?.reliabilityCategories||{};
   const enabledClasses=!enabled?[]:mode==='SPLIT'?['minor','major'].filter(kind=>split[kind].mtbfMinutes>0&&categories[kind]!==false).map(kind=>kind.toUpperCase()):
     mode==='GENERAL'&&categories.general!==false?['GENERAL']:[];

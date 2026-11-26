@@ -33,6 +33,8 @@ function createEquipmentRandom(seed,equipmentId,eventType) {
 // Category frequencies share the same operating exposure. Exponential clocks
 // superpose to a total rate, with event categories sampled by their rate share.
 function stopReliabilityProfile(model, categories) {
+  // Conveyors may stop from flow, sensors or commands, never own random failures.
+  if(model?.type==='CONVEYOR'||model?.processData?.role==='CONVEYOR')return null;
   const general=model.noiseProfile?.reliability;
   // 2D also resolves draft inputs before the numerical validator runs.
   const valid=profile=>Number.isFinite(profile?.mtbfMinutes)&&profile.mtbfMinutes>0&&
@@ -3036,6 +3038,7 @@ function applyCommand(runtime, equipment, action) {
 
 function updateMicroStops(runtime) {
   runtime.equipment.forEach((equipment) => {
+    if(equipment.type==='CONVEYOR'||equipment.processData?.role==='CONVEYOR')return;
     if (equipment.emergencyStopLatched) return;
     if (equipment.failureRemainingSeconds > 0) return;
     if (equipment.microStopRemainingSeconds > 0) {
@@ -4655,7 +4658,7 @@ function adaptSimPyInput(input) {
         ...(d.primeSensorPositionMm!=null?{primeSensorPositionMm:d.primeSensorPositionMm}:{}),...(d.backupSensorPositionMm!=null?{backupSensorPositionMm:d.backupSensorPositionMm}:{}),
         ...(d.backupRestartPositionMm!=null?{backupRestartPositionMm:d.backupRestartPositionMm}:{}),...(d.upstreamRestartDelaySeconds!=null?{upstreamRestartDelaySeconds:d.upstreamRestartDelaySeconds}:{}),...(d.downstreamRampUpSeconds!=null?{downstreamRampUpSeconds:d.downstreamRampUpSeconds}:{}),
         blockedTimeDelaySeconds:d.blockedTimeDelaySeconds??0,clearTimeDelaySeconds:d.clearTimeDelaySeconds??0,upstreamStopResponseSeconds:d.upstreamStopResponseSeconds??0,
-        bottlesDischargedAtStop:d.bottlesDischargedAtStop??0,...(input.run.reliabilityEnabled !== false && reliability?{reliability}:{}),...(model.noiseProfile?.microStop?{microStop:model.noiseProfile.microStop}:{})});
+        bottlesDischargedAtStop:d.bottlesDischargedAtStop??0});
     } else {
       if(Object.keys(model.noiseProfile||{}).some(key=>!['reliability','microStop'].includes(key)))throw new Error('SimPy does not support this machine noise profile: '+model.name);
       const design=model.processData?.equipment;
@@ -5198,7 +5201,7 @@ function scenarioStopDataCoverage(simulation,equipment){
     (pair.mtbfMinutes>0&&pair.mttrMinutes>0||pair.mtbfMinutes===0&&pair.mttrMinutes===0);
   const mode=split!==undefined?(['minor','major'].every(kind=>validPair(split?.[kind]))?'SPLIT':'INVALID_SPLIT'):
     reliability?.mtbfMinutes>0&&reliability?.mttrMinutes>0?'GENERAL':'NOT_CONFIGURED';
-  const enabled=simulation?.dynamicConfig?.reliabilityEnabled!==false&&!!reliability;
+  const enabled=equipment?.type!=='CONVEYOR'&&equipment?.processData?.role!=='CONVEYOR'&&simulation?.dynamicConfig?.reliabilityEnabled!==false&&!!reliability;
   const categories=simulation?.dynamicConfig?.reliabilityCategories||{};
   const enabledClasses=!enabled?[]:mode==='SPLIT'?['minor','major'].filter(kind=>split[kind].mtbfMinutes>0&&categories[kind]!==false).map(kind=>kind.toUpperCase()):
     mode==='GENERAL'&&categories.general!==false?['GENERAL']:[];

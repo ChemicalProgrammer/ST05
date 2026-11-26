@@ -23,58 +23,91 @@ var STReliabilityControls = (function(){
       });
     });
     var assumption=document.createElement('p');assumption.className='chart-note conveyor-reliability-assumption';assumption.style.gridColumn='1 / -1';group.append(assumption);
-    function visibility(){
-      var conveyor=fields.querySelector('.equipment-type').value==='CONVEYOR';
-      controls.enabled.parentElement.firstChild.nodeValue=conveyor?'Model own conveyor failures (exception)':__ST_TEXT__('reliability.enabled');
-      controls.enabled.parentElement.title=conveyor?'Default assumption: no own random conveyor failures. Enable only for a documented exception with MTBF and MTTR. Existing enabled profiles are preserved.':__ST_TEXT__('reliability.enabled');
-      ['mtbfMinutes','mttrMinutes'].forEach(function(key){controls[key].parentElement.hidden=mode.value==='split'||conveyor&&!controls.enabled.checked;controls[key].parentElement.style.display=controls[key].parentElement.hidden?'none':'';});
-      Object.values(splitControls).forEach(function(pair){Object.values(pair).forEach(function(input){
-        input.parentElement.hidden=mode.value!=='split';
-        input.parentElement.style.display=input.parentElement.hidden?'none':'';
-      });});
-      assumption.hidden=!conveyor;assumption.textContent=controls.enabled.checked?'Exception active: this conveyor has its own failure model. Existing configured values are preserved; disable the exception to use the no-own-failures assumption.':'Model assumption: conveyors have no own random failures. MTBF and MTTR are not required. Material shortage, blocking, sensors and scheduled or manual stops still affect operation.';
+    // Both sets remain mounted. A GENERAL pair cannot determine its
+    // MINOR/MAJOR breakdown, so show only retained measurements (or N/A).
+    var keys=['mtbfMinutes','mttrMinutes'],previousMode='general',generalDraft={};
+    function conveyor(){return fields.querySelector('.equipment-type').value==='CONVEYOR';}
+    function setRole(input,editable){
+      input.parentElement.hidden=conveyor();input.parentElement.style.display=input.parentElement.hidden?'none':'';
+      input.disabled=!editable;input.readOnly=!editable;input.dataset.fieldRole=editable?'INPUT':'OUTPUT';
+      input.classList.toggle('calculated-value',!editable);
+      input.placeholder=editable?(input.dataset.stopClass?'0 if no stops':''):'—';
+      input.title=editable?'':mode.value==='split'?'Calculated from minor and major stop inputs.':'Previous breakdown, if available; not inferred from general inputs.';
     }
-    fields.querySelector('.equipment-grid').after(group);
-    fields.querySelector('.equipment-type').addEventListener('change',visibility);
-    function refresh(){try{var noise=JSON.parse(profile.value),data=JSON.parse(process.value),rel=noise.reliability||data.equipment||{};controls.enabled.checked=!!noise.reliability;
-      mode.value=data.equipment?.stopInputs?'split':'general';
-      Object.entries(splitControls).forEach(function(entry){Object.keys(entry[1]).forEach(function(key){
-        entry[1][key].value=data.equipment?.stopInputs?.[entry[0]]?.[key]??'';
-      });});['mtbfMinutes','mttrMinutes'].forEach(function(key){controls[key].value=rel[key]??'';});}catch(e){/* Keep unfinished advanced JSON intact. */}visibility();}
+    function visibility(){
+      var belt=conveyor(),split=mode.value==='split';
+      controls.enabled.checked=!belt;controls.enabled.disabled=true;controls.enabled.parentElement.hidden=true;controls.enabled.parentElement.style.display='none';
+      modeLabel.hidden=belt;mode.disabled=belt;
+      keys.forEach(key=>setRole(controls[key],!belt&&!split));
+      Object.values(splitControls).forEach(pair=>keys.forEach(key=>setRole(pair[key],!belt&&split)));
+      assumption.hidden=!belt;assumption.textContent='Conveyors have no own random failures. Material shortage, blocking, sensors and scheduled or manual stops still affect operation.';
+    }
+    function values(pair){return Object.fromEntries(keys.map(key=>[key,pair[key].value===''?null:Number(pair[key].value)]));}
+    function validPair(pair,allowBlank){return allowBlank&&keys.every(key=>pair[key]===null)||keys.every(key=>Number.isFinite(pair[key])&&pair[key]>0)||keys.every(key=>pair[key]===0);}
+    function aggregate(split){
+      var m=split.minor.mtbfMinutes>0?1/split.minor.mtbfMinutes:0,M=split.major.mtbfMinutes>0?1/split.major.mtbfMinutes:0;
+      return {mtbfMinutes:m+M>0?1/(m+M):null,mttrMinutes:m+M>0?(m*split.minor.mttrMinutes+M*split.major.mttrMinutes)/(m+M):null};
+    }
+    function displayGeneral(pair){keys.forEach(key=>{controls[key].value=pair[key]??'';});}
+    function refresh(){try{
+      var noise=JSON.parse(profile.value),data=JSON.parse(process.value),e=data.equipment||{},rel=noise.reliability||e;
+      mode.value=e.stopInputs?'split':'general';previousMode=mode.value;
+      var retained=e.stopInputs||e.stopInputDrafts;
+      Object.entries(splitControls).forEach(([kind,pair])=>keys.forEach(key=>{pair[key].value=retained?.[kind]?.[key]??'';}));
+      generalDraft={mtbfMinutes:rel.mtbfMinutes??null,mttrMinutes:rel.mttrMinutes??null};
+      var split=Object.fromEntries(Object.entries(splitControls).map(([kind,pair])=>[kind,values(pair)]));
+      displayGeneral(mode.value==='split'&&Object.values(split).every(p=>validPair(p,false))?aggregate(split):generalDraft);
+      if(mode.value==='split'&&!Object.values(split).every(p=>validPair(p,false)))displayGeneral({});
+    }catch(e){/* Preserve unfinished advanced JSON. */}visibility();}
     function update(){
       try{
         var noise=JSON.parse(profile.value),data=JSON.parse(process.value);
         if(!noise||Array.isArray(noise)||typeof noise!=='object'||!data||Array.isArray(data)||typeof data!=='object')throw Error('Invalid JSON');
-        var rel={mtbfMinutes:Number(controls.mtbfMinutes.value),mttrMinutes:Number(controls.mttrMinutes.value)};
-        data.equipment=Object.assign({},data.equipment);
+        var split=Object.fromEntries(Object.entries(splitControls).map(([kind,pair])=>[kind,values(pair)])),complete=Object.values(split).every(p=>validPair(p,false));
+        if(conveyor()){
+          // Retain the supplied source data, but no active own failure model.
+          // The simulation engines independently reject conveyor failure profiles.
+          delete noise.reliability;
+          if(data.equipment?.stopInputs){data.equipment.stopInputDrafts=data.equipment.stopInputs;delete data.equipment.stopInputs;}
+          profile.value=JSON.stringify(noise,null,2);process.value=JSON.stringify(data,null,2);
+          group.dataset.invalid='';delete group.dataset.validationMessage;return;
+        }
+        if(previousMode!==mode.value){
+          if(mode.value==='split')generalDraft=values(controls);
+          else displayGeneral(complete?aggregate(split):generalDraft);
+          previousMode=mode.value;
+        }
+        var rel;
         if(mode.value==='split'){
-          var split={};
-          Object.entries(splitControls).forEach(function(entry){
-            var pair=entry[1],bf=pair.mtbfMinutes.value,tr=pair.mttrMinutes.value;
-            if(bf===''||tr===''||!Number.isFinite(Number(bf))||!Number.isFinite(Number(tr))||!(Number(bf)>0&&Number(tr)>0)&&!(Number(bf)===0&&Number(tr)===0))throw Error((entry[0]==='minor'?'Minor':'Major')+' stops: enter both MTBF and MTTR as positive minutes, or 0 and 0 if there were no stops.');
-            split[entry[0]]={mtbfMinutes:Number(bf),mttrMinutes:Number(tr)};
-          });
-          var minor=split.minor,major=split.major,m=minor.mtbfMinutes>0?1/minor.mtbfMinutes:0,M=major.mtbfMinutes>0?1/major.mtbfMinutes:0;
-          rel={mtbfMinutes:m+M>0?1/(m+M):null,mttrMinutes:m+M>0?(m*minor.mttrMinutes+M*major.mttrMinutes)/(m+M):null};
-          data.equipment.stopInputs=split;
-          Object.keys(rel).forEach(function(key){controls[key].value=rel[key]??'';});
-        }else delete data.equipment.stopInputs;
-        if(window.STBasicMode?.isBasic()&&fields.querySelector('.equipment-type').value!=='CONVEYOR')controls.enabled.checked=mode.value==='general'||rel.mtbfMinutes>0;
-        if(mode.value==='split'&&rel.mtbfMinutes===null)controls.enabled.checked=false;
-        if(controls.enabled.checked&&rel.mtbfMinutes>0&&rel.mttrMinutes>0)noise.reliability=Object.assign({},noise.reliability,rel);else delete noise.reliability;
-        if(mode.value==='split'||controls.enabled.checked||controls.mtbfMinutes.value!==''||controls.mttrMinutes.value!=='')Object.assign(data.equipment,rel);
+          displayGeneral(complete?aggregate(split):{});
+          for(var [kind,pair] of Object.entries(split))if(!validPair(pair,false))throw Error((kind==='minor'?'Minor':'Major')+' stops: enter both MTBF and MTTR as positive minutes, or 0 and 0 if there were no stops.');
+          rel=aggregate(split);
+        }else{
+          rel=values(controls);
+          if(!validPair(rel,true))throw Error('General stops: enter both MTBF and MTTR as positive minutes, 0 and 0 if there were no stops, or leave both blank.');
+          generalDraft=rel;
+        }
+        data.equipment=Object.assign({},data.equipment);
+        if(mode.value==='split'){data.equipment.stopInputs=split;delete data.equipment.stopInputDrafts;}
+        else{
+          if(complete)data.equipment.stopInputDrafts=split;
+          delete data.equipment.stopInputs;
+        }
+        if(rel.mtbfMinutes>0&&rel.mttrMinutes>0)noise.reliability=Object.assign({},noise.reliability,rel);else delete noise.reliability;
+        Object.assign(data.equipment,rel);
         profile.value=JSON.stringify(noise,null,2);process.value=JSON.stringify(data,null,2);group.dataset.invalid='';delete group.dataset.validationMessage;
       }catch(e){group.dataset.invalid='true';group.dataset.validationMessage=e.message;}
-      visibility();
+      finally{visibility();}
     }
+    fields.querySelector('.equipment-grid').after(group);
+    fields.querySelector('.equipment-type').addEventListener('change',update);
     [mode,...Object.values(splitControls.minor),...Object.values(splitControls.major),...Object.values(controls)].forEach(function(input){input.addEventListener('input',update);input.addEventListener('change',update);});
     card._validateReliability=update;
     profile.addEventListener('change',refresh);process.addEventListener('change',refresh);refresh();
-    if(window.STBasicMode?.isBasic()&&fields.querySelector('.equipment-type').value!=='CONVEYOR'){
-      controls.enabled.checked=true;update();
-    }
+    // A legacy hidden enable flag must not disable a machine with supplied data.
+    if(!conveyor()&&mode.value==='general'&&validPair(values(controls),true))update();
   }
-  attach.valid=function(card){var fields=card._fields,group=fields.querySelector('.reliability-controls');card._validateReliability?.();return !group.dataset.invalid&&(group.querySelector('select').value==='split'||!fields.querySelector('.reliability-enabled').checked||['mtbfMinutes','mttrMinutes'].every(function(key){return Number(fields.querySelector('.reliability-'+key).value)>0;}));};
+  attach.valid=function(card){var group=card._fields.querySelector('.reliability-controls');card._validateReliability?.();return !group.dataset.invalid;};
   return attach;
 })();
 var STConfigurationEditor=(function(){

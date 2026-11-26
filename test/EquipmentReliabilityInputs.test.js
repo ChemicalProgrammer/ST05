@@ -12,7 +12,9 @@ test('equipment editor accepts general and split reliability and validates the f
  const mode=card.querySelector('[aria-label="Stop inputs"]');
  const set=(input,value)=>{input.value=value;input.dispatchEvent(new w.Event('input'));};
  assert.equal(mode.value,'general');
- set(mode,'split');assert.equal(w.STReliabilityControls.valid(card),false);
+ const general=card.querySelector('.reliability-mtbfMinutes'),minor=card.querySelector('[data-stop-class=minor]');
+ assert(!general.disabled&&!general.parentElement.hidden);assert(minor.disabled&&!minor.parentElement.hidden);assert.equal(minor.value,'');
+ set(mode,'split');assert(general.disabled&&!general.parentElement.hidden);assert(!minor.disabled&&!minor.parentElement.hidden);assert.equal(w.STReliabilityControls.valid(card),false);
  for(const [text,value] of [['Minor MTBF [min]',10],['Minor MTTR [min]',2],['Major MTBF [min]',40],['Major MTTR [min]',17]]){
   const label=[...card.querySelectorAll('label')].find(item=>item.textContent===text);
   set(label.querySelector('input'),value);
@@ -24,7 +26,9 @@ test('equipment editor accepts general and split reliability and validates the f
  assert.equal(process().equipment.stopInputs.major.mttrMinutes,17);
  set(mode,'general');
  assert.equal(process().equipment.stopInputs,undefined);
- assert.deepEqual(noise().reliability,{mtbfMinutes:8,mttrMinutes:5});
+ assert.equal(process().equipment.stopInputDrafts.minor.mtbfMinutes,10);
+ assert(minor.disabled&&!minor.parentElement.hidden);assert(!general.disabled);assert.deepEqual(noise().reliability,{mtbfMinutes:8,mttrMinutes:5});
+ set(mode,'split');assert(w.STReliabilityControls.valid(card));assert.equal(minor.value,'10');
 });
 
 test('save reports the equipment validation message and retains its code',async()=>{

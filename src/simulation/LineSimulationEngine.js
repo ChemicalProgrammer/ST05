@@ -1307,6 +1307,7 @@ function applyCommand(runtime, equipment, action) {
 
 function updateMicroStops(runtime) {
   runtime.equipment.forEach((equipment) => {
+    if(equipment.type==='CONVEYOR'||equipment.processData?.role==='CONVEYOR')return;
     if (equipment.emergencyStopLatched) return;
     if (equipment.failureRemainingSeconds > 0) return;
     if (equipment.microStopRemainingSeconds > 0) {

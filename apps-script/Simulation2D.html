@@ -501,6 +501,8 @@ window.STSimulation2D=(function(){
 
   function num(value){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:2}):'—';}
   function fallbackStopReliabilityProfile(model, categories) {
+  // Conveyors may stop from flow, sensors or commands, never own random failures.
+  if(model?.type==='CONVEYOR'||model?.processData?.role==='CONVEYOR')return null;
     const general=model.noiseProfile?.reliability;
     // 2D also resolves draft inputs before the numerical validator runs.
     const valid=profile=>Number.isFinite(profile?.mtbfMinutes)&&profile.mtbfMinutes>0&&
@@ -515,6 +517,7 @@ window.STSimulation2D=(function(){
   }
 
   function failuresFor(item,config){
+    if(item?.type==='CONVEYOR'||item?.processData?.role==='CONVEYOR')return [];
     const resolve=window.SimulatorEngine?.reliabilitySupport?.stopReliabilityProfile??fallbackStopReliabilityProfile;
     const profile=resolve(item,config.reliabilityCategories);
     if(!profile)return [];

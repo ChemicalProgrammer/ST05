@@ -842,14 +842,11 @@ function numericInputValue(input) {
         characteristics.isPacemaker=critical;data.role=type==='CONVEYOR'?'CONVEYOR':critical?'PACEMAKER':'MACHINE';data.machineType=type;
         data.equipment=Object.assign({},data.equipment);
         [['maximum-speed','maximumSpeedBpm'],['recovery-time','recoveryTimeSeconds']].forEach(function(spec){var input=equipmentField(card,'.equipment-'+spec[0]);if(input.value==='')delete data.equipment[spec[1]];else data.equipment[spec[1]]=Number(input.value);});
-        if(!data.equipment.stopInputs){
+        if(type==='CONVEYOR'){delete noise.reliability;delete data.equipment.stopInputs;}
+        else if(!data.equipment.stopInputs){
           var bf=equipmentField(card,'.reliability-mtbfMinutes').value,tr=equipmentField(card,'.reliability-mttrMinutes').value;
-          // Basic can expose blank reliability fields on a machine with no
-          // failure profile (e.g. an ideal inlet). Do not fabricate a 0/0 pair.
-          if(equipmentField(card,'.reliability-enabled').checked||(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())&&type!=='CONVEYOR'){
-            if(!noise.reliability&&(bf===''||Number(bf)===0)&&(tr===''||Number(tr)===0))delete noise.reliability;
-            else noise.reliability=Object.assign({},noise.reliability,{mtbfMinutes:Number(bf),mttrMinutes:Number(tr)});
-          }else delete noise.reliability;
+          if(Number(bf)>0&&Number(tr)>0)noise.reliability=Object.assign({},noise.reliability,{mtbfMinutes:Number(bf),mttrMinutes:Number(tr)});
+          else delete noise.reliability;
         }
         if(type!=='CONVEYOR')STEquipmentRoles.readCapacity(card._fields,data);
         if(type==='CONVEYOR'){delete data.equipment.macroStopScrapBottles;data=mergeFormatZoneData(data,readFormatZoneInputs(card));}
@@ -989,10 +986,6 @@ function numericInputValue(input) {
         var processData = parseJsonObject(equipmentField(card, '.equipment-process-data').value, __ST_TEXT__('client.process_format_data'), index + 1);
         if (processData === null) return false;
         var type = equipmentField(card, '.equipment-type').value;
-        if((window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())&&type!=='CONVEYOR'&&!processData.equipment?.stopInputs){
-          equipmentField(card,'.reliability-enabled').checked=true;
-          noiseProfile.reliability=Object.assign({},noiseProfile.reliability,{mtbfMinutes:Number(equipmentField(card,'.reliability-mtbfMinutes').value),mttrMinutes:Number(equipmentField(card,'.reliability-mttrMinutes').value)});
-        }
         if(!STReliabilityControls.valid(card)){
           var group=equipmentField(card,'.reliability-controls'),equipmentName=equipmentField(card,'.equipment-name').value||'Equipment '+(index+1);
           showError({code:'INVALID_EQUIPMENT_RELIABILITY',message:equipmentName+' · '+(group.dataset.validationMessage||'General stops: enter both MTBF and MTTR as positive minutes when failures are enabled.')});

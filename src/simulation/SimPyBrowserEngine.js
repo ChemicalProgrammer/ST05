@@ -30,7 +30,7 @@ export function adaptSimPyInput(input) {
         ...(d.primeSensorPositionMm!=null?{primeSensorPositionMm:d.primeSensorPositionMm}:{}),...(d.backupSensorPositionMm!=null?{backupSensorPositionMm:d.backupSensorPositionMm}:{}),
         ...(d.backupRestartPositionMm!=null?{backupRestartPositionMm:d.backupRestartPositionMm}:{}),...(d.upstreamRestartDelaySeconds!=null?{upstreamRestartDelaySeconds:d.upstreamRestartDelaySeconds}:{}),...(d.downstreamRampUpSeconds!=null?{downstreamRampUpSeconds:d.downstreamRampUpSeconds}:{}),
         blockedTimeDelaySeconds:d.blockedTimeDelaySeconds??0,clearTimeDelaySeconds:d.clearTimeDelaySeconds??0,upstreamStopResponseSeconds:d.upstreamStopResponseSeconds??0,
-        bottlesDischargedAtStop:d.bottlesDischargedAtStop??0,...(input.run.reliabilityEnabled !== false && reliability?{reliability}:{}),...(model.noiseProfile?.microStop?{microStop:model.noiseProfile.microStop}:{})});
+        bottlesDischargedAtStop:d.bottlesDischargedAtStop??0});
     } else {
       if(Object.keys(model.noiseProfile||{}).some(key=>!['reliability','microStop'].includes(key)))throw new Error('SimPy does not support this machine noise profile: '+model.name);
       const design=model.processData?.equipment;

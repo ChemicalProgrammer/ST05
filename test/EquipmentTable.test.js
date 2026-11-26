@@ -56,9 +56,9 @@ function fixture(){
       field(fields,'equipment-macrostop-scrap',3,{type:'number'});
       const rel=node('section','reliability-controls');fields.append(rel);
       const mode=field(rel,'','general',{tag:'select',options:['general','split']});
-      const bf=field(rel,'reliability-mtbfMinutes',5,{type:'number'});
-      const minor=field(rel,'',1,{type:'number',hidden:true});minor.dataset.stopClass='minor';minor.dataset.parameterHelp='reliability-mtbfMinutes';
-      mode.addEventListener('change',()=>{bf.parentElement.hidden=mode.value==='split';minor.parentElement.hidden=mode.value!=='split';});
+      const general=['mtbfMinutes','mttrMinutes'].map((key,i)=>field(rel,'reliability-'+key,[5,2][i],{type:'number'}));
+      const breakdown=[];for(const kind of ['minor','major'])for(const key of ['mtbfMinutes','mttrMinutes']){const input=field(rel,'',1,{type:'number',disabled:true,readOnly:true});input.dataset.stopClass=kind;input.dataset.parameterHelp='reliability-'+key;breakdown.push(input);}
+      mode.addEventListener('change',()=>{general.forEach(input=>{input.disabled=input.readOnly=mode.value==='split';});breakdown.forEach(input=>{input.disabled=input.readOnly=mode.value!=='split';});});
     }else{
       field(fields,'equipment-transport-unit','Bottle',{tag:'output'});
       field(fields,'format-zone-lact',1000,{type:'number'});
@@ -131,8 +131,10 @@ test('conveyor table mirrors calculated values, manual switches and conditional 
    assert.equal(h.cell('Belt','dynamic-percent').querySelector('input').value,'120');
    const reliability=h.cell('Filler','stop-mode').querySelector('select');reliability.value='split';emit(h,reliability,'change');
    assert.equal(h.cell('Filler','minor-mtbf').querySelector('input').hidden,false);
-   assert.equal(h.cell('Capper','minor-mtbf').querySelector('input').hidden,true);
-   assert.equal(h.cell('Filler','mtbf').querySelector('input').hidden,true);
+   assert.equal(h.cell('Capper','minor-mtbf').querySelector('input').hidden,false);
+   assert.equal(h.cell('Capper','minor-mtbf').querySelector('input').disabled,true);
+   assert.equal(h.cell('Filler','mtbf').querySelector('input').hidden,false);
+   assert.equal(h.cell('Filler','mtbf').querySelector('input').disabled,true);
  }finally{h.close();}
 });
 
@@ -171,10 +173,10 @@ test('group headings span their parameters, labels and units are separate, and r
    const table=h.row('Filler').closest('table'),head=table.querySelector('thead');
    assert.equal(head.querySelectorAll('tr').length,3);
    const headings=[...head.querySelectorAll('.equipment-table-group-heading')].filter(th=>th.textContent);
-   assert.deepEqual(headings.map(th=>th.textContent),['General','Machine design','Reliability']);
+   assert.deepEqual(headings.map(th=>th.querySelector('button span').textContent),['General','Machine design','Reliability']);
    assert.equal(headings.reduce((sum,th)=>sum+th.colSpan,0),head.querySelectorAll('th[data-column]').length-3);
    const beltHead=h.row('Belt').closest('table').querySelector('thead');
-   assert([...beltHead.querySelectorAll('.equipment-table-group-heading')].some(th=>th.textContent==='Geometry'));
+   assert([...beltHead.querySelectorAll('.equipment-table-group-heading')].some(th=>th.querySelector('button span')?.textContent==='Geometry'));
    assert.equal(h.row('Filler').querySelector('.equipment-table-position'),null);
    assert.equal(h.row('Belt').querySelector('.equipment-table-position'),null);
    assert.equal(head.querySelectorAll('th[data-column="evaluation"]').length,1);
@@ -319,5 +321,23 @@ test('Minimal mounts the same editable and resizable table as a mixed physical l
   assert(h.host.querySelector('th[data-column="lact"] .equipment-table-resize'));
   h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync();
   assert.equal(h.host.parentElement,h.content);
+ }finally{h.close();}
+});
+
+test('mixed table combines material flow and transport, and groups collapse without changing original values',()=>{
+ const h=fixture();try{
+  const compact=h.d.createElement('div');compact.id='minimal-equipment-table-host';h.d.body.append(compact);
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  assert.equal(h.host.querySelectorAll('th[data-column=flow]').length,1);assert(!h.host.querySelector('th[data-column=transport]'));
+  assert(h.cell('Filler','flow').querySelector('select'));assert.equal(h.cell('Belt','flow').querySelector('output').textContent,'Bottle');
+  assert.equal(h.host.querySelector('th[data-column=critical]').textContent,'Critical machine');
+  assert(!h.host.querySelector('th[data-column=failure-enabled]'));
+  assert.equal(h.cell('Belt','mtbf').textContent,'—');
+  const toggle=()=>h.host.querySelector('button[data-group-id="mixed:Reliability"]');
+  const original=h.a._fields.querySelector('.reliability-mtbfMinutes');
+  assert.equal(toggle().getAttribute('aria-expanded'),'true');toggle().click();
+  assert.equal(toggle().getAttribute('aria-expanded'),'false');assert.equal(h.cell('Filler','mtbf'),null);
+  assert.equal(original.value,'5');assert.equal(h.calls.dirty,0);toggle().click();
+  assert.equal(toggle().getAttribute('aria-expanded'),'true');assert.equal(h.cell('Filler','mtbf').querySelector('input').value,'5');
  }finally{h.close();}
 });

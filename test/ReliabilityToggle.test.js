@@ -24,3 +24,11 @@ test('cache signature separates failure-free runs and preserves enabled/default 
  const a=input(),signature=run=>vm.runInNewContext(fn+'simulationInputSignature(input)',{input:{...a,run},CURRENT_ENGINE_ID:'ST_CURRENT',canonicalSimulationInputSignature});
  assert.equal(signature(a.run),signature({...a.run,reliabilityEnabled:true}));assert.notEqual(signature(a.run),signature({...a.run,reliabilityEnabled:false}));
 });
+
+test('conveyor random failure and microstop profiles are not activated by the app engines',async()=>{
+ const {stopReliabilityProfile}=await import('../src/simulation/StopReliability.js');
+ const profile={mtbfMinutes:1,mttrMinutes:2};
+ assert.equal(stopReliabilityProfile({type:'CONVEYOR',noiseProfile:{reliability:profile}}),null);
+ assert.equal(stopReliabilityProfile({type:'CUSTOM',processData:{role:'CONVEYOR',equipment:{stopInputs:{minor:profile,major:profile}}}}),null);
+ assert.equal(stopReliabilityProfile({type:'FILLER',noiseProfile:{reliability:profile}}).mtbfMinutes,1);
+});

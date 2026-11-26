@@ -1,6 +1,8 @@
 // Category frequencies share the same operating exposure. Exponential clocks
 // superpose to a total rate, with event categories sampled by their rate share.
 export function stopReliabilityProfile(model, categories) {
+  // Conveyors may stop from flow, sensors or commands, never own random failures.
+  if(model?.type==='CONVEYOR'||model?.processData?.role==='CONVEYOR')return null;
   const general=model.noiseProfile?.reliability;
   // 2D also resolves draft inputs before the numerical validator runs.
   const valid=profile=>Number.isFinite(profile?.mtbfMinutes)&&profile.mtbfMinutes>0&&

@@ -109,7 +109,12 @@ html:not([data-ui-mode=advance]) #equipment-view-tools { display:none!important;
 /* Explicitly override the global 42px table row height for ALL header rows.
    Align labels and units toward their shared boundary with no padding gap. */
 .equipment-editor-table thead tr { height:auto; }
-.equipment-editor-table .equipment-table-groups th { padding-block:var(--space-1); border-bottom:var(--border-width) solid var(--secondary); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
+.equipment-editor-table .equipment-table-groups th { background:color-mix(in srgb,var(--secondary) 38%,var(--surface));color:var(--ink);padding-block:var(--space-1); border-bottom:var(--border-width) solid var(--secondary); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
+.equipment-table-group-toggle {display:flex;align-items:center;justify-content:center;gap:var(--space-1);width:100%;min-height:0;padding:var(--space-1);border:0;background:transparent;color:inherit;font:inherit;white-space:normal;overflow-wrap:anywhere;}
+.equipment-table-group-toggle:hover {background:color-mix(in srgb,var(--secondary) 18%,transparent);color:inherit;}
+.equipment-table-group-toggle:active:not(:disabled){transform:none;}
+.equipment-table-group-chevron {flex:none;}
+.equipment-table-folded-column {background:var(--surface-soft);}
 .equipment-editor-table .equipment-table-labels th { padding-block:var(--space-1) 0; border-bottom:0; vertical-align:bottom; line-height:1.1; white-space:normal; overflow-wrap:anywhere; }
 .equipment-editor-table .equipment-table-units th { font-size:var(--font-secondary); font-weight:var(--weight-regular); padding-block:0 var(--space-1); vertical-align:top; line-height:1.1; white-space:normal; overflow-wrap:anywhere; }
 .equipment-editor-table .equipment-table-center { text-align:center; }

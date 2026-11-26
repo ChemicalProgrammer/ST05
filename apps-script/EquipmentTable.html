@@ -5,7 +5,7 @@
 window.STEquipmentTable=(function(){
   var current=null,section='equipment',separate=false,scope='equipment',active=false,initialized=false;
   var signature='',renderedCards=[],bindings=[],rowActions=[],updating=false,queued=false;
-  var labels={},manualWidths=new Map(),tableLayouts=[],gesture=null,rowSettlements=new WeakMap(),viewMotion=null,viewContext='';
+  var labels={},manualWidths=new Map(),collapsedGroups=new Map(),tableLayouts=[],gesture=null,rowSettlements=new WeakMap(),viewMotion=null,viewContext='';
   function el(id){return document.getElementById(id);}
   function tr(en,es){return document.documentElement.lang==='es'?es:en;}
   function node(tag,cls,text){var n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
@@ -21,10 +21,10 @@ window.STEquipmentTable=(function(){
   function group(en,es,columns){return {en:en,es:es,columns:columns};}
   var machineGeneral=group('General','General',[
     col('type','.equipment-type','Type','Tipo'),
-    col('flow','.equipment-material-flow','Material flow','Flujo de material'),
+    col('flow',['.equipment-material-flow','.equipment-transport-unit'],'Material flow','Flujo de material'),
     col('rate','.equipment-rate','Speed (bpm / cases/min)','Velocidad (bpm / cajas/min)'),
     col('maximum','.equipment-maximum-speed','Maximum speed (bpm / cases/min)','Velocidad máxima (bpm / cajas/min)'),
-    col('critical','.equipment-pacemaker','Pacemaker','Equipo crítico')]);
+    col('critical','.equipment-pacemaker','Critical machine','Equipo crítico')]);
   var physical=group('Machine design','Diseño del equipo',[
     col('capacity','.equipment-internal-capacity','Internal capacity (input units)','Capacidad interna (unidades de entrada)'),
     col('occupancy','.equipment-occupancy-mode','Occupancy model','Modelo de ocupación'),
@@ -33,15 +33,14 @@ window.STEquipmentTable=(function(){
     col('scrap','.equipment-macrostop-scrap','Scrap (bottles/stop)','Scrap (botellas/paro)')]);
   function reliability(conveyor){return group('Reliability','Confiabilidad',[
     col('stop-mode','.reliability-controls select','Stop inputs','Tipo de paro'),
-    col('failure-enabled','.reliability-enabled',conveyor?'Own failures':'Failures enabled',conveyor?'Fallas propias':'Fallas habilitadas'),
-    col('mtbf','.reliability-mtbfMinutes','MTBF (min)','MTBF (min)'),
-    col('mttr','.reliability-mttrMinutes','MTTR (min)','MTTR (min)'),
+    col('mtbf','.reliability-mtbfMinutes','General MTBF (min)','MTBF general (min)'),
+    col('mttr','.reliability-mttrMinutes','General MTTR (min)','MTTR general (min)'),
     col('minor-mtbf','[data-stop-class="minor"][data-parameter-help="reliability-mtbfMinutes"]','Minor MTBF (min)','MTBF menor (min)'),
     col('minor-mttr','[data-stop-class="minor"][data-parameter-help="reliability-mttrMinutes"]','Minor MTTR (min)','MTTR menor (min)'),
     col('major-mtbf','[data-stop-class="major"][data-parameter-help="reliability-mtbfMinutes"]','Major MTBF (min)','MTBF mayor (min)'),
     col('major-mttr','[data-stop-class="major"][data-parameter-help="reliability-mttrMinutes"]','Major MTTR (min)','MTTR mayor (min)')]);}
   function zone(id,en,es,manual){return col(id,manual?['.format-zone-'+id+'-enabled','.format-zone-'+id]:'.format-zone-'+id,en,es);}
-  var conveyorGeneral=group('General','General',[col('type','.equipment-type','Type','Tipo'),col('transport','.equipment-transport-unit','Transport unit','Unidad de transporte')]);
+  var conveyorGeneral=group('General','General',[col('type','.equipment-type','Type','Tipo'),col('flow',['.equipment-material-flow','.equipment-transport-unit'],'Material flow','Flujo de material')]);
   var geometry=group('Geometry','Geometría',[
     zone('lact','Lact (mm)','Lact (mm)'),zone('lp-prime','Lp (mm)','Lp (mm)'),zone('package-length','Package length (mm)','Longitud del envase (mm)'),
     zone('discharge-runout','Discharge (mm)','Descarga (mm)'),zone('reject-runout','Coding (mm)','Codificado (mm)'),
@@ -80,15 +79,15 @@ window.STEquipmentTable=(function(){
     return true;
   }
   function columnGroups(cards,conveyor){
-    var groups=conveyor?[conveyorGeneral,geometry,upstream,downstream,speeds,dynamic,reliability(true)]:[machineGeneral,physical,reliability(false)];
+    var groups=conveyor?[conveyorGeneral,geometry,upstream,downstream,speeds,dynamic]:[machineGeneral,physical,reliability(false)];
     return groups.map(g=>({...g,columns:g.columns.filter(c=>cards.some(card=>c.selectors.some(s=>applicable(source(card,s),card))))})).filter(g=>g.columns.length);
   }
   // Combine the same column definitions without duplicating type/reliability
   // columns. Machine-only and conveyor-only cells are explicitly inapplicable.
   function mixedGroups(cards){
-    var general=group('General','General',[col('type','.equipment-type','Type','Tipo'),...machineGeneral.columns.slice(1).map(c=>({...c,kind:c.id==='rate'?null:'machine'})),...conveyorGeneral.columns.slice(1).map(c=>({...c,kind:'conveyor'}))]);
+    var general=group('General','General',[col('type','.equipment-type','Type','Tipo'),...machineGeneral.columns.slice(1).map(c=>({...c,kind:['rate','flow'].includes(c.id)?null:'machine'}))]);
     var groups=[general,{...physical,columns:physical.columns.map(c=>({...c,kind:'machine'}))},
-      ...[geometry,upstream,downstream,speeds,dynamic].map(g=>({...g,columns:g.columns.map(c=>({...c,kind:'conveyor'}))})),reliability(false)];
+      ...[geometry,upstream,downstream,speeds,dynamic].map(g=>({...g,columns:g.columns.map(c=>({...c,kind:'conveyor'}))})),{...reliability(false),columns:reliability(false).columns.map(c=>({...c,kind:'machine'}))}];
     return groups.map(g=>({...g,columns:g.columns.filter(c=>cards.some(card=>columnApplies(c,card)&&c.selectors.some(sel=>applicable(source(card,sel),card))))})).filter(g=>g.columns.length);
   }
   function columnApplies(column,card){return !column.kind||(column.kind==='conveyor')===(type(card)==='CONVEYOR');}
@@ -436,6 +435,7 @@ window.STEquipmentTable=(function(){
     bindResize(descriptor,layout);
     return descriptor;
   }
+  function groupKey(layout,name){return (layout.conveyor===null?'mixed':layout.conveyor?'conveyors':'equipment')+':'+name;}
   function groupHeader(row,label,count,identity=false){
     var cell=node('th','equipment-table-group-heading',label);
     cell.colSpan=count;
@@ -460,9 +460,17 @@ window.STEquipmentTable=(function(){
     var params=[];
     groups.forEach(g=>{
       var label=tr(g.en,g.es),cols=node('colgroup');
-      groupHeader(groupRow,label,g.columns.length);
-      g.columns.forEach(c=>{
+      var groupId=groupKey(layout,g.en),collapsed=collapsedGroups.get(groupId)===true;
+      var groupHead=groupHeader(groupRow,'',collapsed?1:g.columns.length);
+      groupHead.removeAttribute('aria-hidden');groupHead.scope='colgroup';groupHead.dataset.groupId=groupId;
+      var toggle=node('button','equipment-table-group-toggle');toggle.type='button';toggle.dataset.groupId=groupId;
+      toggle.setAttribute('aria-expanded',String(!collapsed));toggle.title=collapsed?tr('Expand columns','Expandir columnas'):tr('Collapse columns','Colapsar columnas');
+      toggle.append(node('span','',label),node('span','equipment-table-group-chevron',collapsed?'▸':'▾'));groupHead.append(toggle);
+      toggle.onclick=function(){collapsedGroups.set(groupId,!collapsed);signature='';refresh();Array.from(host.querySelectorAll('button[data-group-id]')).find(b=>b.dataset.groupId===groupId)?.focus({preventScroll:true});};
+      var columns=collapsed?[{id:'folded-'+g.en,en:g.en,es:g.es,selectors:[],collapsed:true}]:g.columns;
+      columns.forEach(c=>{
         var descriptor=appendColumn(layout,top,bottom,cols,c.id,tr(c.en,c.es),label);
+        if(c.collapsed){descriptor.head.classList.add('equipment-table-folded-column');descriptor.unit.classList.add('equipment-table-folded-column');}
         params.push({column:c,descriptor});
       });
       table.append(cols);
@@ -483,7 +491,7 @@ window.STEquipmentTable=(function(){
       identity.dataset.column='name';identity.append(wrap);row.append(identity);name.cells.push(identity);
       var status=node('td','equipment-table-center');status.dataset.column='evaluation';
       var verdict=evaluationCell(card,status);row.append(status);evaluation.cells.push(status);
-      params.forEach(({column,descriptor})=>{var td=node('td');td.dataset.column=column.id;cellContent(td,card,column);row.append(td);descriptor.cells.push(td);});
+      params.forEach(({column,descriptor})=>{var td=node('td');td.dataset.column=column.id;if(column.collapsed)td.classList.add('equipment-table-folded-column');else cellContent(td,card,column);row.append(td);descriptor.cells.push(td);});
       var last=node('td','equipment-table-center');last.dataset.column='delete';
       var remove=actionButton('trash',tr('Delete equipment','Eliminar equipo'),()=>card.querySelector('.remove-equipment')?.click());
       last.append(remove);row.append(last);deletion.cells.push(last);
@@ -499,7 +507,7 @@ window.STEquipmentTable=(function(){
       var cards=Array.from(list.querySelectorAll('.equipment-card:not(.hidden)'));
       var mixed=minimal(current),kinds=mixed?[cards]:[cards.filter(c=>type(c)!=='CONVEYOR'),cards.filter(c=>type(c)==='CONVEYOR')];
       var groups=mixed?[mixedGroups(cards)]:kinds.map((group,i)=>columnGroups(group,i===1));
-      var next=JSON.stringify([mixed,document.documentElement.lang,cards.map(c=>[c.dataset.equipmentId,type(c)]),groups.map(gs=>gs.map(g=>g.columns.map(c=>c.id)))]);
+      var next=JSON.stringify([mixed,document.documentElement.lang,cards.map(c=>[c.dataset.equipmentId,type(c)]),groups.map(gs=>gs.map(g=>g.columns.map(c=>c.id))),Array.from(collapsedGroups.entries())]);
       var rebuild=next!==signature||renderedCards.length!==cards.length||cards.some((c,i)=>renderedCards[i]!==c);
       if(rebuild){
         var scrolls=Array.from(host.querySelectorAll('.equipment-table-scroll')).map(n=>n.scrollLeft);

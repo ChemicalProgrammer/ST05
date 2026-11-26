@@ -186,14 +186,22 @@
       STSettings.connectCalendar(function(detail){if(detail?.physical){var simulation=activePersistentSimulation();if(simulation)simulation.results=null;cancelRoundSession();stopPlaybackTimer();state.run.result=null;state.run.representative=null;state.run.configuration=null;toggle('simulation-results',false);}markCaseDirty();renderSimulationAnalysis();shell.sync();});
       STSettings.connectCaseFlush(function(){return prepareCaseDraft();});
       STSettings.connectInterfaceMode(async function(mode){
-        if(!state.bootstrap||!['MINIMAL','BASIC','ADVANCE'].includes(mode))return;
-        if(runControlsLocked()||window.STMinimalMode?.isSearching())throw Error('Wait for the current calculation to finish.');
-        var record=state.activeCase;
+        if(!['MINIMAL','BASIC','ADVANCE'].includes(mode))throw Error('Invalid interface mode.');
+        if(runControlsLocked()||window.STMinimalMode?.busy?.()||window.STSimulation2D?.isRunning?.())throw Error('Wait for the current calculation to finish.');
+        // The shortcut also works before opening a workspace. Store the
+        // browser preference so bootstrap uses it on sign-in.
+        if(!state.bootstrap){
+          if(!STPreferences.write('interfaceMode',mode))throw Error(__ST_TEXT__('settings.interface_mode_storage_error'));
+          document.documentElement.dataset.workspaceMode=mode;
+          document.documentElement.dataset.uiMode=mode==='ADVANCE'?'advance':'basic';
+          return;
+        }
+        var record=state.activeCase,session=state.bootstrap;
         if(record){
           if(autosave.pending())await flushCase(true);
           var response=await new Promise(resolve=>callServer('setCaseWorkspaceMode',[record.id,mode],resolve));
           if(!response?.ok)throw Error(response?.error?.message||'The case interface mode could not be saved.');
-          if(state.activeCase!==record)return;
+          if(state.activeCase!==record||state.bootstrap!==session)throw Error('The active case changed. Open the mode selector again.');
           record.metadata=Object.assign({},record.metadata,{workspaceMode:response.data.workspaceMode});
           record.revision=response.data.revision;
           var item=state.bootstrap.cases?.find(c=>c.id===record.id);if(item)item.revision=record.revision;

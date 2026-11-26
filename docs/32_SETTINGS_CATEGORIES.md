@@ -7,7 +7,7 @@ close icon or Escape applies pending settings through the existing save pipeline
 | Tab | Options | Scope |
 | --- | --- | --- |
 | Case | Name, include What-If DOE, equipment chart colors, JSON-field visibility | Case JSON; normal case save policy |
-| Appearance | Language (English / Español), theme, accent palette, text size; existing restricted interface-mode selector | Browser preferences |
+| Appearance | Language (English / Español), theme, accent palette, text size | Browser preferences |
 | Simulation | Autosave and interval, fixed/random seed policy | Browser preferences; seed policy in both modes; autosave only in Advance, Basic saves manually |
 | Gemini | Model, private API key, mode-specific prompt sections and inclusion checkboxes | Google account User Properties |
 | Storage | Drive workspace root folder | Google account settings |
@@ -61,3 +61,5 @@ editor; the former sidebar is hidden, and comparison, Settings, close-case and
 sign-out actions remain accessible as header icons. Basic Gemini shows two editable
 prompts (personality and combined CAPEX definitions), while preserving Advance
 prompt drafts. Model and API-key connection settings remain accessible in both.
+
+The restricted interface-mode selector is a standalone global dialog, not a Settings subsection. Hold Ctrl + Shift and press M five times within three seconds; choose the mode and Apply, or Cancel. Modes are persisted per case; the gallery uses the browser preference.

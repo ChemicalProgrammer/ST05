@@ -126,6 +126,12 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 #settings-dialog .dialog-actions { padding:var(--space-3) var(--space-4); }
 #settings-error:empty { display:none; }
 #settings-dialog { --dialog-width:920px; height:min(720px,calc(100dvh - 32px)); }
+#interface-mode-dialog { --dialog-width:var(--size-320,320px); }
+#interface-mode-form {display:flex;flex-direction:column;min-height:0;}
+#interface-mode-dialog .dialog-heading,#interface-mode-dialog .dialog-body,#interface-mode-dialog .dialog-actions {padding:var(--space-3) var(--space-4);}
+#interface-mode-dialog .dialog-body {display:grid;gap:var(--space-2);}
+#interface-mode-dialog select {width:100%;min-width:0;}
+#interface-mode-error {margin:0;font-size:var(--font-secondary);color:var(--danger);}
 #settings-dialog > .dialog-body { flex:1; min-height:0; overflow:auto; }
 .settings-tabs { display:flex; flex-wrap:wrap; flex-shrink:0; gap:var(--space-1); padding:var(--space-2) var(--space-4); border-bottom:var(--border-width) solid var(--line); }
 /* Tab buttons use .app-section-tab from ComponentStyles. */

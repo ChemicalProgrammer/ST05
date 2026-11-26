@@ -1206,26 +1206,45 @@ test('UI Basic: compact machine fields remain visible, palette has all colors an
  }finally{h.dom.window.close();}
 });
 
-test('UI: hidden mode selector requires five deliberate M presses, saves pending edits and stores the case mode',async()=>{
- const h=await setup({uiMode:'BASIC'});try{
-  await h.click('#sign-in-button');await h.click('.open-case');await h.click('#open-settings');
-  const dialog=h.d.getElementById('settings-dialog'),section=h.d.getElementById('settings-interface-section'),picker=h.d.getElementById('settings-interface-mode');
-  const press=(target,key='m',extra={})=>target.dispatchEvent(new h.w.KeyboardEvent('keydown',{key,bubbles:true,...extra}));
-  for(let i=0;i<5;i++)press(h.d.getElementById('case-name'));assert(section.classList.contains('hidden'));
-  for(let i=0;i<5;i++)press(dialog,'m',{repeat:true});assert(section.classList.contains('hidden'));
-  for(let i=0;i<4;i++)press(dialog);assert(section.classList.contains('hidden'));press(dialog);assert(!section.classList.contains('hidden'));
-  const doe=h.d.getElementById('settings-scenario-doe');assert.equal(doe.checked,false);doe.checked=true;
-  await h.click('#settings-cancel');assert.equal(h.w.STScenarioExplorer.doeEnabled(),true);assert.equal(h.w.localStorage.getItem('st.ui.v1.scenarioDoe'),null);await h.click('#open-settings');assert(section.classList.contains('hidden'));assert.equal(doe.checked,true);
-  h.d.getElementById('case-name').value='Mode change preserves draft';h.d.getElementById('case-name').dispatchEvent(new h.w.Event('input',{bubbles:true}));
-  for(let i=0;i<5;i++)press(dialog);picker.value='ADVANCE';picker.dispatchEvent(new h.w.Event('change'));await waitFor(()=>h.d.documentElement.dataset.uiMode==='advance'&&!picker.disabled);assert(dialog.open);assert(h.visible('settings-save-section'));assert(h.visible('settings-chart-section'));assert(!h.d.getElementById('settings-json-fields').closest('label').hidden);h.d.getElementById('settings-json-fields').checked=true;h.d.getElementById('settings-json-fields').dispatchEvent(new h.w.Event('change'));await h.click('#settings-cancel');
-  await waitFor(()=>!dialog.open);assert.equal(h.d.documentElement.dataset.uiMode,'advance',JSON.stringify({error:h.d.getElementById('settings-error').textContent,errors:h.errors,local:h.w.localStorage.getItem('st.ui.v1.interfaceMode')}));assert(section.classList.contains('hidden'));assert.equal(h.w.localStorage.getItem('st.ui.v1.interfaceMode'),null);assert.equal(h.storedCases()[0].metadata.workspaceMode,'ADVANCE');
-  await waitFor(()=>h.storedCases()[0].name==='Mode change preserves draft');
-  assert.equal(h.d.querySelectorAll('#accent-palette .accent-choice:not(.hidden)').length,57);
-  await h.click('#open-settings');assert(section.classList.contains('hidden'));for(let i=0;i<5;i++)press(dialog);picker.value='BASIC';picker.dispatchEvent(new h.w.Event('change'));await waitFor(()=>h.d.documentElement.dataset.uiMode==='basic'&&!picker.disabled);assert(dialog.open);assert(!h.visible('settings-save-section'));assert(!h.visible('settings-chart-section'));assert(h.d.getElementById('settings-json-fields').closest('label').hidden);assert.equal(h.d.documentElement.dataset.showJson,'false');assert.equal(h.d.querySelector('#gemini-prompt-language').classList.contains('hidden'),false);await h.click('#settings-cancel');
-  assert.equal(h.d.documentElement.dataset.uiMode,'basic');assert(h.d.querySelector('.basic-machine')._fields.querySelector('.reliability-mtbfMinutes'));assert.deepEqual(h.errors,[]);
+function pressModeKey(h,target=h.d.body,extra={}){
+ target.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'M',code:'KeyM',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true,...extra}));
+}
+function openModeSelector(h,target=h.d.body){
+ for(let i=0;i<5;i++)pressModeKey(h,target);
+ assert(h.d.getElementById('interface-mode-dialog').open);
+}
+async function applyWorkspaceMode(h,mode){
+ openModeSelector(h);
+ h.d.getElementById('settings-interface-mode').value=mode;
+ await h.click('#interface-mode-apply');
+ await waitFor(()=>!h.d.getElementById('interface-mode-dialog').open);
+}
+test('UI: global Ctrl Shift five-M shortcut requires deliberate presses and explicit apply; mode stays per case',async()=>{
+ const h=await setup({remember:true,uiMode:'MINIMAL'});try{
+  const d=h.d,dialog=d.getElementById('interface-mode-dialog'),picker=d.getElementById('settings-interface-mode');
+  assert(!d.getElementById('settings-interface-section'));assert(!dialog.open);
+  for(let i=0;i<5;i++)pressModeKey(h,d.body,{ctrlKey:false,shiftKey:false});assert(!dialog.open);
+  for(let i=0;i<5;i++)pressModeKey(h,d.body,{repeat:true});assert(!dialog.open);
+  const clock=h.w.Date.now;let time=10000;h.w.Date.now=()=>time;
+  try{
+   for(let i=0;i<4;i++)pressModeKey(h);assert(!dialog.open);time+=3001;pressModeKey(h);assert(!dialog.open);
+   for(let i=0;i<4;i++)pressModeKey(h);assert(dialog.open);
+  }finally{h.w.Date.now=clock;}
+  assert.equal(picker.value,'MINIMAL');picker.value='ADVANCE';picker.dispatchEvent(new h.w.Event('change',{bubbles:true}));
+  assert.equal(d.documentElement.dataset.workspaceMode,'MINIMAL');await h.click('#interface-mode-cancel');assert(!dialog.open);
+  assert.equal(h.w.localStorage.getItem('st.ui.v1.interfaceMode'),null);
+  await h.click('.open-case');await h.click('#open-settings');
+  const name=d.getElementById('case-name');name.value='Mode change preserves draft';name.dispatchEvent(new h.w.Event('input',{bubbles:true}));
+  openModeSelector(h,name);assert.equal(picker.value,'MINIMAL');picker.value='ADVANCE';await h.click('#interface-mode-apply');
+  await waitFor(()=>!dialog.open&&d.documentElement.dataset.workspaceMode==='ADVANCE');
+  assert(d.getElementById('settings-dialog').open);assert.equal(h.storedCases()[0].metadata.workspaceMode,'ADVANCE');
+  assert.equal(h.storedCases()[0].name,'Mode change preserves draft');assert.equal(h.w.localStorage.getItem('st.ui.v1.interfaceMode'),null);
+  await h.click('#settings-cancel');await applyWorkspaceMode(h,'BASIC');assert.equal(h.storedCases()[0].metadata.workspaceMode,'BASIC');
+  await h.click('#home-cases');assert.equal(d.documentElement.dataset.workspaceMode,'MINIMAL');
+  await applyWorkspaceMode(h,'ADVANCE');assert.equal(h.w.localStorage.getItem('st.ui.v1.interfaceMode'),'ADVANCE');
+  await h.click('.open-case');assert.equal(d.documentElement.dataset.workspaceMode,'BASIC');
+  assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
- const persisted=await setup({remember:true,uiMode:'BASIC',savedUiMode:'ADVANCE'});try{assert.equal(persisted.d.documentElement.dataset.uiMode,'advance');assert.deepEqual(persisted.errors,[]);}finally{persisted.dom.window.close();}
- const other=await setup({remember:true,uiMode:'BASIC'});try{assert.equal(other.d.documentElement.dataset.uiMode,'basic');}finally{other.dom.window.close();}
 });
 
 test('UI: Basic conveyor speed round-trips m/min and preserves overrides while Gemini follows the local mode',async()=>{
@@ -1235,7 +1254,7 @@ test('UI: Basic conveyor speed round-trips m/min and preserves overrides while G
   let asked;h.api.askGemini=request=>{asked=request;return {text:'Mode received.'};};
   await h.click('#toggle-gemini');h.d.getElementById('gemini-question').value='Improve the conveyor';await h.click('#send-gemini');await waitFor(()=>asked);assert.equal(asked.uiMode,'ADVANCE');
   await h.click('#close-gemini');
-  async function mode(value){await h.click('#open-settings');for(let i=0;i<5;i++)h.d.getElementById('settings-dialog').dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'m',bubbles:true}));h.d.getElementById('settings-interface-mode').value=value;await h.click('#settings-cancel');await waitFor(()=>!h.d.getElementById('settings-dialog').open);}
+  async function mode(value){await applyWorkspaceMode(h,value);}
   await mode('BASIC');await h.click('[data-basic-view=conveyors]');
   let fields=h.d.getElementById('equipment-inspector').querySelector('.equipment-fields'),speed=fields.querySelector('.format-zone-belt-speed');
   assert.equal(speed.disabled,false);assert.equal(Number(speed.value),30);assert.match(speed.closest('label').textContent,/m\/min/);
@@ -2036,7 +2055,7 @@ test('UI: DOE factors remain visible when disabled and can be enabled without un
   const card=Array.from(h.d.querySelectorAll('.scenario-tier-grid .analysis-recommendation')).find(card=>card.querySelector('.scenario-doe-factor'));assert(card);card.querySelector('.scenario-configure').click();
   const panel=card.querySelector('.scenario-doe'),toggle=card.querySelector('.scenario-doe-enabled');assert.equal(panel.hidden,false);assert.equal(toggle.checked,false);assert(card.querySelectorAll('.scenario-doe-factor').length>0);assert(card.querySelector('.scenario-doe-factor .scenario-doe-select').disabled);
   toggle.checked=true;toggle.dispatchEvent(new h.w.Event('change'));assert.equal(h.w.STScenarioExplorer.doeEnabled(),true);assert(!card.querySelector('.scenario-doe-factor .scenario-doe-select').disabled,'supported factors can be chosen before searching');
-  card.querySelector('.scenario-config-dialog').close();await h.click('#open-settings');assert(h.d.getElementById('settings-interface-section').classList.contains('hidden'));assert(!h.d.getElementById('settings-scenario-doe').closest('section').classList.contains('hidden'));
+  card.querySelector('.scenario-config-dialog').close();await h.click('#open-settings');assert(!h.d.getElementById('interface-mode-dialog').open);assert(!h.d.getElementById('settings-scenario-doe').closest('section').classList.contains('hidden'));
   h.d.getElementById('settings-scenario-doe').checked=false;await h.click('#settings-cancel');assert.equal(h.w.STScenarioExplorer.doeEnabled(),false);assert.equal(panel.hidden,false);assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });
@@ -2219,7 +2238,7 @@ test('UI: Comparison requires multiple simulations in both modes and file export
 test('UI: mode switches rebuild isolated What-If cards and unified DOE rows preserve factor selection',async()=>{
  const h=await setup({remember:true,uiMode:'BASIC'});try{
   await h.click('.open-case');await h.click('[data-basic-view=whatif]');const grid=()=>h.d.querySelector('#simulation-analysis-content .scenario-tier-grid');assert(grid().querySelector('.scenario-current'));
-  const switchMode=async mode=>{await h.click('#open-settings');const dialog=h.d.getElementById('settings-dialog');for(let i=0;i<5;i++)dialog.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'m',bubbles:true}));h.d.getElementById('settings-interface-mode').value=mode;await h.click('#settings-cancel');};
+  const switchMode=async mode=>{await applyWorkspaceMode(h,mode);};
   let card=grid().querySelector('.analysis-recommendation:has(.scenario-evaluate)');const choice=card.querySelector('.scenario-change input[type=checkbox]');choice.checked=false;choice.dispatchEvent(new h.w.Event('change'));assert(card.querySelector('.scenario-create').disabled);
   await switchMode('ADVANCE');assert(!grid().querySelector('.scenario-current'));assert.equal(grid().children.length,4);assert(!h.d.querySelector('.scenario-candidate-details'));card=grid().querySelector('.analysis-recommendation:has(.scenario-evaluate)');assert(card.querySelector('.scenario-change input[type=checkbox]').checked);
   await switchMode('BASIC');assert(grid().querySelector('.scenario-current'));assert.equal(grid().children.length,4);card=grid().querySelector('.analysis-recommendation:has(.scenario-evaluate)');assert.equal(card.querySelector('.scenario-change input[type=checkbox]').checked,false);
@@ -3491,17 +3510,15 @@ test('UI: Basic Settings is a single General and Appearance view; mode unlock re
   assert.equal(d.getElementById('settings-page-appearance').getAttribute('role'),null);
   const general=d.getElementById('settings-case-section'),appearance=d.getElementById('settings-appearance-section');
   assert(general.compareDocumentPosition(appearance)&h.w.Node.DOCUMENT_POSITION_FOLLOWING);
-  for(let i=0;i<5;i++)dialog.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'m',bubbles:true}));
-  const picker=d.getElementById('settings-interface-mode');assert(!d.getElementById('settings-interface-section').classList.contains('hidden'));
-  picker.value='ADVANCE';picker.dispatchEvent(new h.w.Event('change'));
-  await waitFor(()=>dialog.dataset.settingsLayout==='tabs'&&!picker.disabled);
+  await applyWorkspaceMode(h,'ADVANCE');
+  await waitFor(()=>dialog.dataset.settingsLayout==='tabs');
   assert(!nav.hidden&&!nav.inert);assert.equal(d.getElementById('settings-page-appearance').getAttribute('role'),'tabpanel');
   assert(!d.querySelector('.settings-case-options').classList.contains('hidden'));
   assert.equal(d.getElementById('settings-appearance-title-general').hidden,false);
   assert.equal(d.getElementById('settings-appearance-title-compact').hidden,true);
   await h.click('#settings-tab-simulation');assert(h.visible('settings-page-simulation'));
-  picker.value='MINIMAL';picker.dispatchEvent(new h.w.Event('change'));
-  await waitFor(()=>dialog.dataset.settingsLayout==='compact'&&!picker.disabled);
+  await applyWorkspaceMode(h,'MINIMAL');
+  await waitFor(()=>dialog.dataset.settingsLayout==='compact');
   assert(nav.hidden);assert(h.visible('settings-case-section'));assert(h.visible('settings-page-appearance'));assert(!h.visible('settings-page-simulation'));
   assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}

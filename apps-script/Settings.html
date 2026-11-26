@@ -1,6 +1,6 @@
 <script>
 window.STSettings = (function() {
-  var settingsCaseNameOnOpen='', save, flushCase, removeKey, resetApp, resetting=false, applyMode, caseProvider, caseChanged, promptDefinitions=[], modeCount=0, modeStarted=0, timer, version=0, savedVersion=0, sending=false, removing=false, hasKey=false, modeChanging=false, lastFocus, failure=null, waiters=[];
+  var settingsCaseNameOnOpen='', save, flushCase, removeKey, resetApp, resetting=false, applyMode, caseProvider, caseChanged, promptDefinitions=[], modeCount=0, modeStarted=0, timer, version=0, savedVersion=0, sending=false, removing=false, hasKey=false, modeChanging=false, modeFocus, lastFocus, failure=null, waiters=[];
   var readModels,modelList=[],modelsLoaded=false,modelsLoading=false,modelsTicket=0;
   function el(id){return document.getElementById(id);}
   function advanced(){return document.documentElement.dataset.uiMode==='advance';}
@@ -142,7 +142,7 @@ window.STSettings = (function() {
     // Sync the existing case name whenever settings opens, even if the editor failed to render.
     var record=activeCase();settingsCaseNameOnOpen=record?.name||'';
     el('case-name').value=settingsCaseNameOnOpen;
-    resetModeSelector();renderEngine();renderCaseCharts();var tab=document.querySelector('[data-settings-tab][aria-selected="true"]');selectTab(tab?.dataset.settingsTab||'appearance');refresh();dialog.showModal();}
+    refreshSettingsControls();renderEngine();renderCaseCharts();var tab=document.querySelector('[data-settings-tab][aria-selected="true"]');selectTab(tab?.dataset.settingsTab||'appearance');refresh();dialog.showModal();}
   function renderRateLossSettings(){
     var target=el('settings-rate-loss-categories');if(!target)return;
     target.replaceChildren();
@@ -167,28 +167,48 @@ window.STSettings = (function() {
     return (catalog.products?.length||0)>1||(catalog.formats?.length||0)>1||
       (Array.isArray(legacy)&&legacy.length>1)?'multiple':'single';
   }
-  function resetModeSelector(preserveUnlock){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-realdata-section').classList.toggle('hidden',document.documentElement.dataset.uiMode==='basic');el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
-    el('settings-product-format-mode').value=productFormatMode(record);el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');if(preserveUnlock!==true){modeCount=0;modeStarted=0;el('settings-interface-section').classList.add('hidden');}el('settings-interface-mode').value=(document.documentElement.dataset.workspaceMode||'MINIMAL');}
-  async function changeMode(){
-    if(modeChanging)return;
-    var picker=el('settings-interface-mode'),previous=(document.documentElement.dataset.workspaceMode||'MINIMAL'),mode=picker.value;
-    if(mode===previous)return;
-    modeChanging=true;picker.disabled=true;
-    try {
-      if(removing||resetting||!await flush()){picker.value=previous;return;}
-      if(activeCase()&&!el('case-editor-form').checkValidity())throw Error(__ST_TEXT__('settings.complete_fields'));
-      await applyMode?.(mode);
-      resetModeSelector(true);renderEngine();renderCaseCharts();
-      selectTab(document.querySelector('[data-settings-tab][aria-selected="true"]')?.dataset.settingsTab||'appearance');
-      el('settings-error').textContent='';window.dispatchEvent(new Event('st-save-policy-change'));
-    }catch(error){picker.value=previous;el('settings-error').textContent=error.message;STErrors.capture('settings-error',error);}
-    finally{modeChanging=false;picker.disabled=false;}
+  function refreshSettingsControls(){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-realdata-section').classList.toggle('hidden',document.documentElement.dataset.uiMode==='basic');el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
+    el('settings-product-format-mode').value=productFormatMode(record);el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');}
+  // Global chord: keep Ctrl + Shift held, press M five distinct times in
+  // the original three-second window. Browser key repeat does not count.
+  function resetModeShortcut(){modeCount=0;modeStarted=0;}
+  function currentMode(){var value=document.documentElement.dataset.workspaceMode;return ['MINIMAL','BASIC','ADVANCE'].includes(value)?value:STPreferences.resolveInterfaceMode();}
+  function openModeDialog(){
+    var dialog=el('interface-mode-dialog');if(dialog.open||modeChanging||!applyMode)return;
+    modeFocus=document.activeElement;el('settings-interface-mode').value=currentMode();
+    el('interface-mode-error').textContent='';el('interface-mode-error').hidden=true;
+    dialog.showModal();el('settings-interface-mode').focus();
   }
-  function unlockMode(event){
-    if(!el('settings-dialog').open||event.repeat||event.ctrlKey||event.altKey||event.metaKey||event.target.closest('input,select,textarea,[contenteditable]'))return;
-    if(event.key.toLowerCase()!=='m'){modeCount=0;return;}
+  function modeShortcut(event){
+    if(!event.ctrlKey||!event.shiftKey||event.altKey||event.metaKey){resetModeShortcut();return;}
+    if(event.code!=='KeyM'&&String(event.key).toLowerCase()!=='m'){
+      if(!['Control','Shift'].includes(event.key))resetModeShortcut();return;
+    }
+    event.preventDefault();event.stopImmediatePropagation();
+    if(event.repeat||event.isComposing||el('interface-mode-dialog').open||modeChanging)return;
     var now=Date.now();if(!modeCount||now-modeStarted>3000){modeCount=0;modeStarted=now;}
-    if(++modeCount===5){el('settings-interface-section').classList.remove('hidden');selectTab('appearance');var modeGroup=el('settings-interface-section');if(modeGroup.querySelector(':scope > .fold-content')?.hidden)modeGroup.querySelector('[data-subsection-toggle]')?.click();el('settings-interface-mode').focus();modeCount=0;}
+    if(++modeCount===5){resetModeShortcut();openModeDialog();}
+  }
+  function closeModeDialog(){
+    if(!modeChanging&&el('interface-mode-dialog').open)el('interface-mode-dialog').close();
+  }
+  async function changeMode(event){
+    event.preventDefault();if(modeChanging)return;
+    var dialog=el('interface-mode-dialog'),picker=el('settings-interface-mode'),mode=picker.value,error=el('interface-mode-error');
+    if(!dialog.open)return;
+    if(mode===currentMode()){closeModeDialog();return;}
+    modeChanging=true;picker.disabled=el('interface-mode-cancel').disabled=el('interface-mode-apply').disabled=true;
+    dialog.setAttribute('aria-busy','true');error.hidden=true;error.textContent='';
+    try{
+      if(removing||resetting||performanceLocked()||window.STMinimalMode?.busy?.()||window.STSimulation2D?.isRunning?.())throw Error('Wait for the current calculation to finish.');
+      if(!await flush())throw Error(el('settings-error').textContent||__ST_TEXT__('settings.complete_fields'));
+      if(activeCase()&&!el('case-editor-form').checkValidity())throw Error(__ST_TEXT__('settings.complete_fields'));
+      await applyMode(mode);
+      if(el('settings-dialog').open){refreshSettingsControls();renderEngine();renderCaseCharts();selectTab(document.querySelector('[data-settings-tab][aria-selected="true"]')?.dataset.settingsTab||'appearance');}
+      el('settings-error').textContent='';window.dispatchEvent(new Event('st-save-policy-change'));
+      dialog.close();
+    }catch(cause){error.textContent=window.STLanguage?.translate(cause.message)||cause.message;error.hidden=false;STErrors.capture('interface-mode-error',cause);}
+    finally{modeChanging=false;picker.disabled=el('interface-mode-cancel').disabled=el('interface-mode-apply').disabled=false;dialog.removeAttribute('aria-busy');}
   }
   function settle(ok){waiters.splice(0).forEach(function(done){done(ok);});}
   function write(){
@@ -226,10 +246,7 @@ window.STSettings = (function() {
         try{await flushCase();}catch(error){el('settings-error').textContent=error.message;STErrors.capture('settings-error',error);}
       }else el('settings-error').textContent='The case name is required before saving changes.';
     }
-    var changed=!el('settings-interface-section').classList.contains('hidden')&&el('settings-interface-mode').value!==((document.documentElement.dataset.workspaceMode||'MINIMAL'));
-    var mode=el('settings-interface-mode').value;
-    if(changed){try{await applyMode?.(mode);}catch(error){el('settings-error').textContent=error.message;return;}}
-    el('settings-error').textContent='';resetModeSelector();el('settings-dialog').close();if(lastFocus?.isConnected)lastFocus.focus();
+    el('settings-error').textContent='';refreshSettingsControls();el('settings-dialog').close();if(lastFocus?.isConnected)lastFocus.focus();
     window.dispatchEvent(new Event('st-save-policy-change'));
   }
   function keyStatus(){modelControls();if(!hasKey)el('gemini-model-status').textContent='Save an API key to load available models.';el('gemini-api-key').placeholder=hasKey?__ST_TEXT__('settings.api_key_mask'):__ST_TEXT__('settings.enter_api_key');el('gemini-key-status').textContent=removing?__ST_TEXT__('settings.removing_api_key'):hasKey?__ST_TEXT__('settings.api_key_saved_for_your_google_account'):__ST_TEXT__('settings.no_api_key_configured');el('gemini-delete-key').disabled=removing||!hasKey;}
@@ -290,7 +307,13 @@ window.STSettings = (function() {
     el('open-plant-calendar').onclick=function(){renderCalendar();var dialog=el('plant-calendar-dialog');if(!dialog.open)dialog.showModal();};
     ['plant-calendar-close','plant-calendar-done'].forEach(function(id){el(id).onclick=function(){el('plant-calendar-dialog').close();};});
     el('plant-calendar-dialog').addEventListener('close',function(){el('open-plant-calendar').focus();});
-    el('settings-interface-mode').onchange=changeMode;
+    el('interface-mode-form').addEventListener('submit',changeMode);
+    el('interface-mode-cancel').onclick=closeModeDialog;
+    el('interface-mode-dialog').addEventListener('cancel',function(event){event.preventDefault();closeModeDialog();});
+    el('interface-mode-dialog').addEventListener('close',function(){resetModeShortcut();if(modeFocus?.isConnected)modeFocus.focus();modeFocus=null;});
+    window.addEventListener('keydown',modeShortcut,true);
+    window.addEventListener('keyup',function(event){if(!event.ctrlKey||!event.shiftKey)resetModeShortcut();},true);
+    window.addEventListener('blur',resetModeShortcut);
     el('settings-product-format-mode').onchange=function(){
       const record=activeCase();if(!record)return;
       const requested=this.value==='multiple'?'multiple':'single';
@@ -368,8 +391,7 @@ window.STSettings = (function() {
     el('gemini-refresh-models').onclick=function(){loadModels(true);};
     el('gemini-api-key').addEventListener('input',function(){showKeyVerified(false);modelsTicket++;modelsLoading=false;modelControls();if(this.value.trim())el('gemini-model-status').textContent='The model list will refresh after the new API key is saved.';});
     el('settings-factory-reset').onclick=factoryReset;
-    el('settings-dialog').addEventListener('keydown',unlockMode);
-    el('settings-dialog').addEventListener('close',resetModeSelector);
+    el('settings-dialog').addEventListener('close',refreshSettingsControls);
     el('settings-dialog').addEventListener('cancel',function(e){e.preventDefault();close();});
     function change(){if(resetting)return;promptBudget();version++;failure=null;refresh();clearTimeout(timer);timer=setTimeout(write,600);}
     el('workspace-form').addEventListener('input',change);el('workspace-form').addEventListener('change',change);el('settings-page-gemini').addEventListener('input',change);el('settings-page-gemini').addEventListener('change',change);

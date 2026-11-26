@@ -527,7 +527,6 @@
             <div id="secondary-color-section" class="settings-row settings-colors"><div class="accent-heading"><span class="field-label" id="secondary-accent-label">Secondary color</span></div><button id="choose-secondary-color" aria-label="Select secondary color" title="Select secondary color" class="appearance-color-trigger" type="button" aria-haspopup="dialog" aria-controls="theme-color-dialog"><span class="appearance-current-swatch appearance-secondary-swatch" aria-hidden="true"></span></button><button id="reset-secondary-color" type="button" class="ghost icon-button" data-icon="refresh" aria-label="Reset secondary color" title="Reset secondary color"></button></div>
             </div></div><div class="appearance-footer"><span id="appearance-status" role="status"></span></div>
           </section>
-          <section id="settings-interface-section" class="settings-section hidden"><div class="settings-row"><label for="settings-interface-mode"><?= __ST_TEXT__('settings.interface_mode') ?></label><select id="settings-interface-mode"><option value="MINIMAL">Basic</option><option value="BASIC">Standard</option><option value="ADVANCE">Advance</option></select></div><p><?= __ST_TEXT__('settings.interface_mode_note') ?></p></section>
         </div>
         <div id="settings-page-simulation" class="hidden" role="tabpanel" aria-labelledby="settings-tab-simulation">
           <div id="settings-run-options" class="simulation-settings-groups">
@@ -568,6 +567,16 @@
         <p id="settings-error" data-error-notice="message" data-error-title="Settings error" role="alert"></p>
       </div>
       <div class="dialog-actions"><button id="settings-retry" type="button" class="hidden"><?= __ST_TEXT__('autosave.retry') ?></button><button id="settings-cancel" type="button"><?= __ST_TEXT__('dialog.done') ?></button></div>
+    </dialog>
+    <dialog id="interface-mode-dialog" aria-labelledby="interface-mode-title">
+      <header class="dialog-heading"><h2 id="interface-mode-title"><?= __ST_TEXT__('settings.interface_mode') ?></h2></header>
+      <form id="interface-mode-form">
+        <div class="dialog-body">
+          <select id="settings-interface-mode" aria-labelledby="interface-mode-title"><option value="MINIMAL">Basic</option><option value="BASIC">Standard</option><option value="ADVANCE">Advance</option></select>
+          <p id="interface-mode-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog-actions"><button id="interface-mode-cancel" type="button" class="ghost"><?= __ST_TEXT__('view.cancel') ?></button><button id="interface-mode-apply" type="submit">Apply</button></footer>
+      </form>
     </dialog>
     <dialog id="series-color-dialog" aria-labelledby="series-color-title"><header class="dialog-heading"><h2 id="series-color-title">Series color</h2><button id="series-color-close" type="button" class="ghost icon-button" data-icon="x" aria-label="Close color picker"></button></header><form id="series-color-form"><div class="dialog-body"><div id="series-color-map" tabindex="0" role="slider" aria-label="Color map. Left/right: saturation. Up/down: brightness." aria-valuemin="0" aria-valuemax="100"><span id="series-color-marker" aria-hidden="true"></span></div><label>Hue<input id="series-color-hue" type="range" min="0" max="359" step="1"></label><div class="color-hex-row"><div id="series-color-preview" aria-hidden="true"></div><label>HEX<input id="series-color-hex" pattern="#[0-9a-fA-F]{6}" maxlength="7" required></label><button id="series-color-copy" type="button" class="ghost icon-button" data-icon="copy" aria-label="Copy HEX" title="Copy HEX"></button></div><p id="series-color-copy-status" class="chart-note" role="status"></p><div class="color-rgb-grid"><label>R<input id="series-color-r" type="number" min="0" max="255" step="1" required></label><label>G<input id="series-color-g" type="number" min="0" max="255" step="1" required></label><label>B<input id="series-color-b" type="number" min="0" max="255" step="1" required></label></div></div><footer class="dialog-actions"><button id="series-color-default" class="ghost hidden" type="button">Restore</button><button id="series-color-cancel" class="ghost" type="button">Cancel</button><button type="submit">Apply</button></footer></form></dialog>
     <dialog id="sheet-import-dialog" aria-labelledby="sheet-import-title">

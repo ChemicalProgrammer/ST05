@@ -29,3 +29,9 @@ The appearance remains in separate modules. Disable it by changing `visualStyle`
 ## Validation
 
 Seventeen targeted tests pass: modular rendering, account-settings contracts, and automatic-theme boundaries, timer scheduling, manual overrides, reset, and suspended-tab recovery. Render checks verify unique IDs, defined stylesheet variables and removal of the requested Settings elements. Browser visual rendering and live Apps Script deployment still require verification in the running app; a local Chromium binary was unavailable.
+
+## Separate colors for each case
+
+Settings → Appearance exposes **Separate colors for each case** in Basic, Standard and Advance. The browser-local preference is off by default. When enabled, the current case has a draft primary/secondary palette, isolated from the general browser palette. Opening a case restores its saved pair; a new case uses the general colors until its first save. Returning to the case gallery or disabling the preference restores the general colors. Selecting colors in the gallery continues to edit the general palette.
+
+On every case save, including evidence-only saves, the captured pair is stored as `metadata.caseAppearance = { accent, secondaryAccent }`. The acknowledgement updates only the captured palette, without replacing newer unsaved UI choices. When the checkbox is off, saves retain any existing stored palette without updating it; opening a case does not apply its saved colors. Light/Dark/Automatic theme, text scale, chart-series colors and layout-specific simulation appearance remain independent. The global preference is not stored in the case and is cleared by browser-preferences reset.

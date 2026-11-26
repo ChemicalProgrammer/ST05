@@ -10,20 +10,27 @@ html[data-workspace-mode=MINIMAL] .case-open #basic-section-row:not(.hidden) {di
 html[data-workspace-mode=MINIMAL] .case-open #header-case-actions {flex:0 0 auto;width:auto;margin-left:0;}
 html[data-workspace-mode=MINIMAL] .case-open .breadcrumb {flex:1 1 var(--size-220);}
 html[data-workspace-mode=MINIMAL] .case-open #basic-case-actions {margin-left:auto;}
-.minimal-workspace {display:grid;gap:var(--section-gap);min-width:0;}
-.minimal-section {display:grid;gap:var(--space-3);min-width:0;}
-.minimal-section > .fold-heading {min-width:0;}
+/* Basic uses the same Subsection contract and exterior gutter as every
+   workspace. Its grid owns the inter-section gap; don't add sibling margins
+   from the shared block-flow layout a second time. */
+html[data-workspace-mode=MINIMAL] .case-open .workspace-content {padding:var(--workspace-gutter);}
+.minimal-workspace {display:grid;gap:var(--subsection-gap);min-width:0;margin:0;padding:0;}
+#minimal-workspace > .fold-card {margin:0;min-width:0;}
+.minimal-section > .fold-content {display:grid;gap:var(--space-3);min-width:0;}
+/* Before a run/search the body can be empty. It must not reserve an extra
+   header-to-content margin. A collapsed body uses the shared hidden rule. */
+.minimal-section > .fold-content:not(:has(> :not([hidden]):not(.hidden))) {margin-block-start:0;}
+.minimal-section .minimal-message {margin:0;}
 .minimal-table-wrap {overflow-x:auto;max-width:100%;}
 .minimal-table-wrap table {width:100%;border-collapse:collapse;white-space:nowrap;}
 .minimal-table-wrap :is(th,td) {padding:var(--space-2) var(--space-3);border-bottom:var(--border-width) solid var(--line);text-align:left;font-size:var(--font-body);}
 .minimal-table-wrap th {font-size:var(--font-secondary);font-weight:var(--weight-semibold);color:var(--muted);}
 html[data-workspace-mode=MINIMAL] #minimal-equipment-table-host {min-width:0;max-width:100%;}
-.minimal-simulation-tools {align-items:center;justify-content:flex-end;flex-wrap:wrap;}
+.minimal-simulation-tools {align-items:center;justify-content:flex-end;}
 .minimal-simulation-tools .time-value-label {display:flex;align-items:center;gap:var(--space-2);margin:0;}
 .minimal-simulation-tools .time-value-control {width:auto;}
 .minimal-simulation-tools #minimal-duration {width:var(--size-80,80px);min-width:0;}
 #minimal-result-cards {grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--size-160)),1fr));}
-.minimal-action {display:flex;justify-content:flex-start;}
 .minimal-result-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);}
 .minimal-result-grid[hidden],.minimal-workspace [hidden],#minimal-import-status[hidden] {display:none!important;}
 .minimal-result-grid article {min-width:0;display:grid;gap:var(--space-2);align-content:start;}

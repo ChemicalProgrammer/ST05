@@ -167,6 +167,10 @@ window.STMinimalMode=(function(){
     renderScenarios(sim,r);
     if(lock)monitor();
   }
+  function expandForAction(id){
+    var button=el(id)?.querySelector('[data-subsection-toggle]');
+    if(button&&button.getAttribute('aria-expanded')==='false')window.STSubsection?.userToggle(button,true);
+  }
   async function startRun(){
     if(busy()||!state.activeCase)return;
     var sim=owner();if(!sim)return;
@@ -174,7 +178,7 @@ window.STMinimalMode=(function(){
     // Let the canonical editor and physical engine validate corrected values.
     if((sim.equipment||[]).length<2){actions.error({message:tr('At least two equipment units are required for simulation.')});return;}
     starting=true;runProgress=0;attempted=null;searchMessage='';scenarioKey=resultKey='';
-    el('run-calculation-mode').value='FAST';sync(state);
+    el('run-calculation-mode').value='FAST';expandForAction('minimal-simulation');sync(state);
     try{await actions.run();}catch(error){actions.error(error);}finally{starting=false;sync(state);}
   }
   async function startSearch(){
@@ -182,7 +186,7 @@ window.STMinimalMode=(function(){
     var sim=owner(),key=ownerKey(),signature=sourceSignature(sim);
     try{actions.prepareSearch();}catch(error){actions.error(error);return;}
     var cards=Array.from(el('simulation-analysis-content').querySelectorAll('.analysis-recommendation')).filter(c=>typeof c._runMinimalSearch==='function');
-    searching=true;searchProgress=0;searchMessage='';scenarioKey='';attempted=new Map();sync(state);
+    searching=true;searchProgress=0;searchMessage='';scenarioKey='';attempted=new Map();expandForAction('minimal-optimization');sync(state);
     try{
       for(var i=0;i<tiers.length;i++){
         if(!isMinimal()||ownerKey()!==key||sourceSignature(sim)!==signature)break;

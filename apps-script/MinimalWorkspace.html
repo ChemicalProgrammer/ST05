@@ -1,23 +1,37 @@
 <section id="minimal-workspace" class="minimal-workspace hidden" aria-label="Basic workspace">
-  <section class="fold-card minimal-section" aria-labelledby="minimal-equipment-title">
-    <div class="fold-heading"><h3 id="minimal-equipment-title">Equipment and conveyors</h3><div class="fold-tools button-row"><button id="minimal-export-equipment-sheet" type="button" class="ghost icon-button" data-icon="upload" title="Export equipment to Google Sheets" aria-label="Export equipment to Google Sheets"></button></div></div>
-    <div id="minimal-equipment-table-host"></div>
-    <p id="minimal-input-review" class="minimal-message" role="status" hidden>Review imported inputs before running.</p>
+  <section id="minimal-equipment" class="fold-card minimal-section" aria-labelledby="minimal-equipment-title">
+    <div class="fold-heading">
+      <div class="subsection-heading-copy"><h3 id="minimal-equipment-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="minimal-equipment-content">Equipment and conveyors</button></h3></div>
+      <div class="fold-tools button-row"><button id="minimal-export-equipment-sheet" type="button" class="ghost icon-button" data-icon="upload" title="Export equipment to Google Sheets" aria-label="Export equipment to Google Sheets"></button></div>
+    </div>
+    <div id="minimal-equipment-content" class="fold-content">
+      <div id="minimal-equipment-table-host"></div>
+      <p id="minimal-input-review" class="minimal-message" role="status" hidden>Review imported inputs before running.</p>
+    </div>
   </section>
-  <section class="fold-card minimal-section" aria-labelledby="minimal-simulation-title">
-    <div class="fold-heading"><h3 id="minimal-simulation-title">Simulation</h3><div class="fold-tools button-row minimal-simulation-tools">
-      <label class="time-value-label"><span>Duration</span><span class="time-value-control"><input id="minimal-duration" type="number" min="0.001" step="any" required value="8" aria-label="Duration"><select id="minimal-duration-unit" aria-label="Duration time unit"><option value="SECONDS">s</option><option value="MINUTES">min</option><option value="HOURS" selected>h</option><option value="DAYS">d</option></select></span></label>
-      <button id="minimal-run" type="button">Run simulation</button>
-    </div></div>
-    <div id="minimal-run-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Simulation progress"></progress><output>0%</output></div>
-    <div id="minimal-result-cards" class="minimal-result-grid" hidden></div>
+  <section id="minimal-simulation" class="fold-card minimal-section" aria-labelledby="minimal-simulation-title">
+    <div class="fold-heading">
+      <div class="subsection-heading-copy"><h3 id="minimal-simulation-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="minimal-simulation-content">Simulation</button></h3></div>
+      <div class="fold-tools button-row minimal-simulation-tools">
+        <label class="time-value-label"><span>Duration</span><span class="time-value-control"><input id="minimal-duration" type="number" min="0.001" step="any" required value="8" aria-label="Duration"><select id="minimal-duration-unit" aria-label="Duration time unit"><option value="SECONDS">s</option><option value="MINUTES">min</option><option value="HOURS" selected>h</option><option value="DAYS">d</option></select></span></label>
+        <button id="minimal-run" type="button">Run simulation</button>
+      </div>
+    </div>
+    <div id="minimal-simulation-content" class="fold-content">
+      <div id="minimal-run-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Simulation progress"></progress><output>0%</output></div>
+      <div id="minimal-result-cards" class="minimal-result-grid" hidden></div>
+    </div>
   </section>
   <section id="minimal-optimization" class="fold-card minimal-section" aria-labelledby="minimal-optimization-title" hidden>
-    <div class="fold-heading"><h3 id="minimal-optimization-title">Optimization</h3></div>
-    <div class="minimal-action"><button id="minimal-search" type="button">Find optimizations</button></div>
-    <div id="minimal-search-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Optimization progress"></progress><output>0%</output></div>
-    <p id="minimal-search-message" class="minimal-message" role="status" hidden></p>
-    <div id="minimal-scenario-cards" class="minimal-result-grid" hidden></div>
+    <div class="fold-heading">
+      <div class="subsection-heading-copy"><h3 id="minimal-optimization-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="minimal-optimization-content">Optimization</button></h3></div>
+      <div class="fold-tools button-row"><button id="minimal-search" type="button">Find optimizations</button></div>
+    </div>
+    <div id="minimal-optimization-content" class="fold-content">
+      <div id="minimal-search-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Optimization progress"></progress><output>0%</output></div>
+      <p id="minimal-search-message" class="minimal-message" role="status" hidden></p>
+      <div id="minimal-scenario-cards" class="minimal-result-grid" hidden></div>
+    </div>
   </section>
 </section>
 <dialog id="minimal-import-dialog" aria-labelledby="minimal-import-title">

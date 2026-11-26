@@ -3486,7 +3486,35 @@ test('UI: minimal Basic uses one editable table and a duration control without h
   const duration=h.d.getElementById('minimal-duration'),unit=h.d.getElementById('minimal-duration-unit');
   unit.value='MINUTES';duration.value='12';duration.dispatchEvent(new h.w.Event('change',{bubbles:true}));
   assert.equal(h.d.getElementById('duration-mode').value,'FIXED');assert.equal(h.w.STRunOptions.durationSeconds(),720);
-  assert(h.d.querySelector('#minimal-simulation-title').parentElement.contains(h.d.getElementById('minimal-run')));
+  assert(h.d.querySelector('#minimal-simulation-title').closest('.fold-heading').contains(h.d.getElementById('minimal-run')));
+  assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});
+
+test('UI: Basic subsections use the shared fold contract, keep tools visible and preserve the mounted table',async()=>{
+ const h=await setup({remember:true,uiMode:'MINIMAL'});try{
+  await h.click('.open-case');await waitFor(()=>h.d.querySelector('#minimal-equipment-table-host .equipment-editor-table'));
+  const d=h.d,workspace=d.getElementById('minimal-workspace'),table=d.querySelector('#minimal-equipment-table-host .equipment-editor-table');
+  const sections=['equipment','simulation','optimization'].map(name=>d.getElementById('minimal-'+name));
+  for(const section of sections){
+   assert(section.classList.contains('st-subsection'));
+   const header=section.querySelector(':scope > .st-subsection-header'),toggle=header.querySelector('[data-subsection-toggle]');
+   const body=d.getElementById(toggle.getAttribute('aria-controls'));
+   assert.equal(body.parentElement,section);assert(body.classList.contains('fold-content'));
+   assert.equal(toggle.getAttribute('aria-expanded'),'true');
+   toggle.click();await waitFor(()=>body.hidden);
+   assert.equal(toggle.getAttribute('aria-expanded'),'false');assert(body.inert);assert(!header.hidden);
+   toggle.click();await waitFor(()=>!body.hidden);
+   assert.equal(toggle.getAttribute('aria-expanded'),'true');assert(!body.inert);
+  }
+  assert.equal(d.querySelector('#minimal-equipment-table-host .equipment-editor-table'),table);
+  const equip=sections[0].querySelector('[data-subsection-toggle]'),body=d.getElementById('minimal-equipment-content');
+  equip.click();await waitFor(()=>body.hidden);
+  h.w.STSubsection.restoreAll(workspace);assert(body.hidden);
+  assert(!sections[0].querySelector('.fold-tools').hidden);
+  equip.click();await waitFor(()=>!body.hidden);
+  assert.equal(d.querySelector('#minimal-equipment-table-host .equipment-editor-table'),table);
+  assert(d.getElementById('minimal-search').closest('.fold-tools'));
   assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });

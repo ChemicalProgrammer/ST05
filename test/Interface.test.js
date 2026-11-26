@@ -3471,3 +3471,70 @@ test('UI: minimal Basic uses one editable table and a duration control without h
   assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });
+
+test('UI: Basic Settings is a single General and Appearance view; mode unlock restores tabbed Settings',async()=>{
+ const h=await setup({remember:true,uiMode:'MINIMAL'});try{
+  const d=h.d,dialog=d.getElementById('settings-dialog'),nav=dialog.querySelector('.settings-tabs');
+  await h.click('#cases-settings');
+  assert.equal(dialog.dataset.settingsLayout,'compact');assert(nav.hidden&&nav.inert);
+  assert(h.visible('settings-page-appearance'));assert(h.visible('settings-page-storage'));
+  assert(!h.visible('settings-page-case'));assert(!h.visible('settings-page-simulation'));
+  await h.click('#settings-cancel');await h.click('.open-case');await h.click('#open-settings');
+  assert(nav.hidden&&nav.inert);
+  assert(h.visible('settings-case-section'));assert(h.visible('settings-page-appearance'));
+  assert.equal(d.getElementById('settings-appearance-title-compact').hidden,false);
+  assert.equal(d.getElementById('settings-appearance-title-general').hidden,true);
+  assert.equal(d.querySelector('.settings-case-options').classList.contains('hidden'),true);
+  for(const id of ['settings-page-simulation','settings-page-storage','settings-page-gemini','settings-chart-section'])assert(!h.visible(id),id);
+  assert(d.getElementById('settings-page-simulation').inert);
+  for(const id of ['case-name','export-complete-case','settings-language','settings-theme','settings-font-scale','choose-primary-color','choose-secondary-color'])assert(h.visible(id),id);
+  assert.equal(d.getElementById('settings-page-appearance').getAttribute('role'),null);
+  const general=d.getElementById('settings-case-section'),appearance=d.getElementById('settings-appearance-section');
+  assert(general.compareDocumentPosition(appearance)&h.w.Node.DOCUMENT_POSITION_FOLLOWING);
+  for(let i=0;i<5;i++)dialog.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'m',bubbles:true}));
+  const picker=d.getElementById('settings-interface-mode');assert(!d.getElementById('settings-interface-section').classList.contains('hidden'));
+  picker.value='ADVANCE';picker.dispatchEvent(new h.w.Event('change'));
+  await waitFor(()=>dialog.dataset.settingsLayout==='tabs'&&!picker.disabled);
+  assert(!nav.hidden&&!nav.inert);assert.equal(d.getElementById('settings-page-appearance').getAttribute('role'),'tabpanel');
+  assert(!d.querySelector('.settings-case-options').classList.contains('hidden'));
+  assert.equal(d.getElementById('settings-appearance-title-general').hidden,false);
+  assert.equal(d.getElementById('settings-appearance-title-compact').hidden,true);
+  await h.click('#settings-tab-simulation');assert(h.visible('settings-page-simulation'));
+  picker.value='MINIMAL';picker.dispatchEvent(new h.w.Event('change'));
+  await waitFor(()=>dialog.dataset.settingsLayout==='compact'&&!picker.disabled);
+  assert(nav.hidden);assert(h.visible('settings-case-section'));assert(h.visible('settings-page-appearance'));assert(!h.visible('settings-page-simulation'));
+  assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});
+
+test('UI: Basic complete-case export downloads the unfiltered current case directly',async()=>{
+ const h=await setup({remember:true,uiMode:'MINIMAL'});try{
+  const get=h.api.getCase;h.api.getCase=(id,mode)=>{
+   const record=get(id,mode),other=JSON.parse(JSON.stringify(record.simulations[0]));
+   other.id='second-simulation';other.name='Second';
+   other.results={summary:{lineOeePercent:45},replay:{samples:[{virtualSecond:1,preserved:'full replay'}]}};
+   other.whatIf={evaluations:[{status:'NOT_REPRODUCED',detail:'preserved evidence'}]};
+   other.geminiHistory=[{role:'user',text:'retained conversation'}];record.simulations.push(other);return record;
+  };
+  let blob,filename;h.w.URL.createObjectURL=value=>{blob=value;return 'blob:complete-basic';};h.w.URL.revokeObjectURL=()=>{};h.w.HTMLAnchorElement.prototype.click=function(){filename=this.download;};
+  await h.click('.open-case');await h.click('#open-settings');
+  const name=h.d.getElementById('case-name');name.value='Basic / complete';name.dispatchEvent(new h.w.Event('input',{bubbles:true}));
+  const before=h.calls.filter(c=>c==='saveCase').length;
+  await h.click('#export-complete-case');await waitFor(()=>blob);
+  assert(!h.d.querySelector('.case-export-dialog'));assert.equal(blob.type,'application/json');assert.match(filename,/Basic - complete-complete\.json$/);
+  const data=JSON.parse(await new Promise(resolve=>{const r=new h.w.FileReader();r.onload=()=>resolve(r.result);r.readAsText(blob);}));
+  assert.equal(data.name,name.value);assert.equal(data.simulations.length,2);assert.equal(data.activeSimulationId,'simulation-a');
+  assert.equal(data.simulations[1].results.replay.samples[0].preserved,'full replay');assert.equal(data.simulations[1].whatIf.evaluations[0].detail,'preserved evidence');assert.equal(data.simulations[1].geminiHistory[0].text,'retained conversation');
+  assert.equal(data.metadata.workspaceMode,'MINIMAL');assert.equal(data.expectedRevision,undefined);
+  assert.equal(h.calls.filter(c=>c==='saveCase').length,before);assert(h.d.getElementById('settings-dialog').open);assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});
+
+test('UI: Basic gallery complete export downloads without opening a case or showing a selection dialog',async()=>{
+ const h=await setup({remember:true,uiMode:'MINIMAL'});try{
+  const record=h.storedCases()[0];h.api.getCompleteCaseForExport=id=>{assert.equal(id,record.id);return record;};
+  let blob;h.w.URL.createObjectURL=value=>{blob=value;return 'blob:complete-gallery';};h.w.URL.revokeObjectURL=()=>{};h.w.HTMLAnchorElement.prototype.click=function(){};
+  await h.click('.export-gallery-case');await waitFor(()=>blob);
+  assert(!h.d.querySelector('.case-export-dialog'));assert(!h.calls.includes('getCase'));assert(!h.calls.includes('saveCase'));assert(h.visible('cases-panel'));assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});

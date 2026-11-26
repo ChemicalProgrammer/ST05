@@ -77,9 +77,18 @@ dialog::backdrop { background: var(--overlay); } dialog[open] { display:flex; fl
 
 #settings-dialog .settings-section h3 { margin:0; font-size:var(--font-secondary); }
 /* Settings groups use the shared Subsection B header and body. */
-#settings-dialog :is([role=tabpanel],#settings-run-options) > .settings-section.st-subsection {display:block;min-width:0;margin:0 0 var(--subsection-gap);padding:var(--subsection-padding);border:var(--border-width) solid var(--line);border-radius:var(--radius-md);background:var(--surface-soft)}
-#settings-dialog :is([role=tabpanel],#settings-run-options) > .settings-section.st-subsection:last-of-type {margin-bottom:0}
+#settings-dialog :is([role=tabpanel],[data-settings-page],#settings-run-options) > .settings-section.st-subsection {display:block;min-width:0;margin:0 0 var(--subsection-gap);padding:var(--subsection-padding);border:var(--border-width) solid var(--line);border-radius:var(--radius-md);background:var(--surface-soft)}
+#settings-dialog :is([role=tabpanel],[data-settings-page],#settings-run-options) > .settings-section.st-subsection:last-of-type {margin-bottom:0}
 #settings-dialog .settings-section.st-subsection.hidden {display:none!important}
+/* Basic Settings has no tab strip or nested presentation. Retain the same
+   subsection tokens and give each visible group exactly one shared gap. */
+#settings-dialog[data-settings-layout=compact] > .settings-tabs {display:none!important;}
+#settings-dialog[data-settings-layout=compact] > .dialog-body {display:grid;align-content:start;gap:var(--subsection-gap);}
+#settings-dialog[data-settings-layout=compact] > .dialog-body > [data-settings-page]:not(.hidden) {display:grid;gap:var(--subsection-gap);min-width:0;}
+#settings-dialog[data-settings-layout=compact] [data-settings-page] > .settings-section.st-subsection {margin:0;}
+#settings-dialog[data-settings-layout=compact] :is(#settings-page-simulation,#settings-page-gemini,#settings-chart-section,.settings-case-options),
+#settings-dialog :is(#settings-appearance-title-general,#settings-appearance-title-compact)[hidden],
+#settings-dialog[data-settings-layout=compact] #settings-error:empty {display:none!important;}
 #settings-dialog .settings-section.st-subsection > .st-subsection-header .subsection-heading-title {font-size:var(--subsection-header-title-size);color:var(--subsection-header-text)}
 #settings-dialog .settings-section.st-subsection > .fold-content {display:grid;gap:var(--space-3);min-width:0}
 #settings-dialog .settings-section.st-subsection > .fold-content[hidden] {display:none!important}

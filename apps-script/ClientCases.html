@@ -412,14 +412,17 @@ async function openCase(caseId, initialView) {
       return {partial:partial};
     }
     async function exportCompleteCase(){
-      if(!state.activeCase)return;var button=document.getElementById('export-complete-case');button.disabled=true;
+      if(!state.activeCase)return;var button=document.getElementById('export-complete-case');if(button.disabled)return;button.disabled=true;
+      var direct=window.STMinimalMode?.isMinimal();
       try{
         if(!document.getElementById('case-editor-form').reportValidity())return;
         await prepareCaseDraft();captureSimulationView();
         var draft=cloneJson(state.activeCase);draft.activeSimulationId=state.activeSimulationId;delete draft.expectedRevision;
         captureCaseNumerical(draft);
         captureCase2D(draft);
-        await STReports.requestCaseExport(draft);
+        // In Basic the existing complete-case serializer downloads the full
+        // captured draft directly; no selection, preview or filtering dialog.
+        if(direct)STReports.exportCompleteCase(draft);else await STReports.requestCaseExport(draft);
       }catch(error){showError(error);}finally{button.disabled=false;}
     }
     function captureForSave() {
@@ -672,7 +675,9 @@ async function openCase(caseId, initialView) {
       if(exportingCases.has(caseId))return;exportingCases.add(caseId);button.disabled=true;button.dataset.busy='true';
       callServer('getCompleteCaseForExport',[caseId],function(response){
         if(!response.ok)return showError(response.error);
-        STReports.requestCaseExport(response.data).catch(showError);
+        if(window.STMinimalMode?.isMinimal()){
+          try{STReports.exportCompleteCase(response.data);}catch(error){showError(error);}
+        }else STReports.requestCaseExport(response.data).catch(showError);
       },function(){
         exportingCases.delete(caseId);button.disabled=false;delete button.dataset.busy;
         document.querySelectorAll('.export-gallery-case').forEach(function(current){if(current.dataset.caseId===caseId){current.disabled=false;delete current.dataset.busy;}});

@@ -4,7 +4,7 @@ window.STTimeControls=(function(){
   'use strict';
   var secondsByUnit={s:1,min:60,h:3600,d:86400,wk:604800};
   var labels={s:'Seconds',min:'Minutes',h:'Hours',d:'Days',wk:'Weeks'};
-  var formatter=new Intl.NumberFormat(undefined,{maximumFractionDigits:3});
+  var formatter=new Intl.NumberFormat(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   var animations=new WeakMap(),inputChanges=new WeakMap(),menu=null,menuId=0,skipClick=null;
   function reducedMotion(){return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true;}
   function animate(node,frames,duration){

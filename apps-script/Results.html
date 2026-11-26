@@ -3,7 +3,7 @@
 window.STResults=(function(){
   function unitLabel(unit){return window.STFlowUnits.labels(unit).count;}
   function rateLabel(unit){return window.STFlowUnits.labels(unit).rate;}
-  function number(value,digits,locale){return Number.isFinite(value)?value.toLocaleString(locale,{maximumFractionDigits:digits===undefined?1:digits}):'—';}
+  function number(value,digits,locale){return Number.isFinite(value)?value.toLocaleString(locale,{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
   // Values and units use the same reusable presentation as the live KPIs.
   // Keep them separate so translations and unit styles never affect numbers.
   function setMetricValue(target,amount,unit,digits,locale){

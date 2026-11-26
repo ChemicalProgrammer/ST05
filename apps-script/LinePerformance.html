@@ -2,7 +2,7 @@
 window.STLinePerformance = (function() {
   function units(unit){return window.STFlowUnits.labels(unit);}
   function el(tag, text) { var item = document.createElement(tag); if (text !== undefined) item.textContent = text; return item; }
-  function value(n, digits) { return Number.isFinite(n) ? n.toLocaleString(undefined, {maximumFractionDigits: digits === undefined ? 1 : digits}) : '—'; }
+  function value(n, digits) { return Number.isFinite(n) ? n.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2}) : '—'; }
   function svg(tag, attrs, text) {
     var item = document.createElementNS('http://www.w3.org/2000/svg', tag);
     Object.entries(attrs).forEach(function(pair) { item.setAttribute(pair[0], String(pair[1])); });

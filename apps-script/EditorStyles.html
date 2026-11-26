@@ -88,7 +88,7 @@ html[data-equipment-layout=split] #equipment-list .equipment-card .equipment-hea
 .switchable-value { display:flex; align-items:center; gap:var(--space-2); min-width:0; }
 .switchable-value > input[type=number] { flex:1; min-width:0; }
 .switchable-value > input[type=checkbox],html[data-ui-mode=basic] .basic-worksheet-group .switchable-value > input[type=checkbox] { width:16px; height:16px; min-height:16px; padding:0; flex:0 0 16px; }
-.switchable-value > .calculated-value { background:var(--surface-soft); border-color:transparent; font-weight:var(--weight-semibold); text-align:right; }
+.switchable-value > .calculated-value { background:transparent; border-color:transparent; box-shadow:none; font-weight:var(--weight-semibold); text-align:right; }
 
 /* Advance: compact, editable worksheet using the existing equipment inputs.
    The canonical cards remain mounted for validation, export and autosave. */
@@ -150,9 +150,12 @@ button.equipment-table-symbol:disabled { cursor:default; opacity:1; }
 .equipment-table-control[aria-invalid=true] { border-color:var(--danger); }
 .equipment-table-control.equipment-table-checkbox { width:16px; height:16px; min-height:16px; min-width:16px; flex:none; padding:0; margin:auto; }
 .equipment-table-cell-controls:has(.equipment-table-checkbox) { justify-content:center; }
-.equipment-table-control.equipment-table-calculated,output.equipment-table-control { background:var(--surface-soft); color:var(--ink); border:var(--border-width) solid transparent; font-variant-numeric:tabular-nums; }
+.equipment-table-control.equipment-table-calculated,output.equipment-table-control { background:transparent; color:var(--ink); border:var(--border-width) solid transparent; font-variant-numeric:tabular-nums; }
 output.equipment-table-control { display:flex; align-items:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .equipment-table-na { color:var(--muted); }
 .equipment-table-action.icon-button { --icon-button-size:var(--size-28); }
 .equipment-table-verdict { font-size:var(--font-secondary); max-width:100%; }
+input.calculated-value, input.equipment-table-calculated { appearance:textfield; -moz-appearance:textfield; background:transparent; border-color:transparent; box-shadow:none; cursor:default; }
+input.calculated-value:focus,input.equipment-table-calculated:focus { background:transparent; border-color:transparent; box-shadow:none; }
+input.calculated-value::-webkit-inner-spin-button,input.calculated-value::-webkit-outer-spin-button,input.equipment-table-calculated::-webkit-inner-spin-button,input.equipment-table-calculated::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 </style>

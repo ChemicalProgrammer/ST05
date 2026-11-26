@@ -3,7 +3,7 @@
     }
 
     function formatNumber(value) {
-      return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits:2,maximumFractionDigits:2 });
     }
 
     function formatSeconds(value) {

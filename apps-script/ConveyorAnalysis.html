@@ -64,6 +64,10 @@
 }
 #conveyor-analysis-body { display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:var(--subsection-gap,var(--space-4)); }
 #conveyor-analysis-body .chart-note { margin:0; }
+#conveyor-analysis-body .first-package-analysis-input {display:flex;align-items:center;gap:var(--space-1);min-width:0;flex-wrap:wrap;justify-content:flex-end;}
+#conveyor-analysis-body .first-package-analysis-input input {width:100%;min-width:0;text-align:end;font-variant-numeric:tabular-nums;}
+#conveyor-analysis-body .first-package-analysis-input button {font-size:var(--font-secondary);}
+#conveyor-analysis-body .first-package-analysis-input small {font-size:var(--font-secondary);color:var(--muted);text-align:start;overflow-wrap:anywhere;}
 #conveyor-analysis-body .conveyor-analysis-verdict.st-status-pill { cursor:default;background:var(--stopped-soft);color:var(--muted); }
 #conveyor-analysis-body .conveyor-analysis-verdict.is-pass { background:var(--success-soft);color:var(--success); }
 #conveyor-analysis-body .conveyor-analysis-verdict.is-fail { background:var(--failure-soft);color:var(--danger); }
@@ -625,7 +629,7 @@ window.STConveyorAnalysis=(function(){
       set('L57',[pdep('L56'),pos('L16')]);
       set('L58',[pdep('L57'),below100(key('L41'))]);
       set('L61',[nonneg('L48')]);
-      set('L62',[],tr('Enter Time to First Package After Restart (s) on the conveyor, in Upstream. It is a separate input from Start-up Time.','Captura Time to First Package After Restart (s) en el conveyor, sección Upstream. Es un input distinto de Start-up Time.'));
+      set('L62',[],tr('Enter Time to First Package After Restart (s) in Conveyor Analysis (Upstream in Advance). It includes Start-up Time; it is not an additional simulation delay.','Captura Time to First Package After Restart (s) en Conveyor Analysis (Upstream en Advance). Incluye Start-up Time; no es otro retardo de simulación.'));
       set('L63',[cd('D8'),...(g.discharge===0?[]:[pos('L34')])]);
       set('L64',[cd('E8'),...(g.coding===0?[]:[pos('L37')])]);
       set('L65',[cd('AVAILABLE_OVERFLOW'),pos('L40')]);
@@ -748,13 +752,29 @@ window.STConveyorAnalysis=(function(){
     all.disabled=!canExportAll(context);
     all.title=all.disabled?(es?'Abre la evaluación desde la configuración de la línea completa.':'Open the evaluation from the full line configuration.'):'';
   }
-  function open(name,context){
+  // Temporary analysis edits do not change the source simulation or its startup delay.
+  function withFirstPackageSeconds(context,seconds){
+    if(seconds!==undefined&&(!Number.isFinite(seconds)||seconds<0))throw Error('Time to First Package After Restart must be zero or greater.');
+    const index=context.index;
+    function dataWith(data){const accumulation={...data?.accumulation};if(seconds===undefined)delete accumulation.restartToFirstPackageSeconds;else accumulation.restartToFirstPackageSeconds=seconds;return {...data,accumulation};}
+    function modelsWith(models){return Array.isArray(models)?models.map((item,n)=>n===index?{...item,processData:dataWith(item.processData)}:item):models;}
+    function profileWith(profile){return profile?{...profile,models:modelsWith(profile.models)}:profile;}
+    const source=context.source,configuration=source?.configuration;
+    return {...context,data:dataWith(context.data),designProfiles:(context.designProfiles||[]).map(profileWith),
+      ...(source?{source:{...source,metadata:{...source.metadata,firstPackageAnalysisOverride:true},activeProfile:profileWith(source.activeProfile),
+        configuration:configuration?{...configuration,equipment:modelsWith(configuration.equipment)}:configuration}}:{})};
+  }
+  function open(name,context,options={}){
     if(!context)return;
     const dialog=document.getElementById('conveyor-analysis-dialog');
     const body=document.getElementById('conveyor-analysis-body');
     const number=new Intl.NumberFormat(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
     const valueText=value=>Number.isFinite(value)?number.format(value):'Pending';
     const worksheet=calculate(context);
+    const preserveView=dialog.open,scrollTop=body.scrollTop,folds=new Map(Array.from(body.querySelectorAll('[data-analysis-group]')).map(group=>[group.dataset.analysisGroup,group.open]));
+    const origin=context.source?.metadata?.origin;
+    const editable=typeof options.editFirstPackage==='function'||['NUMERICAL_SIMULATION','SIMULATION_2D'].includes(origin);
+    const localOnly=typeof options.editFirstPackage!=='function';
     currentExport={name,context,worksheet};
     const menu=document.getElementById('conveyor-analysis-export-menu');
     menu.open=false;menu.querySelector('summary').setAttribute('aria-expanded','false');
@@ -790,6 +810,7 @@ window.STConveyorAnalysis=(function(){
       const description=localized(spec.description,language)+(spec.key==='geometry'&&mode?' · '+localized(mode,language):'');
       const group=window.STSubsection.create({title:localized(spec.title,language),description,variant:'B',native:true,open:true,tools});
       group.section.dataset.analysisGroup=spec.key;
+      if(preserveView&&folds.has(spec.key))group.section.open=folds.get(spec.key);
       group.section.dataset.completeness=spec.progress.status;
       body.append(group.section);
       const heading=group.title;
@@ -836,6 +857,28 @@ window.STConveyorAnalysis=(function(){
       cell.setAttribute('aria-label',cell.textContent+' · '+tip);
       cell.classList.add(!Number.isFinite(value)?'conveyor-value-pending':partial?'conveyor-value-partial':'conveyor-value-diagnostic');
     }
+    function renderFirstPackageInput(cell,profile){
+      const es=language==='es',wrap=make(cell,'div');wrap.className='first-package-analysis-input';
+      const input=make(wrap,'input');input.type='number';input.min='0';input.step='any';
+      input.value=Number.isFinite(profile.firstPackage)?String(profile.firstPackage):'';
+      input.placeholder=es?'Pendiente':'Pending';
+      input.title=es?'Tiempo desde permiso de rearranque hasta salida del primer envase, incluido Startup Time. No es otro retardo de simulación.':'Time from restart permission to first package exit, including Startup Time. Not an extra simulation delay.';
+      input.setAttribute('aria-label',es?'Tiempo hasta el primer envase tras rearranque (s)':'Time to First Package After Restart (s)');
+      const apply=make(wrap,'button',es?'Aplicar':'Apply');apply.type='button';apply.className='ghost';
+      const note=make(wrap,'small',localOnly?(es?'Solo este análisis; no modifica la corrida.':'Analysis only; does not change the run.'):(es?'Se guarda con el conveyor; aplica a todos los formatos.':'Saved with the conveyor; applies to all formats.'));
+      function commit(){
+        if(!input.checkValidity()){input.reportValidity();return;}
+        const seconds=input.value===''?undefined:Number(input.value);
+        if(seconds!==undefined&&(!Number.isFinite(seconds)||seconds<0))return;
+        try{
+          const nextContext=localOnly?withFirstPackageSeconds(context,seconds):options.editFirstPackage(seconds);
+          if(!nextContext)throw Error('Conveyor evaluation context is unavailable.');
+          open(name,nextContext,options);
+        }catch(error){note.textContent=error.message;note.setAttribute('role','alert');}
+      }
+      apply.addEventListener('click',commit);
+      input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();commit();}});
+    }
     function renderNotApplicable(cell,reason){
       cell.textContent=language==='es'?'No aplica':'N/A';
       cell.classList.add('conveyor-value-not-applicable');
@@ -880,6 +923,7 @@ window.STConveyorAnalysis=(function(){
           }else{
             const value=read(profile),reason=notApplicableReason(worksheet,'L'+ref,value,profile);
             if(reason)renderNotApplicable(cell,reason);
+            else if(ref===62&&index===0&&editable)renderFirstPackageInput(cell,profile);
             else renderValue(cell,value,valueDiagnostic(worksheet,trace,'L'+ref,index));
           }
           if(!cell.title)cell.title=parameterHelp('L'+ref);
@@ -887,8 +931,8 @@ window.STConveyorAnalysis=(function(){
         make(element,'td',unit).className='analysis-table-unit';
       }
     }
-    body.scrollTop=0;
-    dialog.showModal();
+    body.scrollTop=preserveView?scrollTop:0;
+    if(!dialog.open)dialog.showModal();
   }
   document.getElementById('conveyor-analysis-close').addEventListener('click',close);
   function exportCurrent(scope){
@@ -915,6 +959,6 @@ window.STConveyorAnalysis=(function(){
     button.addEventListener('click',event=>{event.stopPropagation();openAnalysis();});
     paintEvaluationButton(button,null);return button;
   }
-  return {open,close,calculate,resolveProfiles,worksheetContext,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton,createPendingTrace,buildEvaluationExport,downloadEvaluation,profilePopulationHelp,parameterHelp,sectionProgress,summarizeSectionValues};
+  return {open,close,calculate,withFirstPackageSeconds,resolveProfiles,worksheetContext,recommendedSpeed,verdictColors,lengthHelp,createEvaluationButton,paintEvaluationButton,createPendingTrace,buildEvaluationExport,downloadEvaluation,profilePopulationHelp,parameterHelp,sectionProgress,summarizeSectionValues};
 })();
 </script>

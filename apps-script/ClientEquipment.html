@@ -121,7 +121,9 @@
         ['restart-first-package','Time to First Package After Restart (s)']].forEach(function(spec){
         var label=document.createElement('label'),input=document.createElement('input');
         label.textContent=spec[1];input.className='format-zone-'+spec[0];
-        input.type='number';input.min='0';input.step='any';label.append(input);conveyorFields.append(label);
+        input.type='number';input.min='0';input.step='any';
+        if(spec[0]==='restart-first-package'){label.classList.add('advanced-first-package-field');label.hidden=conveyorManualSpeedOnly();}
+        label.append(input);conveyorFields.append(label);
       });
       var selectedProduct=STProducts.currentFormat?.(),selectedProfile=selectedProduct?.equipment?.[equipment.id]||{};
       card.dataset.productProfileId=selectedProduct?.id||'';
@@ -231,7 +233,15 @@
       if(window.STConveyorAnalysis){
         var conveyorVerdict=window.STConveyorAnalysis.createEvaluationButton(function(){
           var context=editorConveyorWorksheet(card.dataset.equipmentId);
-          if(context)window.STConveyorAnalysis.open(equipmentField(card,'.equipment-name').value||card.dataset.equipmentId,context);
+          if(context)window.STConveyorAnalysis.open(equipmentField(card,'.equipment-name').value||card.dataset.equipmentId,context,{
+            editFirstPackage:function(seconds){
+              if(!card.isConnected||runControlsLocked()||window.STSimulation2D?.isRunning?.())throw Error('Stop the simulation before editing conveyor inputs.');
+              var input=equipmentField(card,'.format-zone-restart-first-package');
+              var next=seconds===undefined?'':String(seconds);
+              if(input.value!==next){input.value=next;input.dispatchEvent(new Event('change',{bubbles:true}));}
+              return editorConveyorWorksheet(card.dataset.equipmentId);
+            }
+          });
         });
         card.querySelector('.equipment-header .button-row').prepend(conveyorVerdict);
         card._editorConveyorVerdict=conveyorVerdict;
@@ -514,6 +524,7 @@ function populateFormatZoneInputs(card, equipment) {
 function updateFormatZoneVisibility(card) {
       var isConveyor = equipmentField(card, '.equipment-type').value === 'CONVEYOR';
       equipmentField(card, '.format-zone-setup').classList.toggle('hidden', !isConveyor);
+      var first=equipmentField(card,'.format-zone-restart-first-package');if(first)first.closest('label').hidden=!isConveyor||conveyorManualSpeedOnly();
       var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!isConveyor||(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())||equipmentField(card,'.format-zone-speed-mode')?.value!=='DYNAMIC';
       var scrap=equipmentField(card,'.equipment-macrostop-scrap');if(scrap){scrap.closest('label').hidden=isConveyor;scrap.disabled=isConveyor;}
       var missingReference=window.STMinimalMode?.isMinimal()&&card.dataset.missingImportedRate==='true';

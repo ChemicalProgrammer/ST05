@@ -328,3 +328,20 @@ test('conveyor dialog exports one or all conveyors from each full-line entry and
   assert.equal(blobs.length,6);assert(blobs.every(b=>b.type==='application/json'));
  }finally{h.close();}
 });
+
+test('First package is editable in analysis; profiles recalculate independently of startup',()=>{
+  const h=harness();try{
+    const ctx=context([fixture('A',{missingFirstPackage:true}),fixture('B',{missingFirstPackage:true})]);
+    const original=JSON.stringify(ctx);
+    let draft=ctx;
+    h.api.open('belt',ctx,{editFirstPackage:seconds=>{draft=h.api.withFirstPackageSeconds(draft,seconds);return draft;}});
+    const input=h.body.querySelector('[data-cell="L62"] input');
+    assert(input);assert.equal(input.value,'');
+    input.value='8';h.body.querySelector('[data-cell="L62"] button').click();
+    const after=h.api.calculate(draft);
+    assert(after.profiles.every(p=>p.firstPackage===8&&p.startup===1));
+    assert.equal(JSON.stringify(ctx),original);
+    assert.equal(h.body.querySelector('[data-cell="L62"] input').value,'8');
+    assert(Number.isFinite(after.profiles[0].recovery));
+  }finally{h.close();}
+});

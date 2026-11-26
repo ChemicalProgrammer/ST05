@@ -71,6 +71,8 @@ function fixture(){
       const speed=fields.querySelector('.format-zone-belt-speed');
       toggle.addEventListener('change',()=>{target.readOnly=!toggle.checked;target.dataset.fieldRole=toggle.checked?'INPUT':'OUTPUT';});
       target.addEventListener('input',()=>{speed.value=String(Number(target.value)*10);});
+      field(fields,'format-zone-restart-first-package',8,{type:'number'});
+      field(fields,'format-zone-startup',3,{type:'number'});
       const mode=field(fields,'format-zone-speed-mode','AUTO',{tag:'select',options:['AUTO','MANUAL','DYNAMIC']});
       const dynamic=field(fields,'format-zone-dynamic-percent',120,{type:'number',hidden:true});
       mode.addEventListener('change',()=>{dynamic.parentElement.hidden=mode.value!=='DYNAMIC';});
@@ -406,5 +408,19 @@ test('Maximum speed remains stored but is not a column in Minimal',()=>{
   assert.equal(h.cell('Filler','maximum'),null);assert.equal(original.value,'600');
   h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync('equipment',false);
   assert.equal(h.cell('Filler','maximum').querySelector('input').value,'600');
+ }finally{h.close();}
+});
+
+test('First package column is Advance only; Startup remains in Basic table',()=>{
+ const h=fixture();try{
+  h.tableButton.click();
+  assert.equal(h.cell('Belt','restart-first-package').querySelector('input').value,'8');
+  const original=h.b._fields.querySelector('.format-zone-restart-first-package');
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  assert.equal(h.cell('Belt','restart-first-package'),null);
+  assert.equal(h.cell('Belt','startup').querySelector('input').value,'3');
+  assert.equal(original.value,'8');
+  h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync('equipment',false);
+  assert.equal(h.cell('Belt','restart-first-package').querySelector('input').value,'8');
  }finally{h.close();}
 });

@@ -131,8 +131,8 @@ window.STEquipmentInspector=(function(){
     "Retardo de arranque antes de que la máquina anterior retome procesamiento (s)."
   ],
   "format-zone-restart-first-package": [
-    "Time from restart permission to first package exiting upstream machine (s). Distinct from start-up; zero only if confirmed.",
-    "Tiempo desde permiso de rearranque hasta salida del primer envase (s). Distinto de Start-up; cero solo si confirmado."
+    "Time from restart permission to first package exit (s), including Startup Time. Used by Conveyor Analysis to evaluate recovery; not a second runtime delay. Blank means unknown.",
+    "Tiempo desde permiso de rearranque hasta salida del primer envase (s), incluido Startup Time. Se usa en Conveyor Analysis para evaluar recuperación; no es otro retardo del motor. Vacío significa desconocido."
   ],
   "format-zone-residual": [
     "Native packages still discharged after stop signal due to runout/deceleration.",

@@ -244,5 +244,8 @@ html[data-ui-mode=basic] .advanced-maximum-speed-field,
 html[data-ui-mode=basic] label:has(> .equipment-maximum-speed),
 .advanced-maximum-speed-field[hidden] {display:none!important;}
 html[data-ui-mode=advance][data-equipment-layout=split] .basic-machine .equipment-grid > label.advanced-maximum-speed-field:not([hidden]){display:grid!important;}
+/* CAT recovery input remains in Conveyor Analysis in every mode. */
+html[data-ui-mode=basic] .advanced-first-package-field,
+html[data-ui-mode=basic] label:has(> .format-zone-restart-first-package) {display:none!important;}
 </style>
 

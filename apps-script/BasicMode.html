@@ -87,6 +87,7 @@ window.STBasicMode=(function(){
       else restoreWorksheet(card);
       if(card._fields)card._fields.dataset.balancingView=String(separate&&conveyorView==='balancing'&&card.classList.contains('equipment-selected'));
       var maximum=card._fields?.querySelector('.equipment-maximum-speed');if(maximum){maximum.disabled=enabled;maximum.closest('label').hidden=enabled;}
+      var first=card._fields?.querySelector('.format-zone-restart-first-package');if(first)first.closest('label').hidden=enabled||type(card)!=='CONVEYOR';
       STEquipmentInspector.refreshTitle(card);});
     if(active&&view==='editor'&&separate){
       var conveyor=section==='conveyors';
@@ -133,7 +134,7 @@ window.STBasicMode=(function(){
     ];
     groups.forEach(function(group){var section=node('section','','basic-worksheet-group'),h=node('h4',group[0]);h.dataset.basicGroup=group[1];section.appendChild(h);worksheet.appendChild(section);
       group[2].forEach(function(spec){var label;
-        if(spec[0]){if(spec[0]==='speed-mode'&&basic())return;var control=fields.querySelector(spec[0]==='material-flow'?'.equipment-material-flow':'.format-zone-'+spec[0]);
+        if(spec[0]){if((spec[0]==='speed-mode'||spec[0]==='restart-first-package')&&basic())return;var control=fields.querySelector(spec[0]==='material-flow'?'.equipment-material-flow':'.format-zone-'+spec[0]);
           if(!control)return;
           label=control.closest('label');moved.push({label:label,home:label.parentNode,next:label.nextSibling,text:label.firstChild.nodeValue});
           if(!spec[0].startsWith('dynamic-'))label.firstChild.nodeValue=spec[1];section.appendChild(label);}

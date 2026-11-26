@@ -74,7 +74,7 @@ window.STEquipmentTable=(function(){
     if(!control||control.type==='hidden')return false;
     // Minimal uses this same table but must never project Advance speed-mode controls.
     if(control.classList.contains('format-zone-speed-mode')&&minimal(current))return false;
-    if(control.classList.contains('equipment-maximum-speed')&&!['ADVANCE','ADVANCED'].includes(String(current?.bootstrap?.uiMode||'').toUpperCase()))return false;
+    if((control.classList.contains('equipment-maximum-speed')||control.classList.contains('format-zone-restart-first-package'))&&!['ADVANCE','ADVANCED'].includes(String(current?.bootstrap?.uiMode||'').toUpperCase()))return false;
     // Original fields can be in a hidden card or inspector by design; only
     // semantic per-field hiding (general/split, dynamic, type) matters here.
     for(var p=control;p&&p!==card._fields;p=p.parentElement){

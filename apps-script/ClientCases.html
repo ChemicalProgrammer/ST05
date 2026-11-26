@@ -7,9 +7,11 @@
     window.addEventListener('st-dialog-activity',activity);
     window.addEventListener('st-calculation-activity',function(event){localCalculations=Math.max(0,localCalculations+(event.detail.active?1:-1));activity();});
     var whatIfOnlySave=false;
-    var autosave = STAutosave({enabled:false,capture:captureForSave,send:function(payload,done){callServer('saveCase',[payload],done);},accept:function(saved){
+    var autosave = STAutosave({enabled:false,capture:captureForSave,send:function(payload,done){callServer('saveCase',[payload],done);},accept:function(saved,payload){
       if (!state.activeCase || state.activeCase.id !== saved.id) return;
       state.activeCase.revision=saved.revision;state.activeCase.updatedAt=saved.updatedAt;if(typeof saved.archived==='boolean')state.activeCase.archived=saved.archived;
+      // Only acknowledge the captured color pair; a newer UI draft may exist.
+      if(payload?.metadata&&Object.prototype.hasOwnProperty.call(payload.metadata,'caseAppearance')){state.activeCase.metadata=state.activeCase.metadata||{};state.activeCase.metadata.caseAppearance=cloneJson(payload.metadata.caseAppearance);}
       var item=(state.bootstrap?.cases||[]).find(function(x){return x.id===saved.id;});
       if(item){item.revision=saved.revision;item.name=saved.name;item.updatedAt=saved.updatedAt;item.equipmentCount=saved.equipmentCount??saved.equipment?.length??item.equipmentCount;item.isSimulationReady=item.equipmentCount>=2;if(typeof saved.archived==='boolean')item.archived=saved.archived;}
     },status:function(status,error){
@@ -32,7 +34,7 @@
     function automaticSaving(){return false;} // Legacy callsites use explicit manual-only policy.
     function syncSaveButton(){
       var active=Boolean(state.activeCase),dirty=active&&Boolean(state.isDirty||autosave.pending());
-      var available=active&&!state.saving&&(dirty||Boolean(window.STSimulation2D?.hasState?.()));
+      var available=active&&!state.saving&&(dirty||Boolean(window.STSimulation2D?.hasState?.())||Boolean(STPreferences.caseColorsNeedSave?.()));
       // The single header Save control is independent of the current view,
       // interface mode or obsolete autosave preferences.
       var button=document.getElementById('save-case');if(!button)return;
@@ -42,6 +44,7 @@
     }
     function configureSaving(){autosave.configure({enabled:false,intervalMs:10000});syncSaveButton();}
     window.addEventListener('st-save-policy-change',configureSaving);
+    window.addEventListener('st-case-colors-policy',syncSaveButton);
     function prepareCaseDraft(){try{STProducts.validateForSave();}catch(error){return Promise.reject(error);}state.lastInputError=null;
       if(state.activeCase&&!syncPersistentSimulation()){
         var failure=state.lastInputError||{message:__ST_TEXT__('autosave.invalid')};
@@ -94,6 +97,7 @@
       cancelRoundSession();stopPlaybackTimer();
       sheetImport.close();
       state.activeCase = null;
+      STPreferences.loadCaseColors?.();
       if(state.bootstrap)state.bootstrap.uiMode=state.bootstrap.galleryUiMode||STPreferences.resolveInterfaceMode();
       STSubsection.restoreAll();
       autosave.reset();
@@ -268,6 +272,7 @@ function createDemoCase() {
         if (deletedActiveCase) {
           stopPlaybackTimer();
           state.activeCase = null;
+          STPreferences.loadCaseColors?.();
           STSubsection.restoreAll();
           autosave.reset();
           STSettings.close();
@@ -298,6 +303,7 @@ async function openCase(caseId, initialView) {
         if(rememberedView==='comparison'&&(response.data.simulations||[]).length<2)rememberedView='editor';
         state.restoringCaseView=true;
         state.activeCase = response.data;
+        STPreferences.loadCaseColors?.();
         state.bootstrap.uiMode=['MINIMAL','BASIC','ADVANCE'].includes(response.data.metadata?.workspaceMode)?response.data.metadata.workspaceMode:(state.bootstrap.galleryUiMode||state.bootstrap.uiMode);
         // The adapter and editor must agree on the selected mode before mounting inputs.
         document.documentElement.dataset.workspaceMode=state.bootstrap.uiMode;
@@ -428,7 +434,7 @@ async function openCase(caseId, initialView) {
     function captureForSave() {
       STProducts.validateForSave();
       captureCase2D(state.activeCase);
-      if(whatIfOnlySave&&state.activeCase){captureSimulationView();var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(evidenceDraft);}
+      if(whatIfOnlySave&&state.activeCase){captureSimulationView();var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(STPreferences.captureCaseColors(evidenceDraft));}
       var simulation=activePersistentSimulation(),preserve=preserveCommittedSimulationInputs(simulation);
       var next=preserve?caseEditorSnapshot():collectCaseEditor();if(!next)return null;
       if(!next.name.trim()||next.equipment.some(function(e){return !e.id||!e.name||!(e.nominalRatePerSecond>0)&&!(e.nominalRatePerSecond===null&&e.characteristics?.importedMissingNominalRate===true);}))throw new Error(__ST_TEXT__('autosave.invalid'));
@@ -436,7 +442,7 @@ async function openCase(caseId, initialView) {
       if(preserve){next.equipment=cloneJson(simulation.equipment);captureSimulationView();}
       else if(simulation){var before=JSON.stringify([simulation.equipment,simulation.dynamicConfig]);simulation.equipment=cloneJson(next.equipment);simulation.dynamicConfig=cloneJson(run);if(before!==JSON.stringify([simulation.equipment,simulation.dynamicConfig]))simulation.updatedAt=new Date().toISOString();captureSimulationView();}
       next.simulations=state.activeCase.simulations;
-      return fitCaseSave(cloneJson(next));
+      return fitCaseSave(STPreferences.captureCaseColors(cloneJson(next)));
     }
     // Export the available full numerical history before any Drive save budget.
     // A displayed later round is not the first/representative calculation.

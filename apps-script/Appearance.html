@@ -4,8 +4,7 @@ window.STAppearance = (function() {
   var root = document.documentElement;
   var defaultSecondary = STThemeResources.defaultSecondary || 'astronomicon-grey', colorOrigin = null;
   function secondary() {
-    var saved = STPreferences.read('secondaryAccent');
-    return Object.prototype.hasOwnProperty.call(STThemeResources.palettes, saved) ? saved : defaultSecondary;
+    return STPreferences.currentColors().secondaryAccent;
   }
   function style() { return STThemeResources.visualStyle === 'classic' ? 'classic' : 'elegant'; }
   function sync() {
@@ -28,11 +27,10 @@ window.STAppearance = (function() {
   }
   function change(name, value) {
     if (name === 'secondaryAccent' && !Object.prototype.hasOwnProperty.call(STThemeResources.palettes, value)) return;
-    var saved = STPreferences.write(name, value);
+    var saved = STPreferences.setSecondaryAccent(value);
     sync();
     var status = document.getElementById('appearance-status');
     if (status) status.textContent = saved ? '' : 'Your browser could not save this appearance preference.';
-    window.dispatchEvent(new Event('st:theme'));
     window.dispatchEvent(new Event('resize'));
   }
   window.addEventListener('st:theme', sync);

@@ -2242,6 +2242,7 @@ window.STLanguage=(function(){
       attributeNames.forEach(function(name){updateAttribute(node,name);});
     });
   }
+  Object.assign(translations,{"Separate colors for each case":"Colores separados para cada caso","Save and restore the primary and secondary colors separately for each case. Theme stays global.":"Guarda y recupera los colores primario y secundario de cada caso. El tema sigue siendo global."});
   function observe(){
     if(observer)observer.disconnect();
     // Legacy components can still create Spanish labels while English is active.

@@ -33,7 +33,7 @@ window.STAutosave = function(options) {
       }
       saved = ticket;
       // Accept metadata only: the editor may already contain newer edits.
-      options.accept(response.data);
+      options.accept(response.data,payload);
       if (version > saved && waiters.length) write();
       else { notify(); if (version > saved) schedule(); else settle(); }
     }

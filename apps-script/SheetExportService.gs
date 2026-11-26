@@ -19,6 +19,7 @@ function exportEquipmentSheet_(request, user) {
     if(!policy.catalog){
       // Basic is one operational format, not a copy of the authoring catalog.
       // Freeze active profile rates, timing and pitch into the exported rows.
+      sheetFillNativeFlows_(equipment,active?.bottlesPerCase??metadata.bottlesPerCase);
       if(active)equipment=STScenarioEngine_.applyProductProfile(equipment,active);
       var product=catalog.products.find(function(item){return item.id===active?.productId;})||(!active&&catalog.products[0]);
       var unit=product?.volumeUnit||'mL',volume=product?.volumeMl;

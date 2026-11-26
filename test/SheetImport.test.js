@@ -78,7 +78,7 @@ test('Sheet reader authenticates, checks case ownership, respects URL gid and se
  const tabs=[tab(0),tab(22)];const r=runtime({DriveApp:{getFileById:()=>({getMimeType:()=> 'application/vnd.google-apps.spreadsheet'})},SpreadsheetApp:{openById:id=>{reads.push(id);return {getSheets:()=>tabs,getSheetByName:()=>null,getSpreadsheetTimeZone:()=> 'Etc/UTC'};}}});
  let checked=false;r.requireCurrentUser_=()=>({email:'owner@test'});r.getCase_=(id,user)=>{assert.equal(id,'mine');assert.equal(user.email,'owner@test');checked=true;};
  const response=r.previewSheetImport({caseId:'mine',spreadsheet:'https://docs.google.com/spreadsheets/d/synthetic-sheet-id/edit#gid=22',uiMode:'ADVANCE'});
- assert(checked);assert.equal(response.ok,true);assert.equal(response.data.source.sheetId,22);assert.equal(response.data.metadata.dateOfAnalysis,'2026-09-16');assert.deepEqual(ranges,[[8,7,2,2],[9,6,1,1],[1,3,7,1],[4,1,1,2],[10,1,3,23]]);
+ assert(checked);assert.equal(response.ok,true);assert.equal(response.data.source.sheetId,22);assert.equal(response.data.metadata.dateOfAnalysis,'2026-09-16');assert.deepEqual(ranges,[[8,1,2,6],[8,7,2,2],[9,6,1,1],[1,3,7,1],[4,1,1,2],[10,1,3,23]]);
  r.getCase_=()=>{throw Error('Denied');};assert.equal(r.previewSheetImport({caseId:'mine',spreadsheet:'synthetic-sheet-id',uiMode:'ADVANCE'}).ok,false);assert.equal(reads.length,1);
  assert.throws(()=>r.parseSheetReference_('https://evil.test/synthetic-sheet-id'));
 });
@@ -96,8 +96,8 @@ test('RPC preserves Google errors and identifies the responding importer',()=>{
  const r=runtime({SpreadsheetApp:{openById:()=>{throw Error('Sheets service unavailable');}},DriveApp:{getFileById:()=>{throw Error('Drive access denied');}}});
  r.requireCurrentUser_=()=>({email:'owner@test'});r.getCase_=()=>({});
  const response=r.previewSheetImport({caseId:'mine',spreadsheet:'synthetic-sheet-id',uiMode:'ADVANCE'});
- assert.equal(response.ok,false);assert.equal(response.importVersion,'sheet-import-20261126-2');
- assert.match(response.error.message,/sheet-import-20261126-2.*SHEET_OPEN_FAILED.*Sheets service unavailable/);
+ assert.equal(response.ok,false);assert.equal(response.importVersion,'sheet-import-20261126-3');
+ assert.match(response.error.message,/sheet-import-20261126-3.*SHEET_OPEN_FAILED.*Sheets service unavailable/);
  assert.match(response.error.details[0],/Drive access denied/);
  r.previewSheetImport_=()=>{throw Error('Failed while reading cells');};
  assert.match(r.previewSheetImport({}).error.message,/SHEET_READ_FAILED.*Failed while reading cells/);

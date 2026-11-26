@@ -104,6 +104,12 @@ Los nombres visibles de los modos son Basic (MINIMAL), Standard (BASIC) y Advanc
 | Velocidad máxima | No | No | J (opcional) |
 | Capacidad interna | No | AE | AE |
 | Tiempo de residencia | No | AH | AH |
-| Pestañas | Equipment, Products & Formats | Equipment, Products & Formats | Equipment, Products & Formats, Real Data |
+| Pestañas | Equipment | Equipment, Products & Formats | Equipment, Products & Formats, Real Data |
 
 Las letras anteriores corresponden exclusivamente a las hojas compactas nuevas; M era Startup Time en la hoja original v1 sin columnas adicionales. Basic crea 32 columnas, Standard 34 (AG reservada sin encabezado ni datos y oculta), Advance 35. Se conserva el identificador interno AD oculto para no romper el mapeo de filas y los catálogos. Las hojas históricas se siguen leyendo: la antigua velocidad única inicializa la nominal; los modos simplificados no aplican máximas ni tiempos de primera botella importados desde una hoja avanzada. La importación selectiva no borra valores avanzados previamente guardados. El campo de primera botella continúa en Conveyor Analysis en los tres modos.
+
+### Basic en una pestaña e importación cruzada
+
+Basic incluye los datos mínimos del producto y del formato en la tabla superior de Equipment: formato E1, tamaño/volumen E2, botellas por caja E3, producto E4, longitud de botella H1 y longitud de caja H2. La columna AE identifica el flujo de material; AF conserva la velocidad de descarga. Basic exporta una copia del formato operativo inicial, incorporando los valores efectivos de sus perfiles a los datos de equipos, no todo el catálogo. Si no hay formato inicial seleccionado se usa el primero disponible. Standard conserva dos pestañas y Advance tres. AD2 identifica el modo de origen y AD3 el formato inicial por nombre; AD permanece oculta.
+
+El importador reconoce las plantillas propias y las hojas de planta históricas por sus marcadores/encabezados y mapeo. El modo destino selecciona los campos permitidos, no obliga a coincidir con el modo origen. Basic importa sin observaciones de compatibilidad de modo, seleccionando únicamente un producto/formato válido si el origen contiene varios. Standard y Advance muestran el modo de origen, campos omitidos y campos que no incluye el origen. Datos inválidos necesarios siguen sujetos a validación en todos los modos. Importar una hoja simplificada no borra capacidades avanzadas ausentes del equipo existente. Las hojas antiguas con un único valor de velocidad mantienen su interpretación de compatibilidad; una velocidad nominal explícita nunca se transforma en máxima.

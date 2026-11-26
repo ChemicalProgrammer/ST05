@@ -47,14 +47,16 @@ test('capability preflight and UI contract are aligned',()=>{
  const h=runtime(),result=h.c.getSheetTemplateCapabilities();
  assert.equal(result.ok,true);
  assert.equal(result.data.modeSpecificTabs,true);assert.equal(result.data.modeSpecificColumns,true);
- assert.equal(result.data.sheetTemplateVersion,'sheet-template-20261126-2');
- assert.equal(result.data.importVersion,'sheet-import-20261126-2');
+ assert.equal(result.data.sheetTemplateVersion,'sheet-template-20261126-3');
+ assert.equal(result.data.importVersion,'sheet-import-20261126-3');
  const client=fs.readFileSync('apps-script/ClientCases.html','utf8');
  assert(client.includes("callServer('getSheetTemplateCapabilities'"));
  assert(client.includes('response.data.tabNames'));
 });
 
-test('Basic writes two tabs; Advance writes three',()=>{
+test('Basic writes one tab, Standard two and Advance three',()=>{
+ const m=runtime();const single=m.c.exportEquipmentSheet({...fixture(m.c),uiMode:'MINIMAL'});
+ assert(single.ok);assert.deepEqual(Array.from(single.data.tabNames),['Equipment']);assert.equal(m.writes.length,1);assert(!m.calls.some(call=>call[0]==='insertSheet'));
  const b=runtime(),request={...fixture(b.c),uiMode:'BASIC'};
  assert.equal(b.c.exportEquipmentSheet(request).ok,true);
  assert.deepEqual(b.calls.filter(call=>call[0]==='insertSheet').map(call=>call[1]),['Products & Formats']);
@@ -397,9 +399,9 @@ test('Each exported mode reimports with nominal rates and no hidden advanced inp
   request.equipment[1].processData.accumulation.restartToFirstPackageSeconds=5;
   assert(h.c.exportEquipmentSheet(request).ok);
   const mock=(grid,name,id)=>({getLastRow:()=>grid.length,getMaxRows:()=>grid.length,getMaxColumns:()=>grid[0].length,getSheetId:()=>id,getName:()=>name,getRange:(r,col,count=1,width=1)=>({getValues:()=>grid.slice(r-1,r-1+count).map(row=>row.slice(col-1,col-1+width)),getNumberFormats:()=>Array.from({length:count},()=>Array(width).fill('0.00'))})});
-  const equipment=mock(h.writes[0].values,'Equipment',1),catalog=mock(h.writes[1].values,'Products & Formats',2);
+  const equipment=mock(h.writes[0].values,'Equipment',1),catalog=h.writes[1]?mock(h.writes[1].values,'Products & Formats',2):null;
   h.c.getCase_=()=>({});
-  h.c.SpreadsheetApp.openById=()=>({getSheets:()=>[equipment,catalog],getSheetByName:()=>equipment,getSpreadsheetTimeZone:()=> 'America/Mexico_City'});
+  h.c.SpreadsheetApp.openById=()=>({getSheets:()=>[equipment,...(catalog?[catalog]:[])],getSheetByName:()=>equipment,getSpreadsheetTimeZone:()=> 'America/Mexico_City'});
   const p=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id',uiMode:mode},{email:'owner@test'});
   assert(p.canImport,JSON.stringify(p.errors));
   assert.equal(p.equipment[0].nominalRatePerSecond,220/60);
@@ -407,5 +409,40 @@ test('Each exported mode reimports with nominal rates and no hidden advanced inp
   assert.equal(p.equipment[0].processData.equipment.internalCapacityBottles,mode==='MINIMAL'?undefined:30);
   assert.equal(p.equipment[1].processData.accumulation.restartToFirstPackageSeconds,mode==='ADVANCE'?5:undefined);
   assert.equal(p.source.restartFirstPackageColumn,mode==='ADVANCE'?true:undefined);
+ }
+});
+
+test('Basic exports only the active product and format inline; all nine source/target combinations are compatible',()=>{
+ for(const source of ['MINIMAL','BASIC','ADVANCE']){
+  const h=runtime(),request={...fixture(h.c),uiMode:source};
+  request.equipment[0].nominalRatePerSecond=220/60;
+  request.equipment[0].processData.equipment.maximumSpeedBpm=250;
+  request.equipment[0].processData.equipment.internalCapacityBottles=30;
+  request.equipment[1].processData.accumulation.restartToFirstPackageSeconds=5;
+  request.metadata.formatCatalog={version:3,products:[{id:'p1',name:'Bottle A',volumeMl:500,bottle:{lengthMm:66}},{id:'p2',name:'Bottle B',volumeMl:750,bottle:{lengthMm:75}}],formats:[{id:'f1',name:'Format A',productId:'p1',bottlesPerCase:12,case:{lengthMm:340}},{id:'f2',name:'Format B',productId:'p2',bottlesPerCase:6,case:{lengthMm:300},equipment:{[request.equipment[0].id]:{ratePerMinute:210}}}]};
+  request.initialFormatId='f2';
+  const output=h.c.exportEquipmentSheet(request);assert(output.ok,JSON.stringify(output));
+  const grid=h.writes[0].values;
+  if(source==='MINIMAL'){
+   assert.deepEqual(Array.from(output.data.tabNames),['Equipment']);
+   assert.equal(grid[0][4],'Format B');assert.equal(grid[1][4],'750 mL');
+   assert.equal(grid[2][4],6);assert.equal(grid[3][4],'Bottle B');assert.equal(grid[0][7],75);assert.equal(grid[1][7],300);
+   assert.equal(grid[7][9],210);assert.equal(grid[9][30],'BOTTLES/CASES');
+  }
+  const mock=(rows,name,id)=>({getLastRow:()=>rows.length,getMaxRows:()=>Math.max(100,rows.length),getMaxColumns:()=>rows[0].length,getSheetId:()=>id,getName:()=>name,getRange:(r,col,count=1,width=1)=>({getValues:()=>Array.from({length:count},(_,i)=>Array.from({length:width},(_,j)=>rows[r-1+i]?.[col-1+j]??'')),getNumberFormats:()=>Array.from({length:count},()=>Array(width).fill('0.00'))})});
+  const sheets=Array.from(output.data.tabNames,(name,i)=>mock(h.writes[i].values,name,i+1));
+  h.c.getCase_=()=>({});
+  h.c.SpreadsheetApp.openById=()=>({getSheets:()=>sheets,getSheetByName:name=>sheets.find(sheet=>sheet.getName()===name),getName:()=> 'Workbook',getSpreadsheetTimeZone:()=> 'America/Mexico_City'});
+  for(const target of ['MINIMAL','BASIC','ADVANCE']){
+   const p=h.c.readSheetImport_({spreadsheet:'new-sheet-id'},target,target==='MINIMAL');
+   assert(p.canImport,JSON.stringify(p.errors));
+   assert.equal(p.source.sourceMode,source);assert.equal(Boolean(p.compatibility),target!=='MINIMAL');
+   assert.equal(p.equipment[0].nominalRatePerSecond*60,source==='MINIMAL'?210:220);
+   assert.equal(p.equipment[0].processData.equipment.maximumSpeedBpm,source==='ADVANCE'&&target==='ADVANCE'?250:undefined);
+   assert.equal(p.equipment[1].processData.accumulation.restartToFirstPackageSeconds,source==='ADVANCE'&&target==='ADVANCE'?5:undefined);
+   assert.equal(p.materialCatalog.catalog.formats.find(f=>f.id===p.materialCatalog.initialFormatId).name,'Format B');
+   if(target==='MINIMAL')assert.equal(p.materialCatalog.catalog.formats.length,1);
+   assert.equal(p.equipment[2].processData.flowUnits.output,'CASES');
+  }
  }
 });

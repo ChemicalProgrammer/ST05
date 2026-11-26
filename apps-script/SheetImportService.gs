@@ -223,6 +223,10 @@ function readSheetImport_(request,mode,requireCompatible) {
     var ids=sheet.getRange(start,idColumn,count,1).getValues();
     result.sourceRows.forEach(function(row){row.equipmentId=String(ids[row.row-start]?.[0]||'');});
   }
+  // Old native exports have no flow column. Reconstruct only the unambiguous
+  // single Case Packer transition; explicit flows always take precedence.
+  var selectedMaterial=result.materialCatalog?.catalog?.formats?.find(function(format){return format.id===result.materialCatalog.initialFormatId;})||result.materialCatalog?.catalog?.formats?.[0];
+  if(recognized&&compact&&sheetFillNativeFlows_(result.equipment,selectedMaterial?.bottlesPerCase??result.metadata.bottlesPerCase))result.source.inferredMaterialFlow=true;
   // Basic silently projects compatible inputs; Standard/Advance can review the source.
   if(!policy.realData)return result;
   var photoActuals=photoActualsTab_(actuals);
@@ -743,15 +747,29 @@ function sheetInlineMaterial_(metadata,grid){
   }
   return {catalog:catalog,errors:errors,matchByName:true,inlineMaterial:true,initialFormatId:catalog.formats[0]?.id};
 }
+function sheetFillNativeFlows_(equipment,pack){
+  if(!Number.isInteger(pack)||pack<1)return false;
+  var packers=equipment.filter(function(item){return item.type==='CASE_PACKER';});if(packers.length!==1)return false;
+  var index=equipment.indexOf(packers[0]),changed=false;
+  equipment.forEach(function(item,i){if(item.processData?.flowUnits?.input&&item.processData?.flowUnits?.output)return;
+    item.processData=item.processData||{};item.processData.flowUnits={input:i<=index?'BOTTLES':'CASES',output:i<index?'BOTTLES':'CASES'};item.unitOfFlow=item.processData.flowUnits.output.toLowerCase();changed=true;
+  });return changed;
+}
 function sheetBasicCatalog_(source,preferredName){
   var catalog=source.catalog||{products:[],formats:[]};
   var candidates=(catalog.formats||[]).filter(function(format){return Number.isInteger(format.bottlesPerCase)&&format.bottlesPerCase>0&&catalog.products.some(function(product){return product.id===format.productId;});});
-  var selected=candidates.find(function(format){return format.id===source.initialFormatId||format.name===preferredName;})||candidates[0];
-  var product=selected?catalog.products.find(function(item){return item.id===selected.productId;}):catalog.products[0];
-  if(!product)return source;
-  var projected={version:3,products:[product],formats:selected?[selected]:[]};
-  try{STScenarioEngine_.validateFormatCatalog(projected);return {...source,catalog:projected,errors:[],initialFormatId:selected?.id};}
-  catch(error){return {...source,catalog:projected,errors:[error.message],initialFormatId:selected?.id};}
+  var preferred=candidates.find(function(format){return format.id===source.initialFormatId||format.name===preferredName;});
+  var ordered=preferred?[preferred,...candidates.filter(function(format){return format!==preferred;})]:candidates;
+  for(var selected of ordered){
+    var product=catalog.products.find(function(item){return item.id===selected.productId;}),projected={version:3,products:[product],formats:[selected]};
+    try{STScenarioEngine_.validateFormatCatalog(projected);return {...source,catalog:projected,errors:[],initialFormatId:selected.id};}catch(ignore){}
+  }
+  if(candidates.length)return source;
+  for(var product of catalog.products){
+    var projected={version:3,products:[product],formats:[]};
+    try{STScenarioEngine_.validateFormatCatalog(projected);return {...source,catalog:projected,errors:[],initialFormatId:undefined};}catch(ignore){}
+  }
+  return source;
 }
 function compactEquipmentMetadataCells_(){return ['B1','B2','E1','E2','E3','B3','B4'];}
 

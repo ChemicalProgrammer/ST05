@@ -127,7 +127,18 @@ button.equipment-table-group-toggle:focus-visible {outline:var(--focus-width) so
 .equipment-editor-table .equipment-table-identity { position:sticky; left:0; z-index:2; background:var(--surface); }
 .equipment-editor-table thead .equipment-table-identity { z-index:3; background:color-mix(in srgb,var(--secondary) 18%,var(--surface)); }
 .equipment-editor-table thead .equipment-table-groups .equipment-table-identity { background:color-mix(in srgb,var(--secondary) 38%,var(--surface)); }
-.equipment-table-resize { position:absolute; right:0; top:0; bottom:0; width:8px; cursor:col-resize; touch-action:none; z-index:1; background:transparent; }
+/* Center the hit area on the painted divider, not inside the column.
+   The absolute containing block ends at the inside of the cell border.
+   Keep the existing animation clipping while a group changes width. */
+.equipment-editor-table:not(.equipment-table-group-animating) thead th:has(> .equipment-table-resize) { overflow:visible; }
+.equipment-table-resize {
+  --resize-hit-width:6px;
+  position:absolute; inset-inline-end:calc((var(--border-width) - var(--resize-hit-width)) / 2 - var(--border-width));
+  top:0; bottom:0; width:var(--resize-hit-width); cursor:col-resize; touch-action:none; z-index:1; background:transparent;
+}
+/* The last column has no inline-end border. */
+.equipment-editor-table thead th:last-child > .equipment-table-resize { inset-inline-end:calc(-1 * var(--resize-hit-width) / 2); }
+@media(pointer:coarse) { .equipment-table-resize { --resize-hit-width:12px; } }
 .equipment-table-resize:focus-visible { outline:var(--focus-width) solid var(--secondary-text,var(--ink)); outline-offset:-2px; }
 .equipment-table-resizing { user-select:none; cursor:col-resize; }
 .equipment-table-name { display:flex; align-items:center; gap:var(--space-1); min-width:0; }

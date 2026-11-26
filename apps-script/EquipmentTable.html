@@ -126,7 +126,7 @@ window.STEquipmentTable=(function(){
     }else{
       copyOptions(original,proxy);
       if(original.type==='checkbox')proxy.checked=original.checked;
-      else if(proxy.value!==original.value)proxy.value=original.value;
+      else {var displayed=original.type==='number'&&original.readOnly&&original.value!==''&&Number.isFinite(Number(original.value))?Number(original.value).toFixed(2):original.value;if(proxy.value!==displayed)proxy.value=displayed;}
       proxy.disabled=original.disabled;
       if('readOnly' in proxy)proxy.readOnly=Boolean(original.readOnly);
       // Hidden source fields keep their own constraint validation. Do not

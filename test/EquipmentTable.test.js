@@ -122,17 +122,17 @@ test('conveyor table mirrors calculated values, manual switches and conditional 
  try{
    h.tableButton.click();
    const accumulation=h.cell('Belt','accumulation-seconds'),accToggle=accumulation.querySelector('input[type="checkbox"]'),accValue=accumulation.querySelector('input[type="number"]');
-   assert.equal(accValue.value,'15');assert(accValue.readOnly);
+   assert.equal(accValue.value,'15.00');assert(accValue.readOnly);
    accToggle.checked=true;emit(h,accToggle,'change');assert(!accValue.readOnly);
    accValue.value='45';emit(h,accValue);assert.equal(h.b._fields.querySelector('.format-zone-accumulation-seconds').value,'45');
    const population=h.cell('Belt','population'),manual=population.querySelector('input[type="checkbox"]'),value=population.querySelector('input[type="number"]');
    assert.equal(value.readOnly,true);
    value.value='99';emit(h,value);assert.equal(h.b._fields.querySelector('.format-zone-population').value,'40');
-   assert.equal(value.value,'40');
+   assert.equal(value.value,'40.00');
    manual.checked=true;emit(h,manual,'change');assert.equal(value.readOnly,false);
    value.value='55';emit(h,value);
    assert.equal(h.b._fields.querySelector('.format-zone-population').value,'55');
-   const speed=h.cell('Belt','belt-speed').querySelector('input');assert.equal(speed.value,'550');assert.equal(speed.readOnly,true);
+   const speed=h.cell('Belt','belt-speed').querySelector('input');assert.equal(speed.value,'550.00');assert.equal(speed.readOnly,true);
    assert.equal(h.cell('Belt','dynamic-percent'),null);
    const mode=h.cell('Belt','speed-mode').querySelector('select');mode.value='DYNAMIC';emit(h,mode,'change');
    assert.equal(h.cell('Belt','dynamic-percent').querySelector('input').value,'120');

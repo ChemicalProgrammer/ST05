@@ -1,7 +1,7 @@
 <script>
 window.STAemComparison=(function(){
   'use strict';
-  const finite=Number.isFinite,fmt=v=>finite(v)?v.toLocaleString(undefined,{maximumFractionDigits:2}):'—';
+  const finite=Number.isFinite,fmt=v=>finite(v)?v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
   const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ratio=(n,d)=>finite(n)&&finite(d)&&d>0?n/d:null;
   const reliabilityEquipment=equipment=>(equipment||[]).filter(e=>e.type!=='CONVEYOR'||e.noiseProfile?.reliability?.enabled!==false&&e.noiseProfile?.reliability?.mtbfMinutes>0);

@@ -101,7 +101,7 @@
       section.querySelectorAll('input').forEach(function(input){input.disabled=locked;});
       var config=readDynamicBalancing(card),preview=section.querySelector('.dynamic-balancing-preview'),es=document.documentElement.lang==='es';
       var nominal=zone?.conveyorSpeedMmPerSecond*.06;
-      var format=function(value){return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:2}):'—';};
+      var format=function(value){return Number.isFinite(value)?value.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):'—';};
       var prefix=(es?'Velocidad nominal: ':'Nominal speed: ')+format(nominal)+' m/min. ';
       if(!config){preview.textContent=prefix+'—';return;}
       try{
@@ -336,7 +336,7 @@
       ['population','lba','backup','overspeed'].forEach(function(key){
         var input=equipmentField(card,'.format-zone-'+key),toggle=equipmentField(card,'.format-zone-'+key+'-enabled'),enabled=toggle.checked,was=input.dataset.inputMode==='true';
         if(key==='population'||key==='overspeed'){if(dynamic||basic)toggle.checked=enabled=false;toggle.disabled=dynamic||basic;toggle.hidden=basic;}
-        if(enabled&&!was)input.value=input.dataset.manualValue!==undefined&&input.dataset.manualValue!==''?input.dataset.manualValue:key==='backup'?'':input.value;
+        if(enabled&&!was)input.value=input.dataset.manualValue!==undefined&&input.dataset.manualValue!==''?input.dataset.manualValue:key==='backup'?'':(input.dataset.calculatedValue??input.value);
         if(enabled||was)input.dataset.manualValue=input.value;
         input.dataset.inputMode=String(enabled);conveyorFieldRole(input,enabled?'INPUT':'OUTPUT',true);
       });
@@ -519,6 +519,11 @@ function updateFormatZoneVisibility(card) {
 
       syncSwitchableFields(card);
       var values = readFormatZoneInputs(card);
+      if(!Number.isFinite(values.dischargeRunoutLengthMm)||!Number.isFinite(values.rejectRunoutLengthMm)){
+        applyConveyorOutputs(card,{},values);
+        target.textContent=window.STLanguage?.translate('Enter a nonnegative Discharge/Coding length or a design transit time and valid segment velocity.')??'Enter a nonnegative Discharge/Coding length or a design transit time and valid segment velocity.';
+        return;
+      }
       var populationEnabled=equipmentField(card,'.format-zone-population-enabled').checked;
       var lbaEnabled=equipmentField(card,'.format-zone-lba-enabled').checked;
       var overspeedEnabled=equipmentField(card,'.format-zone-overspeed-enabled').checked;
@@ -668,7 +673,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
         downstreamInfeedPitchMm: numericInputValue(equipmentField(card, '.format-zone-infeed')),
         codingFactorPercent: numericInputValue(equipmentField(card, '.format-zone-coding-factor')),
         accFactorPercent: !target&&mode==='AUTO'?numericInputValue(equipmentField(card, '.format-zone-acc-factor')):undefined,
-        overspeedPercent: numericInputValue(equipmentField(card, '.format-zone-overspeed'))
+        overspeedPercent: (()=>{var field=equipmentField(card,'.format-zone-overspeed');return field?.dataset.fieldRole==='OUTPUT'?numericInputValue({value:field.dataset.calculatedValue??''}):numericInputValue(field);})()
       };
     }
 
@@ -1019,11 +1024,15 @@ function numericInputValue(input) {
             conveyorButton.hidden=!conveyor;
             if(conveyor){
               try{
+                var zoneInputs=readFormatZoneInputs(card);
+                if(!Number.isFinite(zoneInputs.dischargeRunoutLengthMm)||!Number.isFinite(zoneInputs.rejectRunoutLengthMm)){
+                  applyConveyorOutputs(card,{},zoneInputs);window.STConveyorAnalysis.paintEvaluationButton(conveyorButton,null);return;
+                }
                 var worksheet=editorConveyorWorksheet(e.id,simulation,resolved);
                 var result=worksheet?window.STConveyorAnalysis.calculate(worksheet):null;
                 var beltIndex=resolved?.models?.findIndex(item=>item.id===e.id)??-1;
                 if(beltIndex>=0)refreshDynamicBalancing(card,resolved.models,beltIndex,resolved.zones[beltIndex]);
-                if(worksheet?.zone?.engineering?.calculated)applyConveyorOutputs(card,worksheet.zone.engineering.calculated,readFormatZoneInputs(card),worksheet.zone,result?.profiles?.find(p=>p.formatId===worksheet.source?.activeProfile?.format?.id)||result?.profiles?.[0]);
+                if(worksheet?.zone?.engineering?.calculated)applyConveyorOutputs(card,worksheet.zone.engineering.calculated,zoneInputs,worksheet.zone,result?.profiles?.find(p=>p.formatId===worksheet.source?.activeProfile?.format?.id)||result?.profiles?.[0]);
                 window.STConveyorAnalysis.paintEvaluationButton(conveyorButton,result?.geometry||null);
               }catch(_){window.STConveyorAnalysis.paintEvaluationButton(conveyorButton,null);}
             }

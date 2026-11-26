@@ -357,7 +357,8 @@ function normalizeEquipmentList_(equipment) {
     if(unit.unitOfFlow!==undefined&&(typeof unit.unitOfFlow!=='string'||unit.unitOfFlow.trim().length>40)){
       throw createSimulatorError_('INVALID_CASE', path + '.unitOfFlow must be text of at most 40 characters.');
     }
-    if (!isPositiveFiniteNumber_(unit.nominalRatePerSecond)) {
+    var incompleteImport=unit.nominalRatePerSecond===null&&unit.characteristics?.importedMissingNominalRate===true;
+    if (!incompleteImport&&!isPositiveFiniteNumber_(unit.nominalRatePerSecond)) {
       throw createSimulatorError_('INVALID_CASE', path + '.nominalRatePerSecond must be greater than zero.');
     }
     if (['AUTO', 'MANUAL', 'PAUSE', 'STOP'].indexOf(unit.initialMode) === -1) {
@@ -368,7 +369,7 @@ function normalizeEquipmentList_(equipment) {
       type: unit.type,
       name: unit.name.trim(),
       unitOfFlow: unit.unitOfFlow?.trim()||undefined,
-      nominalRatePerSecond: Number(unit.nominalRatePerSecond),
+      nominalRatePerSecond: incompleteImport?null:Number(unit.nominalRatePerSecond),
       initialMode: unit.initialMode,
       characteristics: normalizeObject_(unit.characteristics),
       noiseProfile: normalizeObject_(unit.noiseProfile),

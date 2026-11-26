@@ -137,10 +137,10 @@ window.STSettings = (function() {
       (Array.isArray(legacy)&&legacy.length>1)?'multiple':'single';
   }
   function resetModeSelector(preserveUnlock){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-realdata-section').classList.toggle('hidden',document.documentElement.dataset.uiMode==='basic');el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
-    el('settings-product-format-mode').value=productFormatMode(record);el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');if(preserveUnlock!==true){modeCount=0;modeStarted=0;el('settings-interface-section').classList.add('hidden');}el('settings-interface-mode').value=document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC';}
+    el('settings-product-format-mode').value=productFormatMode(record);el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');if(preserveUnlock!==true){modeCount=0;modeStarted=0;el('settings-interface-section').classList.add('hidden');}el('settings-interface-mode').value=(document.documentElement.dataset.workspaceMode||'MINIMAL');}
   async function changeMode(){
     if(modeChanging)return;
-    var picker=el('settings-interface-mode'),previous=document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC',mode=picker.value;
+    var picker=el('settings-interface-mode'),previous=(document.documentElement.dataset.workspaceMode||'MINIMAL'),mode=picker.value;
     if(mode===previous)return;
     modeChanging=true;picker.disabled=true;
     try {
@@ -201,7 +201,7 @@ window.STSettings = (function() {
         try{await flushCase();}catch(error){el('settings-error').textContent=error.message;STErrors.capture('settings-error',error);}
       }else el('settings-error').textContent='The case name is required before saving changes.';
     }
-    var changed=!el('settings-interface-section').classList.contains('hidden')&&el('settings-interface-mode').value!==(document.documentElement.dataset.uiMode==='advance'?'ADVANCE':'BASIC');
+    var changed=!el('settings-interface-section').classList.contains('hidden')&&el('settings-interface-mode').value!==((document.documentElement.dataset.workspaceMode||'MINIMAL'));
     var mode=el('settings-interface-mode').value;
     if(changed&&!STPreferences.write('interfaceMode',mode)){el('settings-error').textContent=__ST_TEXT__('settings.interface_mode_storage_error');return;}
     el('settings-error').textContent='';resetModeSelector();el('settings-dialog').close();if(lastFocus?.isConnected)lastFocus.focus();

@@ -62,7 +62,7 @@ window.STPreferences = (function() {
     automaticTimer = setTimeout(apply, Math.min.apply(null,delays)+50);
   }
   var colors=Object.keys(STThemeResources.palettes);
-  function resolveInterfaceMode(fallback){var value=read('interfaceMode')||fallback;return ['ADVANCE','ADVANCED'].includes(String(value||'').trim().toUpperCase())?'ADVANCE':'BASIC';}
+  function resolveInterfaceMode(fallback){var value=String(read('interfaceMode')||fallback||'MINIMAL').trim().toUpperCase();return ['ADVANCE','ADVANCED'].includes(value)?'ADVANCE':['BASIC','STANDARD','LEGACY_BASIC'].includes(value)?'BASIC':'MINIMAL';}
   function applyPalette(){
     document.querySelectorAll('.accent-choice').forEach(function(button){
       var entry=STThemeResources.palettes[button.dataset.accent];

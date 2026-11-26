@@ -18,6 +18,7 @@
     <?!= include_('AssistantStyles'); ?>
     <?!= include_('SheetImportStyles'); ?>
     <?!= include_('BasicModeStyles'); ?>
+    <?!= include_('MinimalModeStyles'); ?>
     <?!= include_('UiStandards'); ?>
     <?!= include_('TimeControls'); ?>
     <?!= include_('RealDataStyles'); ?>
@@ -117,6 +118,7 @@
         </div>
       </section>
 
+      <?!= include_('MinimalWorkspace'); ?>
       <section id="editor-panel" class="card hidden" aria-labelledby="editor-title">
         <div class="section-heading">
           <div>
@@ -525,7 +527,7 @@
             <div id="secondary-color-section" class="settings-row settings-colors"><div class="accent-heading"><span class="field-label" id="secondary-accent-label">Secondary color</span></div><button id="choose-secondary-color" aria-label="Select secondary color" title="Select secondary color" class="appearance-color-trigger" type="button" aria-haspopup="dialog" aria-controls="theme-color-dialog"><span class="appearance-current-swatch appearance-secondary-swatch" aria-hidden="true"></span></button><button id="reset-secondary-color" type="button" class="ghost icon-button" data-icon="refresh" aria-label="Reset secondary color" title="Reset secondary color"></button></div>
             </div></div><div class="appearance-footer"><span id="appearance-status" role="status"></span></div>
           </section>
-          <section id="settings-interface-section" class="settings-section hidden"><div class="settings-row"><label for="settings-interface-mode"><?= __ST_TEXT__('settings.interface_mode') ?></label><select id="settings-interface-mode"><option value="BASIC">Basic</option><option value="ADVANCE">Advance</option></select></div><p><?= __ST_TEXT__('settings.interface_mode_note') ?></p></section>
+          <section id="settings-interface-section" class="settings-section hidden"><div class="settings-row"><label for="settings-interface-mode"><?= __ST_TEXT__('settings.interface_mode') ?></label><select id="settings-interface-mode"><option value="MINIMAL">Basic</option><option value="BASIC">Standard</option><option value="ADVANCE">Advance</option></select></div><p><?= __ST_TEXT__('settings.interface_mode_note') ?></p></section>
         </div>
         <div id="settings-page-simulation" class="hidden" role="tabpanel" aria-labelledby="settings-tab-simulation">
           <div id="settings-run-options" class="simulation-settings-groups">
@@ -654,6 +656,7 @@
     <?!= include_('ConfigurationEditor'); ?>
     <?!= include_('EquipmentRoles'); ?>
     <?!= include_('BasicMode'); ?>
+    <?!= include_('MinimalMode'); ?>
     <?!= include_('DesignReference'); ?>
     <?!= include_('BrandConveyorMotion'); ?>
     <?!= includeClient_(); ?>

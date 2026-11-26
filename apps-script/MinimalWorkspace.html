@@ -1,0 +1,38 @@
+<section id="minimal-workspace" class="minimal-workspace hidden" aria-label="Basic workspace">
+  <section class="fold-card minimal-section" aria-labelledby="minimal-equipment-title">
+    <div class="fold-heading"><h3 id="minimal-equipment-title">Equipment and conveyors</h3></div>
+    <div class="minimal-table-wrap"><table class="minimal-equipment-table">
+      <thead><tr><th scope="col">#</th><th scope="col">Equipment</th><th scope="col">Type</th><th scope="col">Critical machine</th><th scope="col">Nominal rate</th><th scope="col">MTBF (min)</th><th scope="col">MTTR (min)</th><th scope="col">Conveyor speed (m/min)</th><th scope="col">Total length (mm)</th><th scope="col">Package length (mm)</th><th scope="col">Discharge pitch (mm)</th></tr></thead>
+      <tbody id="minimal-equipment-rows"></tbody>
+    </table></div>
+    <p id="minimal-input-review" class="minimal-message" role="status" hidden>Review imported inputs in Standard before running.</p>
+  </section>
+  <section class="fold-card minimal-section" aria-labelledby="minimal-simulation-title">
+    <div class="fold-heading"><h3 id="minimal-simulation-title">Simulation</h3></div>
+    <div class="minimal-action"><button id="minimal-run" type="button">Run simulation</button></div>
+    <div id="minimal-run-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Simulation progress"></progress><output>0%</output></div>
+    <div id="minimal-result-cards" class="minimal-result-grid" hidden></div>
+  </section>
+  <section id="minimal-optimization" class="fold-card minimal-section" aria-labelledby="minimal-optimization-title" hidden>
+    <div class="fold-heading"><h3 id="minimal-optimization-title">Optimization</h3></div>
+    <div class="minimal-action"><button id="minimal-search" type="button">Find optimizations</button></div>
+    <div id="minimal-search-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Optimization progress"></progress><output>0%</output></div>
+    <p id="minimal-search-message" class="minimal-message" role="status" hidden></p>
+    <div id="minimal-scenario-cards" class="minimal-result-grid" hidden></div>
+  </section>
+</section>
+<dialog id="minimal-import-dialog" aria-labelledby="minimal-import-title">
+  <header class="dialog-heading"><h2 id="minimal-import-title">Import case</h2><button id="minimal-import-close" type="button" class="ghost icon-button" data-icon="x" aria-label="Close"></button></header>
+  <form id="minimal-import-form">
+    <div class="dialog-body">
+      <input id="minimal-import-link" type="text" required autocomplete="off" aria-label="Google Sheets link" placeholder="Google Sheets link">
+      <p id="minimal-import-status" role="status" aria-live="polite" hidden></p>
+    </div>
+    <footer class="dialog-actions"><button id="minimal-import-submit" type="submit">Import</button></footer>
+  </form>
+</dialog>
+<dialog id="minimal-improvements-dialog" aria-labelledby="minimal-improvements-title">
+  <header class="dialog-heading"><h2 id="minimal-improvements-title">Suggested improvements</h2><button id="minimal-improvements-close" type="button" class="ghost icon-button" data-icon="x" aria-label="Close"></button></header>
+  <div class="dialog-body"><p id="minimal-improvements-note" class="minimal-message" hidden></p><div class="minimal-table-wrap"><table><thead><tr><th scope="col">Equipment</th><th scope="col">Parameter</th><th scope="col">Current</th><th scope="col">Proposed</th></tr></thead><tbody id="minimal-improvements-rows"></tbody></table></div></div>
+  <footer class="dialog-actions"><button id="minimal-improvements-done" type="button">Done</button></footer>
+</dialog>

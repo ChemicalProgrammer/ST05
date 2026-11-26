@@ -52,6 +52,7 @@
     function flushForServer(){return prepareCaseDraft().then(function(){return window.STCaseContext.snapshot(Object.assign({},state.activeCase,{activeSimulationId:state.activeSimulationId}));});}
     async function leaveCase(){
       window.STSimulation2D?.pause();
+      if(window.STMinimalMode?.busy())return false;
       if(!state.activeCase||!autosave.pending())return true;
       if(automaticSaving()){await flushCase();return true;}
       var answer=await STDialog.open({title:'Unsaved case changes',message:'Save your changes before closing this case?',buttons:[{id:'cancel',label:__ST_TEXT__('view.cancel')},{id:'discard',label:'Discard changes'},{id:'save',label:'Save changes'}]});
@@ -209,6 +210,16 @@
       });
     }
 
+    function importMinimalCase(spreadsheet,done){
+      var session=state.bootstrap,epoch=state.requestEpoch;
+      callServer('importSimpleCase',[{spreadsheet:spreadsheet}],function(response){
+        if(state.bootstrap!==session||state.requestEpoch!==epoch){done({ok:false});return;}
+        if(!response?.ok||!response.data?.id){done({ok:false,format:/^(INVALID_SHEET|SHEET_TAB_NOT_FOUND)/.test(response?.error?.code||'')});return;}
+        var summary=response.data;
+        cancelCaseCatalog();session.cases=(session.cases||[]).filter(x=>x.id!==summary.id).concat([summary]);
+        renderCases(session.cases);done({ok:true});openCase(summary.id,'simulation');
+      });
+    }
     function createDraftCase(event) {
       event.preventDefault();
       var input = document.getElementById('new-case-name');

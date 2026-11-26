@@ -1,0 +1,208 @@
+<script>
+window.STMinimalMode=(function(){
+  'use strict';
+  var state,actions,initialized=false,importing=false,starting=false,searching=false,timer=null;
+  var runProgress=0,searchProgress=0,searchCard=null,searchIndex=0,tableKey='',resultKey='',scenarioKey='',attempted=null,searchMessage='',lastOwner=null;
+  var tiers=['ZERO','MEDIUM','HIGH'];
+  var tierLabels={ZERO:'Zero CAPEX',MEDIUM:'Medium CAPEX',HIGH:'High CAPEX'};
+  function el(id){return document.getElementById(id);}
+  function node(tag,text,cls){var n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;}
+  function tr(value){return window.STLanguage?.translate(value)||value;}
+  function isMinimal(){return (state?.bootstrap?.uiMode||STPreferences.resolveInterfaceMode())==='MINIMAL';}
+  function busy(){return isMinimal()&&(importing||starting||searching||!!actions?.locked?.());}
+  function isSearching(){return isMinimal()&&searching;}
+  function number(value,digits){return Number.isFinite(value)?value.toLocaleString(document.documentElement.lang==='es'?'es-MX':'en-US',{maximumFractionDigits:digits??2}):'—';}
+  function show(id,visible){el(id).hidden=!visible;}
+  function progress(id,value){
+    var holder=el(id),p=Math.max(0,Math.min(100,Number(value)||0));
+    holder.querySelector('progress').value=p;
+    holder.querySelector('output').textContent=p.toFixed(1).replace(/\.0$/,'')+'%';
+  }
+  function owner(){return actions.simulation();}
+  function ownerKey(){return state.activeCase&&owner()?state.activeCase.id+'|'+owner().id:null;}
+  function result(){var sim=owner(),r=sim?.results;
+    return r?.summary&&r.replicationStatus?.state==='COMPLETE'?r:null;
+  }
+  function reviewRequired(sim){return (sim?.sourceImport?.simpleImportIssues||[]).length>0;}
+  function metricValue(value,unit,digits){var n=node('strong',number(value,digits),'metric-value');if(Number.isFinite(value)&&unit)n.append(node('span',' '+unit,'metric-unit'));return n;}
+  function renderTable(sim){
+    var line=sim?.equipment||state.activeCase?.equipment||[];
+    var key=JSON.stringify([line,document.documentElement.lang]);
+    if(key===tableKey)return;tableKey=key;
+    var body=el('minimal-equipment-rows');body.replaceChildren();
+    line.forEach(function(e,i){
+      var data=e.processData||{},belt=e.type==='CONVEYOR',m=data.equipment||{},g=data.geometry||{},up=data.upstream||{};
+      var rate=Number.isFinite(e.nominalRatePerSecond)?e.nominalRatePerSecond*60:null;
+      var unit=window.STFlowUnits?.labels(e.unitOfFlow||data.flowUnits?.output||state.activeCase.unitOfFlow)?.rate||'units/min';
+      var velocity=data.accumulation?.conveyorSpeedMmPerSecond;
+      var values=[i+1,e.name,tr(e.type),belt?'—':e.characteristics?.isPacemaker||e.characteristics?.criticalMachine?tr('Yes'):tr('No'),
+        rate===null?'—':number(rate)+' '+unit,number(e.noiseProfile?.reliability?.mtbfMinutes??m.mtbfMinutes),
+        number(e.noiseProfile?.reliability?.mttrMinutes??m.mttrMinutes),
+        belt?number(Number.isFinite(velocity)?velocity*.06:null):'—',belt?number(g.lactMm):'—',belt?number(up.packageLengthMm):'—',belt?number(up.dischargePitchMm):'—'];
+      var row=node('tr');row.dataset.conveyor=String(belt);
+      values.forEach(function(value,index){var td=node('td',value);if(index===1)td.dataset.stNoTranslate='';row.append(td);});body.append(row);
+    });
+    if(!line.length){var td=node('td','No equipment imported.');td.colSpan=11;var row=node('tr');row.append(td);body.append(row);}
+  }
+  function resultValues(r){
+    var unit=window.STFlowUnits?.labels(r.unitOfFlow||state.activeCase?.unitOfFlow)||{count:'units',rate:'units/min'};
+    var stats=r.batch?.statistics||{},s=r.summary||{};
+    return {unit:unit,oee:stats.lineOeePercent?.mean??s.lineOeePercent,
+      throughput:stats.throughputPerMinute?.mean??(r.durationSeconds>0?s.outputCount/r.durationSeconds*60:null),output:stats.outputCount?.mean??s.outputCount};
+  }
+  function productionLabel(unit){return unit.count==='bottles'?'Bottles produced':'Production';}
+  function renderResults(r){
+    show('minimal-result-cards',!!r&&!starting&&!actions.locked());
+    if(!r)return;
+    var v=resultValues(r),key=JSON.stringify([v,document.documentElement.lang]);
+    if(key===resultKey)return;resultKey=key;
+    var grid=el('minimal-result-cards');grid.replaceChildren();
+    [['Efficiency',v.oee,'%',2],['Throughput',v.throughput,v.unit.rate,2],[productionLabel(v.unit),v.output,v.unit.count,0]].forEach(function(spec,i){
+      var card=node('article',null,'metric-card '+(i===0?'metric-card--featured':'metric-card--result'));
+      card.append(node('span',spec[0]),metricValue(spec[1],spec[2],spec[3]));grid.append(card);
+    });
+  }
+  function sourceSignature(sim){try{return window.STScenarios?.signature(sim)||null;}catch(_){return null;}}
+  function currentEntry(sim,tier,signature){
+    if(!signature)return null;
+    return (sim.whatIf?.evaluations||[]).filter(e=>e.sourceSimulationId===sim.id&&e.sourceSignature===signature&&(e.searchScope||e.tier)===tier&&
+      (e.cardId===JSON.stringify([sim.id,'CAPEX',tier])||e.kind==='CUSTOM'||e.origin==='DEMO_PREPARED')).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0]||null;
+  }
+  function outcome(entry){
+    if(!entry)return {status:'Not evaluated',candidate:null,changes:[]};
+    var confirmed=entry.independentCheck?.passed===true&&entry.independentCheck.candidate;
+    if(confirmed&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED'].includes(entry.status)){
+      var status=entry.analysisOnly?'Exploratory target':entry.status==='ENGINEERING_REVIEW_REQUIRED'?'Engineering review required':'Confirmed improvement';
+      return {status:status,candidate:confirmed,changes:entry.evaluatedChanges||[]};
+    }
+    var statuses={NO_DEMONSTRATED_IMPROVEMENT:'No demonstrated improvement',NO_ELIGIBLE_TARGETS:'No eligible targets',NOT_REPRODUCED:'No confirmed improvement',ERROR:'Evaluation failed',INFEASIBLE:'No feasible candidate',CANCELLED:'Evaluation cancelled',INTERRUPTED:'Evaluation interrupted',RUNNING:'Evaluation interrupted',VALIDATING:'Evaluation interrupted'};
+    return {status:statuses[entry.status]||'Not evaluated',candidate:null,changes:[]};
+  }
+  function showImprovements(entry,sim){
+    var display=outcome(entry);if(!display.changes.length)return;
+    var body=el('minimal-improvements-rows');body.replaceChildren();
+    display.changes.forEach(function(change){
+      var info=STWhatIf.changeInfo(change,sim.equipment),row=node('tr');
+      [info.equipment,info.parameter,info.before,info.after].forEach(function(value,index){var td=node('td',value);if(index===0)td.dataset.stNoTranslate='';row.append(td);});body.append(row);
+    });
+    var note=el('minimal-improvements-note');note.textContent=tr(entry.analysisOnly?'These targets require feasibility and cost review.':entry.warnings?.length?'Engineering review is required before implementation.':'');note.hidden=!note.textContent;
+    el('minimal-improvements-dialog').showModal();
+  }
+  function renderScenarios(sim,r){
+    if(!sim||!r||searching||starting||actions.locked()){show('minimal-scenario-cards',false);return;}
+    var signature=sourceSignature(sim),entries=tiers.map(t=>attempted?.has(t)?attempted.get(t):currentEntry(sim,t,signature));
+    var visible=!!attempted||entries.some(Boolean);show('minimal-scenario-cards',visible);
+    el('minimal-search').textContent=tr(visible?'Restart search':'Find optimizations');
+    if(!visible)return;
+    var key=JSON.stringify([ownerKey(),document.documentElement.lang,entries.map(e=>e&&[e.updatedAt,e.status,e.sourceSignature,e.independentCheck?.passed]),!!attempted]);
+    if(key===scenarioKey)return;scenarioKey=key;
+    var grid=el('minimal-scenario-cards');grid.replaceChildren();
+    tiers.forEach(function(tier,i){
+      var entry=entries[i],data=outcome(entry),c=data.candidate;
+      var unit=window.STFlowUnits?.labels(c?.unitOfFlow||entry?.independentCheck?.unitOfFlow||r.unitOfFlow)||{count:'units',rate:'units/min'};
+      var rows=c?.roundMetrics||[],output=rows.length&&rows.every(x=>Number.isFinite(x.outputCount))?rows.reduce((sum,x)=>sum+x.outputCount,0)/rows.length:null;
+      var card=node('article',null,'metric-card minimal-scenario-card');card.dataset.tier=tier;
+      card.append(node('h4',tierLabels[tier]),node('p',data.status,'minimal-message'));
+      var metrics=node('div',null,'minimal-scenario-values');
+      [['Efficiency',c?.oee,'%',2],['Throughput',c?.throughput,unit.rate,2],[productionLabel(unit),output,unit.count,0]].forEach(function(spec){var m=node('div');m.append(node('span',spec[0]),metricValue(spec[1],spec[2],spec[3]));metrics.append(m);});
+      var button=node('button','View improvements','secondary');button.type='button';button.disabled=!data.changes.length;button.onclick=function(){showImprovements(entry,sim);};
+      card.append(metrics,button);grid.append(card);
+    });
+  }
+  function stopMonitor(){if(timer!==null){clearInterval(timer);timer=null;}}
+  function monitor(){if(timer===null)timer=setInterval(function(){sync(state);if(!busy())stopMonitor();},180);}
+  function updateSearchProgress(){
+    if(!searching)return;
+    var current=Number(searchCard?.querySelector('.scenario-activity')?.getAttribute('aria-valuenow'))||0;
+    searchProgress=Math.max(searchProgress,Math.min(99.9,(searchIndex+Math.min(current,100)/100)/tiers.length*100));
+    progress('minimal-search-progress',searchProgress);
+  }
+  function sync(current){
+    state=current;if(!initialized)return;
+    var active=isMinimal()&&!!state.activeCase,sim=active?owner():null,k=active?ownerKey():null;
+    el('minimal-workspace').classList.toggle('hidden',!active);
+    if(k!==lastOwner){lastOwner=k;tableKey=resultKey=scenarioKey='';attempted=null;searchMessage='';runProgress=0;searchProgress=0;}
+    var lock=busy();
+    document.querySelectorAll('#basic-case-actions button').forEach(function(b){if(lock&&!b.disabled){b.disabled=true;b.dataset.minimalLock='true';}else if(!lock&&b.dataset.minimalLock==='true'){b.disabled=false;delete b.dataset.minimalLock;}});
+    if(!active){if(!busy())stopMonitor();return;}
+    renderTable(sim);
+    var running=starting||actions.locked(),r=result(),review=reviewRequired(sim);
+    show('minimal-input-review',review);
+    show('minimal-run-progress',running);
+    if(running){runProgress=Math.max(runProgress,Math.min(99.9,100*actions.progress()));progress('minimal-run-progress',runProgress);}
+    el('minimal-run').hidden=running;el('minimal-run').disabled=searching||state.saving||!sim;
+    el('minimal-run').textContent=tr(r?'Restart simulation':'Run simulation');
+    renderResults(r);
+    show('minimal-optimization',!!r&&!running);
+    var canSearch=!!r&&!review&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL';
+    el('minimal-search').hidden=searching;
+    el('minimal-search').disabled=!canSearch||running||state.saving;
+    show('minimal-search-progress',searching);
+    if(searching)updateSearchProgress();
+    var message=searchMessage||(!canSearch&&r?'Optimization is unavailable for this configuration.':'');
+    el('minimal-search-message').textContent=tr(message);show('minimal-search-message',!!message&&!searching);
+    renderScenarios(sim,r);
+    if(lock)monitor();
+  }
+  async function startRun(){
+    if(busy()||!state.activeCase)return;
+    var sim=owner();if(!sim)return;
+    if(reviewRequired(sim)){actions.error({message:tr('Review imported inputs in Standard before running.')});return;}
+    if((sim.equipment||[]).length<2){actions.error({message:tr('At least two equipment units are required for simulation.')});return;}
+    starting=true;runProgress=0;attempted=null;searchMessage='';scenarioKey=resultKey='';
+    el('run-calculation-mode').value='FAST';sync(state);
+    try{await actions.run();}catch(error){actions.error(error);}finally{starting=false;sync(state);}
+  }
+  async function startSearch(){
+    if(busy()||!result()||!owner())return;
+    var sim=owner(),key=ownerKey(),signature=sourceSignature(sim);
+    try{actions.prepareSearch();}catch(error){actions.error(error);return;}
+    var cards=Array.from(el('simulation-analysis-content').querySelectorAll('.analysis-recommendation')).filter(c=>typeof c._runMinimalSearch==='function');
+    searching=true;searchProgress=0;searchMessage='';scenarioKey='';attempted=new Map();sync(state);
+    try{
+      for(var i=0;i<tiers.length;i++){
+        if(!isMinimal()||ownerKey()!==key||sourceSignature(sim)!==signature)break;
+        var tier=tiers[i];searchIndex=i;searchCard=cards.find(c=>c.dataset.motionKey===JSON.stringify([sim.id,'CAPEX',tier]));
+        var prior=currentEntry(sim,tier,signature);
+        if(searchCard){
+          try{await searchCard._runMinimalSearch();}
+          catch(error){searchMessage='Evaluation failed';}
+        }
+        var latest=currentEntry(sim,tier,signature);
+        // If validation did not start a fresh search, do not present older
+        // evidence as the result of this new request.
+        attempted.set(tier,latest&&latest!==prior?latest:null);
+        searchProgress=(i+1)/tiers.length*100;progress('minimal-search-progress',searchProgress);
+      }
+      if(ownerKey()===key){try{await actions.save();}catch(error){actions.error(error);}}
+    }catch(error){actions.error(error);searchMessage='Evaluation failed';}
+    finally{searching=false;searchCard=null;sync(state);}
+  }
+  function openImport(){
+    if(importing||!isMinimal()||!state.bootstrap)return;
+    el('minimal-import-link').value='';el('minimal-import-status').hidden=true;
+    el('minimal-import-dialog').showModal();el('minimal-import-link').focus();
+  }
+  function init(current,callbacks){
+    state=current;actions=callbacks;if(initialized)return;initialized=true;
+    el('minimal-run').onclick=startRun;el('minimal-search').onclick=startSearch;
+    var dialog=el('minimal-import-dialog'),link=el('minimal-import-link'),submit=el('minimal-import-submit'),close=el('minimal-import-close');
+    close.onclick=function(){if(!importing)dialog.close();};
+    dialog.addEventListener('cancel',e=>{if(importing)e.preventDefault();});
+    dialog.addEventListener('close',()=>el('show-new-case')?.focus());
+    el('minimal-import-form').onsubmit=function(event){
+      event.preventDefault();if(importing||!link.value.trim())return;
+      importing=true;link.disabled=submit.disabled=close.disabled=true;el('minimal-import-status').hidden=true;
+      actions.importCase(link.value.trim(),function(response){
+        importing=false;link.disabled=submit.disabled=close.disabled=false;
+        if(response?.ok)dialog.close();
+        else{el('minimal-import-status').textContent=tr(response?.format?'Incorrect format.':'Could not import case.');el('minimal-import-status').hidden=false;}
+        sync(state);
+      });
+    };
+    ['minimal-improvements-close','minimal-improvements-done'].forEach(id=>el(id).onclick=()=>el('minimal-improvements-dialog').close());
+    window.addEventListener('st-language-change',()=>{tableKey=resultKey=scenarioKey='';sync(state);});
+  }
+  return {init:init,sync:sync,isMinimal:isMinimal,busy:busy,isSearching:isSearching,openImport:openImport};
+})();
+</script>

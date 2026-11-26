@@ -85,11 +85,17 @@ function previewSheetImport_(request, user) {
   var mode=sheetRequestUiMode_(request);
   if(request.clientImportVersion&&request.clientImportVersion!==sheetImportContractVersion_())throw createSimulatorError_('SHEET_VERSION_MISMATCH','The import client and server are different versions. Reopen the latest web deployment before retrying.');
   if(request.caseSnapshot)browserCaseSnapshot_(request,user);else getCase_(request.caseId, user);
+  return readSheetImport_(request,mode,false);
+}
+
+// New-case import has no pre-existing case; authorization remains in its RPC.
+function readSheetImport_(request,mode,requireCompatible) {
   var reference = parseSheetReference_(request.spreadsheet);
   var book = openImportSpreadsheet_(reference.id);
   var name = typeof request.sheetName === 'string' ? request.sheetName.trim() : '';
   var sheets = book.getSheets();
   var sheet = name ? book.getSheetByName(name) : reference.gid !== null ? sheets.filter(function(s){return String(s.getSheetId()) === reference.gid;})[0] : sheets[0];
+  if(requireCompatible&&!name&&reference.gid===null)sheet=book.getSheetByName('Equipment')||sheet;
   if(sheet&&['Products & Formats','Real Data','Datos reales'].includes(sheet.getName()))sheet=book.getSheetByName('Equipment');
   if (!sheet) throw createSimulatorError_('SHEET_TAB_NOT_FOUND','The worksheet was not found. Enter its exact tab name.');
   var lastRow=sheet.getLastRow();
@@ -101,6 +107,15 @@ function previewSheetImport_(request, user) {
   var stopBreakdown=inlineStops||marker==='st-equipment-metadata-b-v4',compact=stopBreakdown||marker==='st-equipment-metadata-b-v3',start=compact?8:marker==='st-equipment-metadata-b-v2'?11:10,limit=start+999;
   if(lastRow>limit)throw createSimulatorError_('SHEET_TOO_LARGE','This importer supports up to 1,000 equipment rows (rows '+start+'–'+limit+'). Remove extra content below the equipment table or use a dedicated worksheet.');
   if(sheet.getMaxColumns()<23||sheet.getMaxRows()<start)throw createSimulatorError_('INVALID_SHEET_LAYOUT','Expected an Equipment header and data starting at A'+start+'.');
+  if(requireCompatible){
+    var recognized=/^st-equipment-metadata-b-v[1-7]$/.test(String(inlineMarker||marker||''))||/^st-equipment-metadata-b-v[1-7]$/.test(String(marker||''));
+    if(!recognized){
+      var header=sheet.getRange(start-2,1,2,6).getValues();
+      function column(i){return header.map(function(r){return String(r[i]||'');}).join(' ');}
+      recognized=/(?:type|tipo|equipment|machine|equipo)/i.test(column(0))&&/(?:name|nombre|equipment|machine|equipo)/i.test(column(1))&&/mtbf/i.test(column(3))&&/mttr/i.test(column(4));
+    }
+    if(!recognized)throw createSimulatorError_('INVALID_SHEET_LAYOUT','Incorrect format.');
+  }
   var layout=detectSheetImportLayout_(sheet.getRange(start-2,inlineStops?11:7,2,2).getValues()),width=sheetImportColumns_(layout).length,lastColumn=capacityColumn?'AE':inlineStops?'AC':String.fromCharCode(64+width);
   var dischargeVelocityColumn=capacityColumn&&sheet.getMaxColumns()>=32&&
     /^Upstream Discharge Velocity\s*[\[(]m\/min[\])]$/i.test(String(sheet.getRange(start-1,32).getValues()[0][0]||'').trim());
@@ -144,6 +159,7 @@ function previewSheetImport_(request, user) {
   var residenceRows=residenceColumn&&count?sheet.getRange(start,34,count,1).getValues():null;
   var result = parseEquipmentSheet_(metadata, rows, formats,layout,{residenceRows:residenceRows,containerUnit:containerUnit,metadataColumn:metadataColumn,metadataCells:metadataCells,stopRows:stopRows,dischargeVelocityRows:dischargeVelocityRows,restartFirstPackageRows:restartFirstPackageRows,inlineStops:inlineStops,start:start,allowEmpty:compact||marker==='st-equipment-metadata-b-v2'});
   result.source = {schemaVersion:layout,spreadsheetId:reference.id,sheetId:sheet.getSheetId(),sheetName:sheet.getName(),metadataColumn:metadataColumn,readAt:new Date().toISOString(),equipmentRange:'A'+start+':'+lastColumn+(count?count+start-1:start)};
+  if(requireCompatible){result.source.templateMarker=String(inlineMarker||marker||'');result.source.spreadsheetName=book.getName();}
   if(capacityColumn)result.source.capacityColumn=true;
   if(dischargeVelocityColumn)result.source.dischargeVelocityColumn=true;
   if(restartFirstPackageColumn)result.source.restartFirstPackageColumn=true;

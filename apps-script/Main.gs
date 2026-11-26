@@ -140,6 +140,14 @@ function askGemini(request) {
   response.geminiVersion='gemini-20261005-1';return response;
 }
 
+function importSimpleCase(request) {
+  return executeServerAction_(function(user){
+    if(!request||typeof request.spreadsheet!=='string')throw createSimulatorError_('INVALID_SHEET_REQUEST','Incorrect format.');
+    var preview=readSheetImport_({spreadsheet:request.spreadsheet},'BASIC',true);
+    return createCase_(simpleImportedCase_(preview),user);
+  });
+}
+
 function previewSheetImport(request) {
   var response = executeServerAction_(function(user) {
     try { return previewSheetImport_(request, user); }

@@ -1,0 +1,45 @@
+<style>
+/* Presentation-only adapter; existing editor, playback and scenario engines stay mounted. */
+html[data-workspace-mode=MINIMAL] .case-open .workspace-content > section:not(#minimal-workspace):not(#status) {display:none!important;}
+html[data-workspace-mode=MINIMAL] .case-open #basic-navigation,
+html[data-workspace-mode=MINIMAL] .case-open #simulation-toolbar,
+html[data-workspace-mode=MINIMAL] .case-open #toggle-gemini,
+html[data-workspace-mode=MINIMAL] .case-open #request-progress,
+html[data-workspace-mode=MINIMAL] .case-open #equipment-inspector {display:none!important;}
+html[data-workspace-mode=MINIMAL] .case-open #basic-section-row:not(.hidden) {display:contents;}
+html[data-workspace-mode=MINIMAL] .case-open #header-case-actions {flex:0 0 auto;width:auto;margin-left:0;}
+html[data-workspace-mode=MINIMAL] .case-open .breadcrumb {flex:1 1 var(--size-220);}
+html[data-workspace-mode=MINIMAL] .case-open #basic-case-actions {margin-left:auto;}
+.minimal-workspace {display:grid;gap:var(--section-gap);min-width:0;}
+.minimal-section {display:grid;gap:var(--space-3);min-width:0;}
+.minimal-section > .fold-heading {min-width:0;}
+.minimal-table-wrap {overflow-x:auto;max-width:100%;}
+.minimal-table-wrap table {width:100%;border-collapse:collapse;white-space:nowrap;}
+.minimal-table-wrap :is(th,td) {padding:var(--space-2) var(--space-3);border-bottom:var(--border-width) solid var(--line);text-align:left;font-size:var(--font-body);}
+.minimal-table-wrap th {font-size:var(--font-secondary);font-weight:var(--weight-semibold);color:var(--muted);}
+.minimal-equipment-table :is(td,th):nth-child(n+5) {text-align:right;font-variant-numeric:tabular-nums;}
+.minimal-equipment-table td:nth-child(1) {color:var(--muted);}
+.minimal-equipment-table tr[data-conveyor=true] {background:var(--surface-soft);}
+.minimal-action {display:flex;justify-content:flex-start;}
+.minimal-result-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);}
+.minimal-result-grid[hidden],.minimal-workspace [hidden],#minimal-import-status[hidden] {display:none!important;}
+.minimal-result-grid article {min-width:0;display:grid;gap:var(--space-2);align-content:start;}
+.minimal-result-grid .metric-value {font-variant-numeric:tabular-nums;}
+.minimal-result-grid .metric-card--result > strong {font-size:var(--font-kpi);}
+.minimal-scenario-card {border-top:var(--card-accent-width) solid var(--line-strong);min-width:0;}
+.minimal-scenario-card[data-tier=ZERO] {border-top-color:var(--capex-zero);}
+.minimal-scenario-card[data-tier=MEDIUM] {border-top-color:var(--capex-medium);}
+.minimal-scenario-card[data-tier=HIGH] {border-top-color:var(--capex-high);}
+.minimal-scenario-card .minimal-scenario-values {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2);}
+.minimal-scenario-card .minimal-scenario-values > div {min-width:0;}
+.minimal-scenario-card .minimal-scenario-values > div:last-child {grid-column:1/-1;}
+.minimal-scenario-card .minimal-scenario-values strong {display:block;font-size:var(--font-section);font-variant-numeric:tabular-nums;}
+.minimal-scenario-card .minimal-scenario-values span,.minimal-message {font-size:var(--font-secondary);color:var(--muted);}
+.minimal-scenario-card button {justify-self:start;}
+.minimal-progress {position:relative;display:flex;align-items:center;gap:var(--space-3);}
+.minimal-progress progress {flex:1;min-width:0;width:100%;height:var(--progress-capsule-height,1rem);accent-color:var(--accent);}
+.minimal-progress output {font-size:var(--font-secondary);font-variant-numeric:tabular-nums;min-width:4em;text-align:right;}
+#minimal-import-dialog {width:min(100% - var(--space-6),var(--size-480,480px));}
+#minimal-import-status {color:var(--danger);font-size:var(--font-secondary);}
+@media(max-width:760px){.minimal-result-grid {grid-template-columns:1fr;}}
+</style>

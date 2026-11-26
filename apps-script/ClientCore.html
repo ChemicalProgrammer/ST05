@@ -67,7 +67,7 @@
       return 'caseView.'+JSON.stringify([state.bootstrap?.user?.email||'',state.bootstrap?.settings?.workspaceRootFolderId||'',caseId]);
     }
     function rememberCaseView(view) {
-      if(!state.activeCase||state.restoringCaseView||!['editor','products','simulation','simulation2d','results','realdata','whatif','comparison'].includes(view))return;
+      if(window.STMinimalMode?.isMinimal()||!state.activeCase||state.restoringCaseView||!['editor','products','simulation','simulation2d','results','realdata','whatif','comparison'].includes(view))return;
       var key=caseViewKey(state.activeCase.id);
       var basicView=view==='editor'?(state.basicView==='conveyors'?'conveyors':'equipment'):view==='results'?(state.basicView==='results'?'results':state.basicView==='vgraph'?'vgraph':null):view;
       var saved=JSON.stringify({view:view,basicView:basicView});
@@ -75,6 +75,7 @@
     }
     function navigateView(view) {
       if (!state.activeCase) return false;
+      if(window.STMinimalMode?.isMinimal())view='simulation';
       if((view==='realdata'||view==='comparison')&&window.STBasicMode?.isBasic()){
         view=state.run.result?.summary?'results':'simulation';state.basicView=view;
       }
@@ -111,6 +112,7 @@
         });
         STProducts.init(state,{navigate:function(){state.basicView='products';navigateView('products');},simulation:activePersistentSimulation,locked:runControlsLocked,capture:syncEquipmentFromEditor,edited:function(){markCaseDirty();},changed:function(all){invalidateActiveResult();renderEditor();markCaseDirty();renderRunWorkspace();renderSimulationAnalysis();shell.sync();}});
         STRealData.init(state,{changed:queueCaseEvidenceSave});
+        STMinimalMode.init(state,{run:runSimulation,locked:runControlsLocked,progress:function(){return roundSession?.batchProgress?.value||0;},prepareSearch:renderSimulationAnalysis,simulation:activePersistentSimulation,save:function(){return flushCase(true);},importCase:importMinimalCase,error:showError});
         shell.init();
         if (STPreferences.read('remember') === 'yes') {
           document.getElementById('remember-session').checked = true;
@@ -146,6 +148,7 @@
       document.getElementById('home-cases').addEventListener('click', showCaseHome);
       document.getElementById('open-settings').addEventListener('click', STSettings.open);
       document.getElementById('show-new-case').addEventListener('click', function() {
+        if(STMinimalMode.isMinimal()){STMinimalMode.openImport();return;}
         setSubsectionExpanded(document.getElementById('toggle-cases-gallery'),true);
         toggle('new-case-form', true); document.getElementById('new-case-name').focus();
       });

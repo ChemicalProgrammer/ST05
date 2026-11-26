@@ -8,6 +8,7 @@
       // The shell may switch Equipment/Conveyors presentation and must not
       // see an empty equipment list while restoring the saved case.
       renderEquipment();
+      if(window.STMinimalMode?.isMinimal()){renderRunWorkspace();shell.sync();return;}
       renderEditorMeta();
       renderCaseDataNote();
       renderRawJson();
@@ -40,6 +41,7 @@
       var selection = STEquipmentInspector.release();
       var target = document.getElementById('equipment-list');
       target.textContent = '';
+      if(window.STMinimalMode?.isMinimal())return;
       state.activeCase.equipment.forEach(function(equipment, index) {
         target.appendChild(createEquipmentCard(equipment, index));
       });
@@ -778,7 +780,7 @@ function numericInputValue(input) {
     }
 
     function collectCaseEditor() {
-      if (!state.activeCase || !syncEquipmentFromEditor()) return null;
+      if (!state.activeCase || (!window.STMinimalMode?.isMinimal()&&!syncEquipmentFromEditor())) return null;
       var nameField=document.getElementById('case-name');
       // A transient blank editor field cannot erase an existing case name.
       if(!nameField.value.trim()&&state.activeCase.name?.trim())nameField.value=state.activeCase.name;

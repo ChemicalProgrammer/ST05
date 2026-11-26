@@ -57,7 +57,7 @@ window.STBasicMode=(function(){
     state=current;if(!initialized)return;
     var enabled=basic(),separate=split(),root=document.documentElement;
     if(!separate&&state.basicView==='conveyors')state.basicView='equipment';
-    root.dataset.uiMode=enabled?'basic':'advance';root.dataset.equipmentLayout=separate?'split':'combined';
+    root.dataset.uiMode=enabled?'basic':'advance';root.dataset.workspaceMode=state.bootstrap?.uiMode||STPreferences.resolveInterfaceMode();root.dataset.equipmentLayout=separate?'split':'combined';
     STPreferences.applyFontScale();
     STPreferences.applyPalette(root.dataset.uiMode);
     if(headerActions.parentNode!==sectionRow)sectionRow.appendChild(headerActions);

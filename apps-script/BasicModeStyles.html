@@ -247,5 +247,9 @@ html[data-ui-mode=advance][data-equipment-layout=split] .basic-machine .equipmen
 /* CAT recovery input remains in Conveyor Analysis in every mode. */
 html[data-ui-mode=basic] .advanced-first-package-field,
 html[data-ui-mode=basic] label:has(> .format-zone-restart-first-package) {display:none!important;}
+/* Basic uses nominal package exit velocity; retain the manual override in
+   stored data for Standard/Advance, but never render its editor in Basic. */
+html[data-workspace-mode=MINIMAL] label:has(.format-zone-discharge-velocity),
+html[data-workspace-mode=MINIMAL] label:has(.format-zone-discharge-velocity-enabled) {display:none!important;}
 </style>
 

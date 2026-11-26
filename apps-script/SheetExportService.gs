@@ -41,13 +41,14 @@ function exportEquipmentSheet_(request, user) {
       });
     });
     stopRows.forEach(function(row,index){if(row.some(function(value){return value!=='';}))data.rows[index].splice(3,2,'','');});
-    var review=parseEquipmentSheet_(data.metadata,data.rows,[],data.layout,{mode:mode,nominalOnlyColumn:!policy.maximum,nominalSpeedRows:policy.maximum?equipment.map(function(unit){return [unit.nominalRatePerSecond*60];}):null,start:8,inlineStops:true,stopRows:stopRows,metadataCells:compactEquipmentMetadataCells_(),allowEmpty:true});
+    var stopResponseRows=equipment.map(function(unit){return [unit.type==='CONVEYOR'?unit.processData?.accumulation?.upstreamStopResponseSeconds??'':''];});
+    var review=parseEquipmentSheet_(data.metadata,data.rows,[],data.layout,{stopResponseRows:stopResponseRows,stopResponseColumn:policy.dischargeVelocity?'AJ':'AF',mode:mode,nominalOnlyColumn:!policy.maximum,nominalSpeedRows:policy.maximum?equipment.map(function(unit){return [unit.nominalRatePerSecond*60];}):null,start:8,inlineStops:true,stopRows:stopRows,metadataCells:compactEquipmentMetadataCells_(),allowEmpty:true});
     if (!review.canImport) throw createSimulatorError_('INVALID_SHEET_EXPORT','Some values cannot be represented in the import format.',review.errors.map(function(issue){return issue.cell+': '+issue.message;}));
     stage='OPEN_EXPORTS_FOLDER';
     var folder=getWorkspaceFolders_().exports;
     var name=String(request.caseName||'Case').trim().slice(0,120)+' · '+String(request.simulationName||'Simulation').trim().slice(0,80)+' · Equipment';
     var primary=sheetExportColor_(request.theme?.primary,'#5485a4');
-    var width=policy.maximum?35:policy.residence?34:32,slots=Math.min(1000,Math.max(100,equipment.length+50));
+    var width=policy.dischargeVelocity?36:32,slots=Math.min(1000,Math.max(100,equipment.length+50));
     stage='CREATE_SPREADSHEET';
     book=SpreadsheetApp.create(name,slots+7,width);
     stage='MOVE_TO_EXPORTS';
@@ -78,14 +79,19 @@ function exportEquipmentSheet_(request, user) {
     }
     var groups=[['Equipment',3,10],['Geometry',13,4],['Upstream',17,4],['Downstream',21,2],['Speed & Sensors',23,7]];
     if(policy.capacity)groups.push(['Machine capacity',31,1]);else groups.push(['Material',31,1]);
-    groups.push(['Upstream · Conveyor Analysis',32,policy.firstPackage?2:1]);
+    if(policy.dischargeVelocity)groups.push(['Upstream · Conveyor Analysis',32,policy.firstPackage?2:1]);
+    else groups.push(['Upstream timing',32,1]);
     if(policy.residence)groups.push(['Machine timing',34,1]);
     if(policy.maximum)groups.push(['Operating speed',35,1]);
+    if(policy.dischargeVelocity)groups.push(['Upstream timing',36,1]);
     groups.forEach(function(group){values[5][group[1]-1]=group[0];});
     values[6]=sheetImportColumns_(data.layout).map(function(column){return sheetColumnHeading_(column[1]==='bottlesDischargedAtStop'?column[2]+' (bottles)':column[0]==='D'||column[0]==='E'?'General '+column[2]:column[2]);}).concat(['Equipment ID','Internal capacity\n[input bottles/cases]',sheetColumnHeading_(sheetDischargeVelocityHeading_()),sheetColumnHeading_(sheetRestartFirstPackageHeading_()),'Residence time [s]']);
     values[6].splice(3,0,'Minor MTBF\n[min]','Minor MTTR\n[min]','Major MTBF\n[min]','Major MTTR\n[min]');
     if(!policy.maximum)values[6][9]='Machine nominal speed\n[units/min]';
     if(!policy.capacity)values[6][30]='Material flow';
+    if(!policy.dischargeVelocity)values[6][31]='Stop Response [s]';
+    else values[6][35]='Stop Response [s]';
+    if(policy.dischargeVelocity&&!policy.maximum)values[6][34]='';
     if(!policy.firstPackage)values[6][32]='';
     if(!policy.residence)values[6][33]='';
     if(policy.maximum)values[6][34]='Machine nominal speed\n[units/min]';
@@ -94,7 +100,7 @@ function exportEquipmentSheet_(request, user) {
       var visible=row.slice(0,25);visible.splice(3,0,...stopRows[index]);
       var unit=equipment[index],conveyor=unit.type==='CONVEYOR';
       var flow=unit.processData?.flowUnits,flowText=['BOTTLES','CASES'].includes(flow?.input)&&['BOTTLES','CASES'].includes(flow?.output)?flow.input+'/'+flow.output:'';
-      values[index+7]=visible.concat([unit.id],policy.capacity?row.slice(25):[flowText],[conveyor?unit.processData?.upstream?.dischargeVelocityMPerMinute??'':'',policy.firstPackage&&conveyor?unit.processData?.accumulation?.restartToFirstPackageSeconds??'':'',policy.residence&&!conveyor?unit.processData?.equipment?.residenceTimeSeconds??'':'',policy.maximum?unit.nominalRatePerSecond*60:'']).slice(0,width).map(sheetExportLiteral_);
+      values[index+7]=visible.concat([unit.id],policy.capacity?row.slice(25):[flowText],[policy.dischargeVelocity?(conveyor?unit.processData?.upstream?.dischargeVelocityMPerMinute??'':''):stopResponseRows[index][0],policy.firstPackage&&conveyor?unit.processData?.accumulation?.restartToFirstPackageSeconds??'':'',policy.residence&&!conveyor?unit.processData?.equipment?.residenceTimeSeconds??'':'',policy.maximum?unit.nominalRatePerSecond*60:'',policy.dischargeVelocity?stopResponseRows[index][0]:'']).slice(0,width).map(sheetExportLiteral_);
     });
     for(var i=equipment.length;i<slots;i++)values[i+7][29]='slot-'+book.getId()+'-'+(i+1);
     sheet.getRange(8,30,slots,1).setNumberFormat('@');
@@ -124,6 +130,7 @@ function exportEquipmentSheet_(request, user) {
     sheet.hideColumns(30);
     if(!policy.capacity){var flowValidation=SpreadsheetApp.newDataValidation().requireValueInList(['BOTTLES/BOTTLES','BOTTLES/CASES','CASES/CASES'],true).setAllowInvalid(false).build();sheet.getRange(8,31,slots,1).setDataValidation(flowValidation);}
     if(!policy.firstPackage&&width>=33)sheet.hideColumns(33);
+    if(policy.dischargeVelocity&&!policy.maximum)sheet.hideColumns(35);
     var types=SpreadsheetApp.newDataValidation().requireValueInList(supportedEquipmentTypes_(),true).setAllowInvalid(false).build();
     sheet.getRange(8,1,slots,1).setDataValidation(types);
     var critical=SpreadsheetApp.newDataValidation().requireValueInList(['Y','N'],true).setAllowInvalid(false).build();

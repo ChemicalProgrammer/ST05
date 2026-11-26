@@ -102,3 +102,21 @@ test('Minimal follows the Basic conveyor speed policy even though it uses the Ad
   assert.equal(h.read().targetPopulationPercent,undefined);assert.equal(h.read().speedMode,'MANUAL');
  }finally{h.close();}
 });
+
+test('Basic hides the manual discharge override and keeps Stop Response optional',()=>{
+ const h=harness();try{
+  h.w.STMinimalMode={isMinimal:()=>true};h.w.STBasicMode.isBasic=()=>true;
+  h.f('discharge-velocity-enabled').checked=true;h.f('discharge-velocity').value='26';
+  h.f('discharge-velocity').dataset.manualValue='26';h.f('discharge-velocity').dataset.inputMode='true';
+  h.sync();assert(h.f('discharge-velocity').closest('label').hidden);
+  assert(h.f('discharge-velocity-enabled').disabled);
+  assert.equal(h.read().dischargeVelocityMPerMinute,undefined);
+  assert.equal(h.read().inputValues.dischargeVelocityMPerMinute,26);
+  assert.equal(h.read().preserveManualDischargeVelocity,true);
+  assert.equal(h.f('stop-response').required,false);assert.equal(h.f('stop-response').placeholder,'0');
+  h.f('stop-response').value='3';assert.equal(h.read().upstreamStopResponseSeconds,3);
+  h.w.STMinimalMode.isMinimal=()=>false;h.sync();
+  assert(!h.f('discharge-velocity').closest('label').hidden);
+  assert.equal(h.read().dischargeVelocityMPerMinute,26);
+ }finally{h.close();}
+});

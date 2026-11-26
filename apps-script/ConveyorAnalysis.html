@@ -107,6 +107,13 @@ window.STConveyorAnalysis=(function(){
   }
   function resolveProfiles(equipment,format,formats=[]){
     const engine=window.SimulatorEngine;
+    // Basic has no independent discharge-velocity input. Evaluate a detached
+    // copy, retaining the measured override in the saved case for other modes.
+    if(document.documentElement.dataset.workspaceMode==='MINIMAL')equipment=equipment.map(item=>{
+      if(item.type!=='CONVEYOR'||!item.processData?.upstream)return item;
+      const upstream={...item.processData.upstream};delete upstream.dischargeVelocityMPerMinute;
+      return {...item,processData:{...item.processData,upstream}};
+    });
     function resolve(profile){
       const lineFlow=engine.resolveLineFlowUnits?.(equipment,profile||{})||[];
       const models=profile?engine.applyProductProfile(equipment,profile):equipment.map((item,index)=>{

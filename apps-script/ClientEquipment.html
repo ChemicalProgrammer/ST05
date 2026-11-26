@@ -349,6 +349,11 @@
       if(workspace)return !['ADVANCE','ADVANCED'].includes(String(workspace).toUpperCase());
       return Boolean(window.STBasicMode?.isBasic?.()??window.STBasicMode?.isBasicEditor?.());
     }
+    function basicDischargeVelocityCalculated(){
+      var workspace=typeof state!=='undefined'?state?.bootstrap?.uiMode:undefined;
+      if(workspace)return String(workspace).toUpperCase()==='MINIMAL';
+      return window.STMinimalMode?.isMinimal?.()===true;
+    }
     function syncSwitchableFields(card){
       var speedMode=equipmentField(card,'.format-zone-speed-mode'),basic=conveyorManualSpeedOnly();
       if(basic)speedMode.value='MANUAL';
@@ -376,7 +381,11 @@
       ['accumulation-seconds','discharge-velocity','moving-gap','discharge-runout','reject-runout'].forEach(function(key){
         var field=equipmentField(card,'.format-zone-'+key),toggle=equipmentField(card,'.format-zone-'+key+'-enabled');
         if(!field||!toggle){if(key==='moving-gap'&&field)switchField(key,!target,true);return;}
-        toggle.disabled=key==='moving-gap'&&target;
+        var hideDischarge=key==='discharge-velocity'&&basicDischargeVelocityCalculated();
+        toggle.disabled=(key==='moving-gap'&&target)||hideDischarge;
+        if(key==='discharge-velocity'){
+          var label=field.closest('label');if(label)label.hidden=hideDischarge;
+        }
         var enabled=toggle.checked&&!toggle.disabled,was=field.dataset.inputMode==='true';
         var segment=key==='discharge-runout'||key==='reject-runout';
         if(enabled&&!was){
@@ -408,7 +417,8 @@
         }
         var balancing=equipmentField(card,'.dynamic-balancing-panel');if(balancing)balancing.hidden=!dynamic||basic||equipmentField(card,'.equipment-type')?.value!=='CONVEYOR';
       }
-      ['speed-factor','coding-factor','accumulated-gap','insurance'].forEach(function(key){conveyorFieldRole(equipmentField(card,'.format-zone-'+key),'OPTIONAL');});
+      ['speed-factor','coding-factor','accumulated-gap','insurance','stop-response'].forEach(function(key){conveyorFieldRole(equipmentField(card,'.format-zone-'+key),'OPTIONAL');});
+      var response=equipmentField(card,'.format-zone-stop-response');if(response)response.placeholder='0';
       window.STEquipmentInspector?.refreshHelp?.(card);
     }
 
@@ -656,7 +666,8 @@ function applyConveyorOutputs(card,d,values,zone,profile){
       for(var n=index-1;n>=0;n--){if(line[n]?.type!=='CONVEYOR'){upstreamIndex=n;break;}}
       var up=line[upstreamIndex],liveCard=typeof document!=='undefined'&&up?.id?Array.from(document.querySelectorAll('#equipment-list .equipment-card')).find(item=>item.dataset.equipmentId===up.id):null;
       var rate=liveCard&&typeof readEquipmentRate==='function'?readEquipmentRate(liveCard):up?.nominalRatePerSecond;
-      var localVelocity=useManual('discharge-velocity')?fieldNumber('discharge-velocity'):undefined;
+      var calculatedDischargeOnly=basicDischargeVelocityCalculated();
+      var localVelocity=!calculatedDischargeOnly&&useManual('discharge-velocity')?fieldNumber('discharge-velocity'):undefined;
       if(localVelocity===undefined)localVelocity=Number.isFinite(rate)&&rate>0&&fieldNumber('discharge-pitch')>0?rate*fieldNumber('discharge-pitch')*.06:undefined;
       var dischargeFactor=fieldNumber('speed-factor')??0,codingFactor=fieldNumber('coding-factor')??0;
       var dischargeSpeed=localVelocity*(1+dischargeFactor/100)/.06,codingSpeed=dischargeSpeed*(1+codingFactor/100);
@@ -691,7 +702,8 @@ function applyConveyorOutputs(card,d,values,zone,profile){
         upstreamStopResponseSeconds: numericInputValue(equipmentField(card, '.format-zone-stop-response')),
         bottlesDischargedAtStop: numericInputValue(equipmentField(card, '.format-zone-residual')),
         downstreamRampUpSeconds: numericInputValue(equipmentField(card, '.format-zone-downstream-ramp')),
-        dischargeVelocityMPerMinute: useManual('discharge-velocity')?numericInputValue(equipmentField(card,'.format-zone-discharge-velocity')):undefined,
+        dischargeVelocityMPerMinute: !calculatedDischargeOnly&&useManual('discharge-velocity')?numericInputValue(equipmentField(card,'.format-zone-discharge-velocity')):undefined,
+        preserveManualDischargeVelocity:calculatedDischargeOnly,
         restartToFirstPackageSeconds: numericInputValue(equipmentField(card,'.format-zone-restart-first-package')),
         upstreamStartupTimeSeconds: numericInputValue(equipmentField(card, '.format-zone-startup')),
         downstreamInfeedPitchMm: numericInputValue(equipmentField(card, '.format-zone-infeed')),
@@ -714,7 +726,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
       result.upstream = Object.assign({}, result.upstream || {}, {
         packageLengthMm: values.packageLengthMm,
         dischargePitchMm: values.dischargePitchMm,
-        dischargeVelocityMPerMinute: values.dischargeVelocityMPerMinute,
+        dischargeVelocityMPerMinute: values.preserveManualDischargeVelocity?processData.upstream?.dischargeVelocityMPerMinute:values.dischargeVelocityMPerMinute,
         bottlesDischargedAtStop: values.bottlesDischargedAtStop
       });
       result.speedAndSensors = Object.assign({}, result.speedAndSensors || {}, {
@@ -1126,9 +1138,10 @@ function numericInputValue(input) {
            if(gapToggle?.checked&&!gapToggle.disabled&&!(conveyorValues.movingGapMm>=0)){
              showError({message:'Enter a moving gap of zero or greater, or disable manual input.'});return false;
            }
-           if((equipmentField(card,'.format-zone-discharge-velocity-enabled')?.checked||conveyorValues.dischargeVelocityMPerMinute!==undefined)&&!(conveyorValues.dischargeVelocityMPerMinute>0)){
+           if(!basicDischargeVelocityCalculated()&&(equipmentField(card,'.format-zone-discharge-velocity-enabled')?.checked||conveyorValues.dischargeVelocityMPerMinute!==undefined)&&!(conveyorValues.dischargeVelocityMPerMinute>0)){
             showError({message:'Upstream Discharge Velocity must be greater than zero.'});return false;
           }
+          if(conveyorValues.upstreamStopResponseSeconds!==undefined&&!(conveyorValues.upstreamStopResponseSeconds>=0)){showError({message:'Stop Response must be zero or greater.'});return false;}
           if(conveyorValues.restartToFirstPackageSeconds!==undefined&&!(conveyorValues.restartToFirstPackageSeconds>=0)){
             showError({message:'Time to First Package After Restart must be zero or greater.'});return false;
           }

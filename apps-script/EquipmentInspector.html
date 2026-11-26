@@ -123,8 +123,8 @@ window.STEquipmentInspector=(function(){
     "Separación centro a centro a la salida anterior (mm), no necesariamente pitch de banda."
   ],
   "format-zone-discharge-velocity": [
-    "Linear package exit velocity at the upstream machine, not belt speed. Manual AF is used by the engineering worksheet; calculated value = nominal native packages/min × discharge pitch / 1000. Steady-state reference, not a time delay or ramp.",
-    "Velocidad lineal del envase al salir de la máquina anterior, no de la banda. AF manual se usa en la hoja de ingeniería; calculada = envases nativos/min nominales × pitch de descarga / 1000. Referencia de régimen nominal, no un retardo ni una rampa."
+    "Linear package exit velocity, not belt speed. Basic always calculates nominal native packages/min × discharge pitch / 1000. Standard/Advance may override the local measured value for engineering analysis. Not a time delay or ramp.",
+    "Velocidad lineal de salida, no de la banda. Basic siempre calcula envases nativos/min nominales × pitch de descarga / 1000. Standard/Advance permiten usar una medición local para el análisis. No es un retardo ni una rampa."
   ],
   "format-zone-startup": [
     "Upstream start-up delay before processing resumes (s).",
@@ -139,8 +139,8 @@ window.STEquipmentInspector=(function(){
     "Envases nativos que siguen saliendo tras señal de paro por inercia/desaceleración."
   ],
   "format-zone-stop-response": [
-    "After Back-up confirms sustained blockage, the upstream machine receives a stop request. Stop Response runs from that request to the end of its response; flow may continue subject to inventory and capacity. Residual packages are a separate quantity. Zero means immediate response.",
-    "Tras confirmar Back-up el bloqueo sostenido, la máquina anterior recibe la orden de paro. Stop Response va desde esa orden hasta finalizar la respuesta; puede continuar el flujo según inventario y capacidad. Los envases residuales son una cantidad aparte. Cero significa respuesta inmediata."
+    "After Back-up confirms sustained blockage, the upstream machine receives a stop request. Stop Response runs from that request to the end of its response; flow may continue subject to inventory and capacity. Residual packages are a separate quantity. Optional: blank or zero means immediate response. Do not include packages produced during the response again in the residual count.",
+    "Tras confirmar Back-up el bloqueo sostenido, la máquina anterior recibe la orden de paro. Stop Response va desde esa orden hasta finalizar la respuesta; puede continuar el flujo según inventario y capacidad. Los envases residuales son una cantidad aparte. Opcional: vacío o cero significa respuesta inmediata. No vuelvas a incluir en la descarga residual los envases producidos durante la respuesta."
   ],
   "format-zone-infeed": [
     "Center-to-center spacing at downstream infeed (mm). Used with its native input rate.",

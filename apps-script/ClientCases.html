@@ -550,7 +550,7 @@ async function openCase(caseId, initialView) {
         metadata:cloneJson(metadata),initialFormatId:simulation.dynamicConfig?.initialFormatId||simulation.dynamicConfig?.initialProductId||null,
         theme:{primary:colors.getPropertyValue('--accent').trim(),secondary:colors.getPropertyValue('--secondary').trim()},
         uiMode:state.bootstrap?.uiMode||document.documentElement.dataset.workspaceMode||'MINIMAL',
-        sheetTemplateVersion:'sheet-template-20261126-3'};
+        sheetTemplateVersion:'sheet-template-20261126-4'};
       button.disabled=true;button.dataset.busy='true';
       function finish(){button.disabled=false;delete button.dataset.busy;}
       function exportError(error,title){

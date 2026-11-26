@@ -42,6 +42,7 @@ window.STSheetImportMerge=(function(){
     return result.filter(function(f){
       if(f.id==='maxSpeed')return advanced&&preview.source?.maximumSpeedColumn!==null;
       if(f.id==='restartFirstPackage')return advanced;
+      if(f.id==='dischargeVelocity')return !basic;
       if(f.id==='internalCapacity'||f.id==='residenceTime')return !basic;
       return true;
     }).map(function(f){
@@ -60,6 +61,7 @@ window.STSheetImportMerge=(function(){
     if(preview.source?.materialFlowColumn||preview.source?.inferredMaterialFlow){var flow=field('materialFlow',preview.source.materialFlowColumn?'AE':'A',preview.source.materialFlowColumn?'Material flow':'Material flow (inferred from Case Packer)',['processData.flowUnits']);flow.read=function(e){var u=e.processData?.flowUnits;return u?.input&&u?.output?u.input+'/'+u.output:null;};flow.write=function(e,value){if(!value)return;var pair=value.split('/');put(e,'processData.flowUnits',{input:pair[0],output:pair[1]});e.unitOfFlow=pair[1].toLowerCase();};result.push(flow);}
     if(preview.source?.capacityColumn)result.push(field('internalCapacity','AE','Internal capacity (input bottles/cases)',['processData.equipment.internalCapacityBottles']));
     if(preview.source?.dischargeVelocityColumn)result.push(field('dischargeVelocity','AF','Upstream Discharge Velocity (m/min)',['processData.upstream.dischargeVelocityMPerMinute']));
+    if(preview.source?.stopResponseColumn)result.push(field('stopResponse',preview.source.stopResponseColumn,'Stop Response (s)',['processData.accumulation.upstreamStopResponseSeconds']));
     if(preview.source?.restartFirstPackageColumn)result.push(field('restartFirstPackage','AG','Time to First Package After Restart (s)',['processData.accumulation.restartToFirstPackageSeconds']));
     if(preview.source?.residenceColumn)result.push(field('residenceTime','AH','Residence time (s)',['processData.equipment.residenceTimeSeconds']));
     return fieldsForMode(result,preview);

@@ -170,7 +170,7 @@ function previewSheetImport(request) {
 function getSheetTemplateCapabilities() {
   return executeServerAction_(function(){
     return {sheetTemplateVersion:sheetTemplateVersion_(),importVersion:sheetImportContractVersion_(),
-      uiModes:['MINIMAL','BASIC','ADVANCE'],modeSpecificTabs:true,modeSpecificColumns:true};
+      uiModes:['MINIMAL','BASIC','ADVANCE'],modeSpecificTabs:true,modeSpecificColumns:true,crossModeImport:true,inlineBasicMaterial:true};
   });
 }
 

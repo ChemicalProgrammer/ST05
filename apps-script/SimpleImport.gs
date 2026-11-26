@@ -27,7 +27,7 @@ function simpleImportedCase_(preview){
         });
         record.equipment=remapped;
       }
-      initialFormatId=preview.materialCatalog.initialFormatId||catalog.formats.find(f=>f.name===metadata.formatName)?.id||(catalog.formats.length===1?catalog.formats[0].id:undefined);
+      initialFormatId=preview.materialCatalog.initialFormatId||catalog.formats.find(f=>f.name===metadata.formatName)?.id||catalog.formats[0]?.id;
     }
   }
   var initial=catalog?.formats?.find(f=>f.id===initialFormatId),pack=initial?.bottlesPerCase??metadata.bottlesPerCase;
@@ -44,7 +44,8 @@ function simpleImportedCase_(preview){
     // unmarked plant sheet declares bottle-equivalent machine rates.
     var native=/^st-equipment-metadata-b-v[1-7]$/.test(source.templateMarker||'');
     equipment.forEach(function(e,i){
-      var input=i<=packIndex?'BOTTLES':'CASES',output=i<packIndex?'BOTTLES':'CASES';
+      var explicit=e.processData?.flowUnits,profile=initial?.equipment?.[e.id];
+      var input=explicit?.input||profile?.inputUnit||(i<=packIndex?'BOTTLES':'CASES'),output=explicit?.output||profile?.outputUnit||(i<packIndex?'BOTTLES':'CASES');
       e.processData.flowUnits={input:input,output:output};e.unitOfFlow=output.toLowerCase();
       if(e.type!=='CONVEYOR')e.characteristics.rateBasis=output==='CASES'?'cases per minute':'bottles per minute';
       if(output==='CASES'&&!native){
@@ -55,7 +56,7 @@ function simpleImportedCase_(preview){
     });
     warnings.push({cell:'F',message:native?'Imported native rates from marked template.':'Converted legacy bottle-equivalent rates after Case Packer using bottles per case.'});
   }else if(!packers.length){
-    equipment.forEach(function(e){if(!e.processData.flowUnits)e.processData.flowUnits={input:'BOTTLES',output:'BOTTLES'};e.unitOfFlow=e.unitOfFlow||'bottles';});
+    equipment.forEach(function(e){if(!e.processData.flowUnits)e.processData.flowUnits={input:'BOTTLES',output:'BOTTLES'};e.unitOfFlow=e.processData.flowUnits.output.toLowerCase();});
   }
   if(catalog){try{STScenarioEngine_.validateFormatCatalog(catalog);}catch(error){issue(error.message);catalog=null;initialFormatId=undefined;}}
   if(equipment.length<2)issue('At least two equipment units are required for simulation.');

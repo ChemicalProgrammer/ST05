@@ -1,4 +1,4 @@
-function sheetTemplateVersion_(){return 'sheet-template-20261126-2';}
+function sheetTemplateVersion_(){return 'sheet-template-20261126-3';}
 function sheetRequestUiMode_(request){
   var mode=typeof request?.uiMode==='string'?request.uiMode.trim().toUpperCase():'';
   if(!mode)throw createSimulatorError_('SHEET_CLIENT_OUTDATED',
@@ -13,9 +13,22 @@ function sheetRequestUiMode_(request){
 
 // Internal workspace names: MINIMAL = Basic; BASIC = Standard.
 function sheetModeColumns_(mode){
-  return {maximum:mode==='ADVANCE',firstPackage:mode==='ADVANCE',capacity:mode!=='MINIMAL',residence:mode!=='MINIMAL',realData:mode==='ADVANCE'};
+  return {maximum:mode==='ADVANCE',firstPackage:mode==='ADVANCE',capacity:mode!=='MINIMAL',residence:mode!=='MINIMAL',catalog:mode!=='MINIMAL',realData:mode==='ADVANCE'};
 }
-function sheetImportContractVersion_(){return 'sheet-import-20261126-2';}
+function sheetModeTabNames_(mode){
+  var policy=sheetModeColumns_(mode);
+  return ['Equipment',...(policy.catalog?['Products & Formats']:[]),...(policy.realData?['Real Data']:[])];
+}
+function sheetModeLabel_(mode){return ({MINIMAL:'Basic',BASIC:'Standard',ADVANCE:'Advance',LEGACY:'Legacy'})[mode]||'Legacy';}
+function sheetImportCompatibility_(sourceMode,targetMode,available){
+  var policy=sheetModeColumns_(targetMode),ignored=[],missing=[];
+  [['maximum','Maximum Speed'],['firstPackage','First Bottle After Resume'],['capacity','Internal Capacity'],['residence','Residence Time'],['realData','Real Data']].forEach(function(pair){
+    if(available[pair[0]]&&!policy[pair[0]])ignored.push(pair[1]);
+    if(!available[pair[0]]&&policy[pair[0]])missing.push(pair[1]);
+  });
+  return {compatible:true,sourceMode:sourceMode,targetMode:targetMode,sourceLabel:sheetModeLabel_(sourceMode),targetLabel:sheetModeLabel_(targetMode),ignoredFields:ignored,missingFields:missing};
+}
+function sheetImportContractVersion_(){return 'sheet-import-20261126-3';}
 // Conservative name recognition for worksheets whose category is simply Machine.
 function inferSheetMachineType_(name) {
   var text=String(name||'').trim().toUpperCase().replace(/[^A-Z0-9]+/g,' ');
@@ -99,7 +112,7 @@ function readSheetImport_(request,mode,requireCompatible) {
   var name = typeof request.sheetName === 'string' ? request.sheetName.trim() : '';
   var sheets = book.getSheets();
   var sheet = name ? book.getSheetByName(name) : reference.gid !== null ? sheets.filter(function(s){return String(s.getSheetId()) === reference.gid;})[0] : sheets[0];
-  if(requireCompatible&&!name&&reference.gid===null)sheet=book.getSheetByName('Equipment')||sheet;
+  if(!name&&reference.gid===null)sheet=book.getSheetByName?.('Equipment')||sheet;
   if(sheet&&['Products & Formats','Real Data','Datos reales'].includes(sheet.getName()))sheet=book.getSheetByName('Equipment');
   if (!sheet) throw createSimulatorError_('SHEET_TAB_NOT_FOUND','The worksheet was not found. Enter its exact tab name.');
   var lastRow=sheet.getLastRow();
@@ -111,27 +124,27 @@ function readSheetImport_(request,mode,requireCompatible) {
   var stopBreakdown=inlineStops||marker==='st-equipment-metadata-b-v4',compact=stopBreakdown||marker==='st-equipment-metadata-b-v3',start=compact?8:marker==='st-equipment-metadata-b-v2'?11:10,limit=start+999;
   if(lastRow>limit)throw createSimulatorError_('SHEET_TOO_LARGE','This importer supports up to 1,000 equipment rows (rows '+start+'–'+limit+'). Remove extra content below the equipment table or use a dedicated worksheet.');
   if(sheet.getMaxColumns()<23||sheet.getMaxRows()<start)throw createSimulatorError_('INVALID_SHEET_LAYOUT','Expected an Equipment header and data starting at A'+start+'.');
-  if(requireCompatible){
-    var recognized=/^st-equipment-metadata-b-v[1-7]$/.test(String(inlineMarker||marker||''))||/^st-equipment-metadata-b-v[1-7]$/.test(String(marker||''));
-    if(!recognized){
-      var header=sheet.getRange(start-2,1,2,6).getValues();
-      function column(i){return header.map(function(r){return String(r[i]||'');}).join(' ');}
-      recognized=/(?:type|tipo|equipment|machine|equipo)/i.test(column(0))&&/(?:name|nombre|equipment|machine|equipo)/i.test(column(1))&&/mtbf/i.test(column(3))&&/mttr/i.test(column(4));
-    }
-    if(!recognized)throw createSimulatorError_('INVALID_SHEET_LAYOUT','Incorrect format.');
+  // Source recognition does not depend on the target workspace.
+  var recognized=/^st-equipment-metadata-b-v[1-7]$/.test(String(inlineMarker||marker||''))||/^st-equipment-metadata-b-v[1-7]$/.test(String(marker||''));
+  if(!recognized){
+    var header=sheet.getRange(start-2,1,2,6).getValues();
+    function column(i){return header.map(function(r){return String(r[i]||'');}).join(' ');}
+    recognized=/(?:type|tipo|equipment|machine|equipo)/i.test(column(0))&&/(?:name|nombre|equipment|machine|equipo)/i.test(column(1))&&/mtbf/i.test(column(3))&&/mttr/i.test(column(4));
   }
   var layout=detectSheetImportLayout_(sheet.getRange(start-2,inlineStops?11:7,2,2).getValues()),width=sheetImportColumns_(layout).length,lastColumn=capacityColumn?'AE':inlineStops?'AC':String.fromCharCode(64+width);
   var policy=sheetModeColumns_(mode);
   function headingAt(column){return sheet.getMaxColumns()>=column?String(sheet.getRange(start-1,column,1,1).getValues()?.[0]?.[0]||'').trim():'';}
   var rateColumn=inlineStops?10:6,rateHeader=headingAt(rateColumn);
-  var capacityInputColumn=policy.capacity&&capacityColumn&&/internal capacity/i.test(headingAt(31));
+  var sourceCapacity=capacityColumn&&/internal capacity/i.test(headingAt(31));
+  var capacityInputColumn=policy.capacity&&sourceCapacity;
+  var flowColumn=capacityColumn&&/^material flow$/i.test(headingAt(31));
   var nominalOnlyColumn=/nominal/i.test(String(rateHeader||''));
   var nominalSpeedColumn=capacityColumn&&/nominal.*speed/i.test(headingAt(35));
   var dischargeVelocityColumn=capacityColumn&&sheet.getMaxColumns()>=32&&
     /^Upstream Discharge Velocity\s*[\[(]m\/min[\])]$/i.test(String(sheet.getRange(start-1,32).getValues()[0][0]||'').trim());
-  var restartFirstPackageColumn=policy.firstPackage&&capacityColumn&&sheet.getMaxColumns()>=33&&
-    /^Time to First Package After Restart\s*(?:\[s\]|\(s\))$/i.test(String(sheet.getRange(start-1,33).getValues()[0][0]||'').trim());
-  var residenceColumn=policy.residence&&capacityColumn&&sheet.getMaxColumns()>=34&&/^Residence time\s*(?:\[s\]|\(s\))$/i.test(String(sheet.getRange(start-1,34).getValues()[0][0]||'').trim());
+  var sourceFirstPackage=capacityColumn&&/^Time to First Package After Restart\s*(?:\[s\]|\(s\))$/i.test(headingAt(33));
+  var sourceResidence=capacityColumn&&/^Residence time\s*(?:\[s\]|\(s\))$/i.test(headingAt(34));
+  var restartFirstPackageColumn=policy.firstPackage&&sourceFirstPackage,residenceColumn=policy.residence&&sourceResidence;
   if(dischargeVelocityColumn)lastColumn='AF';
   if(restartFirstPackageColumn)lastColumn='AG';
   if(residenceColumn)lastColumn='AH';
@@ -139,6 +152,8 @@ function readSheetImport_(request,mode,requireCompatible) {
   if(sheet.getMaxColumns()<width)throw createSimulatorError_('INVALID_SHEET_LAYOUT','Expected equipment in A'+start+':'+lastColumn+'.');
   var metadataColumn=compact||['st-equipment-metadata-b-v1','st-equipment-metadata-b-v2'].includes(marker)?'B':'C';
   var metadata,containerUnit,metadataCells=compact?compactEquipmentMetadataCells_():null;
+  var modeMarker=capacityColumn?String(sheet.getRange(2,30,1,1).getValues()?.[0]?.[0]||''):'',activeFormatName=capacityColumn?String(sheet.getRange(3,30,1,1).getValues()?.[0]?.[0]||'').trim():'';
+  var declaredMode=/^st-sheet-mode:(MINIMAL|BASIC|ADVANCE)$/.exec(modeMarker)?.[1];
   if(compact){
     var grid=sheet.getRange(1,1,4,5).getValues();
     metadata=metadataCells.map(function(cell){return grid[Number(cell.slice(1))-1][cell.charCodeAt(0)-65];});
@@ -169,12 +184,17 @@ function readSheetImport_(request,mode,requireCompatible) {
   var restartFirstPackageRows=restartFirstPackageColumn&&count?sheet.getRange(start,33,count,1).getValues():null;
   var residenceRows=residenceColumn&&count?sheet.getRange(start,34,count,1).getValues():null;
   var nominalSpeedRows=nominalSpeedColumn&&count?sheet.getRange(start,35,count,1).getValues():null;
-  var result = parseEquipmentSheet_(metadata, rows, formats,layout,{mode:mode,nominalOnlyColumn:nominalOnlyColumn,nominalSpeedRows:nominalSpeedRows,residenceRows:residenceRows,containerUnit:containerUnit,metadataColumn:metadataColumn,metadataCells:metadataCells,stopRows:stopRows,dischargeVelocityRows:dischargeVelocityRows,restartFirstPackageRows:restartFirstPackageRows,inlineStops:inlineStops,start:start,allowEmpty:compact||marker==='st-equipment-metadata-b-v2'});
+  var flowRows=flowColumn&&count?sheet.getRange(start,31,count,1).getValues():null;
+  var result = parseEquipmentSheet_(metadata, rows, formats,layout,{flowRows:flowRows,mode:mode,nominalOnlyColumn:nominalOnlyColumn,nominalSpeedRows:nominalSpeedRows,residenceRows:residenceRows,containerUnit:containerUnit,metadataColumn:metadataColumn,metadataCells:metadataCells,stopRows:stopRows,dischargeVelocityRows:dischargeVelocityRows,restartFirstPackageRows:restartFirstPackageRows,inlineStops:inlineStops,start:start,allowEmpty:compact||marker==='st-equipment-metadata-b-v2'});
+  // Legacy unmarked sheets may lack the conventional labels; require typed equipment and physical data, never accept an unrelated grid.
+  if(!recognized&&!rows.some(function(row){return /^(?:MACHINE|BLOWER|BLOWMOLDER|BLOWMOULDER|CONVEYOR|PACEMAKER|PUCKER|FILLER|CAPPER|TAPADORA|TAPONADORA|ROSCADORA|FEEDER|DEPUCKER|SLEEVER|CASEPACKER|PALLETIZER|PALLETISER|CUSTOM|OTHER)$/.test(String(row[0]||'').toUpperCase().replace(/[\s_-]+/g,''))&&String(row[1]||'').trim()&&row.slice(3).some(function(value){return typeof value==='number'&&Number.isFinite(value)&&value>0;});}))throw createSimulatorError_('INVALID_SHEET_LAYOUT','Incorrect format. No compatible Equipment table was found.');
   result.source = {schemaVersion:layout,spreadsheetId:reference.id,sheetId:sheet.getSheetId(),sheetName:sheet.getName(),metadataColumn:metadataColumn,readAt:new Date().toISOString(),equipmentRange:'A'+start+':'+lastColumn+(count?count+start-1:start)};
-  if(requireCompatible){result.source.templateMarker=String(inlineMarker||marker||'');result.source.spreadsheetName=book.getName();}
+  result.source.templateMarker=String(inlineMarker||marker||'');
+  if(requireCompatible)result.source.spreadsheetName=book.getName?.()||sheet.getName();
   result.uiMode=mode;result.source.nominalSpeedColumn=nominalSpeedColumn?'AI':(inlineStops?'J':'F');
   result.source.maximumSpeedColumn=policy.maximum&&!nominalOnlyColumn?(inlineStops?'J':'F'):null;
   if(capacityInputColumn)result.source.capacityColumn=true;
+  if(flowColumn)result.source.materialFlowColumn=true;
   if(residenceColumn)result.source.residenceColumn=true;
   if(dischargeVelocityColumn)result.source.dischargeVelocityColumn=true;
   if(restartFirstPackageColumn)result.source.restartFirstPackageColumn=true;
@@ -183,14 +203,28 @@ function readSheetImport_(request,mode,requireCompatible) {
   if(inlineStops)result.source.inlineStops=true;
   var catalogTab=sheet.getName()==='Equipment'?sheets.find(function(tab){return tab.getName()==='Products & Formats';}):null;
   var catalogMarker=catalogTab?.getRange(1,1).getValues()[0][0];
+  var actuals=sheet.getName()==='Equipment'?sheets.find(function(tab){return ['Real Data','Datos reales'].includes(tab.getName());}):null;
+  var sourceMode=declaredMode||(actuals||nominalSpeedColumn?'ADVANCE':catalogTab?'BASIC':flowColumn?'MINIMAL':'LEGACY');
+  result.source.sourceMode=sourceMode;
+  var hasActuals=Boolean(actuals);
+  if(!hasActuals&&sheet.getMaxColumns()>=31)hasActuals=sheet.getRange(1,18).getValues()[0][0]==='st-real-sheet-v1';
+  if(!hasActuals&&sheet.getMaxColumns()>=26)hasActuals=sheet.getRange(1,5).getValues()[0][0]==='AU (%)'&&sheet.getRange(9,26).getValues()[0][0]==='Observed downtime (min)';
+  if(mode!=='MINIMAL')result.compatibility=sheetImportCompatibility_(sourceMode,mode,{maximum:!nominalOnlyColumn,firstPackage:sourceFirstPackage,capacity:sourceCapacity,residence:sourceResidence,realData:hasActuals});
   if(['st-material-sheet-v1','st-material-sheet-v2','st-material-sheet-v3'].includes(catalogMarker)){
     result.materialCatalog=readSheetCatalog_(catalogTab,catalogMarker);
-    var ids=count&&sheet.getMaxColumns()>=26?sheet.getRange(start,idColumn,count,1).getValues():[];
+    var selected=result.materialCatalog.catalog.formats.find(function(format){return format.name===(activeFormatName||result.metadata.formatName);});
+    if(selected)result.materialCatalog.initialFormatId=selected.id;
+    if(mode==='MINIMAL')result.materialCatalog=sheetBasicCatalog_(result.materialCatalog,activeFormatName||result.metadata.formatName);
+  }else if(declaredMode==='MINIMAL'||flowColumn){
+    var materialGrid=sheet.getRange(1,1,4,8).getValues();
+    result.materialCatalog=sheetInlineMaterial_(result.metadata,materialGrid);
+  }
+  if((recognized&&compact||result.materialCatalog)&&count&&sheet.getMaxColumns()>=idColumn){
+    var ids=sheet.getRange(start,idColumn,count,1).getValues();
     result.sourceRows.forEach(function(row){row.equipmentId=String(ids[row.row-start]?.[0]||'');});
   }
-  // Basic reads only Equipment and Products & Formats, even for older sources with inline actuals.
+  // Basic silently projects compatible inputs; Standard/Advance can review the source.
   if(!policy.realData)return result;
-  var actuals=sheet.getName()==='Equipment'?sheets.find(function(tab){return ['Real Data','Datos reales'].includes(tab.getName());}):null;
   var photoActuals=photoActualsTab_(actuals);
   if(photoActuals||actuals&&actuals.getMaxColumns()>=23&&actuals.getRange(1,23).getValues()[0][0]==='st-real-inputs-v3'){
     result.realData=readDedicatedSheetActuals_(actuals,sheet,count,result,photoActuals,start,idColumn);
@@ -328,6 +362,7 @@ function parseEquipmentSheet_(metadataCells, rows, formats,layout,options) {
       speedAndSensors:{conveyorSpeedFactorVsDischargeVelocityPercent:values.conveyorSpeedFactorVsDischargeVelocityPercent,codingConveyorSpeedFactorVsPreviousConveyorPercent:values.codingConveyorSpeedFactorVsPreviousConveyorPercent,conveyorSpeedFactorVsPreviousConveyorPercent:values.conveyorSpeedFactorVsPreviousConveyorPercent,blockedTimeDelaySeconds:values.blockedTimeDelaySeconds,clearTimeDelaySeconds:values.clearTimeDelaySeconds,insuranceFactorUnits:values.insuranceFactorUnits,overspeedVsInfeedScrewPercent:values.overspeedVsInfeedScrewPercent}
     }};
     if(nominalOnly){delete unit.processData.equipment.maximumSpeedBpm;if(options?.mode)delete values.maximumSpeedBpm;}
+    if(options?.flowRows){var flow=String(options.flowRows[offset]?.[0]||'').trim().toUpperCase();if(flow){if(!['BOTTLES/BOTTLES','BOTTLES/CASES','CASES/CASES'].includes(flow)||conveyor&&flow==='BOTTLES/CASES')issue(errors,'AE'+rowNumber,'Select a valid material flow. Conveyors cannot convert bottles to cases.');else{var pair=flow.split('/');unit.processData.flowUnits={input:pair[0],output:pair[1]};unit.unitOfFlow=pair[1].toLowerCase();values.materialFlow=flow;}}}
     if(!conveyor&&options?.mode!=='MINIMAL'){
       var capacity=numeric(row[columns.length],'AE'+rowNumber);
       if(capacity!==null&&(!Number.isSafeInteger(capacity)||capacity<1))issue(errors,'AE'+rowNumber,'Internal capacity must be a positive whole number.');
@@ -689,6 +724,35 @@ function readSheetCatalog_(sheet,marker){
   return {catalog:catalog,errors:errors,matchByName:true};
 }
 
+// Basic's top block stores a single product/format using existing metadata cells.
+function sheetInlineMaterial_(metadata,grid){
+  var name=String(grid[3]?.[4]||'').trim(),formatName=String(metadata.formatName||'').trim(),pack=metadata.bottlesPerCase;
+  var errors=[],catalog={version:3,products:[],formats:[]};
+  function length(value,cell){if(value==null||value==='')return undefined;if(typeof value!=='number'||!Number.isFinite(value)||value<=0){errors.push(cell+': enter a positive length in mm.');return undefined;}return value;}
+  var bottleLength=length(grid[0]?.[7],'H1'),caseLength=length(grid[1]?.[7],'H2');
+  var size=String(metadata.containerSize||'').trim(),volume=/^(\d+(?:\.\d+)?)\s*(ml|l|(?:fl\.?\s*)?oz(?: \(US\)| \(UK\))?)$/i.exec(size);
+  if(!name&&!formatName&&!pack&&!size&&bottleLength===undefined&&caseLength===undefined&&!errors.length)return undefined;
+  var product={id:'sheet-inline-product',name:name||size||'Imported product',bottle:{}};
+  if(bottleLength!==undefined)product.bottle.lengthMm=bottleLength;
+  if(volume){var unit=/^l$/i.test(volume[2])?'L':/^ml$/i.test(volume[2])?'mL':/UK/i.test(volume[2])?'fl oz (UK)':'fl oz (US)';product.volumeMl=Number(volume[1])*STScenarioEngine_.productVolumeUnits[unit];if(unit!=='mL')product.volumeUnit=unit;}
+  catalog.products.push(product);
+  if(Number.isInteger(pack)&&pack>=1&&pack<=10000){
+    var format={id:'sheet-inline-format',name:formatName||'Imported format',productId:product.id,bottlesPerCase:pack,case:{}};
+    if(caseLength!==undefined)format.case.lengthMm=caseLength;
+    catalog.formats.push(format);
+  }
+  return {catalog:catalog,errors:errors,matchByName:true,inlineMaterial:true,initialFormatId:catalog.formats[0]?.id};
+}
+function sheetBasicCatalog_(source,preferredName){
+  var catalog=source.catalog||{products:[],formats:[]};
+  var candidates=(catalog.formats||[]).filter(function(format){return Number.isInteger(format.bottlesPerCase)&&format.bottlesPerCase>0&&catalog.products.some(function(product){return product.id===format.productId;});});
+  var selected=candidates.find(function(format){return format.id===source.initialFormatId||format.name===preferredName;})||candidates[0];
+  var product=selected?catalog.products.find(function(item){return item.id===selected.productId;}):catalog.products[0];
+  if(!product)return source;
+  var projected={version:3,products:[product],formats:selected?[selected]:[]};
+  try{STScenarioEngine_.validateFormatCatalog(projected);return {...source,catalog:projected,errors:[],initialFormatId:selected?.id};}
+  catch(error){return {...source,catalog:projected,errors:[error.message],initialFormatId:selected?.id};}
+}
 function compactEquipmentMetadataCells_(){return ['B1','B2','E1','E2','E3','B3','B4'];}
 
 function sheetAnalysisDate_(value){

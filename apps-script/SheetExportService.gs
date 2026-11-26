@@ -10,13 +10,27 @@ function exportEquipmentSheet_(request, user) {
   try {
     var equipment=normalizeEquipmentList_(request.equipment),metadata=normalizeCaseMetadata_(request.metadata);
     stage='PREPARE_CATALOG';
-    var policy=sheetModeColumns_(mode),data=equipmentSheetData_(equipment,metadata,mode),catalog=STScenarioEngine_.normalizeFormatCatalog(metadata,equipment);
+    var policy=sheetModeColumns_(mode),catalog=STScenarioEngine_.normalizeFormatCatalog(metadata,equipment);
     STScenarioEngine_.validateFormatCatalog(catalog);
-    var hasCatalog=catalog.products.length||catalog.formats.length;
+    var hasCatalog=catalog.products.length||catalog.formats.length,compactMaterial=null;
+    var resolved=STScenarioEngine_.resolvePackingFormats(catalog,equipment);
+    var active=resolved.find(function(format){return format.id===request.initialFormatId;})||
+      resolved.find(function(format){return format.name===metadata.formatName;})||resolved[0];
+    if(!policy.catalog){
+      // Basic is one operational format, not a copy of the authoring catalog.
+      // Freeze active profile rates, timing and pitch into the exported rows.
+      if(active)equipment=STScenarioEngine_.applyProductProfile(equipment,active);
+      var product=catalog.products.find(function(item){return item.id===active?.productId;})||(!active&&catalog.products[0]);
+      var unit=product?.volumeUnit||'mL',volume=product?.volumeMl;
+      compactMaterial={productName:product?.name||'',bottleLength:product?.bottle?.lengthMm,caseLength:active?.presentations?.case?.lengthMm};
+      if(active){metadata.formatName=active.name;metadata.bottlesPerCase=active.bottlesPerCase;}
+      if(volume!==undefined)metadata.containerSize=Number((volume/STScenarioEngine_.productVolumeUnits[unit]).toPrecision(12))+' '+unit;
+    }
+    var data=equipmentSheetData_(equipment,metadata,mode);
     stage='VALIDATE_EQUIPMENT';
     var date=sheetAnalysisDate_(data.metadata[5])||sheetAnalysisDate_(data.metadata[6]);
     data.metadata[5]=date||'';
-    if(hasCatalog)data.metadata.splice(2,3,'','','');
+    if(hasCatalog&&policy.catalog)data.metadata.splice(2,3,'','','');
     data.metadata[6]=sheetResponsibleName_(data.metadata[6])||'';
     // Validate the same contract as Preview before creating a spreadsheet.
     var stopRows=equipment.map(function(unit){
@@ -46,15 +60,23 @@ function exportEquipmentSheet_(request, user) {
     var cells=compactEquipmentMetadataCells_();
     labels.forEach(function(label,index){
       var value=data.metadata[index],cell=cells[index],row=Number(cell.slice(1))-1,column=cell.charCodeAt(0)-65;
-      if(index>=2&&index<=4&&(hasCatalog||value==='NA'||value===''))return;
+      if(index>=2&&index<=4&&policy.catalog&&(hasCatalog||value==='NA'||value===''))return;
+      if(!policy.catalog&&(value==='NA'||value==null))value='';
       values[row][column-1]=label;
       values[row][column]=index===5&&date?(Date.parse(date+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000:sheetExportLiteral_(value);
     });
     sheet.getRange(3,2).setNumberFormat('dd mmm yyyy');
     sheet.getRange(4,2).setNumberFormat('@');
     values[0][29]='st-equipment-metadata-b-v7';
+    values[1][29]='st-sheet-mode:'+mode;
+    values[2][29]=sheetExportLiteral_(active?.name||'');
+    if(!policy.catalog){
+      values[3][3]='Product';values[3][4]=sheetExportLiteral_(compactMaterial.productName);
+      values[0][6]='Bottle length [mm]';values[0][7]=compactMaterial.bottleLength??'';
+      values[1][6]='Case length [mm]';values[1][7]=compactMaterial.caseLength??'';
+    }
     var groups=[['Equipment',3,10],['Geometry',13,4],['Upstream',17,4],['Downstream',21,2],['Speed & Sensors',23,7]];
-    if(policy.capacity)groups.push(['Machine capacity',31,1]);
+    if(policy.capacity)groups.push(['Machine capacity',31,1]);else groups.push(['Material',31,1]);
     groups.push(['Upstream · Conveyor Analysis',32,policy.firstPackage?2:1]);
     if(policy.residence)groups.push(['Machine timing',34,1]);
     if(policy.maximum)groups.push(['Operating speed',35,1]);
@@ -62,7 +84,7 @@ function exportEquipmentSheet_(request, user) {
     values[6]=sheetImportColumns_(data.layout).map(function(column){return sheetColumnHeading_(column[1]==='bottlesDischargedAtStop'?column[2]+' (bottles)':column[0]==='D'||column[0]==='E'?'General '+column[2]:column[2]);}).concat(['Equipment ID','Internal capacity\n[input bottles/cases]',sheetColumnHeading_(sheetDischargeVelocityHeading_()),sheetColumnHeading_(sheetRestartFirstPackageHeading_()),'Residence time [s]']);
     values[6].splice(3,0,'Minor MTBF\n[min]','Minor MTTR\n[min]','Major MTBF\n[min]','Major MTTR\n[min]');
     if(!policy.maximum)values[6][9]='Machine nominal speed\n[units/min]';
-    if(!policy.capacity)values[6][30]='';
+    if(!policy.capacity)values[6][30]='Material flow';
     if(!policy.firstPackage)values[6][32]='';
     if(!policy.residence)values[6][33]='';
     if(policy.maximum)values[6][34]='Machine nominal speed\n[units/min]';
@@ -70,13 +92,14 @@ function exportEquipmentSheet_(request, user) {
     data.rows.forEach(function(row,index){
       var visible=row.slice(0,25);visible.splice(3,0,...stopRows[index]);
       var unit=equipment[index],conveyor=unit.type==='CONVEYOR';
-      values[index+7]=visible.concat([unit.id],row.slice(25),[conveyor?unit.processData?.upstream?.dischargeVelocityMPerMinute??'':'',policy.firstPackage&&conveyor?unit.processData?.accumulation?.restartToFirstPackageSeconds??'':'',policy.residence&&!conveyor?unit.processData?.equipment?.residenceTimeSeconds??'':'',policy.maximum?unit.nominalRatePerSecond*60:'']).slice(0,width).map(sheetExportLiteral_);
+      var flow=unit.processData?.flowUnits,flowText=['BOTTLES','CASES'].includes(flow?.input)&&['BOTTLES','CASES'].includes(flow?.output)?flow.input+'/'+flow.output:'';
+      values[index+7]=visible.concat([unit.id],policy.capacity?row.slice(25):[flowText],[conveyor?unit.processData?.upstream?.dischargeVelocityMPerMinute??'':'',policy.firstPackage&&conveyor?unit.processData?.accumulation?.restartToFirstPackageSeconds??'':'',policy.residence&&!conveyor?unit.processData?.equipment?.residenceTimeSeconds??'':'',policy.maximum?unit.nominalRatePerSecond*60:'']).slice(0,width).map(sheetExportLiteral_);
     });
     for(var i=equipment.length;i<slots;i++)values[i+7][29]='slot-'+book.getId()+'-'+(i+1);
     sheet.getRange(8,30,slots,1).setNumberFormat('@');
     sheet.getRange(1,1,values.length,width).setValues(values).setFontFamily('Arial').setFontSize(10).setFontColor('#000000').setVerticalAlignment('middle');
     stage='WRITE_CATALOG';
-    writeSheetCatalog_(book.insertSheet('Products & Formats',1),catalog,primary);
+    if(policy.catalog)writeSheetCatalog_(book.insertSheet('Products & Formats',1),catalog,primary);
     if(policy.realData){
       stage='WRITE_REAL_DATA';
       writeSheetActuals_(book.insertSheet('Real Data',2),values.slice(7),primary,8);
@@ -88,6 +111,9 @@ function exportEquipmentSheet_(request, user) {
       if(values[row-1][column-2])sheet.getRange(row,column-1).setBackground(sheetExportTint_(primary));
       sheet.getRange(row,column-1).setFontWeight('bold');
     });
+    if(!policy.catalog){
+      ['D4','G1','G2'].forEach(function(cell){var row=Number(cell.slice(1)),column=cell.charCodeAt(0)-64;sheet.getRange(row,column).setBackground(sheetExportTint_(primary)).setFontWeight('bold');});
+    }
     groups.forEach(function(group){
       var band=sheet.getRange(6,group[1],1,group[2]);
       band.merge();
@@ -95,7 +121,7 @@ function exportEquipmentSheet_(request, user) {
       sheetExportGroupDivider_(band,sheet.getRange(7,group[1],slots+1,1),primary);
     });
     sheet.hideColumns(30);
-    if(!policy.capacity)sheet.hideColumns(31);
+    if(!policy.capacity){var flowValidation=SpreadsheetApp.newDataValidation().requireValueInList(['BOTTLES/BOTTLES','BOTTLES/CASES','CASES/CASES'],true).setAllowInvalid(false).build();sheet.getRange(8,31,slots,1).setDataValidation(flowValidation);}
     if(!policy.firstPackage&&width>=33)sheet.hideColumns(33);
     var types=SpreadsheetApp.newDataValidation().requireValueInList(supportedEquipmentTypes_(),true).setAllowInvalid(false).build();
     sheet.getRange(8,1,slots,1).setDataValidation(types);
@@ -116,7 +142,7 @@ function exportEquipmentSheet_(request, user) {
     stage='FLUSH';
     SpreadsheetApp.flush();
     return {spreadsheetId:book.getId(),url:book.getUrl(),sheetName:sheet.getName(),equipmentCount:data.rows.length,
-      uiMode:mode,tabNames:policy.realData?['Equipment','Products & Formats','Real Data']:['Equipment','Products & Formats'],
+      uiMode:mode,tabNames:sheetModeTabNames_(mode),
       sheetTemplateVersion:sheetTemplateVersion_()};
   } catch (error) {
     var details=['Exporter: equipment-actuals-catalog-v3','Stage: '+stage,'Service: '+safeSheetErrorDetail_(error)];

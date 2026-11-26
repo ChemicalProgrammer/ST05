@@ -541,10 +541,10 @@ async function openCase(caseId, initialView) {
         .filter(function(key){return Object.prototype.hasOwnProperty.call(source,key);})
         .map(function(key){return [key,source[key]];}));
       var request={caseId:editor.id,caseName:editor.name,simulationName:simulation.name,equipment:cloneJson(editor.equipment),
-        metadata:cloneJson(metadata),
+        metadata:cloneJson(metadata),initialFormatId:simulation.dynamicConfig?.initialFormatId||simulation.dynamicConfig?.initialProductId||null,
         theme:{primary:colors.getPropertyValue('--accent').trim(),secondary:colors.getPropertyValue('--secondary').trim()},
         uiMode:state.bootstrap?.uiMode||document.documentElement.dataset.workspaceMode||'MINIMAL',
-        sheetTemplateVersion:'sheet-template-20261126-2'};
+        sheetTemplateVersion:'sheet-template-20261126-3'};
       button.disabled=true;button.dataset.busy='true';
       function finish(){button.disabled=false;delete button.dataset.busy;}
       function exportError(error,title){
@@ -554,7 +554,7 @@ async function openCase(caseId, initialView) {
       }
       // Never generate a workbook with an older server that cannot honor Basic/Advance.
       callServer('getSheetTemplateCapabilities',[],function(check){
-        if(!check?.ok||check.data?.sheetTemplateVersion!==request.sheetTemplateVersion||check.data?.modeSpecificTabs!==true||check.data?.modeSpecificColumns!==true){
+        if(!check?.ok||check.data?.sheetTemplateVersion!==request.sheetTemplateVersion||check.data?.modeSpecificTabs!==true||check.data?.modeSpecificColumns!==true||check.data?.inlineBasicMaterial!==true){
           finish();
           exportError({code:'SHEET_CLIENT_OUTDATED',message:'Spreadsheet export requires the latest Apps Script web deployment. Update it, then reopen the app.'});
           return;
@@ -566,7 +566,7 @@ async function openCase(caseId, initialView) {
             exportError(response?.error);
             return;
           }
-          var tabs=request.uiMode==='ADVANCE'?['Equipment','Products & Formats','Real Data']:['Equipment','Products & Formats'];
+          var tabs=request.uiMode==='MINIMAL'?['Equipment']:request.uiMode==='ADVANCE'?['Equipment','Products & Formats','Real Data']:['Equipment','Products & Formats'];
           if(response.data.uiMode!==request.uiMode||JSON.stringify(response.data.tabNames)!==JSON.stringify(tabs)||
              response.data.sheetTemplateVersion!==request.sheetTemplateVersion){
             finish();

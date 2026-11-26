@@ -758,9 +758,6 @@
 
     var playbackControlSignature=null,playbackBoundExportResult=null;
     function renderPlaybackFrame() {
-      // Basic has its own KPI renderer; the complete playback DOM and canvas
-      // are hidden. They are refreshed on navigation or a workspace-mode change.
-      if(window.STMinimalMode?.isMinimal())return;
       updateNumericalEquipmentVisibility();
       // Locking every input/selector on every visual frame is expensive for
       // multi-equipment Live playback. Only synchronize when the lock state,
@@ -779,6 +776,9 @@
         playbackBoundExportResult=state.run.result;
         STReports.bindChartExports(state.run.result,state.activeCase,activePersistentSimulation(),state.run.roundIndex+1);
       }
+      // Basic has its own KPI renderer; the complete playback DOM and canvas
+      // are hidden. They are refreshed on navigation or a workspace-mode change.
+      if(window.STMinimalMode?.isMinimal())return;
       var progress=document.getElementById('playback-progress'),effective=document.getElementById('run-effective-progress');
       if(effective){
         var result=state.run.result,stop=result?.effectiveRuntimeStop,frame=playbackVisualSample();

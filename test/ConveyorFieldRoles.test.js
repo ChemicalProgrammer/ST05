@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {JSDOM} from 'jsdom';
 const src=fs.readFileSync('apps-script/ClientEquipment.html','utf8');
 const slice=(a,b)=>src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)+a.length));
-const fields=['population','lba','backup','overspeed','speed-mode','belt-speed','moving-gap','acc-factor','discharge-velocity','speed-factor','coding-factor','accumulated-gap','insurance','lact','lp-prime','package-length','discharge-pitch','discharge-runout','reject-runout','blocked-delay','clear-delay','stop-response','residual','downstream-ramp','restart-first-package','startup','infeed','accumulation-seconds'];
+const fields=['population','lba','backup','overspeed','speed-mode','belt-speed','moving-gap','acc-factor','discharge-velocity','speed-factor','coding-factor','accumulated-gap','insurance','lact','lp-prime','package-length','discharge-pitch','discharge-runout','reject-runout','blocked-delay','clear-delay','stop-response','residual','downstream-ramp','restart-first-package','startup','infeed','accumulation-seconds','discharge-runout-time','reject-runout-time'];
 function harness(){
  const dom=new JSDOM('<article><div class="equipment-fields"></div></article>',{runScripts:'outside-only'}),w=dom.window,d=w.document,card=d.querySelector('article');
  card._fields=card.firstChild;
@@ -13,12 +13,12 @@ function harness(){
   control.className='format-zone-'+key;
   if(key==='speed-mode'){for(const mode of ['AUTO','MANUAL'])control.add(new w.Option(mode,mode));}else control.type='number';
   label.append(control);card._fields.append(label);
-  if(['population','lba','backup','overspeed','accumulation-seconds','discharge-velocity','moving-gap'].includes(key)){
-   const toggleLabel=d.createElement('label'),toggle=d.createElement('input');toggle.type='checkbox';toggle.checked=key==='moving-gap';toggle.className=control.className+'-enabled';toggleLabel.append(toggle);card._fields.append(toggleLabel);
+  if(['population','lba','backup','overspeed','accumulation-seconds','discharge-velocity','moving-gap','discharge-runout','reject-runout'].includes(key)){
+   const toggleLabel=d.createElement('label'),toggle=d.createElement('input');toggle.type='checkbox';toggle.checked=['moving-gap','discharge-runout','reject-runout'].includes(key);toggle.className=control.className+'-enabled';toggleLabel.append(toggle);card._fields.append(toggleLabel);
   }
  }
  card.dataset.index='0';
- w.equipmentField=(card,selector)=>card.querySelector(selector);w.STBasicMode={isBasic:()=>true};
+ w.equipmentField=(card,selector)=>card.querySelector(selector);w.STBasicMode={isBasic:()=>false};
  w.eval(slice('    function prepareSwitchableFields','    function applyConceptTooltips')+slice('    function readFormatZoneInputs','    function mergeFormatZoneData')+slice('function numericInputValue','function parseJsonForPreview'));
  w.prepareSwitchableFields(card);
  const f=key=>card.querySelector('.format-zone-'+key);
@@ -67,5 +67,27 @@ test('declared accumulation, discharge velocity and moving gap keep independent 
   assert(f('moving-gap').readOnly);assert.equal(read().movingGapMm,undefined);check('moving-gap');assert.equal(read().movingGapMm,12);
   check('population');assert(f('moving-gap-enabled').disabled);assert.equal(read().movingGapMm,undefined);
   f('population-enabled').checked=false;sync();assert.equal(read().movingGapMm,12);
+ }finally{h.close();}
+});
+
+test('Basic manual speed and m/min conversion',()=>{
+ const h=harness();try{
+  h.w.STBasicMode.isBasic=()=>true;
+  h.f('speed-mode').value='AUTO';h.f('belt-speed').value='30';h.f('population-enabled').checked=true;h.sync();
+  assert.equal(h.f('speed-mode').value,'MANUAL');assert(h.f('speed-mode').closest('label').hidden);
+  assert(!h.f('belt-speed').readOnly);assert.equal(h.read().conveyorSpeedMmPerSecond,500);
+  assert.equal(h.read().targetPopulationPercent,undefined);assert(h.f('population-enabled').disabled);
+ }finally{h.close();}
+});
+test('runout length from design transit time, manual blank zero',()=>{
+ const h=harness();try{
+  const {f,check,sync,read}=h;sync();
+  assert.equal(read().dischargeRunoutLengthMm,0);assert.equal(read().rejectRunoutLengthMm,0);
+  check('discharge-velocity');f('discharge-velocity').value='18.7';f('speed-factor').value='10';f('coding-factor').value='5';
+  f('discharge-runout-enabled').checked=false;f('reject-runout-enabled').checked=false;sync();
+  assert.equal(read().dischargeRunoutLengthMm,undefined);
+  f('discharge-runout-time').value='3';f('reject-runout-time').value='4';sync();
+  assert(Math.abs(read().dischargeRunoutLengthMm-1028.5)<1e-8);assert(Math.abs(read().rejectRunoutLengthMm-1439.9)<1e-8);
+  check('discharge-runout');assert.equal(read().dischargeRunoutLengthMm,0);assert(f('discharge-runout-time').closest('label').hidden);
  }finally{h.close();}
 });

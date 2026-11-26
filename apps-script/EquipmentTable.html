@@ -43,7 +43,7 @@ window.STEquipmentTable=(function(){
   var conveyorGeneral=group('General','General',[col('type','.equipment-type','Type','Tipo'),col('flow',['.equipment-material-flow','.equipment-transport-unit'],'Material flow','Flujo de material')]);
   var geometry=group('Geometry','Geometría',[
     zone('lact','Lact (mm)','Lact (mm)'),zone('lp-prime','Lp (mm)','Lp (mm)'),zone('package-length','Package length (mm)','Longitud del envase (mm)'),
-    zone('discharge-runout','Discharge (mm)','Descarga (mm)'),zone('reject-runout','Coding (mm)','Codificado (mm)'),
+    zone('discharge-runout','Discharge (mm)','Descarga (mm)',true),zone('discharge-runout-time','Discharge design transit (s)','Tránsito de diseño Discharge (s)'),zone('reject-runout','Coding (mm)','Codificado (mm)',true),zone('reject-runout-time','Coding design transit (s)','Tránsito de diseño Coding (s)'),
     zone('backup','Back-up (mm)','Back-up (mm)',true),zone('lba','LBA (mm)','LBA (mm)',true),
     zone('accumulation-seconds','Accumulation (s)','Acumulación (s)',true)]);
   var upstream=group('Upstream','Equipo anterior',[
@@ -53,7 +53,7 @@ window.STEquipmentTable=(function(){
   var downstream=group('Downstream','Equipo siguiente',[
     zone('infeed','Infeed pitch (mm)','Pitch de entrada (mm)'),zone('downstream-ramp','Ramp up (s)','Rampa de arranque (s)')]);
   var speeds=group('Speed & sensors','Velocidad y sensores',[
-    zone('speed-mode','Speed mode','Modo de velocidad'),zone('belt-speed','Belt speed (mm/s)','Vel. de banda (mm/s)'),
+    zone('speed-mode','Speed mode','Modo de velocidad'),zone('belt-speed','Belt speed (m/min)','Vel. de banda (m/min)'),
     zone('moving-gap','Moving gap (mm)','Separación en movimiento (mm)',true),zone('accumulated-gap','Accumulated gap (mm)','Separación acumulada (mm)'),
     zone('population','Population (%)','Población (%)',true),zone('overspeed','Overspeed (%)','Sobrevelocidad (%)',true),
     zone('speed-factor','Discharge factor (%)','Factor de descarga (%)'),zone('coding-factor','Coding factor (%)','Factor de codificado (%)'),
@@ -432,6 +432,7 @@ window.STEquipmentTable=(function(){
     var parts=headingParts(label),col=node('col'),head=node('th','equipment-table-column',parts.name),unit=node('th','equipment-table-unit',parts.unit);
     head.dataset.column=id;unit.dataset.unitFor=id;head.scope='col';unit.setAttribute('aria-hidden','true');
     if(group){head.title=group;head.dataset.parameterGroup=group;}
+    var ownHelp={name:tr('Name identifying the equipment in the line.','Nombre que identifica el equipo en la línea.'),evaluation:tr('Engineering evaluation of machine or conveyor configuration. Open the result for details.','Evaluación de ingeniería del equipo o conveyor. Abre el resultado para ver detalles.'),delete:tr('Remove this equipment from the line.','Elimina este equipo de la línea.')};if(ownHelp[id])head.title=ownHelp[id];
     if(id==='name'){head.classList.add('equipment-table-identity');unit.classList.add('equipment-table-identity');}
     if(id==='evaluation'||id==='delete'){head.classList.add('equipment-table-center');unit.classList.add('equipment-table-center');}
     var handle=node('span','equipment-table-resize');head.append(handle);
@@ -520,6 +521,9 @@ window.STEquipmentTable=(function(){
         params.push({column:{id,selectors:[],collapsed:true},descriptor});
       }else g.columns.forEach(c=>{
         var descriptor=appendColumn(layout,top,bottom,cols,c.id,tr(c.en,c.es),label);
+        var field=c.selectors.slice().reverse().map(sel=>cards.map(card=>source(card,sel)).find(Boolean)).find(Boolean);
+        var help=window.STEquipmentInspector?.columnHelp?.(field,c.id)||field?.title||field?.closest('label')?.title||label;
+        descriptor.head.title=help;descriptor.head.setAttribute('aria-description',help);descriptor.unit.title=help;
         descriptor.groupId=groupId;params.push({column:c,descriptor});
       });
       table.append(cols);

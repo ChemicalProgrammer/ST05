@@ -123,8 +123,8 @@ window.STEquipmentInspector=(function(){
     "Separación centro a centro a la salida anterior (mm), no necesariamente pitch de banda."
   ],
   "format-zone-discharge-velocity": [
-    "Optional measured discharge velocity (m/min). Blank: nominal output × discharge pitch / 1000. Not the belt speed.",
-    "Velocidad de descarga medida opcional (m/min). Vacío: flujo nominal × pitch de descarga / 1000. No es velocidad de banda."
+    "Linear package exit velocity at the upstream machine, not belt speed. Manual AF is used by the engineering worksheet; calculated value = nominal native packages/min × discharge pitch / 1000. Steady-state reference, not a time delay or ramp.",
+    "Velocidad lineal del envase al salir de la máquina anterior, no de la banda. AF manual se usa en la hoja de ingeniería; calculada = envases nativos/min nominales × pitch de descarga / 1000. Referencia de régimen nominal, no un retardo ni una rampa."
   ],
   "format-zone-startup": [
     "Upstream start-up delay before processing resumes (s).",
@@ -139,8 +139,8 @@ window.STEquipmentInspector=(function(){
     "Envases nativos que siguen saliendo tras señal de paro por inercia/desaceleración."
   ],
   "format-zone-stop-response": [
-    "Delay from stop request until upstream discharge response completes (s).",
-    "Retardo desde solicitud de paro hasta completar respuesta de descarga anterior (s)."
+    "After Back-up confirms sustained blockage, the upstream machine receives a stop request. Stop Response runs from that request to the end of its response; flow may continue subject to inventory and capacity. Residual packages are a separate quantity. Zero means immediate response.",
+    "Tras confirmar Back-up el bloqueo sostenido, la máquina anterior recibe la orden de paro. Stop Response va desde esa orden hasta finalizar la respuesta; puede continuar el flujo según inventario y capacidad. Los envases residuales son una cantidad aparte. Cero significa respuesta inmediata."
   ],
   "format-zone-infeed": [
     "Center-to-center spacing at downstream infeed (mm). Used with its native input rate.",
@@ -151,12 +151,12 @@ window.STEquipmentInspector=(function(){
     "Tiempo para alcanzar velocidad plena de máquina siguiente tras rearranque (s)."
   ],
   "format-zone-discharge-runout": [
-    "Measured Discharge segment from machine exit to Coding or Overflow (mm). Zero if absent.",
-    "Tramo Discharge medido desde salida de máquina hasta Coding u Overflow (mm). Cero si no existe."
+    "Installed segment between upstream machine exit and Coding/Overflow. Checked: enter length in mm (blank = 0). Unchecked: design transit seconds × local Discharge speed in mm/s. Used for overflow reserve and recovery, not an independent delay.",
+    "Tramo instalado entre salida anterior y Coding/Overflow. Marcado: longitud en mm (vacío = 0). Desmarcado: segundos de tránsito de diseño × velocidad local Discharge en mm/s. Se usa para reserva Overflow y recuperación, no como retardo independiente."
   ],
   "format-zone-reject-runout": [
-    "Measured Coding segment before Overflow (mm). Zero if absent.",
-    "Tramo Coding medido antes de Overflow (mm). Cero si no existe."
+    "Installed Coding segment before Overflow. Checked: measured mm (blank = 0). Unchecked: design transit seconds × Coding speed in mm/s. Used in installed geometry and overflow/recovery analysis.",
+    "Tramo Coding instalado antes de Overflow. Marcado: mm medidos (vacío = 0). Desmarcado: segundos de tránsito de diseño × velocidad Coding en mm/s. Se usa en geometría instalada y análisis de Overflow/recuperación."
   ],
   "format-zone-backup": [
     "Position of Back-up photoeye from conveyor entry (mm). Manual only for installed value; otherwise derived from LBA or required overflow.",
@@ -171,9 +171,13 @@ window.STEquipmentInspector=(function(){
     "Manual usa velocidad real de banda. Auto usa factores. Dynamic usa una velocidad Normal o Máxima y un porcentaje; disponible en Advance. Population/Overspeed objetivo es incompatible con Dynamic."
   ],
   "format-zone-belt-speed": [
-    "Belt linear speed: m/min in Basic, mm/s in Advance. Calculated for Auto or target modes; in Dynamic it is the selected Normal or Maximum reference.",
-    "Velocidad lineal de banda: m/min en Basic, mm/s en Advance. Calculada en Auto o modos objetivo; en Dynamic es la referencia Normal o Máxima seleccionada."
+    "Linear belt speed in m/min in all editor modes; internally converted to mm/s for travel, transfer capacity and sensor timing. Basic uses manual speed; Advance supports automatic/target speeds and dynamic Normal/Maximum reference.",
+    "Velocidad lineal de banda en m/min en todos los modos del editor; se convierte internamente a mm/s para tránsito, capacidad y sensores. Basic usa velocidad manual; Advance admite cálculo/objetivos y referencia Normal/Máxima dinámica."
   ],
+  "format-zone-discharge-runout-time": ["Design transit time across Discharge; multiplied by local speed to size installed length. Not Stop Response.","Tiempo de tránsito de diseño en Discharge; se multiplica por velocidad local para dimensionar el tramo. No es Stop Response."],
+  "format-zone-reject-runout-time": ["Design transit time across Coding; multiplied by local Coding velocity to size installed length.","Tiempo de tránsito de diseño en Coding; se multiplica por su velocidad local para dimensionar el tramo."],
+  "format-zone-accumulation-seconds": ["Full useful zone protection = floor(LBA / packed pitch) / native downstream rate in packages/s. Manual value is a declared reference, not a runtime capacity override.","Protección con zona útil llena = parte entera de LBA / pitch acumulado, dividida por flujo nativo aguas abajo en envases/s. Manual es referencia declarada, no cambia capacidad del motor."],
+  "equipment-macrostop-scrap": ["Bottle loss when an applicable macro stop occurs; deducted by the machine model.","Pérdida de botellas por macroparo aplicable; descontada por el modelo del equipo."],
   "format-zone-moving-gap": [
     "Optional free space between moving packages (mm), not center-to-center pitch. Target modes calculate spacing.",
     "Separación libre opcional entre productos en movimiento (mm), no pitch centro a centro. Los modos objetivo calculan separación."
@@ -232,6 +236,23 @@ window.STEquipmentInspector=(function(){
   ]
 };
   function localized(en,es){return document.documentElement.lang==='es'?es:en;}
+  function columnHelp(control,id){
+    var extra={
+      'flow':['Material input/output units used for native package flow.','Unidades de entrada/salida para flujo nativo de envases.'],
+      'stop-mode':['General or separate minor/major failure model.','Modelo de fallas generales o separadas menor/mayor.'],
+      'dynamic-reference':['Whether entered speed is normal or maximum dynamic speed.','Si la velocidad introducida es normal o máxima dinámica.'],
+      'dynamic-percent':['Ratio between normal and maximum speeds.','Relación entre velocidades normal y máxima.'],
+      'dynamic-range':['Resolved normal and maximum speeds in m/min.','Velocidades normal y máxima resueltas en m/min.'],
+      'low-reserve':['Lower queue reserve threshold in seconds.','Umbral inferior de reserva de cola en segundos.'],
+      'high-reserve':['Upper queue reserve threshold in seconds.','Umbral superior de reserva de cola en segundos.'],
+      'acceleration':['Time for belt acceleration.','Tiempo de aceleración de banda.'],
+      'deceleration':['Time for belt deceleration.','Tiempo de desaceleración de banda.'],
+      'confirmation':['Time a dynamic sensor condition must persist.','Tiempo que debe persistir la condición del sensor dinámico.'],
+      'dwell':['Minimum time between dynamic speed changes.','Tiempo mínimo entre cambios de velocidad dinámica.']
+    };
+    var key=control?.dataset.parameterHelp||Array.from(control?.classList||[]).find(name=>parameterHelp[name]),entry=extra[id]||parameterHelp[key];
+    return entry?localized(...entry):control?.dataset.baseParameterHelp||control?.title||'';
+  }
   function refreshHelp(card){
     if(!card?._fields)return;
     card._fields.querySelectorAll('input,select,textarea').forEach(function(control){
@@ -249,7 +270,7 @@ window.STEquipmentInspector=(function(){
   }
   function decorate(card){refreshHelp(card);}
   window.addEventListener('st-language-change',function(){document.querySelectorAll('#equipment-list .equipment-card').forEach(refreshHelp);});
-  return {init:init,select:select,release:release,restore:restore,sync:sync,decorate:decorate,refreshHelp:refreshHelp,refreshTitle:refreshTitle,hide:function(){opened=false;},show:function(){if(selected)opened=true;},available:function(){return !!selected&&state?.uiView==='editor';},name:function(){return selected?selected._fields.querySelector('.equipment-name').value:'';}};
+  return {init:init,select:select,release:release,restore:restore,sync:sync,decorate:decorate,columnHelp:columnHelp,refreshHelp:refreshHelp,refreshTitle:refreshTitle,hide:function(){opened=false;},show:function(){if(selected)opened=true;},available:function(){return !!selected&&state?.uiView==='editor';},name:function(){return selected?selected._fields.querySelector('.equipment-name').value:'';}};
 })();
 </script>
 

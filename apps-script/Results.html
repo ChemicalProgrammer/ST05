@@ -398,7 +398,9 @@ window.STResults=(function(){
     var ready=Boolean(result&&result.summary&&!result.provisional);
     renderRateLossHighlights(document.getElementById('results-rate-loss-highlights'),ready?result:null,
       resultUnit(activeCase,simulation,result?.unitOfFlow||result?.replay?.unitOfFlow));
-    const resultEquipment=simulation?.equipment||activeCase?.equipment||[];
+    const savedEquipment=simulation?.equipment||activeCase?.equipment||[];
+    const nominalOnly=ready?simulation?.dynamicConfig?.machineMaximumSpeedEnabled===false:document.documentElement.dataset.uiMode==='basic';
+    const resultEquipment=nominalOnly?(window.SimulatorEngine.projectMachineDesign?.(savedEquipment,{machineMaximumSpeedEnabled:false})||savedEquipment):savedEquipment;
     renderEquipmentOperatingResults(document.getElementById('results-equipment-operation'),ready?result:null,source,resultEquipment);
     renderRateLoss(document.getElementById('results-rate-loss'),ready?result:null,resultEquipment,activeCase?.metadata?.consoleOptions?.rateLossCategories);
     renderRamps(document.getElementById('results-ramp-accounting'),ready?result:null,resultEquipment);
@@ -426,7 +428,7 @@ window.STResults=(function(){
     if(result.detailCoverage?.omittedEvents)document.getElementById('results-meta').textContent+=' · '+result.detailCoverage.omittedEvents+' detailed events omitted; totals retained';
 
     document.getElementById('results-reference').textContent=result.engineId==='DES_SIMPY_EXPERIMENTAL'?'DES · SimPy 4.1.2 (experimental). OEE is not validated. '+(result.limitations||[]).join(' '):__ST_TEXT__('results.oee_reference')+(result.summary.lineOeePacemakerName||'not available')+__ST_TEXT__('results.quality_assumes_100_no_reject_model_loss_and_downtime_totals_are_equipment_')+' '+__ST_TEXT__('results.partial_note')+' '+__ST_TEXT__('results.productive_note');
-    window.STLinePerformance.render(result,activeCase.equipment||[]);
+    window.STLinePerformance.render(result,resultEquipment);
     var rows=resultEquipment.map(function(e){return {model:e,metric:(result.equipmentMetrics||{})[e.id]||{}};});
     document.getElementById('results-insight').replaceChildren();
     var table=document.createElement('table'); table.innerHTML=("<thead><tr><th>" + __ST_HTML_TEXT__('client.equipment') + "</th><th>" + __ST_HTML_TEXT__('sheetimportmerge.type') + "</th><th>" + __ST_HTML_TEXT__('client.equipment_unit_label') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('client.oee') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.produced_processed') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.starved_min') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.blocked_min') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.failure_min') + "</th><th class=\"numeric\">" + __ST_HTML_TEXT__('results.failures') + "</th></tr></thead>");

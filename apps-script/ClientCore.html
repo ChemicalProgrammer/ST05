@@ -55,13 +55,14 @@
       if(!simulation)return;
       simulation2D.syncEvents(true);
       var ownerId=state.activeCase.id,simulationId=simulation.id;
-      simulation2D.load([ownerId,simulationId,format?.id],state.activeCase.equipment,format,simulation.dynamicConfig,simulation.simulation2d,function(record){
+      var config={...simulation.dynamicConfig,machineMaximumSpeedEnabled:workspaceMachineMaximumSpeedFlag()};
+      simulation2D.load([ownerId,simulationId,format?.id],state.activeCase.equipment,format,config,simulation.simulation2d,function(record){
         if(state.activeCase?.id!==ownerId)return;
         var owner=state.activeCase.simulations.find(function(item){return item.id===simulationId;});
         if(!owner)return;
         owner.simulation2d=record;
         autosave.change();
-      },representativeRoundFor2D(simulation.results),STProducts.formats());
+      },representativeRoundFor2D(maximumSpeedPolicyMatches(simulation)?simulation.results:null),STProducts.formats());
     }
     function caseViewKey(caseId) {
       return 'caseView.'+JSON.stringify([state.bootstrap?.user?.email||'',state.bootstrap?.settings?.workspaceRootFolderId||'',caseId]);
@@ -214,7 +215,11 @@
         state.bootstrap.uiMode=mode;
         configureSaving();
         STBasicMode.sync(state);
-        if(state.activeCase)renderEquipment();
+        if(state.activeCase){
+          var active=activePersistentSimulation();
+          if(active?.results&&(!maximumSpeedPolicyMatches(active)||!state.run.result))activatePersistentSimulation(active.id,true);
+          else renderEquipment();
+        }
         shell.sync();
         if(state.activeCase)renderSimulationAnalysis();
         if(state.run.result)renderPlaybackFrame();

@@ -239,5 +239,10 @@ html[data-ui-mode=advance][data-equipment-layout=split] .basic-machine .equipmen
    including an inspector reparented by the split equipment layout. */
 html[data-ui-mode=basic] .conveyor-speed-mode-field,
 html[data-ui-mode=basic] label:has(> .format-zone-speed-mode) { display:none!important; }
+/* Maximum Speed is an installed design limit only exposed in Advance. */
+html[data-ui-mode=basic] .advanced-maximum-speed-field,
+html[data-ui-mode=basic] label:has(> .equipment-maximum-speed),
+.advanced-maximum-speed-field[hidden] {display:none!important;}
+html[data-ui-mode=advance][data-equipment-layout=split] .basic-machine .equipment-grid > label.advanced-maximum-speed-field:not([hidden]){display:grid!important;}
 </style>
 

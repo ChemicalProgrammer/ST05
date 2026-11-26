@@ -64,18 +64,23 @@ function validateDynamicBalancing(equipment,run,details){
 // persisted installation. Validators, runtimes and evidence use this same
 // projection; unrelated reliability, flow and speed fields remain.
 export function projectMachineDesign(equipment,run){
-  if(run?.machineDesignEnabled!==false||!Array.isArray(equipment))return equipment;
+  const simpleDesign=run?.machineDesignEnabled===false;
+  const nominalOnly=run?.machineMaximumSpeedEnabled===false;
+  if((!simpleDesign&&!nominalOnly)||!Array.isArray(equipment))return equipment;
   return equipment.map(unit=>{
     const design=unit?.processData?.equipment;
     if(!design||typeof design!=='object'||Array.isArray(design))return unit;
     const processData={...unit.processData},next={...design};
-    for(const key of ['internalCapacityBottles','occupancyMode','residenceTimeSeconds','recoveryTimeSeconds','macroStopScrapBottles'])delete next[key];
+    if(simpleDesign)for(const key of ['internalCapacityBottles','occupancyMode','residenceTimeSeconds','recoveryTimeSeconds','macroStopScrapBottles'])delete next[key];
+    // A separate switch preserves all other machine design parameters in Basic.
+    // This is an execution/evidence projection, never an edit of saved maxima.
+    if(nominalOnly)delete next.maximumSpeedBpm;
     if(Object.keys(next).length)processData.equipment=next;else delete processData.equipment;
     return {...unit,processData};
   });
 }
 export function projectMachineDesignInput(input){
-  return input?.run?.machineDesignEnabled===false&&Array.isArray(input?.case?.equipment)
+  return (input?.run?.machineDesignEnabled===false||input?.run?.machineMaximumSpeedEnabled===false)&&Array.isArray(input?.case?.equipment)
     ?{...input,case:{...input.case,equipment:projectMachineDesign(input.case.equipment,input.run)}}:input;
 }
 
@@ -320,6 +325,7 @@ function validateRun(run, details) {
     return;
   }
   if(run.machineDesignEnabled!==undefined&&typeof run.machineDesignEnabled!=='boolean')details.push(invalid('run.machineDesignEnabled','must be a boolean'));
+  if(run.machineMaximumSpeedEnabled!==undefined&&typeof run.machineMaximumSpeedEnabled!=='boolean')details.push(invalid('run.machineMaximumSpeedEnabled','must be a boolean'));
   if(run.dynamicLineBalancingEnabled!==undefined&&typeof run.dynamicLineBalancingEnabled!=='boolean')details.push(invalid('run.dynamicLineBalancingEnabled','must be a boolean'));
   if(run.dynamicLineBalancingEnabled===true&&(run.engineId==='DES_SIMPY_EXPERIMENTAL'||run.machineResidenceEnabled!==true))details.push(invalid('run.dynamicLineBalancingEnabled','Dynamic balancing requires the ST discrete physical engine (machine residence enabled).'));
   if (run.eventsEnabled !== undefined && typeof run.eventsEnabled !== 'boolean') details.push(invalid('run.eventsEnabled','must be a boolean'));

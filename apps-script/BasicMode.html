@@ -86,6 +86,7 @@ window.STBasicMode=(function(){
       if(separate&&type(card)==='CONVEYOR')prepareWorksheet(card);
       else restoreWorksheet(card);
       if(card._fields)card._fields.dataset.balancingView=String(separate&&conveyorView==='balancing'&&card.classList.contains('equipment-selected'));
+      var maximum=card._fields?.querySelector('.equipment-maximum-speed');if(maximum){maximum.disabled=enabled;maximum.closest('label').hidden=enabled;}
       STEquipmentInspector.refreshTitle(card);});
     if(active&&view==='editor'&&separate){
       var conveyor=section==='conveyors';
@@ -181,7 +182,7 @@ window.STBasicMode=(function(){
     var preview=actions.preview?.()||[],committed=state.activeCase.equipment||[];
     var byId=new Map(preview.map(e=>[e.id,e]));
     var equipment=committed.map(e=>byId.get(e.id)||e).concat(preview.filter(e=>!committed.some(b=>b.id===e.id))),simulation=(state.activeCase.simulations||[]).find(function(s){return s.id===state.activeSimulationId;});
-    var audits=STScenarios.audit({equipment:equipment}),machines=equipment.filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR'),availability=theoreticalEfficiency(equipment)/100;
+    var audits=STScenarios.audit({equipment:equipment,dynamicConfig:{machineMaximumSpeedEnabled:basic()?false:undefined}}),machines=equipment.filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR'),availability=theoreticalEfficiency(equipment)/100;
     Array.from(list.querySelectorAll('.equipment-card')).forEach(function(card,index){
       var e=equipment.find(item=>item.id===card.dataset.equipmentId);if(!e)return;var machine=e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR';
       if(splitMounted)card.querySelector('.equipment-header strong').textContent=e.name;

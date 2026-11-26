@@ -620,6 +620,7 @@ window.STSimulation2D=(function(){
   }
   function prepare(equipment,format,config,formats){
     const geometry=window.SimulatorEngine;
+    if(config.machineMaximumSpeedEnabled===false)equipment=geometry.projectMachineDesign?.(equipment,{machineMaximumSpeedEnabled:false})||equipment;
     const packSize=format?geometry.productPackSize(format):null;
     const resolvedProfiles=window.STConveyorAnalysis.resolveProfiles(equipment,format,formats);
     const {models:configured,zones,designProfiles}=resolvedProfiles;

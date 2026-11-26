@@ -568,7 +568,7 @@ function updateFormatZoneVisibility(card) {
         packageLengthMm: values.packageLengthMm,
         upstreamDischargePitchMm: values.dischargePitchMm,
         upstreamNominalSpeedBpm: Number(upstreamMachine.nominalRatePerSecond) * 60,
-        downstreamHighSpeedBpm: downstreamMachine.processData?.productInputRatePerSecond!==undefined?downstreamMachine.processData.productInputRatePerSecond*60:(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())||processData.accumulation?.useNominalDesignSpeed?Number(downstreamMachine.nominalRatePerSecond)*60:firstDefinedValue(downstreamMachine.processData?.equipment?.maximumSpeedBpm, Number(downstreamMachine.nominalRatePerSecond) * 60),
+        downstreamHighSpeedBpm: downstreamMachine.processData?.productInputRatePerSecond!==undefined?downstreamMachine.processData.productInputRatePerSecond*60:conveyorManualSpeedOnly()||processData.accumulation?.useNominalDesignSpeed?Number(downstreamMachine.nominalRatePerSecond)*60:firstDefinedValue(downstreamMachine.processData?.equipment?.maximumSpeedBpm, Number(downstreamMachine.nominalRatePerSecond) * 60),
         downstreamInfeedPitchMm: values.downstreamInfeedPitchMm ?? downstreamMachine.processData?.downstream?.infeedPitchMm,
         conveyorSpeedFactorPercent: values.conveyorSpeedFactorPercent,
         dischargeRunoutLengthMm: values.dischargeRunoutLengthMm,
@@ -732,7 +732,7 @@ function applyConveyorOutputs(card,d,values,zone,profile){
       });
       if(Object.prototype.hasOwnProperty.call(values,'declaredAccumulationSeconds'))result.accumulation.declaredAccumulationSeconds=values.declaredAccumulationSeconds;
       var basic=(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic());
-      if(basic)result.accumulation.useNominalDesignSpeed=true;
+      if(conveyorManualSpeedOnly())result.accumulation.useNominalDesignSpeed=true;else delete result.accumulation.useNominalDesignSpeed;
       result.upstream.startupTimeSeconds=values.upstreamStartupTimeSeconds;
       if(basic||values.downstreamInfeedPitchMm!==undefined||result.downstream){
         result.downstream=Object.assign({},result.downstream,{infeedPitchMm:values.downstreamInfeedPitchMm});
@@ -924,11 +924,14 @@ function numericInputValue(input) {
         card._transportFlowIssue=row.source==='CONFLICT'?row.reason:null;
       });
     }
+    function nominalSpeedPreview(equipment){
+      return conveyorManualSpeedOnly()?(window.SimulatorEngine?.projectMachineDesign?.(equipment,{machineMaximumSpeedEnabled:false})||equipment):equipment;
+    }
     function basicEquipmentPreview(){
       var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
       // El editor puede estar desmontado mientras se simula: usar el modelo,
       // sin interpretar la ausencia visual como una línea sin equipos.
-      if(!cards.length&&state.activeCase?.equipment?.length)return cloneJson(state.activeCase.equipment);
+      if(!cards.length&&state.activeCase?.equipment?.length)return nominalSpeedPreview(cloneJson(state.activeCase.equipment));
       refreshEditorTransportUnits(cards);
       var preview=cards.map(function(card){
         var type=equipmentField(card,'.equipment-type').value,data=parseJsonForPreview(equipmentField(card,'.equipment-process-data').value);
@@ -936,7 +939,7 @@ function numericInputValue(input) {
         var critical=type!=='CONVEYOR'&&equipmentField(card,'.equipment-pacemaker').checked;
         characteristics.isPacemaker=critical;data.role=type==='CONVEYOR'?'CONVEYOR':critical?'PACEMAKER':'MACHINE';data.machineType=type;
         data.equipment=Object.assign({},data.equipment);
-        (window.STMinimalMode?.isMinimal()?[['maximum-speed','maximumSpeedBpm']]:[['maximum-speed','maximumSpeedBpm'],['recovery-time','recoveryTimeSeconds']]).forEach(function(spec){var input=equipmentField(card,'.equipment-'+spec[0]);if(input.value==='')delete data.equipment[spec[1]];else data.equipment[spec[1]]=Number(input.value);});
+        (window.STMinimalMode?.isMinimal()?[]:[['recovery-time','recoveryTimeSeconds']]).concat(conveyorManualSpeedOnly()?[]:[['maximum-speed','maximumSpeedBpm']]).forEach(function(spec){var input=equipmentField(card,'.equipment-'+spec[0]);if(input.value==='')delete data.equipment[spec[1]];else data.equipment[spec[1]]=Number(input.value);});
         if(type==='CONVEYOR'){delete noise.reliability;delete data.equipment.stopInputs;}
         else if(!data.equipment.stopInputs){
           var bf=equipmentField(card,'.reliability-mtbfMinutes').value,tr=equipmentField(card,'.reliability-mttrMinutes').value;
@@ -952,13 +955,13 @@ function numericInputValue(input) {
           nominalRatePerSecond:readEquipmentRate(card),characteristics:characteristics,processData:data,noiseProfile:noise};
       });
       var byId=new Map(preview.map(e=>[e.id,e])),base=state.activeCase?.equipment||[];
-      if(preview.length<base.length)return base.map(e=>byId.get(e.id)||cloneJson(e)).concat(preview.filter(e=>!base.some(b=>b.id===e.id)));
-      return preview;
+      if(preview.length<base.length)return nominalSpeedPreview(base.map(e=>byId.get(e.id)||cloneJson(e)).concat(preview.filter(e=>!base.some(b=>b.id===e.id))));
+      return nominalSpeedPreview(preview);
     }
     function equipmentAnalysisEditorContext(preview){
       var tab=activePersistentSimulation(),base=state.activeCase?.equipment||[];
-      var models=(preview||basicEquipmentPreview()).map(e=>({...base.find(b=>b.id===e.id),...e}));
-      var config={...(tab?.dynamicConfig||state.run.configuration||{})},format=window.STProducts?.currentFormat?.();
+      var models=nominalSpeedPreview((preview||basicEquipmentPreview()).map(e=>({...base.find(b=>b.id===e.id),...e})));
+      var config={...(tab?.dynamicConfig||state.run.configuration||{}),machineMaximumSpeedEnabled:conveyorManualSpeedOnly()?false:undefined},format=window.STProducts?.currentFormat?.();
       if(format){
         config.initialFormatId=format.id;
         config.productCatalog=window.STProducts?.formats?.()||config.productCatalog;

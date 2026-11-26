@@ -100,6 +100,7 @@ export function scenarioSignature(simulation){
   const config=simulation.dynamicConfig&&typeof simulation.dynamicConfig==='object'&&!Array.isArray(simulation.dynamicConfig)?{...simulation.dynamicConfig}:{};
   delete config.chartWindow;
   if(config.machineDesignEnabled!==false)delete config.machineDesignEnabled;
+  if(config.machineMaximumSpeedEnabled!==false)delete config.machineMaximumSpeedEnabled;
   if(config.numericalResolution==='PRECISE')delete config.numericalResolution;
   const unitOfFlow=simulation.unitOfFlow||simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||'units';
   const text=JSON.stringify(stableScenarioValue(["SCENARIO_STREAMS_V5",SIMULATION_PROVENANCE_VERSION,simulation.id,unitOfFlow,equipment,config]));
@@ -264,6 +265,7 @@ export function analyzeEquipmentReliability(simulation,equipmentId,{observed,aud
 // Catalog lists model-supported inputs even when the planner has no proposal.
 // Targets start at the baseline: the user supplies bounds; no gains are invented.
 export function scenarioVariableCatalog(simulation){
+  const nominalOnly=simulation.dynamicConfig?.machineMaximumSpeedEnabled===false;
   const referenceId=analyzeLinePerformance(simulation.equipment,simulation.results).referenceId;
   return (simulation.equipment||[]).flatMap(e=>Object.keys(SCENARIO_FIELDS).filter(path=>
     e.type==='CONVEYOR'?path.startsWith('processData.'):path==='nominalRatePerSecond'||path.startsWith('noiseProfile.reliability.')||path==='processData.upstream.startupTimeSeconds'
@@ -272,7 +274,8 @@ export function scenarioVariableCatalog(simulation){
     let disabledReason=Number.isFinite(before)?null:'Set a numeric baseline in Equipment first.';
     if(external&&!(before>0))disabledReason='Set a positive reliability baseline in Equipment first.';
     if(path==='nominalRatePerSecond'){
-      if(e.id===referenceId)disabledReason='Reference machine speed is fixed by the current scenario policy.';
+      if(nominalOnly)disabledReason='Machine speed optimization requires Advance and an installed maximum speed.';
+      else if(e.id===referenceId)disabledReason='Reference machine speed is fixed by the current scenario policy.';
       else if(!(Number(e.processData?.equipment?.maximumSpeedBpm)>0))disabledReason='Set the installed maximum speed in Equipment first.';
     }
     if(e.type==='CONVEYOR'&&path.endsWith('conveyorSpeedMmPerSecond')&&e.processData?.accumulation?.speedMode!=='MANUAL')disabledReason='Select manual conveyor speed in Equipment first.';
@@ -290,6 +293,7 @@ export function applyScenarioChanges(simulation,changes){
     if(!Object.hasOwn(change,'before')||(scenarioGet(unit,change.path)??null)!==change.before)throw new Error('SCENARIO_STALE');
     if((change.path.includes('accumulation')||change.path.includes('geometry'))&&unit.type!=='CONVEYOR')throw new Error('SCENARIO_INVALID_FIELD');
     if(change.path==='nominalRatePerSecond'){
+      if(copy.dynamicConfig?.machineMaximumSpeedEnabled===false)throw new Error('SCENARIO_INSTALLED_SPEED_LIMIT');
       let maximum=Number(unit.processData?.equipment?.maximumSpeedBpm)/60;
       if(change.replacementMaximumBpm!==undefined){
         if(!(maximum>0)||change.external!==true||change.interventionType!=='REPLACEMENT'||typeof change.justification!=='string'||!change.justification.trim()||!Number.isFinite(change.replacementMaximumBpm)||change.replacementMaximumBpm<=maximum*60||change.replacementMaximumBpm>SCENARIO_FIELDS.nominalRatePerSecond[1]*60||change.after<change.before)throw Error('SCENARIO_REPLACEMENT_EVIDENCE_REQUIRED');
@@ -341,6 +345,7 @@ function scenarioRecoveryPlan(engineering,requiredSeconds=0){
 }
 // Losses describe observed states, not proven causal attribution.
 export function diagnoseScenarioLosses(simulation){
+  if(simulation.dynamicConfig?.machineMaximumSpeedEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
   const result=simulation.results,readiness=scenarioSourceReadiness(simulation);
   if(!readiness.ready)return {status:'NO_COMPATIBLE_RESULTS',...readiness,equipment:[],referenceId:null,rankings:{},opportunities:[]};
   const referenceId=analyzeLinePerformance(simulation.equipment,result).referenceId;
@@ -449,7 +454,7 @@ export function scenarioProposalNeeds(simulation){
   return needs.sort((a,b)=>(a.availabilityOnlyBpm??a.configuredBpm)-(b.availabilityOnlyBpm??b.configuredBpm));
 }
 export function planScenarios(simulation){
-  if(simulation.dynamicConfig?.machineDesignEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
+  if(simulation.dynamicConfig?.machineDesignEnabled===false||simulation.dynamicConfig?.machineMaximumSpeedEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
   const audit=scenarioAudit(simulation),engineeringEquipment=scenarioEngineeringEquipment(simulation),diagnosis=diagnoseScenarioLosses(simulation);
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
   const result=diagnosis.status==='OBSERVED'?simulation.results:null;

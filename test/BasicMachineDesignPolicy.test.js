@@ -33,3 +33,26 @@ test('Basic ignores all five advanced machine design inputs in execution, valida
  const invalid=JSON.parse(JSON.stringify(b));invalid.case.equipment[0].processData.equipment.internalCapacityBottles=-5;
  assert(validateSimulationInput(invalid).ok);assert(!validateSimulationInput({...invalid,run:{...invalid.run,machineDesignEnabled:true}}).ok);
 });
+
+test('Nominal-only speed policy ignores retained maxima, preserving other machine design and evidence',()=>{
+ const [a]=inputs(),b=JSON.parse(JSON.stringify(a));
+ a.run.machineDesignEnabled=true;b.run.machineDesignEnabled=true;
+ a.run.machineMaximumSpeedEnabled=false;b.run.machineMaximumSpeedEnabled=false;
+ const aMachine=a.case.equipment.find(e=>e.type!=='CONVEYOR'),bMachine=b.case.equipment.find(e=>e.id===aMachine.id);
+ aMachine.processData.equipment={...aMachine.processData.equipment,maximumSpeedBpm:aMachine.nominalRatePerSecond*60};
+ bMachine.processData.equipment={...bMachine.processData.equipment,maximumSpeedBpm:bMachine.nominalRatePerSecond*15};
+ const saved=JSON.stringify(b);
+ assert(validateSimulationInput(a).ok&&validateSimulationInput(b).ok);
+ const first=simulateLine(a),second=simulateLine(b);
+ assert(first.ok&&second.ok);
+ assert.deepEqual(first.result.summary,second.result.summary);
+ assert.deepEqual(first.result.equipmentMetrics,second.result.equipmentMetrics);
+ assert.equal(second.result.equipmentMetrics[bMachine.id].designSpeedPerSecond,bMachine.nominalRatePerSecond);
+ assert.equal(canonicalSimulationInputSignature(a),canonicalSimulationInputSignature(b));
+ const sim=input=>({id:'nominal-only',equipment:input.case.equipment,unitOfFlow:'bottles',dynamicConfig:input.run});
+ assert.equal(scenarioSignature(sim(a)),scenarioSignature(sim(b)));
+ assert.deepEqual(planScenarios(sim(a)),planScenarios(sim(b)));
+ assert.equal(JSON.stringify(b),saved);
+ const advanced={...b,run:{...b.run,machineMaximumSpeedEnabled:true}};
+ assert.notEqual(canonicalSimulationInputSignature(advanced),canonicalSimulationInputSignature(b));
+});

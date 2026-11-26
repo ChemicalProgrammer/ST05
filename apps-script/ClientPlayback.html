@@ -1318,7 +1318,8 @@
         });
       }
       var rate=card.querySelector('.live-rate');
-      var machineLimit=unit.designSpeedPerSecond??(model.processData?.equipment?.maximumSpeedBpm>0
+      var nominalOnly=state.run.configuration?.machineMaximumSpeedEnabled===false||window.STBasicMode?.isBasic?.();
+      var machineLimit=unit.designSpeedPerSecond??(!nominalOnly&&model.processData?.equipment?.maximumSpeedBpm>0
         ?model.processData.equipment.maximumSpeedBpm/60:model.nominalRatePerSecond);
       var machineRate=Number.isFinite(unit.actualRatePerSecond)&&machineLimit>0
         ?Math.min(unit.actualRatePerSecond,machineLimit):unit.actualRatePerSecond;
@@ -1355,7 +1356,7 @@
       updateNumerical2DRows(stateDetails,rows,'states',card);
       // The duplicate legacy loss counters are hidden permanently.
       // Their durations remain available in the States group and raw samples.
-      card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatRatePerMinute(belt.capacityPerSecond,equipmentFlowUnit)+' a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond,equipmentFlowUnit) + (model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatRatePerMinute(model.processData.equipment.maximumSpeedBpm/60,equipmentFlowUnit) : '');
+      card.querySelector('.live-nominal-rate').textContent = belt?'Capacidad de banda: '+formatRatePerMinute(belt.capacityPerSecond,equipmentFlowUnit)+' a '+formatNumber(belt.pitchMm)+' mm de pitch':__ST_TEXT__('client.nominal') + formatRatePerMinute(model.nominalRatePerSecond,equipmentFlowUnit) + (!nominalOnly&&model.processData?.equipment?.maximumSpeedBpm ? __ST_TEXT__('client.max') + formatRatePerMinute(model.processData.equipment.maximumSpeedBpm/60,equipmentFlowUnit) : '');
       card.querySelector('.live-sparkline-nominal-rate').textContent = formatRatePerMinute(belt?belt.capacityPerSecond:model.nominalRatePerSecond,equipmentFlowUnit);
       var savedWindow=state.run.restoredSpeedHistory;
       var restored= savedWindow?.result===state.run.result&&!state.run.playing&&savedWindow.history.endSecond===sample.virtualSecond;

@@ -397,3 +397,14 @@ test('Minimal mixed table does not project a conveyor speed-mode column, even fr
   assert(h.cell('Belt','speed-mode').querySelector('select'));
  }finally{h.close();}
 });
+
+test('Maximum speed remains stored but is not a column in Minimal',()=>{
+ const h=fixture();try{
+  h.tableButton.click();const original=h.a._fields.querySelector('.equipment-maximum-speed');
+  assert.equal(h.cell('Filler','maximum').querySelector('input').value,'600');
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  assert.equal(h.cell('Filler','maximum'),null);assert.equal(original.value,'600');
+  h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync('equipment',false);
+  assert.equal(h.cell('Filler','maximum').querySelector('input').value,'600');
+ }finally{h.close();}
+});

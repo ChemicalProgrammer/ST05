@@ -151,6 +151,7 @@ window.SimulatorEngine = {
   simulateLineAsync: simulateSelectedLine,
   createPlayback: createBrowserPlayback,
   validateSimulationInput: validateSimulationInput,
+  projectMachineDesign:projectMachineDesign,
   plantCalendarSchedule: plantCalendarSchedule,
   resolvePlannedStops:resolvePlannedStops,
   resolveProductConveyor:function(equipment,index){return resolveAccumulationZoneDefinition(equipment,index).definition;},

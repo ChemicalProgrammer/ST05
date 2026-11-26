@@ -18,6 +18,7 @@ export function canonicalSimulationInputSignature(input) {
   // Enabled/default reliability are equivalent; disabled reliability is not.
   if (run.reliabilityEnabled !== false) delete run.reliabilityEnabled;
   if(run.machineDesignEnabled!==false)delete run.machineDesignEnabled;
+  if(run.machineMaximumSpeedEnabled!==false)delete run.machineMaximumSpeedEnabled;
   // PRECISE preserves the historical step. Explicitly choosing it must not
   // invalidate an otherwise identical completed simulation.
   if (run.numericalResolution === 'PRECISE') delete run.numericalResolution;

@@ -1,5 +1,10 @@
 <script>
 window.STEquipmentRoles=(function(){
+  function maximumSpeedVisible(){
+    var mode=document.documentElement.dataset.workspaceMode||document.documentElement.dataset.uiMode;
+    if(mode)return ['ADVANCE','ADVANCED'].includes(String(mode).toUpperCase());
+    return !(window.STBasicMode?.isBasic?.()??window.STMinimalMode?.isMinimal?.());
+  }
   function readCapacity(fields,data){
     if(window.STMinimalMode?.isMinimal())return true;
     var input=fields.querySelector('.equipment-internal-capacity');
@@ -27,7 +32,11 @@ window.STEquipmentRoles=(function(){
       if(spec[1]==='number'){input.min=spec[0]==='residence-time'?'0':'0.000001';input.step='any';}
       if(spec[0]==='residence-time'){input.value=equipment.processData?.equipment?.residenceTimeSeconds??'';input.placeholder='0';label.title='Optional minimum time inside the machine. Capacity alone does not impose a residence time; nominal speed defines the processing cycle.';}
       if(spec[0]==='pacemaker'){input.checked=selected;input.addEventListener('change',function(){if(input.checked)document.querySelectorAll('.equipment-pacemaker').forEach(function(other){if(other!==input)other.checked=false;});});}
-      if(spec[0]==='maximum-speed')input.value=equipment.processData?.equipment?.maximumSpeedBpm??'';
+      if(spec[0]==='maximum-speed'){
+        input.value=equipment.processData?.equipment?.maximumSpeedBpm??'';
+        label.classList.add('advanced-maximum-speed-field');
+        label.hidden=!maximumSpeedVisible();input.disabled=label.hidden;
+      }
       if(spec[0]==='recovery-time'){input.value=equipment.processData?.equipment?.recoveryTimeSeconds??'';input.placeholder=__ST_TEXT__('equipment.recovery_default');label.title=__ST_TEXT__('equipment.recovery_help');}
       if(spec[0]==='pacemaker'){label.prepend(input);grid.prepend(label);}
       else{label.appendChild(input);grid.appendChild(label);}
@@ -83,7 +92,7 @@ window.STEquipmentRoles=(function(){
     if(type==='CONVEYOR'&&data.equipment)delete data.equipment.macroStopScrapBottles;
     if(type!=='CONVEYOR'){
       if(!readCapacity(fields,data))return false;
-      var specs=[['maximum-speed','maximumSpeedBpm']];
+      var specs=maximumSpeedVisible()?[['maximum-speed','maximumSpeedBpm']]:[];
       if(!window.STMinimalMode?.isMinimal())specs.push(['recovery-time','recoveryTimeSeconds'],['residence-time','residenceTimeSeconds']);
       for(var spec of specs){
         var input=fields.querySelector('.equipment-'+spec[0]);
@@ -93,6 +102,6 @@ window.STEquipmentRoles=(function(){
     }
     return true;
   }
-  return {attach:attach,read:read,readCapacity:readCapacity,machineType:machineType};
+  return {attach:attach,read:read,readCapacity:readCapacity,machineType:machineType,maximumSpeedVisible:maximumSpeedVisible};
 })();
 </script>

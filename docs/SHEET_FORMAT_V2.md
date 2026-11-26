@@ -85,3 +85,7 @@ La exportación agrega celdas superiores editables y columnas Z:AE de observacio
 ### Formato simple de observaciones
 
 La hoja exportada usa ahora únicamente F1:F7 (AU, UPDT, turnos y producción), J1:J7 (tiempos), N1 (Rate Loss) y Z (downtime por equipo). AA contiene el ID automático y se oculta. Se retiraron los campos adicionales de captura; el bloque anterior de observaciones sigue siendo importable. [Mapa vigente](SHEET_REAL_DATA_IMPORT.md).
+
+### Maximum Speed por modo
+
+Basic y Minimal ocultan la velocidad máxima de las máquinas; se conserva el valor original en processData.equipment.maximumSpeedBpm. Las corridas de ambos modos registran machineMaximumSpeedEnabled: false y proyectan únicamente una copia del modelo sin este límite. La velocidad nominal del formato es la referencia de rendimiento y diseño, incluidos los conveyors. Advance conserva el límite máximo opcional y la optimización de velocidad con evidencia de capacidad instalada. Esta política no cambia las demás opciones de diseño de máquinas ni elimina datos importados. Las corridas anteriores con otra política no son equivalentes a una nueva corrida nominal.

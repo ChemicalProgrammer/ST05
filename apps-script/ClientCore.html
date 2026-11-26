@@ -113,7 +113,7 @@
         });
         STProducts.init(state,{navigate:function(){state.basicView='products';navigateView('products');},simulation:activePersistentSimulation,locked:runControlsLocked,capture:syncEquipmentFromEditor,edited:function(){markCaseDirty();},changed:function(all){invalidateActiveResult();renderEditor();markCaseDirty();renderRunWorkspace();renderSimulationAnalysis();shell.sync();}});
         STRealData.init(state,{changed:queueCaseEvidenceSave});
-        STMinimalMode.init(state,{run:runSimulation,locked:runControlsLocked,progress:function(){return roundSession?.pending?roundSession.batchProgress?.value||0:0;},prepareSearch:function(){renderSimulationAnalysis({prepareBasic:true});},simulation:activePersistentSimulation,setDuration:function(value,unit){
+        STMinimalMode.init(state,{run:runSimulation,locked:runControlsLocked,progress:function(){return roundSession?.pending?roundSession.batchProgress?.value||0:0;},prepareSearch:function(target){renderSimulationAnalysis({prepareBasic:true,target:target});},simulation:activePersistentSimulation,setDuration:function(value,unit){
           document.getElementById('duration-mode').value='FIXED';state.run.durationMode='FIXED';
           var input=document.getElementById('run-duration');input.value=String(value);document.getElementById('run-duration-unit').value=unit;
           syncDurationControls();renderControlEvents();markCaseDirty({target:input});

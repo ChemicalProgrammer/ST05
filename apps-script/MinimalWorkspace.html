@@ -30,7 +30,7 @@
     <div id="minimal-optimization-content" class="fold-content">
       <div id="minimal-search-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Optimization progress"></progress><output>0%</output></div>
       <p id="minimal-search-message" class="minimal-message" role="status" hidden></p>
-      <div id="minimal-scenario-cards" class="minimal-result-grid" hidden></div>
+      <div id="minimal-scenario-cards" hidden></div>
     </div>
   </section>
 </section>
@@ -43,9 +43,4 @@
     </div>
     <footer class="dialog-actions"><button id="minimal-import-submit" type="submit">Import</button></footer>
   </form>
-</dialog>
-<dialog id="minimal-improvements-dialog" aria-labelledby="minimal-improvements-title">
-  <header class="dialog-heading"><h2 id="minimal-improvements-title">Suggested improvements</h2><button id="minimal-improvements-close" type="button" class="ghost icon-button" data-icon="x" aria-label="Close"></button></header>
-  <div class="dialog-body"><p id="minimal-improvements-note" class="minimal-message" hidden></p><div class="minimal-table-wrap"><table><thead><tr><th scope="col">Equipment</th><th scope="col">Parameter</th><th scope="col">Current</th><th scope="col">Proposed</th></tr></thead><tbody id="minimal-improvements-rows"></tbody></table></div></div>
-  <footer class="dialog-actions"><button id="minimal-improvements-done" type="button">Done</button></footer>
 </dialog>

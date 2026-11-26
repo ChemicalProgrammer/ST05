@@ -15,10 +15,11 @@ window.STWhatIf = (function() {
     STScenarioExplorer.attach(item,project,create,simulation||{id:project.sourceSimulationId,equipment:equipment||[],dynamicConfig:{}});
     return item;
   }
-  function render(simulation,target,create){
+  function render(simulation,target,create,options){
     window.STMotion?.watchCards(target);
     var plan=STScenarios.plan(simulation);target.textContent='';if(simulation.results?.batch)target.appendChild(node('p',__ST_TEXT__('batch.evidence'),'notice'));var grid=node('div','','scenario-grid');
-    var proposals=visibleProjects(plan);STScenarioExplorer.tools(target,simulation,plan,create);
+    var proposals=visibleProjects(plan);STScenarioExplorer.tools(target,simulation,plan,create,options);
+    if(options?.compact)return;
     if(!proposals.length)target.appendChild(node('p',__ST_TEXT__('scenario.no_supported'),'empty'));
     STReports.bindWhatIf(simulation,plan,proposals);
   }

@@ -100,3 +100,19 @@ test('effective runtime target uses gross speed loss and records actual calendar
  assert.equal(stopped.result.effectiveRuntimeStop.status,'LIMIT_REACHED');
  assert.equal(stopped.result.effectiveRuntimeStop.accumulatedSeconds,0);
 });
+
+ test('Basic omits only the redundant representative replay, retaining all statistical rounds',async()=>{
+ const data=input();data.run={...data.run,durationSeconds:10,rounds:3,calculationMode:'FAST'};
+ const calls=[];const runner=async(input,options)=>{
+   const seed=input.run.seed;calls.push(seed);options.progress?.(1);
+   const outputCount=seed===17?0:seed===18?10:20;
+   return {ok:true,result:{seed,durationSeconds:10,summary:{outputCount,lineOeePercent:outputCount},equipmentMetrics:{},samples:options.summaryOnly?[]:[{virtualSecond:10,outputCount}]}};
+ };
+ const normal=await simulateBatch(data,{workerFirstRound:true,laterSummaryOnly:true,runRound:runner});
+ assert.equal(normal.result.batch.representativeRound,2);assert.equal(normal.result.batch.representativeReplay.round,2);assert.equal(calls.length,4);
+ calls.length=0;
+ const basic=await simulateBatch(data,{workerFirstRound:true,laterSummaryOnly:true,representativeReplay:false,runRound:runner});
+ assert.equal(calls.length,3);assert.equal(basic.result.batch.representativeReplay,undefined);
+ for(const key of ['rows','statistics','equipmentStatistics','representativeRound'])assert.deepEqual(basic.result.batch[key],normal.result.batch[key]);
+ assert.deepEqual(basic.result.samples,normal.result.samples);
+});

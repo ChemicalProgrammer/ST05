@@ -480,3 +480,21 @@ test('shared tables reserve full verdicts, all select options and complete heade
   shrink('Belt','package-length');assert(width('Belt','package-length')>=min('Belt','package-length'));
  }finally{h.close();}
 });
+
+ test('Basic keeps the scroll region active while physical controls are locked',()=>{
+ const h=fixture();try{
+  const compact=h.d.createElement('div');compact.id='minimal-equipment-table-host';h.d.body.append(compact);
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  const scroller=h.host.querySelector('.equipment-table-scroll'),rate=h.cell('Filler','rate').querySelector('input');
+  const original=h.a._fields.querySelector('.equipment-rate'),before=original.value;
+  h.w.STEquipmentTable.setLocked(true);
+  assert(rate.disabled);assert(h.host.querySelector('button.equipment-table-symbol').disabled);
+  assert(h.host.querySelector('button.equipment-table-action').disabled);
+  assert(!compact.inert);assert(!scroller.inert);assert.equal(scroller.tabIndex,0);
+  scroller.scrollLeft=120;rate.value='999';emit(h,rate);
+  assert.equal(original.value,before);assert.equal(h.calls.dirty,0);
+  assert.equal(h.host.querySelector('.equipment-table-scroll'),scroller);assert.equal(scroller.scrollLeft,120);
+  h.w.STEquipmentTable.setLocked(false);assert(!rate.disabled);
+  rate.value='350';emit(h,rate);assert.equal(original.value,'350');assert.equal(h.calls.dirty,1);
+ }finally{h.close();}
+});

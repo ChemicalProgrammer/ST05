@@ -4,13 +4,14 @@
 // never serialize them, assign a second equipment ID, or replace a draft.
 window.STEquipmentTable=(function(){
   var current=null,section='equipment',separate=false,scope='equipment',active=false,initialized=false;
-  var signature='',renderedCards=[],bindings=[],rowActions=[],updating=false,queued=false;
+  var signature='',renderedCards=[],bindings=[],rowActions=[],updating=false,queued=false,editLocked=false;
   var labels={},manualWidths=new Map(),collapsedGroups=new Map(),tableLayouts=[],gesture=null,rowSettlements=new WeakMap(),viewMotion=null,viewContext='';
   function el(id){return document.getElementById(id);}
   function tr(en,es){return document.documentElement.lang==='es'?es:en;}
   function node(tag,cls,text){var n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
   function key(view,split){return split?(view==='conveyors'?'conveyors':'equipment'):'combined';}
   function minimal(state){return state?.bootstrap?.uiMode==='MINIMAL';}
+  function editsLocked(){return minimal(current)&&editLocked;}
   function wantsTable(state,view,split){
     if(minimal(state))return Boolean(state?.activeCase);
     return Boolean(state?.activeCase&&state.uiView==='editor'&&
@@ -115,7 +116,7 @@ window.STEquipmentTable=(function(){
   }
   function writeThrough(original,proxy,event){
     event.stopPropagation();
-    if(!original.isConnected||original.disabled||original.readOnly)return false;
+    if(editsLocked()||proxy.disabled||!original.isConnected||original.disabled||original.readOnly)return false;
     if(original.type==='checkbox')original.checked=proxy.checked;else original.value=proxy.value;
     original.dispatchEvent(new Event(event.type,{bubbles:true}));
     return true;
@@ -131,7 +132,7 @@ window.STEquipmentTable=(function(){
       copyOptions(original,proxy);
       if(original.type==='checkbox')proxy.checked=original.checked;
       else {var displayed=original.type==='number'&&original.readOnly&&original.value!==''&&Number.isFinite(Number(original.value))?Number(original.value).toFixed(2):original.value;if(proxy.value!==displayed)proxy.value=displayed;}
-      proxy.disabled=original.disabled;
+      proxy.disabled=editsLocked()||original.disabled;
       if('readOnly' in proxy)proxy.readOnly=Boolean(original.readOnly);
       // Hidden source fields keep their own constraint validation. Do not
       // attach a second named/required form field or invent a model value.
@@ -173,10 +174,10 @@ window.STEquipmentTable=(function(){
   }
   function evaluationCell(card,cell){
     var verdict=node('button','secondary equipment-table-verdict');verdict.type='button';
-    verdict.addEventListener('click',()=>{(type(card)==='CONVEYOR'?card._editorConveyorVerdict:card._equipmentReliabilityVerdict)?.click();});
+    verdict.addEventListener('click',()=>{if(!editsLocked())(type(card)==='CONVEYOR'?card._editorConveyorVerdict:card._equipmentReliabilityVerdict)?.click();});
     cell.append(verdict);return verdict;
   }
-  function canMove(card){var handle=card.querySelector('.equipment-drag');return Boolean(handle&&!handle.disabled);}
+  function canMove(card){var handle=card.querySelector('.equipment-drag');return Boolean(!editsLocked()&&handle&&!handle.disabled);}
   function syncActions(entry){
     var {card,verdict,symbol,remove}=entry,original=type(card)==='CONVEYOR'?card._editorConveyorVerdict:card._equipmentReliabilityVerdict;
     verdict.hidden=!original||original.hidden;
@@ -185,10 +186,10 @@ window.STEquipmentTable=(function(){
       if(verdict.className!==cls)verdict.className=cls;
       if(verdict.innerHTML!==original.innerHTML)verdict.innerHTML=original.innerHTML;
       for(var attr of ['title','aria-label','aria-description','data-status','data-verdict','data-state','data-evaluation'])copyAttribute(original,verdict,attr);
-      verdict.disabled=original.disabled;
+      verdict.disabled=editsLocked()||original.disabled;
     }
     symbol.disabled=!canMove(card)||entry.layout.cards.length<2;
-    remove.disabled=Boolean(card.querySelector('.remove-equipment')?.disabled);
+    remove.disabled=editsLocked()||Boolean(card.querySelector('.remove-equipment')?.disabled);
   }
   // One cancellable pointer gesture at a time. The row/resize handles use
   // capture for touch and mouse; losing capture, Escape or a view rebuild
@@ -613,7 +614,7 @@ window.STEquipmentTable=(function(){
       var verdict=evaluationCell(card,status);row.append(status);evaluation.cells.push(status);
       params.forEach(({column,descriptor})=>{var td=node('td');td.dataset.column=column.id;if(column.collapsed)td.classList.add('equipment-table-folded-column');else cellContent(td,card,column);row.append(td);descriptor.cells.push(td);});
       var last=node('td','equipment-table-center');last.dataset.column='delete';
-      var remove=actionButton('trash',tr('Delete equipment','Eliminar equipo'),()=>card.querySelector('.remove-equipment')?.click());
+      var remove=actionButton('trash',tr('Delete equipment','Eliminar equipo'),()=>{if(!editsLocked())card.querySelector('.remove-equipment')?.click();});
       last.append(remove);row.append(last);deletion.cells.push(last);
       rowActions.push({card,verdict,symbol,remove,layout});body.append(row);
     });
@@ -727,6 +728,14 @@ window.STEquipmentTable=(function(){
     if(active)refresh();
     else{gesture?.cancel();tableLayouts.forEach(cancelGroupMotion);host.replaceChildren();signature='';renderedCards=[];bindings=[];rowActions=[];tableLayouts=[];}
   }
-  return {sync:sync,refresh:refresh,wantsTable:wantsTable};
+  function setLocked(lock){
+    lock=Boolean(lock);if(editLocked===lock)return;
+    editLocked=lock;
+    if(!minimal(current)||!active)return;
+    if(lock)gesture?.cancel();
+    // Do not rebuild or remeasure the scrollable table for a lock change.
+    bindings.forEach(syncControl);rowActions.forEach(syncActions);
+  }
+  return {sync:sync,refresh:refresh,wantsTable:wantsTable,setLocked:setLocked};
 })();
 </script>

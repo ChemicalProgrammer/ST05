@@ -77,7 +77,7 @@ export async function simulateBatch(input, options={}) {
     batch.failureOverlapStatistics=Object.fromEntries(['episodes','openEpisodes','unionSeconds','overlapSeconds','summedEquipmentSeconds','peakConcurrent']
       .map(key=>[key,summarizeReplications(overlapRows.map(row=>row[key]))]));
   }
-  if(!options.summaryOnly&&input.run.calculationMode!=='SUMMARY'&&batch.representativeRound>1&&!replays[batch.representativeRound-2]){
+  if(options.representativeReplay!==false&&!options.summaryOnly&&input.run.calculationMode!=='SUMMARY'&&batch.representativeRound>1&&!replays[batch.representativeRound-2]){
     const row=rows[batch.representativeRound-1],runner=options.runRound||simulateLineAsync;
     options.onRepresentative?.(row.round);
     const response=await runner({case:input.case,run:{...input.run,seed:row.seed}},{detail:true,summaryOnly:false,cancelled:options.cancelled});

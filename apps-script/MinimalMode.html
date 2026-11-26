@@ -13,10 +13,10 @@ window.STMinimalMode=(function(){
   function isSearching(){return isMinimal()&&searching;}
   function number(value,digits){return Number.isFinite(value)?value.toLocaleString(document.documentElement.lang==='es'?'es-MX':'en-US',{maximumFractionDigits:digits??2}):'—';}
   function show(id,visible){el(id).hidden=!visible;}
-  function progress(id,value){
+  function progress(id,value,stage){
     var holder=el(id),p=Math.max(0,Math.min(100,Number(value)||0));
     holder.querySelector('progress').value=p;
-    holder.querySelector('output').textContent=p.toFixed(1).replace(/\.0$/,'')+'%';
+    holder.querySelector('output').textContent=p.toFixed(1).replace(/\.0$/,'')+'%'+(stage?' · '+tr(stage):'');
   }
   function owner(){return actions.simulation();}
   function ownerKey(){return state.activeCase&&owner()?state.activeCase.id+'|'+owner().id:null;}
@@ -33,7 +33,10 @@ window.STMinimalMode=(function(){
   function metricValue(value,unit,digits){var n=node('strong',number(value,digits),'metric-value');if(Number.isFinite(value)&&unit)n.append(node('span',' '+unit,'metric-unit'));return n;}
   // Use the shared equipment table; only the original editor owns inputs.
   function syncTable(lock){
-    var host=el('minimal-equipment-table-host');host.inert=lock;
+    var host=el('minimal-equipment-table-host');
+    // The region and its native scrollbar must remain interactive during a run.
+    // Lock only controls that can mutate the physical configuration.
+    host.inert=false;window.STEquipmentTable?.setLocked?.(lock);
     if(lock)host.setAttribute('aria-busy','true');else host.removeAttribute('aria-busy');
   }
   var durationKey='';
@@ -149,7 +152,7 @@ window.STMinimalMode=(function(){
     var running=starting||actions.locked(),r=result(),review=reviewRequired(sim);
     show('minimal-input-review',review||!!sim?.sourceImport?.simpleImportIssues?.length&&!r);
     show('minimal-run-progress',running);
-    if(running){runProgress=Math.max(runProgress,Math.min(99.9,100*actions.progress()));progress('minimal-run-progress',runProgress);}
+    if(running){runProgress=Math.max(runProgress,Math.min(100,100*actions.progress()));progress('minimal-run-progress',runProgress,runProgress===100?'Preparing results…':null);}
     el('minimal-run').hidden=false;el('minimal-run').disabled=lock||state.saving||!sim;
     el('minimal-run').textContent=tr(r?'Restart simulation':'Run simulation');
     renderResults(r);

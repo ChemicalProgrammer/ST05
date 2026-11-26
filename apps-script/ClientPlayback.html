@@ -758,6 +758,9 @@
 
     var playbackControlSignature=null,playbackBoundExportResult=null;
     function renderPlaybackFrame() {
+      // Basic has its own KPI renderer; the complete playback DOM and canvas
+      // are hidden. They are refreshed on navigation or a workspace-mode change.
+      if(window.STMinimalMode?.isMinimal())return;
       updateNumericalEquipmentVisibility();
       // Locking every input/selector on every visual frame is expensive for
       // multi-equipment Live playback. Only synchronize when the lock state,

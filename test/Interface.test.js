@@ -41,7 +41,8 @@ async function setup({remember=false,fail=false,many=false,invalidSheet=false,em
   setCaseArchived:(id,archived)=>{const record=cases.find(c=>c.id===id);record.archived=archived;record.revision++;return {id:record.id,name:record.name,revision:record.revision,equipmentCount:record.equipment.length,isSimulationReady:record.equipment.length>1,updatedAt:record.updatedAt,archived};},
   askGemini:()=>({text:'Analysis of the saved case.'}),
   previewSheetImport:()=>({canImport:!invalidSheet,source:{schemaVersion:'plant-sheet-v1',sheetName:'Synthetic sheet',readAt:'2026-09-16',spreadsheetId:'synthetic-id'},metadata:{site:'Synthetic site',formatName:'Imported format'},equipment:copy(sourceEquipment.slice(0,3)).map((unit,index)=>({...unit,characteristics:{...unit.characteristics,criticalMachine:index===0,isPacemaker:index===0},processData:{...unit.processData,role:unit.type==='CONVEYOR'?'CONVEYOR':index===0?'CRITICAL_MACHINE':'MACHINE'}})).map((e,i)=>({...e,noiseProfile:{...e.noiseProfile,reliability:{...e.noiseProfile.reliability,mtbfMinutes:e.noiseProfile.reliability.mtbfMinutes+60}},processData:{...e.processData,equipment:{...e.processData.equipment,mtbfMinutes:e.processData.equipment.mtbfMinutes+60}},characteristics:{...e.characteristics,sourceSheetRow:i+10}})),sourceRows:[],errors:invalidSheet?[{cell:'D10:E10',message:'Supply both MTBF and MTTR.'}]:[],warnings:[],notes:['Review model assumptions.']}),
-  getCase:id=>copy(cases.find(c=>c.id===id)),
+  getCase:(id,mode)=>{const c=cases.find(c=>c.id===id);c.metadata=c.metadata||{};if(mode&&!c.metadata.workspaceMode)c.metadata.workspaceMode=mode;return copy(c);},
+  setCaseWorkspaceMode:(id,mode)=>{const c=cases.find(c=>c.id===id);c.metadata={...c.metadata,workspaceMode:mode};c.revision++;return {id,workspaceMode:mode,revision:c.revision,updatedAt:c.updatedAt};},
   saveCase:c=>{c=copy(c);c.revision=c.expectedRevision+1;cases=cases.map(x=>x.id===c.id?c:x);return c;},
   getScenarioSourceSignature:request=>{const record=cases.find(c=>c.id===request.caseId),simulation=record?.simulations.find(s=>s.id===request.simulationId);if(!simulation||record.revision!==request.expectedRevision)throw Error('Stale scenario source');return {revision:record.revision,simulationId:simulation.id,signature:dom.window.STScenarios.signature(simulation)};},
   saveUserSettings:s=>{if(s.gemini?.apiKey)geminiConfigured=true;return stored=s;},
@@ -1205,7 +1206,7 @@ test('UI Basic: compact machine fields remain visible, palette has all colors an
  }finally{h.dom.window.close();}
 });
 
-test('UI: hidden mode selector requires five deliberate M presses, saves pending edits and stays browser-local',async()=>{
+test('UI: hidden mode selector requires five deliberate M presses, saves pending edits and stores the case mode',async()=>{
  const h=await setup({uiMode:'BASIC'});try{
   await h.click('#sign-in-button');await h.click('.open-case');await h.click('#open-settings');
   const dialog=h.d.getElementById('settings-dialog'),section=h.d.getElementById('settings-interface-section'),picker=h.d.getElementById('settings-interface-mode');
@@ -1217,7 +1218,7 @@ test('UI: hidden mode selector requires five deliberate M presses, saves pending
   await h.click('#settings-cancel');assert.equal(h.w.STScenarioExplorer.doeEnabled(),true);assert.equal(h.w.localStorage.getItem('st.ui.v1.scenarioDoe'),null);await h.click('#open-settings');assert(section.classList.contains('hidden'));assert.equal(doe.checked,true);
   h.d.getElementById('case-name').value='Mode change preserves draft';h.d.getElementById('case-name').dispatchEvent(new h.w.Event('input',{bubbles:true}));
   for(let i=0;i<5;i++)press(dialog);picker.value='ADVANCE';picker.dispatchEvent(new h.w.Event('change'));await waitFor(()=>h.d.documentElement.dataset.uiMode==='advance'&&!picker.disabled);assert(dialog.open);assert(h.visible('settings-save-section'));assert(h.visible('settings-chart-section'));assert(!h.d.getElementById('settings-json-fields').closest('label').hidden);h.d.getElementById('settings-json-fields').checked=true;h.d.getElementById('settings-json-fields').dispatchEvent(new h.w.Event('change'));await h.click('#settings-cancel');
-  await waitFor(()=>!dialog.open);assert.equal(h.d.documentElement.dataset.uiMode,'advance',JSON.stringify({error:h.d.getElementById('settings-error').textContent,errors:h.errors,local:h.w.localStorage.getItem('st.ui.v1.interfaceMode')}));assert(section.classList.contains('hidden'));assert.equal(h.w.localStorage.getItem('st.ui.v1.interfaceMode'),'ADVANCE');
+  await waitFor(()=>!dialog.open);assert.equal(h.d.documentElement.dataset.uiMode,'advance',JSON.stringify({error:h.d.getElementById('settings-error').textContent,errors:h.errors,local:h.w.localStorage.getItem('st.ui.v1.interfaceMode')}));assert(section.classList.contains('hidden'));assert.equal(h.w.localStorage.getItem('st.ui.v1.interfaceMode'),null);assert.equal(h.storedCases()[0].metadata.workspaceMode,'ADVANCE');
   await waitFor(()=>h.storedCases()[0].name==='Mode change preserves draft');
   assert.equal(h.d.querySelectorAll('#accent-palette .accent-choice:not(.hidden)').length,57);
   await h.click('#open-settings');assert(section.classList.contains('hidden'));for(let i=0;i<5;i++)press(dialog);picker.value='BASIC';picker.dispatchEvent(new h.w.Event('change'));await waitFor(()=>h.d.documentElement.dataset.uiMode==='basic'&&!picker.disabled);assert(dialog.open);assert(!h.visible('settings-save-section'));assert(!h.visible('settings-chart-section'));assert(h.d.getElementById('settings-json-fields').closest('label').hidden);assert.equal(h.d.documentElement.dataset.showJson,'false');assert.equal(h.d.querySelector('#gemini-prompt-language').classList.contains('hidden'),false);await h.click('#settings-cancel');
@@ -3453,6 +3454,20 @@ test('UI: archive hides a case from active gallery filters and unarchive restore
   assert.equal(h.storedCases()[0].archived,false);
   filter.value='all';filter.dispatchEvent(new h.w.Event('change'));assert.equal(h.d.querySelectorAll('.case-row').length,1);
   assert.equal(h.d.querySelector('.archive-gallery-case').dataset.icon,'archive');
+  assert.deepEqual(h.errors,[]);
+ }finally{h.dom.window.close();}
+});
+
+test('UI: minimal Basic uses one editable table and a duration control without header tabs',async()=>{
+ const h=await setup({remember:true,uiMode:'MINIMAL'});try{
+  await h.click('.open-case');await waitFor(()=>h.d.querySelector('#minimal-equipment-table-host .equipment-editor-table'));
+  assert.equal(h.d.documentElement.dataset.workspaceMode,'MINIMAL');
+  assert.equal(h.d.querySelectorAll('#minimal-equipment-table-host table').length,1);
+  assert.equal(h.w.getComputedStyle(h.d.getElementById('basic-navigation')).display,'none');
+  const duration=h.d.getElementById('minimal-duration'),unit=h.d.getElementById('minimal-duration-unit');
+  unit.value='MINUTES';duration.value='12';duration.dispatchEvent(new h.w.Event('change',{bubbles:true}));
+  assert.equal(h.d.getElementById('duration-mode').value,'FIXED');assert.equal(h.w.STRunOptions.durationSeconds(),720);
+  assert(h.d.querySelector('#minimal-simulation-title').parentElement.contains(h.d.getElementById('minimal-run')));
   assert.deepEqual(h.errors,[]);
  }finally{h.dom.window.close();}
 });

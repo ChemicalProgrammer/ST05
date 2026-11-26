@@ -1,15 +1,14 @@
 <section id="minimal-workspace" class="minimal-workspace hidden" aria-label="Basic workspace">
   <section class="fold-card minimal-section" aria-labelledby="minimal-equipment-title">
     <div class="fold-heading"><h3 id="minimal-equipment-title">Equipment and conveyors</h3></div>
-    <div class="minimal-table-wrap"><table class="minimal-equipment-table">
-      <thead><tr><th scope="col">#</th><th scope="col">Equipment</th><th scope="col">Type</th><th scope="col">Critical machine</th><th scope="col">Nominal rate</th><th scope="col">MTBF (min)</th><th scope="col">MTTR (min)</th><th scope="col">Conveyor speed (m/min)</th><th scope="col">Total length (mm)</th><th scope="col">Package length (mm)</th><th scope="col">Discharge pitch (mm)</th></tr></thead>
-      <tbody id="minimal-equipment-rows"></tbody>
-    </table></div>
-    <p id="minimal-input-review" class="minimal-message" role="status" hidden>Review imported inputs in Standard before running.</p>
+    <div id="minimal-equipment-table-host"></div>
+    <p id="minimal-input-review" class="minimal-message" role="status" hidden>Review imported inputs before running.</p>
   </section>
   <section class="fold-card minimal-section" aria-labelledby="minimal-simulation-title">
-    <div class="fold-heading"><h3 id="minimal-simulation-title">Simulation</h3></div>
-    <div class="minimal-action"><button id="minimal-run" type="button">Run simulation</button></div>
+    <div class="fold-heading"><h3 id="minimal-simulation-title">Simulation</h3><div class="fold-tools button-row minimal-simulation-tools">
+      <label class="time-value-label"><span>Duration</span><span class="time-value-control"><input id="minimal-duration" type="number" min="0.001" step="any" required value="8" aria-label="Duration"><select id="minimal-duration-unit" aria-label="Duration time unit"><option value="SECONDS">s</option><option value="MINUTES">min</option><option value="HOURS" selected>h</option><option value="DAYS">d</option></select></span></label>
+      <button id="minimal-run" type="button">Run simulation</button>
+    </div></div>
     <div id="minimal-run-progress" class="minimal-progress" hidden><progress max="100" value="0" aria-label="Simulation progress"></progress><output>0%</output></div>
     <div id="minimal-result-cards" class="minimal-result-grid" hidden></div>
   </section>

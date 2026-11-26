@@ -59,6 +59,27 @@ function setCaseArchived_(caseId, archived, user) {
     return toCaseSummary_(record,owned.file);
   });
 }
+// Presentation mode is case metadata. Update only the owned manifest; do not
+// rewrite simulation files, invalidate results or modify the last-edit date.
+function normalizeWorkspaceMode_(value){
+  return value==='MINIMAL'?'MINIMAL':value==='BASIC'||value==='STANDARD'?'BASIC':value==='ADVANCE'||value==='ADVANCED'?'ADVANCE':null;
+}
+function setCaseWorkspaceMode_(caseId,mode,user,onlyIfMissing){
+  mode=normalizeWorkspaceMode_(mode);
+  if(!mode)throw createSimulatorError_('INVALID_CASE','Invalid interface mode.');
+  return withCaseWriteLock_(function(){
+    var owned=getOwnedCaseFile_(caseId,user,true),record=owned.caseData;
+    record.metadata=normalizeCaseMetadata_(record.metadata);
+    var current=normalizeWorkspaceMode_(record.metadata.workspaceMode);
+    if(!current||!onlyIfMissing&&current!==mode){
+      record.metadata.workspaceMode=mode;
+      record.revision=Number(record.revision||1)+1;
+      owned.file.setContent(JSON.stringify(record));
+      if(typeof updateCaseIndex_==='function')updateCaseIndex_(record,owned.file,user,false,owned.folder?record.id:null);
+    }
+    return {id:record.id,workspaceMode:normalizeWorkspaceMode_(record.metadata.workspaceMode),revision:record.revision,updatedAt:record.updatedAt};
+  });
+}
 function deleteCase_(caseId, user) { return withCaseWriteLock_(function(){return deleteCaseUnlocked_(caseId,user);}); }
 function deleteCaseUnlocked_(caseId, user) {
   var owned = getOwnedCaseFile_(caseId, user, true);
@@ -147,7 +168,8 @@ function buildUpdatedCase_(request, current, user) {
     engineConfig: normalizeObject_(request.engineConfig || current.engineConfig),
     simulations: simulations,
     activeSimulationId: simulations.some(function(sim){return sim.id===request.activeSimulationId;})?request.activeSimulationId:simulations[0].id,
-    metadata: request.metadata === undefined ? normalizeCaseMetadata_(current.metadata) : normalizeCaseMetadata_(request.metadata),
+    // Mode has its own manifest update; a stale ordinary editor save must not undo it.
+    metadata: Object.assign({},request.metadata === undefined ? normalizeCaseMetadata_(current.metadata) : normalizeCaseMetadata_(request.metadata),normalizeWorkspaceMode_(current.metadata?.workspaceMode)?{workspaceMode:normalizeWorkspaceMode_(current.metadata.workspaceMode)}:{}),
     stateIds: normalizeStringList_(current.stateIds),
     ownerEmail: user.email,
     // Ordinary saves, including stale drafts, cannot change archive state.

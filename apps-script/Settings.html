@@ -145,14 +145,8 @@ window.STSettings = (function() {
     modeChanging=true;picker.disabled=true;
     try {
       if(removing||resetting||!await flush()){picker.value=previous;return;}
-      if(activeCase()){
-        if(!el('case-editor-form').checkValidity())throw Error(__ST_TEXT__('settings.complete_fields'));
-        var options=STPreferences.caseOptions();
-        options.seedPolicy=el('settings-seed-policy').value;STPreferences.setCaseOptions(options);
-        if(flushCase)await flushCase();
-      }
-      if(!STPreferences.write('interfaceMode',mode))throw Error(__ST_TEXT__('settings.interface_mode_storage_error'));
-      applyMode?.(mode);
+      if(activeCase()&&!el('case-editor-form').checkValidity())throw Error(__ST_TEXT__('settings.complete_fields'));
+      await applyMode?.(mode);
       resetModeSelector(true);renderEngine();renderCaseCharts();
       selectTab(document.querySelector('[data-settings-tab][aria-selected="true"]')?.dataset.settingsTab||'appearance');
       el('settings-error').textContent='';window.dispatchEvent(new Event('st-save-policy-change'));
@@ -203,9 +197,8 @@ window.STSettings = (function() {
     }
     var changed=!el('settings-interface-section').classList.contains('hidden')&&el('settings-interface-mode').value!==((document.documentElement.dataset.workspaceMode||'MINIMAL'));
     var mode=el('settings-interface-mode').value;
-    if(changed&&!STPreferences.write('interfaceMode',mode)){el('settings-error').textContent=__ST_TEXT__('settings.interface_mode_storage_error');return;}
+    if(changed){try{await applyMode?.(mode);}catch(error){el('settings-error').textContent=error.message;return;}}
     el('settings-error').textContent='';resetModeSelector();el('settings-dialog').close();if(lastFocus?.isConnected)lastFocus.focus();
-    if(changed)applyMode?.(mode);
     window.dispatchEvent(new Event('st-save-policy-change'));
   }
   function keyStatus(){modelControls();if(!hasKey)el('gemini-model-status').textContent='Save an API key to load available models.';el('gemini-api-key').placeholder=hasKey?__ST_TEXT__('settings.api_key_mask'):__ST_TEXT__('settings.enter_api_key');el('gemini-key-status').textContent=removing?__ST_TEXT__('settings.removing_api_key'):hasKey?__ST_TEXT__('settings.api_key_saved_for_your_google_account'):__ST_TEXT__('settings.no_api_key_configured');el('gemini-delete-key').disabled=removing||!hasKey;}

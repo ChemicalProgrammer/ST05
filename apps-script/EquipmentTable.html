@@ -10,7 +10,9 @@ window.STEquipmentTable=(function(){
   function tr(en,es){return document.documentElement.lang==='es'?es:en;}
   function node(tag,cls,text){var n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
   function key(view,split){return split?(view==='conveyors'?'conveyors':'equipment'):'combined';}
+  function minimal(state){return state?.bootstrap?.uiMode==='MINIMAL';}
   function wantsTable(state,view,split){
+    if(minimal(state))return Boolean(state?.activeCase);
     return Boolean(state?.activeCase&&state.uiView==='editor'&&
       ['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase())&&
       (labels[key(view,split)]||window.STPreferences?.read('equipmentView.'+key(view,split)))==='table');
@@ -81,6 +83,15 @@ window.STEquipmentTable=(function(){
     var groups=conveyor?[conveyorGeneral,geometry,upstream,downstream,speeds,dynamic,reliability(true)]:[machineGeneral,physical,reliability(false)];
     return groups.map(g=>({...g,columns:g.columns.filter(c=>cards.some(card=>c.selectors.some(s=>applicable(source(card,s),card))))})).filter(g=>g.columns.length);
   }
+  // Combine the same column definitions without duplicating type/reliability
+  // columns. Machine-only and conveyor-only cells are explicitly inapplicable.
+  function mixedGroups(cards){
+    var general=group('General','General',[col('type','.equipment-type','Type','Tipo'),...machineGeneral.columns.slice(1).map(c=>({...c,kind:c.id==='rate'?null:'machine'})),...conveyorGeneral.columns.slice(1).map(c=>({...c,kind:'conveyor'}))]);
+    var groups=[general,{...physical,columns:physical.columns.map(c=>({...c,kind:'machine'}))},
+      ...[geometry,upstream,downstream,speeds,dynamic].map(g=>({...g,columns:g.columns.map(c=>({...c,kind:'conveyor'}))})),reliability(false)];
+    return groups.map(g=>({...g,columns:g.columns.filter(c=>cards.some(card=>columnApplies(c,card)&&c.selectors.some(sel=>applicable(source(card,sel),card))))})).filter(g=>g.columns.length);
+  }
+  function columnApplies(column,card){return !column.kind||(column.kind==='conveyor')===(type(card)==='CONVEYOR');}
   function captionFor(original,fallback){
     var label=original.closest('label');
     var caption=label?Array.from(label.childNodes).filter(n=>n.nodeType===3).map(n=>n.nodeValue).join(' ').trim():'';
@@ -144,7 +155,7 @@ window.STEquipmentTable=(function(){
   }
   function cellContent(cell,card,column){
     var cluster=node('div','equipment-table-cell-controls'),list=[];
-    for(var s of column.selectors){
+    for(var s of (columnApplies(column,card)?column.selectors:[])){
       var original=source(card,s);if(!original)continue;
       var b=makeProxy(original,card,tr(column.en,column.es));list.push(b);cluster.append(b.proxy);
     }
@@ -208,7 +219,7 @@ window.STEquipmentTable=(function(){
   function reorder(card,target,layout){
     if(!target||card===target||!canMove(card)||!layout.cards.includes(target))return;
     // The canonical editor owns topology, validation, autosave and order.
-    card._moveTableRow?.(target,layout.conveyor?'conveyors':'equipment');
+    card._moveTableRow?.(target,layout.conveyor===null?undefined:layout.conveyor?'conveyors':'equipment');
   }
   function rowShift(row,y){row.style.transform=y?'translateY('+y+'px)':'';}
   function stopRowSettlements(rows){
@@ -331,7 +342,7 @@ window.STEquipmentTable=(function(){
     var match=text.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
     return match?{name:match[1],unit:match[2]}:{name:text,unit:''};
   }
-  function widthKey(layout,id){return (layout.conveyor?'conveyors':'equipment')+':'+id;}
+  function widthKey(layout,id){return (layout.conveyor===null?'mixed':layout.conveyor?'conveyors':'equipment')+':'+id;}
   function clampWidth(width,min){return Math.max(min,Math.min(1000,Math.round(width)));}
   function measureText(value,element){
     // Browser typography, with a deterministic fallback for non-layout tests.
@@ -436,7 +447,7 @@ window.STEquipmentTable=(function(){
   function renderTable(host,cards,conveyor,groups,showTitle){
     if(showTitle){var title=node('h4','equipment-table-heading',conveyor?tr('Conveyors','Conveyors'):tr('Equipment','Equipos'));host.append(title);}
     var scroller=node('div','equipment-table-scroll'),table=node('table','equipment-editor-table'),head=node('thead'),groupRow=node('tr','equipment-table-groups'),top=node('tr','equipment-table-labels'),bottom=node('tr','equipment-table-units');
-    scroller.tabIndex=0;scroller.setAttribute('role','region');scroller.setAttribute('aria-label',conveyor?tr('Conveyor table','Tabla de conveyors'):tr('Equipment table','Tabla de equipos'));
+    scroller.tabIndex=0;scroller.setAttribute('role','region');scroller.setAttribute('aria-label',conveyor===null?tr('Equipment and conveyors','Equipos y transportadores'):conveyor?tr('Conveyor table','Tabla de conveyors'):tr('Equipment table','Tabla de equipos'));
     table.setAttribute('aria-label',scroller.getAttribute('aria-label'));
     var layout={scroller,table,cards,conveyor,rows:[],columns:[]};
     tableLayouts.push(layout);
@@ -486,16 +497,16 @@ window.STEquipmentTable=(function(){
     updating=true;
     try{
       var cards=Array.from(list.querySelectorAll('.equipment-card:not(.hidden)'));
-      var kinds=[cards.filter(c=>type(c)!=='CONVEYOR'),cards.filter(c=>type(c)==='CONVEYOR')];
-      var groups=kinds.map((group,i)=>columnGroups(group,i===1));
-      var next=JSON.stringify([document.documentElement.lang,cards.map(c=>[c.dataset.equipmentId,type(c)]),groups.map(gs=>gs.map(g=>g.columns.map(c=>c.id)))]);
+      var mixed=minimal(current),kinds=mixed?[cards]:[cards.filter(c=>type(c)!=='CONVEYOR'),cards.filter(c=>type(c)==='CONVEYOR')];
+      var groups=mixed?[mixedGroups(cards)]:kinds.map((group,i)=>columnGroups(group,i===1));
+      var next=JSON.stringify([mixed,document.documentElement.lang,cards.map(c=>[c.dataset.equipmentId,type(c)]),groups.map(gs=>gs.map(g=>g.columns.map(c=>c.id)))]);
       var rebuild=next!==signature||renderedCards.length!==cards.length||cards.some((c,i)=>renderedCards[i]!==c);
       if(rebuild){
         var scrolls=Array.from(host.querySelectorAll('.equipment-table-scroll')).map(n=>n.scrollLeft);
         var focused=document.activeElement,focusBinding=bindings.find(b=>b.proxy===focused),focusAction=rowActions.find(a=>a.symbol===focused);
         gesture?.cancel();
         signature=next;renderedCards=cards;bindings=[];rowActions=[];tableLayouts=[];host.replaceChildren();
-        kinds.forEach((items,i)=>{if(items.length)renderTable(host,items,i===1,groups[i],!separate&&kinds.every(g=>g.length));});
+        kinds.forEach((items,i)=>{if(items.length)renderTable(host,items,mixed?null:i===1,groups[i],!mixed&&!separate&&kinds.every(g=>g.length));});
         if(!cards.length&&!list.querySelector('.equipment-card'))host.append(node('p','empty',list.querySelector('.empty')?.textContent||tr('No equipment.','Sin equipos.')));
         host.querySelectorAll('.equipment-table-scroll').forEach((n,i)=>{n.scrollLeft=scrolls[i]||0;});
         if(focusBinding)bindings.find(b=>b.original===focusBinding.original)?.proxy.focus({preventScroll:true});
@@ -559,12 +570,15 @@ window.STEquipmentTable=(function(){
       el('equipment-view-table').addEventListener('click',()=>select('table'));
       window.addEventListener('st-language-change',()=>{sync(current,section,separate);scheduleRefresh();});
     }
-    var allowed=Boolean(state?.activeCase&&state.uiView==='editor'&&['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase()));
+    var mixed=minimal(state)&&!!state?.activeCase;
+    var allowed=mixed||Boolean(state?.activeCase&&state.uiView==='editor'&&['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase()));
+    var home=el('equipment-section-content'),destination=mixed?el('minimal-equipment-table-host'):home;
+    if(destination&&host.parentElement!==destination){destination.append(host);signature='';}
     var next=allowed&&wantsTable(state,view,separate);
     var context=JSON.stringify([state?.activeCase?.id,state?.activeSimulationId,scope,view,allowed]);
     if(context!==viewContext||next!==active)cancelViewMotion();
     viewContext=context;
-    tools.hidden=!allowed;
+    tools.hidden=!allowed||mixed;
     tools.setAttribute('aria-label',tr('Equipment presentation','Vista de equipos'));
     for(var [id,on,en,es] of [['equipment-view-cards',!next,'Card view','Vista de tarjetas'],['equipment-view-table',next,'Table view','Vista de tablas']]){
       var b=el(id),label=tr(en,es);b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',label);b.title=label;

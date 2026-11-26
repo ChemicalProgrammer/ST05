@@ -112,7 +112,11 @@
         });
         STProducts.init(state,{navigate:function(){state.basicView='products';navigateView('products');},simulation:activePersistentSimulation,locked:runControlsLocked,capture:syncEquipmentFromEditor,edited:function(){markCaseDirty();},changed:function(all){invalidateActiveResult();renderEditor();markCaseDirty();renderRunWorkspace();renderSimulationAnalysis();shell.sync();}});
         STRealData.init(state,{changed:queueCaseEvidenceSave});
-        STMinimalMode.init(state,{run:runSimulation,locked:runControlsLocked,progress:function(){return roundSession?.batchProgress?.value||0;},prepareSearch:renderSimulationAnalysis,simulation:activePersistentSimulation,save:function(){return flushCase(true);},importCase:importMinimalCase,error:showError});
+        STMinimalMode.init(state,{run:runSimulation,locked:runControlsLocked,progress:function(){return roundSession?.batchProgress?.value||0;},prepareSearch:renderSimulationAnalysis,simulation:activePersistentSimulation,setDuration:function(value,unit){
+          document.getElementById('duration-mode').value='FIXED';state.run.durationMode='FIXED';
+          var input=document.getElementById('run-duration');input.value=String(value);document.getElementById('run-duration-unit').value=unit;
+          syncDurationControls();renderControlEvents();markCaseDirty({target:input});
+        },save:function(){return flushCase(true);},importCase:importMinimalCase,error:showError});
         shell.init();
         if (STPreferences.read('remember') === 'yes') {
           document.getElementById('remember-session').checked = true;
@@ -181,7 +185,22 @@
       STScenarioExplorer.connectCase(function(){return state.activeCase;},function(){autosave.change();});
       STSettings.connectCalendar(function(detail){if(detail?.physical){var simulation=activePersistentSimulation();if(simulation)simulation.results=null;cancelRoundSession();stopPlaybackTimer();state.run.result=null;state.run.representative=null;state.run.configuration=null;toggle('simulation-results',false);}markCaseDirty();renderSimulationAnalysis();shell.sync();});
       STSettings.connectCaseFlush(function(){return prepareCaseDraft();});
-      STSettings.connectInterfaceMode(function(mode){
+      STSettings.connectInterfaceMode(async function(mode){
+        if(!state.bootstrap||!['MINIMAL','BASIC','ADVANCE'].includes(mode))return;
+        if(runControlsLocked()||window.STMinimalMode?.isSearching())throw Error('Wait for the current calculation to finish.');
+        var record=state.activeCase;
+        if(record){
+          if(autosave.pending())await flushCase(true);
+          var response=await new Promise(resolve=>callServer('setCaseWorkspaceMode',[record.id,mode],resolve));
+          if(!response?.ok)throw Error(response?.error?.message||'The case interface mode could not be saved.');
+          if(state.activeCase!==record)return;
+          record.metadata=Object.assign({},record.metadata,{workspaceMode:response.data.workspaceMode});
+          record.revision=response.data.revision;
+          var item=state.bootstrap.cases?.find(c=>c.id===record.id);if(item)item.revision=record.revision;
+        }else{
+          if(!STPreferences.write('interfaceMode',mode))throw Error(__ST_TEXT__('settings.interface_mode_storage_error'));
+          state.bootstrap.galleryUiMode=mode;
+        }
         STEquipmentInspector.release();
         document.getElementById('equipment-list').replaceChildren();
         state.bootstrap.uiMode=mode;

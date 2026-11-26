@@ -17,15 +17,19 @@ html[data-workspace-mode=MINIMAL] .case-open #basic-case-actions {margin-left:au
 .minimal-table-wrap table {width:100%;border-collapse:collapse;white-space:nowrap;}
 .minimal-table-wrap :is(th,td) {padding:var(--space-2) var(--space-3);border-bottom:var(--border-width) solid var(--line);text-align:left;font-size:var(--font-body);}
 .minimal-table-wrap th {font-size:var(--font-secondary);font-weight:var(--weight-semibold);color:var(--muted);}
-.minimal-equipment-table :is(td,th):nth-child(n+5) {text-align:right;font-variant-numeric:tabular-nums;}
-.minimal-equipment-table td:nth-child(1) {color:var(--muted);}
-.minimal-equipment-table tr[data-conveyor=true] {background:var(--surface-soft);}
+html[data-workspace-mode=MINIMAL] #minimal-equipment-table-host {min-width:0;max-width:100%;}
+.minimal-simulation-tools {align-items:center;justify-content:flex-end;flex-wrap:wrap;}
+.minimal-simulation-tools .time-value-label {display:flex;align-items:center;gap:var(--space-2);margin:0;}
+.minimal-simulation-tools .time-value-control {width:auto;}
+.minimal-simulation-tools #minimal-duration {width:var(--size-80,80px);min-width:0;}
+#minimal-result-cards {grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--size-160)),1fr));}
 .minimal-action {display:flex;justify-content:flex-start;}
 .minimal-result-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);}
 .minimal-result-grid[hidden],.minimal-workspace [hidden],#minimal-import-status[hidden] {display:none!important;}
 .minimal-result-grid article {min-width:0;display:grid;gap:var(--space-2);align-content:start;}
 .minimal-result-grid .metric-value {font-variant-numeric:tabular-nums;}
-.minimal-result-grid .metric-card--result > strong {font-size:var(--font-kpi);}
+/* All four baseline KPIs use the existing featured-card component. */
+#minimal-result-cards .metric-card--featured > strong {font-size:var(--font-kpi);}
 .minimal-scenario-card {border-top:var(--card-accent-width) solid var(--line-strong);min-width:0;}
 .minimal-scenario-card[data-tier=ZERO] {border-top-color:var(--capex-zero);}
 .minimal-scenario-card[data-tier=MEDIUM] {border-top-color:var(--capex-medium);}

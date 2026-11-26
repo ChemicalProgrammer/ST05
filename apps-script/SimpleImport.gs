@@ -62,6 +62,6 @@ function simpleImportedCase_(preview){
   var name=[metadata.packagingLine,metadata.formatName].filter(v=>v!=null&&String(v).trim()).join(' · ')||source.spreadsheetName||source.sheetName||'Imported case';
   var run={durationMode:'SHIFTS',durationSeconds:28800,shiftHours:8,shiftCount:1,rounds:1,tickSeconds:.25,sampleEverySeconds:5,calculationMode:'FAST',calculationPreference:'FAST',engineId:'ST_CURRENT',seed:20260909,eventsEnabled:false,includePlantCalendar:false};
   if(initialFormatId){run.initialFormatId=initialFormatId;run.initialProductId=initialFormatId;}
-  return {name:String(name).trim().slice(0,120)||'Imported case',unitOfFlow:'bottles',equipment:equipment,metadata:{dataClassification:'USER_PROVIDED',...(catalog?{formatCatalog:catalog}:{})},
+  return {name:String(name).trim().slice(0,120)||'Imported case',unitOfFlow:'bottles',equipment:equipment,metadata:{workspaceMode:'MINIMAL',dataClassification:'USER_PROVIDED',...(catalog?{formatCatalog:catalog}:{})},
     simulations:[{id:'simulation-a',name:'Simulation A',equipment:equipment,dynamicConfig:run,results:null,sourceImport:{source:source,metadata:metadata,rows:preview.sourceRows||[],warnings:warnings,notes:preview.notes||[],simpleImportIssues:issues,...(preview.materialCatalog?.errors?.length?{unresolvedMaterialCatalog:preview.materialCatalog}:{})}}]};
 }

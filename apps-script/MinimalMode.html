@@ -23,26 +23,40 @@ window.STMinimalMode=(function(){
   function result(){var sim=owner(),r=sim?.results;
     return r?.summary&&r.replicationStatus?.state==='COMPLETE'?r:null;
   }
-  function reviewRequired(sim){return (sim?.sourceImport?.simpleImportIssues||[]).length>0;}
+  function reviewRequired(sim){
+    var cards=Array.from(document.querySelectorAll('#equipment-list .equipment-card'));
+    if(cards.length)return cards.some(c=>!(Number(c._fields?.querySelector('.equipment-rate')?.value)>0));
+    return (sim?.equipment||[]).some(e=>!(Number.isFinite(e.nominalRatePerSecond)&&e.nominalRatePerSecond>0));
+  }
   function metricValue(value,unit,digits){var n=node('strong',number(value,digits),'metric-value');if(Number.isFinite(value)&&unit)n.append(node('span',' '+unit,'metric-unit'));return n;}
-  function renderTable(sim){
-    var line=sim?.equipment||state.activeCase?.equipment||[];
-    var key=JSON.stringify([line,document.documentElement.lang]);
-    if(key===tableKey)return;tableKey=key;
-    var body=el('minimal-equipment-rows');body.replaceChildren();
-    line.forEach(function(e,i){
-      var data=e.processData||{},belt=e.type==='CONVEYOR',m=data.equipment||{},g=data.geometry||{},up=data.upstream||{};
-      var rate=Number.isFinite(e.nominalRatePerSecond)?e.nominalRatePerSecond*60:null;
-      var unit=window.STFlowUnits?.labels(e.unitOfFlow||data.flowUnits?.output||state.activeCase.unitOfFlow)?.rate||'units/min';
-      var velocity=data.accumulation?.conveyorSpeedMmPerSecond;
-      var values=[i+1,e.name,tr(e.type),belt?'—':e.characteristics?.isPacemaker||e.characteristics?.criticalMachine?tr('Yes'):tr('No'),
-        rate===null?'—':number(rate)+' '+unit,number(e.noiseProfile?.reliability?.mtbfMinutes??m.mtbfMinutes),
-        number(e.noiseProfile?.reliability?.mttrMinutes??m.mttrMinutes),
-        belt?number(Number.isFinite(velocity)?velocity*.06:null):'—',belt?number(g.lactMm):'—',belt?number(up.packageLengthMm):'—',belt?number(up.dischargePitchMm):'—'];
-      var row=node('tr');row.dataset.conveyor=String(belt);
-      values.forEach(function(value,index){var td=node('td',value);if(index===1)td.dataset.stNoTranslate='';row.append(td);});body.append(row);
-    });
-    if(!line.length){var td=node('td','No equipment imported.');td.colSpan=11;var row=node('tr');row.append(td);body.append(row);}
+  // Use the shared equipment table; only the original editor owns inputs.
+  function syncTable(lock){
+    var host=el('minimal-equipment-table-host');host.inert=lock;
+    if(lock)host.setAttribute('aria-busy','true');else host.removeAttribute('aria-busy');
+  }
+  var durationKey='';
+  function readDuration(){
+    try{return STRunOptions.durationSeconds();}catch(_){return NaN;}
+  }
+  function syncDuration(lock){
+    var input=el('minimal-duration'),unit=el('minimal-duration-unit'),seconds=readDuration();
+    input.disabled=unit.disabled=lock;
+    var key=ownerKey()+'|'+seconds+'|'+unit.value;
+    if(key!==durationKey&&Number.isFinite(seconds)){
+      input.value=String(Number((seconds/(STTimeControls.inputFactors[unit.value]||3600)).toPrecision(12)));
+      durationKey=key;
+    }
+  }
+  function applyDuration(){
+    if(busy())return false;
+    var input=el('minimal-duration'),unit=el('minimal-duration-unit');
+    if(!input.reportValidity())return false;
+    var seconds=STTimeControls.inputSeconds(input.value,unit.value);
+    if(!Number.isFinite(seconds)||seconds<=0||seconds>366*86400*5){actions.error({message:tr('Duration must be positive; end time must follow start time.')});return false;}
+    if(Math.abs(seconds-readDuration())<1e-7)return true;
+    // The compact control changes the existing run options, not a shadow
+    // configuration. Existing saved non-fixed methods remain until edited.
+    actions.setDuration(Number(input.value),unit.value);durationKey='';sync(state);return true;
   }
   function resultValues(r){
     var unit=window.STFlowUnits?.labels(r.unitOfFlow||state.activeCase?.unitOfFlow)||{count:'units',rate:'units/min'};
@@ -54,11 +68,12 @@ window.STMinimalMode=(function(){
   function renderResults(r){
     show('minimal-result-cards',!!r&&!starting&&!actions.locked());
     if(!r)return;
-    var v=resultValues(r),key=JSON.stringify([v,document.documentElement.lang]);
+    var v=resultValues(r),theory=window.STBasicMode?.theoreticalEfficiency(owner()?.equipment),key=JSON.stringify([v,theory,document.documentElement.lang]);
     if(key===resultKey)return;resultKey=key;
     var grid=el('minimal-result-cards');grid.replaceChildren();
-    [['Efficiency',v.oee,'%',2],['Throughput',v.throughput,v.unit.rate,2],[productionLabel(v.unit),v.output,v.unit.count,0]].forEach(function(spec,i){
-      var card=node('article',null,'metric-card '+(i===0?'metric-card--featured':'metric-card--result'));
+    [['Theoretical equipment efficiency',theory,'%',2],['Simulated efficiency',v.oee,'%',2],['Throughput',v.throughput,v.unit.rate,2],[productionLabel(v.unit),v.output,v.unit.count,0]].forEach(function(spec,i){
+      var card=node('article',null,'metric-card metric-card--featured');
+      if(i===0){card.title=tr('Theoretical efficiency = 100 × product of MTBF / (MTBF + MTTR).');card.tabIndex=0;}
       card.append(node('span',spec[0]),metricValue(spec[1],spec[2],spec[3]));grid.append(card);
     });
   }
@@ -120,17 +135,19 @@ window.STMinimalMode=(function(){
   function sync(current){
     state=current;if(!initialized)return;
     var active=isMinimal()&&!!state.activeCase,sim=active?owner():null,k=active?ownerKey():null;
-    el('minimal-workspace').classList.toggle('hidden',!active);
-    if(k!==lastOwner){lastOwner=k;tableKey=resultKey=scenarioKey='';attempted=null;searchMessage='';runProgress=0;searchProgress=0;}
+    var workspace=el('minimal-workspace'),becameVisible=active&&workspace.classList.contains('hidden');
+    workspace.classList.toggle('hidden',!active);
+    if(becameVisible)window.STEquipmentTable?.refresh();
+    if(k!==lastOwner){lastOwner=k;durationKey=tableKey=resultKey=scenarioKey='';attempted=null;searchMessage='';runProgress=0;searchProgress=0;}
     var lock=busy();
     document.querySelectorAll('#basic-case-actions button').forEach(function(b){if(lock&&!b.disabled){b.disabled=true;b.dataset.minimalLock='true';}else if(!lock&&b.dataset.minimalLock==='true'){b.disabled=false;delete b.dataset.minimalLock;}});
     if(!active){if(!busy())stopMonitor();return;}
-    renderTable(sim);
+    syncTable(lock||state.saving);syncDuration(lock||state.saving);
     var running=starting||actions.locked(),r=result(),review=reviewRequired(sim);
-    show('minimal-input-review',review);
+    show('minimal-input-review',review||!!sim?.sourceImport?.simpleImportIssues?.length&&!r);
     show('minimal-run-progress',running);
     if(running){runProgress=Math.max(runProgress,Math.min(99.9,100*actions.progress()));progress('minimal-run-progress',runProgress);}
-    el('minimal-run').hidden=running;el('minimal-run').disabled=searching||state.saving||!sim;
+    el('minimal-run').hidden=false;el('minimal-run').disabled=lock||state.saving||!sim;
     el('minimal-run').textContent=tr(r?'Restart simulation':'Run simulation');
     renderResults(r);
     show('minimal-optimization',!!r&&!running);
@@ -147,7 +164,8 @@ window.STMinimalMode=(function(){
   async function startRun(){
     if(busy()||!state.activeCase)return;
     var sim=owner();if(!sim)return;
-    if(reviewRequired(sim)){actions.error({message:tr('Review imported inputs in Standard before running.')});return;}
+    if(!applyDuration())return;
+    // Let the canonical editor and physical engine validate corrected values.
     if((sim.equipment||[]).length<2){actions.error({message:tr('At least two equipment units are required for simulation.')});return;}
     starting=true;runProgress=0;attempted=null;searchMessage='';scenarioKey=resultKey='';
     el('run-calculation-mode').value='FAST';sync(state);
@@ -186,6 +204,7 @@ window.STMinimalMode=(function(){
   function init(current,callbacks){
     state=current;actions=callbacks;if(initialized)return;initialized=true;
     el('minimal-run').onclick=startRun;el('minimal-search').onclick=startSearch;
+    el('minimal-duration').onchange=applyDuration;el('minimal-duration-unit').onchange=applyDuration;
     var dialog=el('minimal-import-dialog'),link=el('minimal-import-link'),submit=el('minimal-import-submit'),close=el('minimal-import-close');
     close.onclick=function(){if(!importing)dialog.close();};
     dialog.addEventListener('cancel',e=>{if(importing)e.preventDefault();});

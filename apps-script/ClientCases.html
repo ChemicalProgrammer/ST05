@@ -94,6 +94,7 @@
       cancelRoundSession();stopPlaybackTimer();
       sheetImport.close();
       state.activeCase = null;
+      if(state.bootstrap)state.bootstrap.uiMode=state.bootstrap.galleryUiMode||STPreferences.resolveInterfaceMode();
       STSubsection.restoreAll();
       autosave.reset();
       state.run.result = null;
@@ -173,7 +174,8 @@
       document.documentElement.classList.remove('restoring-session');
       toggle('auth-panel', false); toggle('application', true);
       state.bootstrap = response.data;
-      state.bootstrap.uiMode=STPreferences.resolveInterfaceMode(response.data.uiMode);
+      state.bootstrap.galleryUiMode=STPreferences.resolveInterfaceMode(response.data.uiMode);
+      state.bootstrap.uiMode=state.activeCase?.metadata?.workspaceMode||state.bootstrap.galleryUiMode;
       configureSaving();
       STSettings.configureGemini(response.data.gemini || {});
       document.getElementById('user-email').textContent = response.data.user.email;
@@ -224,7 +226,7 @@
       event.preventDefault();
       var input = document.getElementById('new-case-name');
       setBusy('new-case-form', true);
-      callServer('createCase', [{ name: input.value }], function(response) {
+      callServer('createCase', [{ name: input.value,metadata:{workspaceMode:state.bootstrap?.galleryUiMode||state.bootstrap?.uiMode||'MINIMAL'} }], function(response) {
         setBusy('new-case-form', false);
         if (!response.ok) return showError(response.error);
         input.value = '';
@@ -238,7 +240,7 @@
 
 function createDemoCase() {
       setBusy('create-demo-case', true);
-      callServer('createDemoCase', [], function(response) {
+      callServer('createDemoCase', [state.bootstrap?.galleryUiMode||state.bootstrap?.uiMode||'MINIMAL'], function(response) {
         setBusy('create-demo-case', false);
         if (!response?.ok || !response.data?.id) {
           var error=response?.error||{code:'DEMO_EMPTY_RESPONSE',message:'The server did not return the created demo. Refresh the case list before retrying.'};
@@ -285,7 +287,7 @@ function createDemoCase() {
 async function openCase(caseId, initialView) {
       try{if(!await leaveCase())return;}catch(error){showError(error);return;}
       var sequence = ++state.openSequence;
-      callServer('getCase', [caseId], function(response) {
+      callServer('getCase', [caseId,state.bootstrap?.galleryUiMode||state.bootstrap?.uiMode||'MINIMAL'], function(response) {
         if(sequence !== state.openSequence) return;
         if (!response.ok) return showError(response.error);
         cancelRoundSession();stopPlaybackTimer();
@@ -296,6 +298,9 @@ async function openCase(caseId, initialView) {
         if(rememberedView==='comparison'&&(response.data.simulations||[]).length<2)rememberedView='editor';
         state.restoringCaseView=true;
         state.activeCase = response.data;
+        state.bootstrap.uiMode=['MINIMAL','BASIC','ADVANCE'].includes(response.data.metadata?.workspaceMode)?response.data.metadata.workspaceMode:(state.bootstrap.galleryUiMode||state.bootstrap.uiMode);
+        // The adapter and editor must agree on the selected mode before mounting inputs.
+        document.documentElement.dataset.workspaceMode=state.bootstrap.uiMode;
         STSubsection.restoreAll();
         // Settings may open before the full editor mount finishes.
         document.getElementById('case-name').value=state.activeCase.name||'';
@@ -423,7 +428,7 @@ async function openCase(caseId, initialView) {
       if(whatIfOnlySave&&state.activeCase){captureSimulationView();var evidenceDraft=Object.assign(cloneJson(state.activeCase),{expectedRevision:state.activeCase.revision});return fitCaseSave(evidenceDraft);}
       var simulation=activePersistentSimulation(),preserve=preserveCommittedSimulationInputs(simulation);
       var next=preserve?caseEditorSnapshot():collectCaseEditor();if(!next)return null;
-      if(!next.name.trim()||next.equipment.some(function(e){return !e.id||!e.name||!(e.nominalRatePerSecond>0);}))throw new Error(__ST_TEXT__('autosave.invalid'));
+      if(!next.name.trim()||next.equipment.some(function(e){return !e.id||!e.name||!(e.nominalRatePerSecond>0)&&!(e.nominalRatePerSecond===null&&e.characteristics?.importedMissingNominalRate===true);}))throw new Error(__ST_TEXT__('autosave.invalid'));
       var run=preserve?simulation.dynamicConfig:readRunConfiguration();if(!run)return null;
       if(preserve){next.equipment=cloneJson(simulation.equipment);captureSimulationView();}
       else if(simulation){var before=JSON.stringify([simulation.equipment,simulation.dynamicConfig]);simulation.equipment=cloneJson(next.equipment);simulation.dynamicConfig=cloneJson(run);if(before!==JSON.stringify([simulation.equipment,simulation.dynamicConfig]))simulation.updatedAt=new Date().toISOString();captureSimulationView();}

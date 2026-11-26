@@ -303,3 +303,21 @@ test('switching cards and tables animates the new view and section height, but n
    assert.equal(h.host.hidden,false);assert.equal(animations.length,4,'reduced-motion preference suppresses animation');
  }finally{h.close();}
 });
+
+test('Minimal mounts the same editable and resizable table as a mixed physical line',()=>{
+ const h=fixture();try{
+  const compact=h.d.createElement('div');compact.id='minimal-equipment-table-host';h.d.body.append(compact);
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  assert.equal(h.host.parentElement,compact);assert.equal(h.host.hidden,false);assert.equal(h.tools.hidden,true);
+  assert.equal(h.host.querySelectorAll('table.equipment-editor-table').length,1);
+  assert.deepEqual(Array.from(h.host.querySelectorAll('tbody tr'),r=>r.dataset.tableEquipmentId),['Filler','Belt','Capper']);
+  const rate=h.cell('Filler','rate').querySelector('input');rate.value='350';emit(h,rate);
+  assert.equal(h.a._fields.querySelector('.equipment-rate').value,'350');assert.equal(h.calls.dirty,1);
+  assert(!h.cell('Belt','rate').querySelector('input'));
+  const length=h.cell('Belt','lact').querySelector('input');length.value='2500';emit(h,length);
+  assert.equal(h.b._fields.querySelector('.format-zone-lact').value,'2500');assert.equal(h.calls.dirty,2);
+  assert(h.host.querySelector('th[data-column="lact"] .equipment-table-resize'));
+  h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync();
+  assert.equal(h.host.parentElement,h.content);
+ }finally{h.close();}
+});

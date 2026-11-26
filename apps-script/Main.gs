@@ -82,10 +82,15 @@ function createCase(request) {
   });
 }
 
-function getCase(caseId) {
+function getCase(caseId,defaultMode) {
   return executeServerAction_(function(user) {
+    if(defaultMode&&normalizeWorkspaceMode_(defaultMode))setCaseWorkspaceMode_(caseId,defaultMode,user,true);
     return getCase_(caseId, user, true);
   });
+}
+
+function setCaseWorkspaceMode(caseId,mode){
+  return executeServerAction_(function(user){return setCaseWorkspaceMode_(caseId,mode,user,false);});
 }
 
 function getCompleteCaseForExport(caseId) {
@@ -115,9 +120,10 @@ function cloneCase(caseId) {
   });
 }
 
-function createDemoCase() {
+function createDemoCase(mode) {
   return executeServerAction_(function(user) {
     var request=createDemoCaseRequest_();
+    if(normalizeWorkspaceMode_(mode))request.metadata=Object.assign({},request.metadata,{workspaceMode:normalizeWorkspaceMode_(mode)});
     var summary=createCase_(request, user);
     summary.demoResultsPrepared=request.simulations.every(function(sim){return !!sim.results?.summary;});
     return summary;

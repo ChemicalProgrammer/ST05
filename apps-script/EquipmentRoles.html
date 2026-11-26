@@ -11,7 +11,7 @@ window.STEquipmentRoles=(function(){
     var occupancy=fields.querySelector('.equipment-occupancy-mode');
     if(occupancy)data.equipment.occupancyMode=occupancy.value==='POSITIONS'?'POSITIONS':'STORAGE';
     var scrap=fields.querySelector('.equipment-macrostop-scrap');
-    if(scrap&&!window.STBasicMode?.isBasic()){
+    if(scrap&&!(window.STBasicMode?.isBasicEditor?.()??window.STBasicMode?.isBasic())){
       if(!scrap.checkValidity()||!Number.isSafeInteger(Number(scrap.value))||Number(scrap.value)<0)return false;
       if(Number(scrap.value)>0)data.equipment.macroStopScrapBottles=Number(scrap.value);else delete data.equipment.macroStopScrapBottles;
     }

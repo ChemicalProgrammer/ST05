@@ -293,3 +293,19 @@ test('archiving persists across catalog refresh, preserves case files and is rev
  assert.deepEqual(JSON.parse(manifest.content).simulationFiles[0],reference);
  assert.equal(h.refresh().cases[0].archived,false);
 });
+
+test('case workspace mode is owned metadata and survives independent opens and ordinary saves',()=>{
+ const h=runtime();
+ h.ctx.createCase_({id:'mode-a',name:'A',metadata:{workspaceMode:'MINIMAL'},simulations:[{id:'a',name:'A',results:{marker:'original'}}]},owner);
+ h.ctx.createCase_({id:'mode-b',name:'B',metadata:{workspaceMode:'ADVANCE'}},owner);
+ const folder=h.folder().getFoldersByName('mode-a').next(),manifest=manifestFile(folder);
+ const before=JSON.parse(manifest.content),simulation=folder.files.get(before.simulationFiles[0].fileName),original=simulation.content;
+ const stale=h.ctx.getCase_('mode-a',owner);
+ const changed=h.ctx.setCaseWorkspaceMode('mode-a','STANDARD');assert(changed.ok);assert.equal(changed.data.workspaceMode,'BASIC');
+ assert.equal(JSON.parse(manifest.content).updatedAt,before.updatedAt);assert.equal(simulation.content,original);
+ assert.equal(h.ctx.getCase('mode-a','ADVANCE').data.metadata.workspaceMode,'BASIC');
+ assert.equal(h.ctx.getCase('mode-b','MINIMAL').data.metadata.workspaceMode,'ADVANCE');
+ stale.metadata.workspaceMode='MINIMAL';const saved=h.ctx.saveCase_(stale,owner);assert.equal(saved.metadata.workspaceMode,'BASIC');
+ assert.throws(()=>h.ctx.setCaseWorkspaceMode_('mode-a','ADVANCE',{email:'other@example.test'},false),e=>e.simulatorError.code==='CASE_NOT_FOUND');
+ h.seed('old-mode');assert.equal(h.ctx.getCase('old-mode','MINIMAL').data.metadata.workspaceMode,'MINIMAL');assert.equal(h.ctx.getCase('old-mode','ADVANCE').data.metadata.workspaceMode,'MINIMAL');
+});

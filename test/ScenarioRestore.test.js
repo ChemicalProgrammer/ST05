@@ -29,7 +29,7 @@ function savedCase(){
   return {simulations:[sim],metadata:{includeDOE:false}};
 }
 
-function browser(record){
+function browser(record,compact=false){
   const dom=new JSDOM('<!doctype html><html data-ui-mode="basic"><body></body></html>',{runScripts:'outside-only'}),w=dom.window;
   w.__ST_TEXT__=key=>key;
   w.STPreferences={read:()=>null,write:()=>true};w.STIcons={svg:()=>'<svg></svg>'};
@@ -45,7 +45,7 @@ function browser(record){
   let simulationCalls=0,creationCalls=0;
   w.SimulatorEngine.simulateBatch=async()=>{simulationCalls++;throw new Error('Restoring history must not simulate.');};
   w.STScenarioExplorer.connectCase(()=>record,()=>{});
-  const sim=record.simulations[0],host=w.STWhatIf.card({kind:'CUSTOM',tier:'ZERO',searchScope:'ZERO',explore:true,catalog:true,searchDerivedDOE:true,
+  const sim=record.simulations[0],host=w.STWhatIf.card({compact,kind:'CUSTOM',tier:'ZERO',searchScope:'ZERO',explore:true,catalog:true,searchDerivedDOE:true,
     changes:[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}]},()=>{creationCalls++;},sim.equipment,sim);
   w.document.body.append(host);
   return {w,sim,host,header:host.querySelector(':scope > .scenario-card-header'),simulationCalls:()=>simulationCalls,creationCalls:()=>creationCalls,close:()=>w.close()};
@@ -313,4 +313,20 @@ test('a fresh source-compatible result has no source-change warning',()=>{
     assert.equal(h.host.dataset.sourceEvidence,'CURRENT');
     assert.equal(h.w.STScenarioExplorer.evaluations(h.sim).length,1);
   }finally{h.close();}
+});
+
+ test('Basic shared card shows retained baseline and the same results dialog, without inventing a candidate',async()=>{
+ const h=browser(savedCase(),true);try{
+  assert.equal(h.host.dataset.compactCapex,'true');
+  assert.match(h.host.querySelector('.scenario-metrics').textContent,/50\.00/);
+  assert.match(h.host.querySelector('.scenario-metrics').textContent,/120\.00/);
+  assert.match(h.host.querySelector('.scenario-metrics').textContent,/Baseline retained/);
+  assert(h.host.querySelector('.scenario-create').disabled);
+  h.host.querySelector('.scenario-results').click();
+  assert.match(h.host.querySelector('.scenario-results-dialog').textContent,/No input changes retained/);
+  h.sim.results=null;
+  const blocked=await h.host._runMinimalSearch();
+  assert.equal(blocked.started,false);assert.match(blocked.reason,/NO_RESULTS/);
+  assert.equal(h.simulationCalls(),0);
+ }finally{h.close();}
 });

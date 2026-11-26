@@ -709,11 +709,16 @@ window.STScenarioExplorer=(function(){
     var progress=el('p','','scenario-search-progress');progress.setAttribute('role','status');host.append(progress);var activityView=createProgressCapsule('scenario-activity'),activity=activityView.bar;activity.hidden=true;host.append(activity,tracePanel);paintOverallProgress();activity.tabIndex=0;activity.title=traceText('View analysis progress');activity.addEventListener('click',()=>showTrace(true));activity.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();showTrace(true);}});
     var actions=el('div','','button-row scenario-actions'),run=iconButton('Find best scenario','refresh',function(){if(activeHost===host){if(searchCanFinish&&!finishRequested){finishRequested=true;setIcon(run,'Cancel evaluation','stop');status.textContent='Finishing the current batch, then validating the best candidate found…';return;}clearTimeout(timer);generation++;status.textContent='Cancelled — no final estimate. Run a new evaluation to enable creation.';save.disabled=true;last=null;record('CANCELLED',latest||{});}else if(project.compact)window.STMinimalMode?.searchTier(host);else preview(true);}),save=iconButton('Create selected scenario','copy',function(){if(!requireCompletedSource())return;searchSettingsChanged();if(last?.changes.length)create(Object.assign({},project,{analysisOnly:last.changes.some(c=>c.analysisOnly),evidence:Object.assign({},project.evidence,{categoryInclusions:Object.assign({},inclusions)},last.validationRequired?{independentValidation:'NOT_REPRODUCED_REQUIRES_VALIDATION',screeningOeeGain:latest?.delta?.oeePercentagePoints,screeningThroughputGain:latest?.delta?.throughputPerMinute,confirmationOeeGain:latest?.independentCheck?.delta?.oeePercentagePoints,confirmationThroughputGain:latest?.independentCheck?.delta?.throughputPerMinute}:{},last.reviewRequired?{engineeringReview:latest?.engineeringReviewAcknowledged?'ACKNOWLEDGED_REQUIRES_REVIEW':'REQUIRES_REVIEW',engineeringWarnings:latest?.warnings||[]}:{}),reviewed:!!last.validationRequired||!!last.reviewRequired||!!project.explore||JSON.stringify(last.changes)!==JSON.stringify(project.changes),title:(last.changes.some(c=>c.analysisOnly)?'Exploratory reliability targets':project.title||STScenarioText[project.titleKey]||'Selected improvements')+(last.validationRequired?' · Validation required':''),changes:last.changes,canApply:true}),save);});save.disabled=true;
     // Compact workspace delegates to the same validated search, not a second planner.
+    host._minimalSearchProgress=function(){return tracePercent;};
     host._runMinimalSearch=async function(){
       var previous=latest,blocked=await preview(true);
       if(blocked?.started===false)return blocked;
       // A normal return from preview is not proof of a completed search.
       if(latest===previous||!latest)return {started:false,reason:status.textContent||'Evaluation did not start.'};
+      if(['RUNNING','VALIDATING'].includes(latest.status)){
+        status.textContent='Evaluation interrupted.';status.dataset.state='rejected';
+        return {started:true,status:'INTERRUPTED',reason:status.textContent};
+      }
       return {started:true,status:latest.status,reason:latest.error||latest.message||status.textContent};
     };
     run.classList.add('scenario-search');save.classList.add('scenario-create');actions.setAttribute('role','group');actions.setAttribute('aria-label','Scenario actions');actions.append(configure,run,save);host.append(actions);
@@ -875,16 +880,17 @@ window.STScenarioExplorer=(function(){
       var cancelled=function(){return ticket!==generation||!host.isConnected;};
       var previousEvaluation=window.ST_SCENARIO_SEARCH_LIMITS.reusePreviousWinner?(latest?.candidate?resultSnapshot(latest):latest?.lastResult):null;
       var includeDOE=all&&doeEnabled()&&depth!=='LIGHT',method=includeDOE?'COORDINATE_SEARCH_WITH_DOE':all?'BOUNDED_COORDINATE_SEARCH':'SELECTED_CHANGES';
-      previewRun=searchRun();contextText();
-      if(baselineRun!==JSON.stringify(previewRun)){baseline=null;baselineRun=JSON.stringify(previewRun);}
-      // A fresh evaluation replaces the previous estimate, including its fallback.
-      latest=null;
-      var limits=searchLimits(),searchPhaseDone=false,coverageComplete=false,inDOE=false,doeStarted=0,stopReason=null,lastGainAt=Date.now(),bestAtTrial=0,stagnant=0;
-      var evidence={searchSettings:Object.assign({},searchSettings),searchSettingsSignature:searchSettingsSignature,phaseAudit:{},searchPolicyVersion:'MATCHED_CAPEX_V11',method:method,depth:depth,proposalNeeds:STScenarios.plan(source).proposalNeeds,lossDiagnosis:STScenarios.plan(source).diagnosis,capacityDiagnosis:STScenarios.plan(source).capacityDiagnosis,sensitivityScreening:sensitivityEvidence,reuseCounts:{},explorationRun:Object.assign({},previewRun),searchLimits:limits},evaluatedVariables=new Map();
+      var limits,searchPhaseDone=false,coverageComplete=false,inDOE=false,doeStarted=0,stopReason=null,lastGainAt=Date.now(),bestAtTrial=0,stagnant=0,evidence={},evaluatedVariables=new Map();
       function keyOf(changes){return JSON.stringify(changes.slice().sort(function(a,b){return (a.equipmentId+':'+a.path)<(b.equipmentId+':'+b.path)?-1:(a.equipmentId+':'+a.path)>(b.equipmentId+':'+b.path)?1:0;}));}
       function finishSearch(reason){searchPhaseDone=true;stopReason=reason;}
       function exhausted(){if(!all||finishRequested||inDOE||searchPhaseDone)return; if(done>=limits.maxCandidates)finishSearch('Evaluation budget reached');else if(limits.wallClockBudget&&Date.now()-started>=limits.maxSearchMs)finishSearch('Search time budget reached');else if(coverageComplete&&stagnant>=limits.maxWithoutImprovement)finishSearch('No meaningful improvement in '+stagnant+' evaluated candidates');}
       try{
+        previewRun=searchRun();contextText();
+        if(baselineRun!==JSON.stringify(previewRun)){baseline=null;baselineRun=JSON.stringify(previewRun);}
+        latest=null;
+        limits=searchLimits();
+        var diagnosticPlan=STScenarios.plan(source);
+        evidence={searchSettings:Object.assign({},searchSettings),searchSettingsSignature:searchSettingsSignature,phaseAudit:{},searchPolicyVersion:'MATCHED_CAPEX_V11',method:method,depth:depth,proposalNeeds:diagnosticPlan.proposalNeeds,lossDiagnosis:diagnosticPlan.diagnosis,capacityDiagnosis:diagnosticPlan.capacityDiagnosis,sensitivityScreening:sensitivityEvidence,reuseCounts:{},explorationRun:Object.assign({},previewRun),searchLimits:limits};
         setCounter('preparation','Input and search configuration',1,1);record('RUNNING',{method:method});
         var reliabilityTargets=null;
         if(all&&depth!=='LIGHT'&&exploreReliability.checked&&STScenarioSearch.reliabilityTargets){

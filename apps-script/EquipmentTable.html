@@ -347,52 +347,104 @@ window.STEquipmentTable=(function(){
   }
   function widthKey(layout,id){return (layout.conveyor===null?'mixed':layout.conveyor?'conveyors':'equipment')+':'+id;}
   function clampWidth(width,min){return Math.max(min,Math.min(1000,Math.round(width)));}
-  function measureText(value,element){
-    // Browser typography, with a deterministic fallback for non-layout tests.
-    var text=String(value??''),key=element.tagName+':'+element.className+':'+(element.type||'');
+  // Measure the actual rendered typography and control chrome. Minimum
+  // widths are content constraints, not the preferred auto-fit widths.
+  function cssPixels(value,fallback=0,fontSize=13){
+    var match=/^(-?\d+(?:\.\d+)?)(px|rem|em)?$/.exec(String(value||'').trim());
+    if(!match)return fallback;
+    var n=Number(match[1]);
+    if(match[2]==='em')return n*fontSize;
+    if(match[2]==='rem')return n*(measureText.rootFontSize||16);
+    return n;
+  }
+  function styleFor(element){
+    var key=element.tagName+':'+element.className+':'+(element.type||'')+':'+(element.dataset?.column||'')+':'+(element.hidden?'hidden':'visible');
     var styles=measureText.styles||(measureText.styles=new Map()),style=styles.get(key);
-    if(!style){
-      var computed=window.getComputedStyle?.(element);
-      style={fontSize:computed?.fontSize,fontWeight:computed?.fontWeight,fontFamily:computed?.fontFamily};styles.set(key,style);
-    }
-    var fontSize=parseFloat(style.fontSize)||13;
+    if(style)return style;
+    var c=window.getComputedStyle?.(element);
+    var fontSize=cssPixels(c?.fontSize,13);
+    if(!(fontSize>0))fontSize=13;
+    style={fontSize:fontSize,fontWeight:c?.fontWeight||'400',fontFamily:c?.fontFamily||'system-ui',
+      letterSpacing:cssPixels(c?.letterSpacing,0,fontSize),paddingLeft:cssPixels(c?.paddingLeft,NaN,fontSize),
+      paddingRight:cssPixels(c?.paddingRight,NaN,fontSize),borderLeft:cssPixels(c?.borderLeftWidth,0,fontSize),
+      borderRight:cssPixels(c?.borderRightWidth,0,fontSize),minWidth:cssPixels(c?.minWidth,0,fontSize),
+      gap:cssPixels(c?.columnGap,NaN,fontSize),appearance:c?.appearance||''};
+    styles.set(key,style);return style;
+  }
+  function measureText(value,element){
+    var text=String(value??''),style=styleFor(element),fontSize=style.fontSize,spacing=Math.max(0,style.letterSpacing)*Array.from(text).length;
     if(window.CanvasRenderingContext2D){
       try{
         var ctx=measureText.context||(measureText.context=document.createElement('canvas').getContext('2d'));
-        if(ctx){ctx.font=(style?.fontWeight||'400')+' '+fontSize+'px '+(style?.fontFamily||'system-ui');return Math.ceil(ctx.measureText(text).width);}
+        if(ctx){ctx.font=style.fontWeight+' '+fontSize+'px '+style.fontFamily;return Math.ceil(ctx.measureText(text).width+spacing);}
       }catch(_){}
     }
-    return Math.ceil(Array.from(text).length*fontSize*.56);
+    return Math.ceil(Array.from(text).length*fontSize*.62+spacing);
+  }
+  function horizontalChrome(element,fallback){
+    var style=styleFor(element);
+    return Math.max(fallback,(style.paddingLeft||0)+(style.paddingRight||0)+style.borderLeft+style.borderRight);
+  }
+  function longestWord(value,element){
+    // Only break between words; punctuation inside a unit such as cases/min
+    // stays together. No header is allowed to break a word into letters.
+    return Math.max(0,...String(value??'').trim().split(/\s+/).map(word=>measureText(word,element)));
+  }
+  function headerWidths(head,unit){
+    var labelChrome=horizontalChrome(head,25)+3,unitChrome=unit?horizontalChrome(unit,25)+3:0;
+    return {min:Math.max(longestWord(head.textContent,head)+labelChrome,unit?longestWord(unit.textContent,unit)+unitChrome:0),
+      fit:Math.max(measureText(head.textContent,head)+labelChrome,unit?measureText(unit.textContent,unit)+unitChrome:0)};
+  }
+  function controlWidths(control,id){
+    var style=styleFor(control),select=control.tagName==='SELECT',output=control.tagName==='OUTPUT',number=control.type==='number';
+    var value=output?control.textContent:control.value;
+    if(control.type==='checkbox')return {min:Math.max(16,style.minWidth),fit:Math.max(16,style.minWidth)};
+    if(select){
+      // Reserve the widest option even when it is not selected yet, plus
+      // padding and the closed picker's icon (both native and base-select).
+      var options=Array.from(control.options||[]).filter(o=>!o.hidden).map(o=>o.textContent);
+      var textWidth=Math.max(measureText(control.selectedOptions?.[0]?.textContent||value,control),...options.map(label=>measureText(label,control)));
+      var chrome=horizontalChrome(control,18);
+      var pickerChrome=Math.max(44,chrome+(style.appearance==='base-select'?24:0));
+      var width=Math.max(90,style.minWidth,textWidth+pickerChrome+4);
+      return {min:width,fit:width};
+    }
+    var chrome=horizontalChrome(control,18),spinner=number&&!control.readOnly&&!control.classList.contains('equipment-table-calculated')?18:0;
+    var measured=measureText(value||control.placeholder||'',control)+chrome+spinner+4;
+    var minimum=Math.max(style.minWidth,output?64:number?68:96);
+    // Names are intentionally editable, scrollable text fields. A very long
+    // user-defined name should not force a thousand-pixel minimum.
+    return {min:id==='name'?minimum:Math.max(minimum,measured),fit:Math.max(minimum,Math.min(340,measured))};
+  }
+  function statusWidths(cell){
+    var verdict=cell.querySelector('.equipment-table-verdict');
+    if(!verdict)return 0;
+    // Evaluation can change after editing. Reserve all localized verdicts,
+    // not just the current PASS or FAIL. Include the capsule's dot and gap.
+    var labels=[tr('NOT EVALUATED','NO EVALUADO'),tr('PASS','CUMPLE'),tr('FAIL','NO CUMPLE'),tr('REVIEW','REVISAR'),tr('AT LIMIT','AL LÍMITE'),verdict.textContent];
+    return Math.max(...labels.map(label=>measureText(label,verdict)))+horizontalChrome(verdict,14)+Math.max(8,cssPixels(window.getComputedStyle?.(document.documentElement)?.getPropertyValue?.('--status-pill-dot-size'),4)+cssPixels(window.getComputedStyle?.(document.documentElement)?.getPropertyValue?.('--status-pill-gap'),4))+6;
   }
   function sizing(layout,descriptor){
     var {id,head,unit,cells}=descriptor;
-    if(descriptor.collapsed){var width=Math.max(44,measureText(descriptor.labelNode.textContent,descriptor.labelNode)+36);return {min:width,fit:width};}
-    var min=id==='name'?152:id==='evaluation'?76:44;
-    var fit=Math.max(min,measureText(head.textContent,head)+24,measureText(unit.textContent,unit)+24);
-    if(id==='delete')return {min,fit};
+    if(descriptor.collapsed){
+      var width=Math.max(44,measureText(descriptor.labelNode.textContent,descriptor.labelNode)+horizontalChrome(head,25)+20);
+      return {min:width,fit:width};
+    }
+    var header=headerWidths(head,unit),min=Math.max(id==='name'?152:44,header.min),fit=Math.max(min,header.fit);
     cells.forEach(cell=>{
-      var width=0;
-      for(var control of cell.querySelectorAll('.equipment-table-control:not([hidden])')){
-        if(control.type==='checkbox'){width+=20;continue;}
-        var select=control.tagName==='SELECT',output=control.tagName==='OUTPUT',number=control.type==='number';
-        var value=select?(control.selectedOptions?.[0]?.textContent||control.value):output?control.textContent:control.value;
-        var minimum=select?90:output?64:number?68:96;
-        var content=Math.min(300,measureText(value,control)+(select?34: number?30:22));
-        width+=Math.max(minimum,content)+4;
-        min=Math.max(min,minimum+16+(cell.querySelector('.equipment-table-checkbox:not([hidden])')?24:0));
-      }
-      if(id==='name'){
-        // Only the type icon and editable name occupy the identity cell.
-        var chrome=28+4;
-        width+=chrome;min=Math.max(min,96+chrome+20);
-      }
-      if(id==='evaluation'){
-        var verdict=cell.querySelector('.equipment-table-verdict');
-        if(verdict&&!verdict.hidden)width=Math.max(width,measureText(verdict.textContent,verdict)+30);
-      }
-      fit=Math.max(fit,width+16);
+      var padding=horizontalChrome(cell,id==='delete'?9:17)+4;
+      var controls=Array.from(cell.querySelectorAll('.equipment-table-control:not([hidden])')),minimum=0,preferred=0;
+      controls.forEach(control=>{var width=controlWidths(control,id);minimum+=width.min;preferred+=width.fit;});
+      var gap=4*Math.max(0,controls.length-1);
+      minimum+=gap;preferred+=gap;
+      if(id==='name'){minimum+=32;preferred+=32;}
+      if(id==='evaluation'){minimum=Math.max(minimum,statusWidths(cell));preferred=Math.max(preferred,minimum);}
+      if(id==='delete'){minimum=Math.max(minimum,28);preferred=Math.max(preferred,minimum);}
+      min=Math.max(min,minimum+padding);
+      fit=Math.max(fit,preferred+padding);
     });
-    return {min,fit:Math.max(min,Math.min(340,fit))};
+    min=Math.ceil(min);
+    return {min,fit:Math.max(min,Math.min(340,Math.ceil(fit)))};
   }
   function applyWidths(layout){
     cancelGroupMotion(layout);
@@ -400,14 +452,25 @@ window.STEquipmentTable=(function(){
     layout.columns.forEach(c=>{
       var custom=manualWidths.get(widthKey(layout,c.id)),value=clampWidth(custom??c.fit,c.min);
       c.width=value;total+=value;c.col.style.width=value+'px';
-      c.handle.setAttribute('aria-valuemin',String(c.min));c.handle.setAttribute('aria-valuemax','1000');c.handle.setAttribute('aria-valuenow',String(value));
+      c.handle.setAttribute('aria-valuemin',String(c.min));c.handle.setAttribute('aria-valuemax',String(Math.max(1000,c.min)));c.handle.setAttribute('aria-valuenow',String(value));
     });
     layout.table.style.width=total+'px';
   }
   function fitColumns(layout){
     if(layout.groupMotion)return;
     measureText.styles=new Map();
+    measureText.rootFontSize=parseFloat(window.getComputedStyle?.(document.documentElement)?.fontSize)||16;
     layout.columns.forEach(c=>Object.assign(c,sizing(layout,c)));
+    // A group with only one visible field still needs space for its label
+    // and expand/collapse chevron, even after manual column resizing.
+    layout.table.querySelectorAll('.equipment-table-group-heading[data-group-id]').forEach(head=>{
+      var columns=layout.columns.filter(c=>c.groupId===head.dataset.groupId&&!c.collapsed);
+      var label=head.querySelector('.equipment-table-group-label');
+      if(!columns.length||!label)return;
+      var need=longestWord(label.textContent,label)+horizontalChrome(head,17)+20;
+      var available=columns.reduce((sum,c)=>sum+c.min,0);
+      if(need>available){var first=columns[0];first.min=Math.ceil(first.min+need-available);first.fit=Math.max(first.fit,first.min);}
+    });
     applyWidths(layout);
   }
   function bindResize(descriptor,layout){
@@ -633,6 +696,10 @@ window.STEquipmentTable=(function(){
       el('equipment-view-cards').addEventListener('click',()=>select('cards'));
       el('equipment-view-table').addEventListener('click',()=>select('table'));
       window.addEventListener('st-language-change',()=>{sync(current,section,separate);scheduleRefresh();});
+      window.addEventListener('resize',scheduleRefresh);
+      // ST Sans loads asynchronously; remeasure once its real metrics exist.
+      document.fonts?.ready?.then(scheduleRefresh);
+      document.fonts?.addEventListener?.('loadingdone',scheduleRefresh);
     }
     var mixed=minimal(state)&&!!state?.activeCase;
     var allowed=mixed||Boolean(state?.activeCase&&state.uiView==='editor'&&['ADVANCE','ADVANCED'].includes(String(state.bootstrap?.uiMode||'').toUpperCase()));

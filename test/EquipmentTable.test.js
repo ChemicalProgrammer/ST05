@@ -44,7 +44,7 @@ function fixture(){
     const fields=node('div','equipment-fields');c.append(drag,remove,verdict,fields);c._fields=fields;
     c._equipmentReliabilityVerdict=type==='CONVEYOR'?null:verdict;c._editorConveyorVerdict=type==='CONVEYOR'?verdict:null;
     field(fields,'equipment-name',id,{label:'Name'});
-    field(fields,'equipment-type',type,{tag:'select',options:['FILLER','CAPPER','CONVEYOR']});
+    field(fields,'equipment-type',type,{tag:'select',options:['FILLER','CAPPER','CONVEYOR','CASE_PACKER','BLOWMOLDER','PALLETIZER']});
     if(type!=='CONVEYOR'){
       field(fields,'equipment-rate',480,{type:'number',min:0,label:'Speed (bpm)'});
       field(fields,'equipment-maximum-speed',600,{type:'number',min:0});
@@ -62,6 +62,7 @@ function fixture(){
     }else{
       field(fields,'equipment-transport-unit','Bottle',{tag:'output'});
       field(fields,'format-zone-lact',1000,{type:'number'});
+      field(fields,'format-zone-package-length',310,{type:'number'});
       const accumulationToggle=field(fields,'format-zone-accumulation-seconds-enabled',false,{type:'checkbox'});
       const accumulation=field(fields,'format-zone-accumulation-seconds',15,{type:'number',readOnly:true});
       accumulationToggle.addEventListener('change',()=>{accumulation.readOnly=!accumulationToggle.checked;});
@@ -422,5 +423,35 @@ test('First package column is Advance only; Startup remains in Basic table',()=>
   assert.equal(original.value,'8');
   h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync('equipment',false);
   assert.equal(h.cell('Belt','restart-first-package').querySelector('input').value,'8');
+ }finally{h.close();}
+});
+
+test('shared tables reserve full verdicts, all select options and complete header words at their resize minimum',()=>{
+ const h=fixture();
+ try{
+  h.a._equipmentReliabilityVerdict.textContent='PASS';
+  h.b._editorConveyorVerdict.textContent='NOT EVALUATED';
+  h.c._equipmentReliabilityVerdict.textContent='FAIL';
+  const types=h.a._fields.querySelector('.equipment-type');
+  types.querySelector('option[value=CASE_PACKER]').textContent='Case packer';
+  const long=types.querySelector('option[value=BLOWMOLDER]');long.textContent='Blow molding machine';
+  const width=(row,column)=>Number(h.row(row).closest('table').querySelector('th[data-column="'+column+'"] .equipment-table-resize').getAttribute('aria-valuenow'));
+  const min=(row,column)=>Number(h.row(row).closest('table').querySelector('th[data-column="'+column+'"] .equipment-table-resize').getAttribute('aria-valuemin'));
+  const shrink=(row,column)=>{const handle=h.row(row).closest('table').querySelector('th[data-column="'+column+'"] .equipment-table-resize');for(let i=0;i<100;i++)handle.dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true}));assert.equal(width(row,column),min(row,column));};
+  h.tableButton.click();
+  for(const row of ['Filler','Belt']){
+    shrink(row,'evaluation');shrink(row,'type');
+    assert(min(row,'evaluation')>=120);
+  }
+  assert(min('Filler','type')>=190,'reserve the unselected long equipment type and the picker');
+  shrink('Belt','package-length');assert(min('Belt','package-length')>=89);
+  h.a._equipmentReliabilityVerdict.textContent='NOT EVALUATED';h.w.STEquipmentTable.refresh();
+  assert(width('Filler','evaluation')>=min('Filler','evaluation'));
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  for(const col of ['evaluation','type','package-length'])shrink('Belt',col);
+  assert(min('Belt','type')>=190);assert(min('Belt','evaluation')>=120);
+  h.d.documentElement.lang='es';h.w.dispatchEvent(new h.w.Event('st-language-change'));
+  assert.equal(h.host.querySelector('th[data-column=evaluation]').textContent,'Evaluación');
+  shrink('Belt','package-length');assert(width('Belt','package-length')>=min('Belt','package-length'));
  }finally{h.close();}
 });

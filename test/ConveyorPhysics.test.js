@@ -24,7 +24,7 @@ function conserved(result) {
 }
 
 test('slower physical speed limits output independently of legacy conveyor BPM',()=>{
-  const slow=run(line({speed:40})),fast=run(line({speed:100}));
+  const slow=run(line({speed:20})),fast=run(line({speed:100}));
   assert.ok(slow.summary.outputCount<fast.summary.outputCount);
   assert.ok(slow.summary.outputCount<=2*100);
   assert.equal(slow.accumulationZoneMetrics['belt--physical-zone'].transferCapacityPerSecond,2);
@@ -35,10 +35,10 @@ test('manual FlowPilot speed overrides automatic speed and survives geometry res
   const model=line();model.equipment[1].processData={geometry:{lactMm:1000,lpPrimeMm:200},upstream:{packageLengthMm:10,dischargePitchMm:20},accumulation:{speedMode:'MANUAL',conveyorSpeedFactorPercent:5,conveyorSpeedMmPerSecond:40,movingGapMm:10,accumulatedGapMm:0,backupSensorPositionMm:200}};
   const {definition}=resolveAccumulationZoneDefinition(model.equipment,1);
   assert.equal(definition.conveyorSpeedMmPerSecond,40);
-  assert.equal(definition.productPitchMm,20);assert.equal(definition.accumulatedPitchMm,10);
+  assert.equal(definition.productPitchMm,10);assert.equal(definition.accumulatedPitchMm,10);assert.equal(definition.gapMm,0);
   const result=run(model);conserved(result);
   assert.equal(result.samples[0].accumulationZones[0].geometry.travelSeconds,25);
-  assert.ok(result.summary.outputCount<=200);
+  assert.ok(result.summary.outputCount<=400);
 });
 
 test('a stopped conveyor freezes transport and prevents discharge of queued inventory',()=>{
@@ -56,7 +56,7 @@ test('a stopped conveyor freezes transport and prevents discharge of queued inve
 test('a paused downstream builds a compressed queue and restart releases it without losing material',()=>{
   const result=run(line(),{commands:[{atVirtualSecond:30,equipmentId:'sink',action:'PAUSE'},{atVirtualSecond:60,equipmentId:'sink',action:'RUN'}]});
   const queue=result.samples.find(s=>s.virtualSecond===60).accumulationZones[0];
-  assert.equal(queue.capacityUnits,100);assert.equal(queue.geometry.productPitchMm,20);assert.equal(queue.geometry.accumulatedPitchMm,10);
+  assert.equal(queue.capacityUnits,100);assert.equal(queue.geometry.productPitchMm,25);assert.equal(queue.geometry.accumulatedPitchMm,10);
   assert.ok(queue.waitingUnits>0);assert.ok(queue.queueLengthMm>0);
   assert.ok(result.events.some(e=>e.type==='BACKUP_SENSOR_BLOCKED'));
   assert.ok(result.samples.at(-1).accumulationZones[0].waitingUnits<queue.waitingUnits);
@@ -73,13 +73,18 @@ test('fractional travel crossing avoids a fake throughput bottleneck at differen
   conserved(a);conserved(b);
 });
 
-test('invalid speed mode, manual speed and gap ordering fail validation',()=>{
-  for(const patch of [{speedMode:'BAD'},{conveyorSpeedMmPerSecond:0},{accumulatedGapMm:11},{movingGapMm:-1}]) {
+test('invalid speed mode and manual speed fail validation; historical gaps are ignored',()=>{
+  for(const patch of [{speedMode:'BAD'},{conveyorSpeedMmPerSecond:0}]) {
     const model=line();Object.assign(model.equipment[1].processData.accumulation,patch);
     assert.equal(simulateLine({case:model,run:{durationSeconds:10,tickSeconds:0.25,seed:1}}).ok,false);
   }
 });
 
+test('legacy gaps and stored pitch do not affect calculated transport or packed capacity',()=>{
+ const model=line(),a=run(model),historical=structuredClone(model);
+ Object.assign(historical.equipment[1].processData.accumulation,{movingGapMm:-1,accumulatedGapMm:80,productPitchMm:999,accumulatedPitchMm:90,gapMm:999});
+ const b=run(historical);assert.deepEqual(a.summary,b.summary);assert.equal(b.accumulationZoneMetrics['belt--physical-zone'].movingPitchMm,25);assert.equal(b.accumulationZoneMetrics['belt--physical-zone'].accumulatedPitchMm,10);
+});
 test('Test 03 reference: eight hours conserve material and reproduce deterministic FlexSim throughput',async()=>{
   const {createTest03ReferenceInput}=await import('../src/simulation/Test03Reference.js');
   const input=createTest03ReferenceInput(),response=simulateLine(input);

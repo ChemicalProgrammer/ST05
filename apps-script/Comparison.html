@@ -19,8 +19,6 @@ window.STInputComparison=(function(){
       add('Target Population (%)',a.targetPopulationPercent??'Automatic');add('Target overspeed (%)',a.targetOverspeedPercent??'Automatic');add('Manual LBA (mm)',a.manualLbaMm??'Automatic');
       var target=a.targetPopulationPercent!=null||a.targetOverspeedPercent!=null,manual=!target&&a.speedMode==='MANUAL';
       add('Speed control',target?'Target':a.speedMode||'AUTO');if(manual)add('Belt speed (m/min)',a.conveyorSpeedMmPerSecond,.06);
-      if(!target)add('Moving gap (mm)',a.movingGapMm);
-      add('Accumulated gap (mm)',a.accumulatedGapMm);
       if(a.manualLbaMm==null)add('Back-up position (mm)',a.backupSensorPositionMm);
       add('Discharge factor (%)',a.conveyorSpeedFactorPercent??s.conveyorSpeedFactorVsDischargeVelocityPercent);
       add('Coding factor (%)',s.codingConveyorSpeedFactorVsPreviousConveyorPercent);add('Acc zone factor (%)',s.conveyorSpeedFactorVsPreviousConveyorPercent);

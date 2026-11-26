@@ -46,7 +46,7 @@ test('disabled events do not change product, and a stop without destination reta
 });
 test('profiles retain shared reliability and installation while overriding machine rates',()=>{
  const i=input(),base=i.case.equipment;base[0].noiseProfile={reliability:{mtbfMinutes:10,mttrMinutes:2}};i.run.productCatalog[0].equipment.source={ratePerMinute:120,startupSeconds:2};const resolved=applyProductProfile(base,i.run.productCatalog[0]);assert.equal(resolved[0].nominalRatePerSecond,2);assert.deepEqual(resolved[0].noiseProfile,base[0].noiseProfile);assert.equal(resolved[1].processData.accumulation.usableLengthMm,1000);
- const z=resolveAccumulationZoneDefinition(resolved,3).definition;assert.equal(z.productLengthMm,100);assert.equal(z.productPitchMm,110);
+ const z=resolveAccumulationZoneDefinition(resolved,3).definition;assert.equal(z.productLengthMm,100);assert.equal(z.productPitchMm,250);
 });
 
 test('nested bottle/case presentations override legacy dimensions and use the correct physical size by stage',()=>{
@@ -72,10 +72,10 @@ test('missing product dimensions inherit conveyor defaults; missing both sources
  const i=input(),draft=structuredClone(i.run.productCatalog[0]);draft.id='draft';draft.name='Draft format';delete draft.bottleLengthMm;delete draft.caseLengthMm;i.run.productCatalog.push(draft);conserved(run(i));i.run.initialProductId='draft';conserved(run(i));for(const e of i.case.equipment.filter(e=>e.type==='CONVEYOR')){delete e.processData.upstream;delete e.processData.accumulation.productLengthMm;}const result=simulateLine(i);assert.equal(result.ok,false);assert.match(JSON.stringify(result.error),/length along the conveyor/);
 });
 
-test('blank conveyor overrides preserve editable base settings while explicit overrides take precedence',()=>{
+test('legacy gap overrides are ignored while explicit belt speeds take precedence',()=>{
  const i=input(),p=i.run.productCatalog[0],belt=i.case.equipment[1];p.equipment.bottles={};delete p.bottleLengthMm;belt.processData.accumulation.movingGapMm=7;belt.processData.accumulation.accumulatedGapMm=3;belt.processData.accumulation.conveyorSpeedMmPerSecond=321;
- const before=structuredClone(belt),resolved=applyProductProfile(i.case.equipment,p)[1];assert.equal(resolved.processData.accumulation.movingGapMm,7);assert.equal(resolved.processData.accumulation.accumulatedGapMm,3);assert.equal(resolved.processData.accumulation.conveyorSpeedMmPerSecond,321);assert.equal(resolved.processData.upstream.packageLengthMm,belt.processData.upstream?.packageLengthMm??belt.processData.accumulation.productLengthMm);assert.deepEqual(belt,before);
- p.equipment.bottles={movingGapMm:0,accumulatedGapMm:0,speedMmPerSecond:123};const custom=applyProductProfile(i.case.equipment,p)[1];assert.equal(custom.processData.accumulation.movingGapMm,0);assert.equal(custom.processData.accumulation.accumulatedGapMm,0);assert.equal(custom.processData.accumulation.conveyorSpeedMmPerSecond,123);assert.equal(custom.processData.accumulation.usableLengthMm,belt.processData.accumulation.usableLengthMm);delete p.equipment.bottles.speedMmPerSecond;assert.equal(applyProductProfile(i.case.equipment,p)[1].processData.accumulation.conveyorSpeedMmPerSecond,321);
+ const before=structuredClone(belt),resolved=applyProductProfile(i.case.equipment,p)[1];assert.equal(resolved.processData.accumulation.movingGapMm,undefined);assert.equal(resolved.processData.accumulation.accumulatedGapMm,undefined);assert.equal(resolved.processData.accumulation.conveyorSpeedMmPerSecond,321);assert.equal(resolved.processData.upstream.packageLengthMm,belt.processData.upstream?.packageLengthMm??belt.processData.accumulation.productLengthMm);assert.deepEqual(belt,before);
+ p.equipment.bottles={movingGapMm:0,accumulatedGapMm:0,speedMmPerSecond:123};const custom=applyProductProfile(i.case.equipment,p)[1];assert.equal(custom.processData.accumulation.movingGapMm,undefined);assert.equal(custom.processData.accumulation.accumulatedGapMm,undefined);assert.equal(custom.processData.accumulation.conveyorSpeedMmPerSecond,123);assert.equal(custom.processData.accumulation.usableLengthMm,belt.processData.accumulation.usableLengthMm);delete p.equipment.bottles.speedMmPerSecond;assert.equal(applyProductProfile(i.case.equipment,p)[1].processData.accumulation.conveyorSpeedMmPerSecond,321);
 });
 
 test('real format changeovers retain enough provenance for weighted nominal gap and closed loss accounting',()=>{

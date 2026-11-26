@@ -120,7 +120,7 @@ var STConfigurationEditor=(function(){
       downstream:['infeedPitchMm','rampUpTimeSeconds'],
       speedAndSensors:['conveyorSpeedFactorVsDischargeVelocityPercent','codingConveyorSpeedFactorVsPreviousConveyorPercent','conveyorSpeedFactorVsPreviousConveyorPercent','blockedTimeDelaySeconds','clearTimeDelaySeconds','insuranceFactorUnits','overspeedVsInfeedScrewPercent'],
       equipment:['maximumSpeedBpm','recoveryTimeSeconds','residenceTimeSeconds','internalCapacityBottles','mtbfMinutes','mttrMinutes'],
-      accumulation:['usableLengthMm','productLengthMm','productPitchMm','gapMm','movingGapMm','accumulatedGapMm','accumulatedPitchMm','conveyorSpeedMmPerSecond','conveyorSpeedFactorPercent','primeSensorPositionMm','backupSensorPositionMm','backupRestartPositionMm','dischargeRunoutLengthMm','rejectRunoutLengthMm','blockedTimeDelaySeconds','clearTimeDelaySeconds','insuranceFactorUnits','upstreamStopResponseSeconds','bottlesDischargedAtStop','downstreamRampUpSeconds','restartToFirstPackageSeconds','declaredAccumulationSeconds','manualLbaMm','targetPopulationPercent','targetOverspeedPercent']
+      accumulation:['usableLengthMm','productLengthMm','conveyorSpeedMmPerSecond','conveyorSpeedFactorPercent','primeSensorPositionMm','backupSensorPositionMm','backupRestartPositionMm','dischargeRunoutLengthMm','rejectRunoutLengthMm','blockedTimeDelaySeconds','clearTimeDelaySeconds','insuranceFactorUnits','upstreamStopResponseSeconds','bottlesDischargedAtStop','downstreamRampUpSeconds','restartToFirstPackageSeconds','declaredAccumulationSeconds','manualLbaMm','targetPopulationPercent','targetOverspeedPercent']
     };
     Object.keys(fields).forEach(function(group){
       if(data[group]==null)return;
@@ -135,7 +135,7 @@ var STConfigurationEditor=(function(){
     if(item?.type!=='CONVEYOR'&&item?.processData?.role!=='CONVEYOR')return false;
     // A draft may lack geometry or have a physical relationship to review.
     // Invalid control modes and explicit target constraints remain blocking.
-    if(['speedMode','targetPopulationPercent','targetOverspeedPercent','movingGapMm','accumulatedGapMm'].includes(field))return false;
+    if(['speedMode','targetPopulationPercent','targetOverspeedPercent'].includes(field))return false;
     if(!field&&data?.targetPopulationPercent!==undefined&&data?.targetOverspeedPercent!==undefined)return false;
     if(field==='manualLbaMm'&&!(data?.manualLbaMm>0))return false;
     return true;

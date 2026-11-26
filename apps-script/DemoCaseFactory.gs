@@ -123,7 +123,7 @@ function createCompleteDemoLine_() {
     belt.processData.geometry.lpPrimeMm=boxed?1200:800;
     belt.processData.upstream.packageWidthMm=boxed?260:66;
     belt.processData.upstream.dischargeVelocityMPerMinute=spec[3]/factor*pitch/1000;
-    belt.processData.accumulation={id:'demo-zone-'+(index+1),name:spec[2]+' accumulation',restartToFirstPackageSeconds:spec[6],speedMode:'MANUAL',conveyorSpeedMmPerSecond:spec[3]/factor*pitch/60*1.2,conveyorWidthMm:boxed?400:150,movingGapMm:pitch-length,accumulatedGapMm:0,backupSensorPositionMm:1000,blockedTimeDelaySeconds:.5,clearTimeDelaySeconds:.5,insuranceFactorUnits:2,upstreamStopResponseSeconds:.4,bottlesDischargedAtStop:boxed?1:3,downstreamRampUpSeconds:3};
+    belt.processData.accumulation={id:'demo-zone-'+(index+1),name:spec[2]+' accumulation',restartToFirstPackageSeconds:spec[6],speedMode:'MANUAL',conveyorSpeedMmPerSecond:spec[3]/factor*pitch/60*1.2,conveyorWidthMm:boxed?400:150,backupSensorPositionMm:1000,blockedTimeDelaySeconds:.5,clearTimeDelaySeconds:.5,insuranceFactorUnits:2,upstreamStopResponseSeconds:.4,bottlesDischargedAtStop:boxed?1:3,downstreamRampUpSeconds:3};
     equipment.push(belt);
   });
   return equipment;

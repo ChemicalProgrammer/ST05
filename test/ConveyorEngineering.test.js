@@ -205,7 +205,7 @@ test('target Overspeed sets active belt speed and pitch and rejects conflicting 
  acc.targetOverspeedPercent=20;acc.targetPopulationPercent=50;assert.equal(simulateLine({case:line,run:{durationSeconds:1,tickSeconds:.25,sampleEverySeconds:1,seed:17}}).ok,false);
 });
 
-test('Sheet conveyors use the design pitch during transport and the package length when packed', () => {
+test('Sheet conveyors derive moving pitch from belt speed and native rate; legacy gaps do not override it', () => {
   const model = createFlowPilotLine();
   const conveyor = model.equipment[1];
   Object.assign(conveyor.processData.accumulation, {
@@ -233,8 +233,8 @@ test('Sheet conveyors use the design pitch during transport and the package leng
   };
 
   const legacy = simulate();
-  closeTo(legacy.movingPitchMm, 150);
-  closeTo(legacy.transferCapacityPerSecond, 552.666666666667 / 150);
+  closeTo(legacy.movingPitchMm, 552.666666666667/5);
+  closeTo(legacy.transferCapacityPerSecond, 5);
   assert.equal(legacy.accumulatedPitchMm, 85);
   assert.equal(legacy.engineering.input.upstreamDischargePitchMm, 150);
   assert.equal(product.equipment.conveyor.movingGapMm, 65);
@@ -243,19 +243,21 @@ test('Sheet conveyors use the design pitch during transport and the package leng
   closeTo(simulate().movingPitchMm, legacy.movingPitchMm);
 
   product.equipment.conveyor.movingGapMm = 70;
-  assert.equal(simulate().movingPitchMm, 155);
+  closeTo(simulate().movingPitchMm, legacy.movingPitchMm);
+  product.equipment.conveyor.accumulatedGapMm=50;
+  assert.equal(simulate().accumulatedPitchMm,85);
 
   delete product.equipment.conveyor.movingGapMm;
   conveyor.processData.accumulation.conveyorSpeedMmPerSecond = 300;
   const slower = simulate();
-  assert.equal(slower.movingPitchMm, 150);
+  assert.equal(slower.movingPitchMm, 85);
   assert.equal(slower.accumulatedPitchMm, 85);
-  closeTo(slower.transferCapacityPerSecond, 300 / 150);
+  closeTo(slower.transferCapacityPerSecond, 300 / 85);
 
   conveyor.characteristics = {...conveyor.characteristics, sourceSheetLayout: 'plant-sheet-v2'};
   Object.assign(conveyor.processData.upstream, {packageLengthMm: 85, dischargePitchMm: 150});
   const rawImport = simulate(false);
-  assert.equal(rawImport.movingPitchMm, 150);
+  assert.equal(rawImport.movingPitchMm, 85);
   assert.equal(rawImport.accumulatedPitchMm, 85);
 });
 
@@ -281,7 +283,7 @@ test('derived sensors still reject impossible overflow geometry and a genuinely 
   }
 });
 
-test('manual speed with measured sheet pitch and missing Back-up does not replace the design pitch',()=>{
+test('manual speed with measured sheet pitch derives moving pitch and Back-up from runtime spacing',()=>{
  const line=createFlowPilotLine(),belt=line.equipment[1],acc=belt.processData.accumulation;
  belt.characteristics={sourceSheetLayout:'plant-sheet-v2'};
  delete belt.processData.speedAndSensors.conveyorSpeedFactorVsDischargeVelocityPercent;
@@ -290,8 +292,8 @@ test('manual speed with measured sheet pitch and missing Back-up does not replac
  const r=simulateLine({case:line,run:{durationSeconds:10,tickSeconds:.25,sampleEverySeconds:1,seed:17}});
  assert.equal(r.ok,true,JSON.stringify(r.error));
  const z=r.result.accumulationZoneMetrics['conveyor--physical-zone'];
- assert.equal(z.movingPitchMm,85);
- closeTo(z.engineering.calculated.actualBackupSensorPositionMm,250+350+(7*.5+4+2)*85);
+ assert.equal(z.movingPitchMm,90);
+ closeTo(z.engineering.calculated.actualBackupSensorPositionMm,250+350+(7*.5+4+2)*90);
 });
 test('direct geometry can reuse the same Back-up photoeye on restart without a separate position',()=>{
  const line=createFlowPilotLine(),belt=line.equipment[1];

@@ -95,7 +95,7 @@ var ST_TEXT_RESOURCES = {
   "reliability.mtbf":"MTBF (min)",
   "reliability.mttr":"MTTR (min)",
 
-  "conveyor.invalid_geometry":"Enter a positive belt speed and package length, a conveyor long enough for one moving pitch, and an accumulated gap no greater than the moving gap.",
+  "conveyor.invalid_geometry":"Enter a positive belt speed and package length, and a conveyor long enough for one calculated moving pitch.",
   "conveyor.packed_pitch":"Accumulated pitch",
   "conveyor.capacity_formula":" · Accumulated capacity = floor(length / accumulated pitch): ",
   "results.productive_capacity":"Productive capacity · %",

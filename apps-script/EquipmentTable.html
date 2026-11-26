@@ -72,8 +72,9 @@ window.STEquipmentTable=(function(){
   function type(card){return source(card,'.equipment-type')?.value||card.dataset.equipmentType;}
   function applicable(control,card){
     if(!control||control.type==='hidden')return false;
-    // Minimal uses this same table but must never project Advance speed-mode controls.
-    if(minimal(current)&&['format-zone-speed-mode','format-zone-discharge-velocity','format-zone-discharge-velocity-enabled'].some(name=>control.classList.contains(name)))return false;
+    // Compact Basic never projects hidden engineering details, even from a
+    // legacy visible source card. Standard and Advance keep their fields.
+    if(minimal(current)&&['format-zone-speed-mode','format-zone-discharge-velocity','format-zone-discharge-velocity-enabled','format-zone-stop-response','format-zone-acc-factor'].some(name=>control.classList.contains(name)))return false;
     if((control.classList.contains('equipment-maximum-speed')||control.classList.contains('format-zone-restart-first-package'))&&!['ADVANCE','ADVANCED'].includes(String(current?.bootstrap?.uiMode||'').toUpperCase()))return false;
     // Original fields can be in a hidden card or inspector by design; only
     // semantic per-field hiding (general/split, dynamic, type) matters here.

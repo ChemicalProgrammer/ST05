@@ -19,3 +19,20 @@ Basic hides Machine design and writes `machineDesignEnabled:false` into its run 
 ## Compact Settings
 
 In Basic (MINIMAL), Settings is a single scrollable view rather than tabs. An open case shows General (name and complete-case export) followed by Appearance (language, theme, text size, primary and secondary colors and their existing reset controls). The separate interface-mode dialog opens globally with Ctrl + Shift held and five deliberate M keypresses within three seconds. Selecting a mode is a draft until Apply; Cancel or Escape leaves the case unchanged. The mode selector is no longer part of Settings. In Case Gallery, the Drive workspace controls remain accessible alongside Appearance. Simulation, case layout, product-format and chart-series controls are not presented in Basic; their existing data and runtime controls are retained. Standard and Advance keep their tabbed Settings. The Basic export button and Basic gallery export download the complete captured draft or saved case JSON directly, with no export-selection or preview dialog, no filtering and no newly generated report annex. The existing export validation and capture of the current numerical/2D data are retained. Exporting does not save the case to Drive.
+
+## Conveyor inputs: compact Basic
+
+Basic (`MINIMAL`) hides Stop Response and Accumulation factor in the shared
+editor/table. Standard (`BASIC`) and Advance retain them. This is a presentation
+change, not a change to the physical model or import schema: existing Stop
+Response values are retained and still participate in simulation; missing values
+use the existing zero-second default. Block delay, Clear delay, and Bottles at
+stop remain independent fields.
+
+The physical accumulation belt speed remains an independent manual input in
+m/min. Discharge and Coding factors remain available. The accumulation factor
+is derived as `100 × (belt speed / coding speed − 1)` when Coding speed is
+positive; it is not a second active speed specification in Basic. Advance Auto
+can instead use the accumulation factor as an input and derive belt speed from
+Coding speed. Previously entered Auto factors are retained in `inputValues` by
+the existing speed-source policy. The engineering/CAT calculations are unchanged.

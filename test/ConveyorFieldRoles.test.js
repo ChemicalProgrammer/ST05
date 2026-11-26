@@ -103,20 +103,29 @@ test('Minimal follows the Basic conveyor speed policy even though it uses the Ad
  }finally{h.close();}
 });
 
-test('Basic hides the manual discharge override and keeps Stop Response optional',()=>{
+test('Compact Basic hides discharge override, Stop Response and accumulation factor without discarding values',()=>{
  const h=harness();try{
   h.w.STMinimalMode={isMinimal:()=>true};h.w.STBasicMode.isBasic=()=>true;
   h.f('discharge-velocity-enabled').checked=true;h.f('discharge-velocity').value='26';
   h.f('discharge-velocity').dataset.manualValue='26';h.f('discharge-velocity').dataset.inputMode='true';
+  h.f('stop-response').value='3';h.f('acc-factor').value='12';
   h.sync();assert(h.f('discharge-velocity').closest('label').hidden);
   assert(h.f('discharge-velocity-enabled').disabled);
   assert.equal(h.read().dischargeVelocityMPerMinute,undefined);
   assert.equal(h.read().inputValues.dischargeVelocityMPerMinute,26);
   assert.equal(h.read().preserveManualDischargeVelocity,true);
   assert.equal(h.f('stop-response').required,false);assert.equal(h.f('stop-response').placeholder,'0');
-  h.f('stop-response').value='3';assert.equal(h.read().upstreamStopResponseSeconds,3);
+  assert(h.f('stop-response').closest('label').hidden);
+  assert(h.f('acc-factor').closest('label').hidden);assert(h.f('acc-factor').readOnly);
+  assert.equal(h.read().upstreamStopResponseSeconds,3);
+  assert.equal(h.read().accFactorPercent,undefined);assert.equal(h.read().inputValues.accFactorPercent,12);
+  h.f('acc-factor').value='40'; // calculated output must not replace the retained Auto input
   h.w.STMinimalMode.isMinimal=()=>false;h.sync();
   assert(!h.f('discharge-velocity').closest('label').hidden);
-  assert.equal(h.read().dischargeVelocityMPerMinute,26);
+  assert(!h.f('stop-response').closest('label').hidden);assert(!h.f('acc-factor').closest('label').hidden);
+  assert.equal(h.read().dischargeVelocityMPerMinute,26);assert.equal(h.read().upstreamStopResponseSeconds,3);
+  assert(h.f('acc-factor').readOnly);assert.equal(h.read().inputValues.accFactorPercent,12);
+  h.w.STBasicMode.isBasic=()=>false;h.f('speed-mode').value='AUTO';h.sync();
+  assert(!h.f('acc-factor').readOnly);assert.equal(h.read().accFactorPercent,12);
  }finally{h.close();}
 });

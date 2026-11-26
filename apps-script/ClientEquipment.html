@@ -419,6 +419,13 @@
       }
       ['speed-factor','coding-factor','accumulated-gap','insurance','stop-response'].forEach(function(key){conveyorFieldRole(equipmentField(card,'.format-zone-'+key),'OPTIONAL');});
       var response=equipmentField(card,'.format-zone-stop-response');if(response)response.placeholder='0';
+      // Compact Basic (MINIMAL) keeps measured belt speed as the only speed
+      // source. Hide the derived factor and the optional advanced stop delay,
+      // without resetting imported/saved values or changing the engine.
+      var compactBasic=basicDischargeVelocityCalculated();
+      ['stop-response','acc-factor'].forEach(function(key){
+        var label=equipmentField(card,'.format-zone-'+key)?.closest('label');if(label)label.hidden=compactBasic;
+      });
       window.STEquipmentInspector?.refreshHelp?.(card);
     }
 

@@ -401,6 +401,31 @@ test('Minimal mixed table does not project a conveyor speed-mode column, even fr
  }finally{h.close();}
 });
 
+test('Compact Basic omits Stop Response and accumulation factor columns without changing the source controls',()=>{
+ const h=fixture();try{
+  const source=h.b._fields;
+  for(const [key,value] of [['stop-response',3],['acc-factor',12],['blocked-delay',0.5],['clear-delay',0.5],['residual',6],['speed-factor',10],['coding-factor',5]]){
+   const label=h.d.createElement('label'),input=h.d.createElement('input');
+   label.textContent=key;input.type='number';input.className='format-zone-'+key;input.value=String(value);label.append(input);source.append(label);
+  }
+  h.tableButton.click();
+  assert.equal(h.cell('Belt','stop-response').querySelector('input').value,'3');
+  assert.equal(h.cell('Belt','acc-factor').querySelector('input').value,'12');
+  h.state.bootstrap.uiMode='MINIMAL';h.state.uiView='simulation';h.sync('simulation',false);
+  for(const key of ['stop-response','acc-factor']){
+   assert.equal(h.cell('Belt',key),null);
+   assert.equal(h.host.querySelector('th[data-column="'+key+'"]'),null);
+  }
+  for(const key of ['belt-speed','blocked-delay','clear-delay','residual','speed-factor','coding-factor'])assert(h.cell('Belt',key).querySelector('input'));
+  assert.equal(source.querySelector('.format-zone-stop-response').value,'3');
+  assert.equal(source.querySelector('.format-zone-acc-factor').value,'12');
+  h.state.bootstrap.uiMode='ADVANCE';h.state.uiView='editor';h.sync('equipment',false);
+  assert.equal(h.cell('Belt','stop-response').querySelector('input').value,'3');
+  assert.equal(h.cell('Belt','acc-factor').querySelector('input').value,'12');
+  assert.equal(h.calls.dirty,0);
+ }finally{h.close();}
+});
+
 test('Maximum speed remains stored but is not a column in Minimal',()=>{
  const h=fixture();try{
   h.tableButton.click();const original=h.a._fields.querySelector('.equipment-maximum-speed');

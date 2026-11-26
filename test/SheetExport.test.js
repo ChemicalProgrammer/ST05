@@ -46,9 +46,9 @@ test('outdated browsers cannot silently create or import a spreadsheet',()=>{
 test('capability preflight and UI contract are aligned',()=>{
  const h=runtime(),result=h.c.getSheetTemplateCapabilities();
  assert.equal(result.ok,true);
- assert.equal(result.data.modeSpecificTabs,true);
- assert.equal(result.data.sheetTemplateVersion,'sheet-template-20261124-1');
- assert.equal(result.data.importVersion,'sheet-import-20261123-8');
+ assert.equal(result.data.modeSpecificTabs,true);assert.equal(result.data.modeSpecificColumns,true);
+ assert.equal(result.data.sheetTemplateVersion,'sheet-template-20261126-2');
+ assert.equal(result.data.importVersion,'sheet-import-20261126-2');
  const client=fs.readFileSync('apps-script/ClientCases.html','utf8');
  assert(client.includes("callServer('getSheetTemplateCapabilities'"));
  assert(client.includes('response.data.tabNames'));
@@ -121,7 +121,7 @@ test('authenticated export creates one new themed Sheet in Exports with batched 
   const response=c.exportEquipmentSheet(request);assert.equal(response.ok,true,JSON.stringify(response));
   assert.equal(response.data.equipmentCount,3);assert.equal(response.data.url,'https://docs.google.com/spreadsheets/d/new-sheet-id/edit');
   assert.equal(calls[0][0],'owned');assert.deepEqual(calls.find(call=>call[0]==='move'),['move','export-folder']);
-  assert.equal(writes.length,3);const {coordinates,values}=writes[0];assert.deepEqual(coordinates,[1,1,107,34]);
+  assert.equal(writes.length,3);const {coordinates,values}=writes[0];assert.deepEqual(coordinates,[1,1,107,35]);
   assert.deepEqual(calls.filter(call=>call[0]==='insertSheet'),[['insertSheet','Products & Formats',1],['insertSheet','Real Data',2]]);
   const actuals=writes[2].values;assert.equal(actuals[0][9],'st-real-inputs-v5');assert.match(actuals[15][0],/Equipment.*MATCH/);assert.equal(actuals[15][9],values[7][29]);assert.equal(actuals[16][9],values[9][29]);assert.match(actuals[15][5],/E16\/\(D16\+E16\)/);
   const catalog=writes[1].values;
@@ -220,7 +220,7 @@ test('three-tab export previews equipment and filled observations via the same s
  actuals[3][1]=1440;actuals[5][1]=1344;actuals[8][4]=.633;actuals[5][4]=1200;
  actuals[15][1]=12;actuals[15][2]=.121;
  values[7].splice(3,4,10,2,40,17);
- values[10].splice(0,10,'CUSTOM','Nueva máquina','N','','','','',200,5,300);
+ values[10].splice(0,10,'CUSTOM','Nueva máquina','N','','','','',200,5,300);values[10][34]=300;
  actuals[18][1]=0;actuals[18][2]=0;
  const mock=(grid,name,id)=>({getLastRow:()=>grid.length,getMaxRows:()=>100,getMaxColumns:()=>grid[0].length,getSheetId:()=>id,getName:()=>name,getRange:(r,col,count=1,width=1)=>({getValues:()=>grid.slice(r-1,r-1+count).map(row=>row.slice(col-1,col-1+width)),getNumberFormats:()=>Array.from({length:count},()=>Array(width).fill('0.00%'))})});
  const equipment=mock(values,'Equipment',1),real=mock(actuals,'Real Data',3),catalog=mock(h.writes[1].values,'Products & Formats',2);
@@ -229,14 +229,14 @@ test('three-tab export previews equipment and filled observations via the same s
   const result=h.c.previewSheetImport_({caseId:'mine',spreadsheet,uiMode:'ADVANCE'},{email:'owner@test'}),r=result.realData.record,e=r.equipment[0];
   assert.equal(result.realData.errors.length,0,JSON.stringify(result.realData.errors));
   assert.equal(result.equipment.length,4);assert.equal(result.source.sheetName,'Equipment');assert.equal(result.source.metadataColumn,'B');assert.equal(result.metadata.bottlesPerCase,24);
-  assert.equal(result.source.equipmentRange,'A8:AH107');assert.equal(result.equipment[1].processData.accumulation.restartToFirstPackageSeconds,2);assert.equal(result.equipment[1].processData.upstream.dischargeVelocityMPerMinute,18.816);assert.equal(result.equipment[0].processData.equipment.internalCapacityBottles,31);assert.equal(result.equipment[0].processData.equipment.residenceTimeSeconds,8.25);assert.equal(result.equipment[0].noiseProfile.reliability.mttrMinutes,5);assert.equal(result.materialCatalog.errors.length,0);
+  assert.equal(result.source.equipmentRange,'A8:AI107');assert.equal(result.equipment[1].processData.accumulation.restartToFirstPackageSeconds,2);assert.equal(result.equipment[1].processData.upstream.dischargeVelocityMPerMinute,18.816);assert.equal(result.equipment[0].processData.equipment.internalCapacityBottles,31);assert.equal(result.equipment[0].processData.equipment.residenceTimeSeconds,8.25);assert.equal(result.equipment[0].noiseProfile.reliability.mttrMinutes,5);assert.equal(result.materialCatalog.errors.length,0);
   assert.equal(r.production,100);assert.equal(r.reportedProductionCases,100);assert.equal(r.reportedProductionUnits,1200);assert.equal(r.aem.productionAvailableSeconds,80640);assert.equal(r.reportedEfficiencyPercent,63.3);
   assert.equal(e.sourceEquipmentId,request.equipment[0].id);assert.equal(e.downtimeSeconds,720);assert.equal(e.failureCount,null);assert.equal(e.stopClass,'UNKNOWN');
   assert.equal(e.reportedDowntimePercent,12.1);assert.equal(e.observationRow,16);
   assert.equal(r.equipment[1].sourceRow,11);assert.equal(r.equipment[1].observationRow,19);assert.equal(r.equipment[1].downtimeSeconds,0);assert.equal(r.equipment[1].reportedDowntimePercent,0);
   assert(result.realData.fields.some(f=>f.cell==='Real Data!B2'));
  }
- values[0][29]='st-equipment-metadata-b-v6';values[6][31]='';values[6][32]='';values[6][33]='';values[7][31]='obsolete';
+ values[0][29]='st-equipment-metadata-b-v6';values[6][31]='';values[6][32]='';values[6][33]='';values[6][34]='';values[7][31]='obsolete';
  const basic=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id',uiMode:'BASIC'},{email:'owner@test'});
  assert.equal(basic.realData,undefined,'Basic ignores Real Data in a three-tab source');
  assert.equal(basic.materialCatalog.errors.length,0);
@@ -363,4 +363,26 @@ test('Capper exports and imports as its own physical machine type',()=>{
  const parsed=h.c.parseEquipmentSheet_(data.metadata,data.rows,[],data.layout);
  assert.equal(parsed.canImport,true,JSON.stringify(parsed.errors));
  assert.equal(parsed.equipment[0].type,'CAPPER');
+});
+
+test('Basic, Standard and Advance exports have mode-specific timing and speed columns',()=>{
+ for(const mode of ['MINIMAL','BASIC','ADVANCE']){
+  const h=runtime(),request={...fixture(h.c),uiMode:mode};
+  request.equipment[0].nominalRatePerSecond=220/60;
+  request.equipment[0].processData.equipment.maximumSpeedBpm=250;
+  request.equipment[0].processData.equipment.internalCapacityBottles=30;
+  request.equipment[0].processData.equipment.residenceTimeSeconds=8;
+  request.equipment[1].processData.accumulation.restartToFirstPackageSeconds=5;
+  const response=h.c.exportEquipmentSheet(request);
+  assert(response.ok,JSON.stringify(response));
+  const rows=h.writes[0].values,headers=rows[6];
+  assert(headers.some(x=>/startup time/i.test(x)));
+  assert.equal(headers.some(x=>/first package after restart/i.test(x)),mode==='ADVANCE');
+  assert.equal(headers.some(x=>/machine max speed/i.test(x)),mode==='ADVANCE');
+  assert.equal(headers.some(x=>/internal capacity/i.test(x)),mode!=='MINIMAL');
+  assert.equal(headers.some(x=>/residence time/i.test(x)),mode!=='MINIMAL');
+  assert.equal(rows[7][9],mode==='ADVANCE'?250:220);
+  if(mode==='ADVANCE')assert.equal(rows[7][34],220);
+  if(mode!=='ADVANCE')assert(!rows[8][32]);
+ }
 });

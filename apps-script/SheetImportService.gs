@@ -1,17 +1,21 @@
-function sheetTemplateVersion_(){return 'sheet-template-20261124-1';}
+function sheetTemplateVersion_(){return 'sheet-template-20261126-2';}
 function sheetRequestUiMode_(request){
   var mode=typeof request?.uiMode==='string'?request.uiMode.trim().toUpperCase():'';
   if(!mode)throw createSimulatorError_('SHEET_CLIENT_OUTDATED',
     'The spreadsheet interface is outdated. Update the Apps Script web deployment and reopen the app, then try again. No spreadsheet changes were made.');
-  if(!['BASIC','ADVANCE','ADVANCED'].includes(mode))throw createSimulatorError_('INVALID_SHEET_REQUEST',
-    'Choose Basic or Advance for the spreadsheet operation.');
+  if(!['MINIMAL','BASIC','STANDARD','ADVANCE','ADVANCED'].includes(mode))throw createSimulatorError_('INVALID_SHEET_REQUEST',
+    'Choose Basic, Standard or Advance for the spreadsheet operation.');
   if(request.sheetTemplateVersion&&request.sheetTemplateVersion!==sheetTemplateVersion_())
     throw createSimulatorError_('SHEET_VERSION_MISMATCH',
       'The spreadsheet interface and server are different versions. Update the web deployment and reload the app before retrying.');
-  return mode==='ADVANCED'?'ADVANCE':mode;
+  return mode==='ADVANCED'?'ADVANCE':mode==='STANDARD'?'BASIC':mode;
 }
 
-function sheetImportContractVersion_(){return 'sheet-import-20261123-8';}
+// Internal workspace names: MINIMAL = Basic; BASIC = Standard.
+function sheetModeColumns_(mode){
+  return {maximum:mode==='ADVANCE',firstPackage:mode==='ADVANCE',capacity:mode!=='MINIMAL',residence:mode!=='MINIMAL',realData:mode==='ADVANCE'};
+}
+function sheetImportContractVersion_(){return 'sheet-import-20261126-2';}
 // Conservative name recognition for worksheets whose category is simply Machine.
 function inferSheetMachineType_(name) {
   var text=String(name||'').trim().toUpperCase().replace(/[^A-Z0-9]+/g,' ');
@@ -117,14 +121,19 @@ function readSheetImport_(request,mode,requireCompatible) {
     if(!recognized)throw createSimulatorError_('INVALID_SHEET_LAYOUT','Incorrect format.');
   }
   var layout=detectSheetImportLayout_(sheet.getRange(start-2,inlineStops?11:7,2,2).getValues()),width=sheetImportColumns_(layout).length,lastColumn=capacityColumn?'AE':inlineStops?'AC':String.fromCharCode(64+width);
+  var policy=sheetModeColumns_(mode);
+  var rateColumn=inlineStops?10:6,rateHeader=sheet.getRange(start-1,rateColumn).getValues()[0][0];
+  var nominalOnlyColumn=/nominal/i.test(String(rateHeader||''));
+  var nominalSpeedColumn=capacityColumn&&sheet.getMaxColumns()>=35&&/nominal.*speed/i.test(String(sheet.getRange(start-1,35).getValues()[0][0]||''));
   var dischargeVelocityColumn=capacityColumn&&sheet.getMaxColumns()>=32&&
     /^Upstream Discharge Velocity\s*[\[(]m\/min[\])]$/i.test(String(sheet.getRange(start-1,32).getValues()[0][0]||'').trim());
-  var restartFirstPackageColumn=capacityColumn&&sheet.getMaxColumns()>=33&&
+  var restartFirstPackageColumn=policy.firstPackage&&capacityColumn&&sheet.getMaxColumns()>=33&&
     /^Time to First Package After Restart\s*(?:\[s\]|\(s\))$/i.test(String(sheet.getRange(start-1,33).getValues()[0][0]||'').trim());
-  var residenceColumn=capacityColumn&&sheet.getMaxColumns()>=34&&/^Residence time\s*(?:\[s\]|\(s\))$/i.test(String(sheet.getRange(start-1,34).getValues()[0][0]||'').trim());
+  var residenceColumn=policy.residence&&capacityColumn&&sheet.getMaxColumns()>=34&&/^Residence time\s*(?:\[s\]|\(s\))$/i.test(String(sheet.getRange(start-1,34).getValues()[0][0]||'').trim());
   if(dischargeVelocityColumn)lastColumn='AF';
   if(restartFirstPackageColumn)lastColumn='AG';
   if(residenceColumn)lastColumn='AH';
+  if(nominalSpeedColumn)lastColumn='AI';
   if(sheet.getMaxColumns()<width)throw createSimulatorError_('INVALID_SHEET_LAYOUT','Expected equipment in A'+start+':'+lastColumn+'.');
   var metadataColumn=compact||['st-equipment-metadata-b-v1','st-equipment-metadata-b-v2'].includes(marker)?'B':'C';
   var metadata,containerUnit,metadataCells=compact?compactEquipmentMetadataCells_():null;
@@ -153,14 +162,18 @@ function readSheetImport_(request,mode,requireCompatible) {
     stopRows=rows.map(function(row){return row.splice(3,4);});
     formats.forEach(function(row){row.splice(3,4);});
   }else if(stopBreakdown&&count)stopRows=sheet.getRange(start,27,count,4).getValues();
-  if(capacityColumn&&count)sheet.getRange(start,31,count,1).getValues().forEach(function(value,index){rows[index].push(value[0]);});
+  if(policy.capacity&&capacityColumn&&count)sheet.getRange(start,31,count,1).getValues().forEach(function(value,index){rows[index].push(value[0]);});
   var dischargeVelocityRows=dischargeVelocityColumn&&count?sheet.getRange(start,32,count,1).getValues():null;
   var restartFirstPackageRows=restartFirstPackageColumn&&count?sheet.getRange(start,33,count,1).getValues():null;
   var residenceRows=residenceColumn&&count?sheet.getRange(start,34,count,1).getValues():null;
-  var result = parseEquipmentSheet_(metadata, rows, formats,layout,{residenceRows:residenceRows,containerUnit:containerUnit,metadataColumn:metadataColumn,metadataCells:metadataCells,stopRows:stopRows,dischargeVelocityRows:dischargeVelocityRows,restartFirstPackageRows:restartFirstPackageRows,inlineStops:inlineStops,start:start,allowEmpty:compact||marker==='st-equipment-metadata-b-v2'});
+  var nominalSpeedRows=nominalSpeedColumn&&count?sheet.getRange(start,35,count,1).getValues():null;
+  var result = parseEquipmentSheet_(metadata, rows, formats,layout,{mode:mode,nominalOnlyColumn:nominalOnlyColumn,nominalSpeedRows:nominalSpeedRows,residenceRows:residenceRows,containerUnit:containerUnit,metadataColumn:metadataColumn,metadataCells:metadataCells,stopRows:stopRows,dischargeVelocityRows:dischargeVelocityRows,restartFirstPackageRows:restartFirstPackageRows,inlineStops:inlineStops,start:start,allowEmpty:compact||marker==='st-equipment-metadata-b-v2'});
   result.source = {schemaVersion:layout,spreadsheetId:reference.id,sheetId:sheet.getSheetId(),sheetName:sheet.getName(),metadataColumn:metadataColumn,readAt:new Date().toISOString(),equipmentRange:'A'+start+':'+lastColumn+(count?count+start-1:start)};
   if(requireCompatible){result.source.templateMarker=String(inlineMarker||marker||'');result.source.spreadsheetName=book.getName();}
-  if(capacityColumn)result.source.capacityColumn=true;
+  result.uiMode=mode;result.source.nominalSpeedColumn=nominalSpeedColumn?'AI':(inlineStops?'J':'F');
+  result.source.maximumSpeedColumn=policy.maximum&&!nominalOnlyColumn?(inlineStops?'J':'F'):null;
+  if(policy.capacity&&capacityColumn)result.source.capacityColumn=true;
+  if(residenceColumn)result.source.residenceColumn=true;
   if(dischargeVelocityColumn)result.source.dischargeVelocityColumn=true;
   if(restartFirstPackageColumn)result.source.restartFirstPackageColumn=true;
   if(compact)result.source.metadataCells=metadataCells;
@@ -174,7 +187,7 @@ function readSheetImport_(request,mode,requireCompatible) {
     result.sourceRows.forEach(function(row){row.equipmentId=String(ids[row.row-start]?.[0]||'');});
   }
   // Basic reads only Equipment and Products & Formats, even for older sources with inline actuals.
-  if(mode==='BASIC')return result;
+  if(!policy.realData)return result;
   var actuals=sheet.getName()==='Equipment'?sheets.find(function(tab){return ['Real Data','Datos reales'].includes(tab.getName());}):null;
   var photoActuals=photoActualsTab_(actuals);
   if(photoActuals||actuals&&actuals.getMaxColumns()>=23&&actuals.getRange(1,23).getValues()[0][0]==='st-real-inputs-v3'){
@@ -279,9 +292,13 @@ function parseEquipmentSheet_(metadataCells, rows, formats,layout,options) {
     if(!name)issue(errors,'B'+rowNumber,'Equipment name is required.');
     var flag=missing(row[2])?'N':String(row[2]).trim().toUpperCase();if(!['Y','N'].includes(flag))issue(errors,'C'+rowNumber,'Use Y, N or NA.');
     var values={type:rawType,name:name,critical:missing(row[2])?null:flag};
-    columns.slice(3).forEach(function(def,index){var col=index+3;values[def[1]]=numeric(row[col],def[0]+rowNumber,['conveyorSpeedFactorVsDischargeVelocityPercent','codingConveyorSpeedFactorVsPreviousConveyorPercent','conveyorSpeedFactorVsPreviousConveyorPercent','overspeedVsInfeedScrewPercent'].includes(def[1])?(formats[offset]||[])[col]:null);});
+    columns.slice(3).forEach(function(def,index){var col=index+3;if(def[1]==='maximumSpeedBpm'&&options?.nominalSpeedRows&&options?.mode&&options.mode!=='ADVANCE'){values[def[1]]=null;return;}values[def[1]]=numeric(row[col],def[0]+rowNumber,['conveyorSpeedFactorVsDischargeVelocityPercent','codingConveyorSpeedFactorVsPreviousConveyorPercent','conveyorSpeedFactorVsPreviousConveyorPercent','overspeedVsInfeedScrewPercent'].includes(def[1])?(formats[offset]||[])[col]:null);});
     var conveyor=type==='CONVEYOR';
-    if(values.maximumSpeedBpm===0||values.maximumSpeedBpm===null&&!conveyor)issue(errors,'F'+rowNumber,'Machine maximum speed must be greater than zero.');
+    var separateNominal=Boolean(options?.nominalSpeedRows),nominal=separateNominal?numeric(options.nominalSpeedRows[offset]?.[0],'AI'+rowNumber):values.maximumSpeedBpm;
+    var nominalOnly=options?.nominalOnlyColumn||options?.mode&&options.mode!=='ADVANCE';
+    if(nominal===0||nominal===null&&!conveyor)issue(errors,(separateNominal?'AI':'F')+rowNumber,nominalOnly||separateNominal?'Machine nominal speed must be greater than zero.':'Machine maximum speed must be greater than zero.');
+    if(separateNominal&&!nominalOnly&&values.maximumSpeedBpm===0)issue(errors,'F'+rowNumber,'Machine maximum speed must be greater than zero or blank.');
+    if(options?.mode)values.nominalSpeedBpm=nominal;
     var mtbf=values.mtbfMinutes,mttr=values.mttrMinutes;
     var stopInputs;
     if(stopRow.some(function(value){return !missing(value);})){
@@ -300,7 +317,7 @@ function parseEquipmentSheet_(metadataCells, rows, formats,layout,options) {
     }else if(mtbf===0||mttr===0||((mtbf===null)!==(mttr===null)))issue(errors,'D'+rowNumber+':E'+rowNumber,'Supply both MTBF and MTTR as positive minutes, or leave both blank.');
     if(mtbf===null&&mttr===null)issue(warnings,'D'+rowNumber+':E'+rowNumber,conveyor?'Conveyor model assumption: no own random failures. MTBF/MTTR are not required; material and control stops remain active.':'No reliability data: random failures are disabled for this equipment.',conveyor?'info':'warning',conveyor?'CONVEYOR_FAILURES_EXCLUDED':'NO_RELIABILITY_DATA');
     if(conveyor&&flag==='Y')issue(errors,'C'+rowNumber,'A conveyor cannot be the critical machine. Use Y for one machine only.');
-    var unit={id:'sheet-row-'+rowNumber,type:type||'CUSTOM',name:name,nominalRatePerSecond:values.maximumSpeedBpm===null?null:values.maximumSpeedBpm/60,initialMode:'AUTO',characteristics:{criticalMachine:flag==='Y',isPacemaker:flag==='Y'&&!conveyor,rateBasis:'bottles per minute',sourceSheetRow:rowNumber,sourceSheetLayout:layout},noiseProfile:{},processData:{
+    var unit={id:'sheet-row-'+rowNumber,type:type||'CUSTOM',name:name,nominalRatePerSecond:nominal===null?null:nominal/60,initialMode:'AUTO',characteristics:{criticalMachine:flag==='Y',isPacemaker:flag==='Y'&&!conveyor,rateBasis:'bottles per minute',sourceSheetRow:rowNumber,sourceSheetLayout:layout},noiseProfile:{},processData:{
       role:conveyor?'CONVEYOR':flag==='Y'?'CRITICAL_MACHINE':'MACHINE',machineType:type||'CUSTOM',
       equipment:{mtbfMinutes:mtbf,mttrMinutes:mttr,maximumSpeedBpm:values.maximumSpeedBpm},
       geometry:{lactMm:values.lactMm,lpPrimeMm:values.lpPrimeMm,actualDischargeMm:values.actualDischargeMm,actualCodingMm:values.actualCodingMm},
@@ -308,7 +325,8 @@ function parseEquipmentSheet_(metadataCells, rows, formats,layout,options) {
       downstream:{infeedPitchMm:values.infeedPitchMm,rampUpTimeSeconds:values.rampUpTimeSeconds},
       speedAndSensors:{conveyorSpeedFactorVsDischargeVelocityPercent:values.conveyorSpeedFactorVsDischargeVelocityPercent,codingConveyorSpeedFactorVsPreviousConveyorPercent:values.codingConveyorSpeedFactorVsPreviousConveyorPercent,conveyorSpeedFactorVsPreviousConveyorPercent:values.conveyorSpeedFactorVsPreviousConveyorPercent,blockedTimeDelaySeconds:values.blockedTimeDelaySeconds,clearTimeDelaySeconds:values.clearTimeDelaySeconds,insuranceFactorUnits:values.insuranceFactorUnits,overspeedVsInfeedScrewPercent:values.overspeedVsInfeedScrewPercent}
     }};
-    if(!conveyor){
+    if(nominalOnly){delete unit.processData.equipment.maximumSpeedBpm;if(options?.mode)delete values.maximumSpeedBpm;}
+    if(!conveyor&&options?.mode!=='MINIMAL'){
       var capacity=numeric(row[columns.length],'AE'+rowNumber);
       if(capacity!==null&&(!Number.isSafeInteger(capacity)||capacity<1))issue(errors,'AE'+rowNumber,'Internal capacity must be a positive whole number.');
       if(capacity!==null)unit.processData.equipment.internalCapacityBottles=values.internalCapacityBottles=capacity;
@@ -356,6 +374,7 @@ function parseEquipmentSheet_(metadataCells, rows, formats,layout,options) {
     'The Sheet does not provide installed Back-up position, discharge/reject runout or upstream stop-response time. The current engine derives Back-up position and defaults the missing runout/stop-response values to zero; review these in Line setup.',
     'P is retained including Prime sensor delay and used as the ramp duration. The model also waits for physical Prime; it cannot separate the delay and ramp components from one total.'
   ];
+  if(options?.mode)notes[0]=options.nominalSpeedRows?'The nominal speed column defines the operating rate; an installed maximum is optional in Advance.':'The sheet speed initializes nominal running speed; maximum speed is not imported in Basic or Standard.';
   if(layout==='plant-sheet-v2')notes=notes.map(function(note){return note.replace(/\b([G-W])(?=\/|\b)/g,function(letter){return String.fromCharCode(letter.charCodeAt(0)+2);});}).concat(['G is the physical conveyor speed in m/min and selects manual belt speed when provided. H is the declared accumulation time in seconds, retained as a reference; geometry still determines simulated capacity.']);
   return {contractVersion:sheetImportContractVersion_(),layout:layout,columns:columns,metadata:metadata,equipment:equipment,sourceRows:sourceRows,errors:errors,warnings:warnings,notes:notes,canImport:errors.length===0};
 }

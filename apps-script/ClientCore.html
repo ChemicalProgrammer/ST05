@@ -237,6 +237,7 @@
       document.getElementById('delete-simulation').onclick = deleteSimulation;
       document.getElementById('add-equipment').addEventListener('click', addEquipment);
       document.getElementById('export-equipment-sheet').onclick=exportEquipmentSheet;
+      var basicSheetExport=document.getElementById('minimal-export-equipment-sheet');if(basicSheetExport){STIcons.button(basicSheetExport,'upload');basicSheetExport.onclick=exportEquipmentSheet;}
       document.getElementById('export-equipment-evaluations').onclick=exportEquipmentEvaluations;
       document.getElementById('export-conveyor-evaluations').onclick=exportConveyorEvaluations;
       document.getElementById('export-complete-case').onclick=exportCompleteCase;

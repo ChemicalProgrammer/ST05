@@ -149,7 +149,7 @@ function askGemini(request) {
 function importSimpleCase(request) {
   return executeServerAction_(function(user){
     if(!request||typeof request.spreadsheet!=='string')throw createSimulatorError_('INVALID_SHEET_REQUEST','Incorrect format.');
-    var preview=readSheetImport_({spreadsheet:request.spreadsheet},'BASIC',true);
+    var preview=readSheetImport_({spreadsheet:request.spreadsheet},'MINIMAL',true);
     return createCase_(simpleImportedCase_(preview),user);
   });
 }
@@ -170,7 +170,7 @@ function previewSheetImport(request) {
 function getSheetTemplateCapabilities() {
   return executeServerAction_(function(){
     return {sheetTemplateVersion:sheetTemplateVersion_(),importVersion:sheetImportContractVersion_(),
-      uiModes:['BASIC','ADVANCE'],modeSpecificTabs:true};
+      uiModes:['MINIMAL','BASIC','ADVANCE'],modeSpecificTabs:true,modeSpecificColumns:true};
   });
 }
 

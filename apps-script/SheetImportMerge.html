@@ -36,8 +36,22 @@ window.STSheetImportMerge=(function(){
     var bf=fields[3].read(e),tr=fields[4].read(e);
     return bf==null&&tr==null?null:{general:{mtbfMinutes:bf,mttrMinutes:tr}};
   };
+  function fieldsForMode(result,preview){
+    if(!preview.uiMode)return result;
+    var advanced=preview.uiMode==='ADVANCE',basic=preview.uiMode==='MINIMAL';
+    return result.filter(function(f){
+      if(f.id==='maxSpeed')return advanced&&preview.source?.maximumSpeedColumn!==null;
+      if(f.id==='restartFirstPackage')return advanced;
+      if(f.id==='internalCapacity'||f.id==='residenceTime')return !basic;
+      return true;
+    }).map(function(f){
+      if(f.id==='nominalSpeed')return {...f,col:preview.source?.nominalSpeedColumn||f.col,label:'Nominal running speed (units/min)'};
+      if(f.id==='maxSpeed')return {...f,col:preview.source?.maximumSpeedColumn||f.col};
+      return f;
+    });
+  }
   function fieldsFor(preview){
-    if((preview.layout||preview.source?.schemaVersion)!=='plant-sheet-v2')return fields;
+    if((preview.layout||preview.source?.schemaVersion)!=='plant-sheet-v2')return fieldsForMode(fields,preview);
     var mapped=fields.map(function(f){return Object.assign({},f,{col:f.col>='G'?String.fromCharCode(f.col.charCodeAt(0)+2):f.col});}).concat([beltField,accumulationField]).sort(function(a,b){return a.col.localeCompare(b.col);});
     if(preview.stopBreakdown||preview.source?.stopBreakdown)mapped.splice(3,2,stopField);
     var result=preview.source?.inlineStops?mapped.map(function(f){
@@ -46,7 +60,8 @@ window.STSheetImportMerge=(function(){
     if(preview.source?.capacityColumn)result.push(field('internalCapacity','AE','Internal capacity (input bottles/cases)',['processData.equipment.internalCapacityBottles']));
     if(preview.source?.dischargeVelocityColumn)result.push(field('dischargeVelocity','AF','Upstream Discharge Velocity (m/min)',['processData.upstream.dischargeVelocityMPerMinute']));
     if(preview.source?.restartFirstPackageColumn)result.push(field('restartFirstPackage','AG','Time to First Package After Restart (s)',['processData.accumulation.restartToFirstPackageSeconds']));
-    return result;
+    if(preview.source?.residenceColumn)result.push(field('residenceTime','AH','Residence time (s)',['processData.equipment.residenceTimeSeconds']));
+    return fieldsForMode(result,preview);
   }
   var criticalField=fields.find(function(f){return f.id==='critical';});
   function isReference(e){return e.type==='PACEMAKER'||e.processData?.role==='PACEMAKER'||e.characteristics?.isPacemaker===true;}

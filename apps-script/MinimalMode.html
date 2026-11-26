@@ -145,6 +145,7 @@ window.STMinimalMode=(function(){
     document.querySelectorAll('#basic-case-actions button').forEach(function(b){if(lock&&!b.disabled){b.disabled=true;b.dataset.minimalLock='true';}else if(!lock&&b.dataset.minimalLock==='true'){b.disabled=false;delete b.dataset.minimalLock;}});
     if(!active){if(!busy())stopMonitor();return;}
     syncTable(lock||state.saving);syncDuration(lock||state.saving);
+    var sheetExport=el('minimal-export-equipment-sheet');if(sheetExport)sheetExport.disabled=lock||state.saving||sheetExport.dataset.busy==='true';
     var running=starting||actions.locked(),r=result(),review=reviewRequired(sim);
     show('minimal-input-review',review||!!sim?.sourceImport?.simpleImportIssues?.length&&!r);
     show('minimal-run-progress',running);

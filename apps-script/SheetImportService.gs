@@ -122,9 +122,11 @@ function readSheetImport_(request,mode,requireCompatible) {
   }
   var layout=detectSheetImportLayout_(sheet.getRange(start-2,inlineStops?11:7,2,2).getValues()),width=sheetImportColumns_(layout).length,lastColumn=capacityColumn?'AE':inlineStops?'AC':String.fromCharCode(64+width);
   var policy=sheetModeColumns_(mode);
-  var rateColumn=inlineStops?10:6,rateHeader=sheet.getRange(start-1,rateColumn).getValues()[0][0];
+  function headingAt(column){return sheet.getMaxColumns()>=column?String(sheet.getRange(start-1,column,1,1).getValues()?.[0]?.[0]||'').trim():'';}
+  var rateColumn=inlineStops?10:6,rateHeader=headingAt(rateColumn);
+  var capacityInputColumn=policy.capacity&&capacityColumn&&/internal capacity/i.test(headingAt(31));
   var nominalOnlyColumn=/nominal/i.test(String(rateHeader||''));
-  var nominalSpeedColumn=capacityColumn&&sheet.getMaxColumns()>=35&&/nominal.*speed/i.test(String(sheet.getRange(start-1,35).getValues()[0][0]||''));
+  var nominalSpeedColumn=capacityColumn&&/nominal.*speed/i.test(headingAt(35));
   var dischargeVelocityColumn=capacityColumn&&sheet.getMaxColumns()>=32&&
     /^Upstream Discharge Velocity\s*[\[(]m\/min[\])]$/i.test(String(sheet.getRange(start-1,32).getValues()[0][0]||'').trim());
   var restartFirstPackageColumn=policy.firstPackage&&capacityColumn&&sheet.getMaxColumns()>=33&&
@@ -162,7 +164,7 @@ function readSheetImport_(request,mode,requireCompatible) {
     stopRows=rows.map(function(row){return row.splice(3,4);});
     formats.forEach(function(row){row.splice(3,4);});
   }else if(stopBreakdown&&count)stopRows=sheet.getRange(start,27,count,4).getValues();
-  if(policy.capacity&&capacityColumn&&count)sheet.getRange(start,31,count,1).getValues().forEach(function(value,index){rows[index].push(value[0]);});
+  if(capacityInputColumn&&count)sheet.getRange(start,31,count,1).getValues().forEach(function(value,index){rows[index].push(value[0]);});
   var dischargeVelocityRows=dischargeVelocityColumn&&count?sheet.getRange(start,32,count,1).getValues():null;
   var restartFirstPackageRows=restartFirstPackageColumn&&count?sheet.getRange(start,33,count,1).getValues():null;
   var residenceRows=residenceColumn&&count?sheet.getRange(start,34,count,1).getValues():null;
@@ -172,7 +174,7 @@ function readSheetImport_(request,mode,requireCompatible) {
   if(requireCompatible){result.source.templateMarker=String(inlineMarker||marker||'');result.source.spreadsheetName=book.getName();}
   result.uiMode=mode;result.source.nominalSpeedColumn=nominalSpeedColumn?'AI':(inlineStops?'J':'F');
   result.source.maximumSpeedColumn=policy.maximum&&!nominalOnlyColumn?(inlineStops?'J':'F'):null;
-  if(policy.capacity&&capacityColumn)result.source.capacityColumn=true;
+  if(capacityInputColumn)result.source.capacityColumn=true;
   if(residenceColumn)result.source.residenceColumn=true;
   if(dischargeVelocityColumn)result.source.dischargeVelocityColumn=true;
   if(restartFirstPackageColumn)result.source.restartFirstPackageColumn=true;

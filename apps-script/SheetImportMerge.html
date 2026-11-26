@@ -145,7 +145,7 @@ window.STSheetImportMerge=(function(){
       if(preview.layout==='plant-sheet-v2'){unit.characteristics=unit.characteristics||{};unit.characteristics.sourceSheetLayout=preview.layout;}
       if(unit.type!=='CONVEYOR')delete unit.processData.accumulation;
       if(!unit.name)issues.push('B'+record.row+' (Equipment name): enter a name and select this field for import.');
-      if(!(unit.nominalRatePerSecond>0))issues.push('F'+record.row+' (Nominal running speed): enter a positive speed, or provide a valid upstream machine speed when this row is a conveyor.');
+      if(!(unit.nominalRatePerSecond>0))issues.push((preview.source?.nominalSpeedColumn||'F')+record.row+' (Nominal running speed): enter a positive speed, or provide a valid upstream machine speed when this row is a conveyor.');
       var changed=isNew||!equal(currentUnit,unit);
       if(changed){if(isNew){equipment.push(unit);added++;}else{equipment[equipment.indexOf(currentUnit)]=unit;updated++;}}
       changes.push({equipmentId:unit.id,sourceName:incoming.name,row:record.row,sourceKey:key(preview.source),added:isNew,fields:applied});

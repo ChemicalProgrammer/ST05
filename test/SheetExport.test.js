@@ -292,10 +292,10 @@ test('a new case with no equipment still exports all headings, validations and b
  assert.equal(response.ok,true,JSON.stringify(response));assert.equal(response.data.equipmentCount,0);
  const grid=writes[0].values;
  assert.equal(grid[2][1],46006);assert.equal(grid[3][0],'By');assert.equal(grid[3][1],'');
- assert.equal(grid[6].length,34);assert(grid[6].every(Boolean));
+ assert.equal(grid[6].length,35);assert(grid[6].every(Boolean));
  assert(grid[7].slice(0,29).every(value=>value===''));assert.match(grid[7][29],/^slot-/);
  assert(calls.some(call=>call[0]==='setNumberFormat'&&String(call[1])==='4,2'&&call[2]==='@'));
- assert(calls.some(call=>call[0]==='createFilter'&&String(call[1])==='7,1,101,34'));
+ assert(calls.some(call=>call[0]==='createFilter'&&String(call[1])==='7,1,101,35'));
  request.metadata.by='María García';
  assert(c.exportEquipmentSheet(request).ok);
  assert.equal(writes[3].values[3][1],'María García');
@@ -384,5 +384,28 @@ test('Basic, Standard and Advance exports have mode-specific timing and speed co
   assert.equal(rows[7][9],mode==='ADVANCE'?250:220);
   if(mode==='ADVANCE')assert.equal(rows[7][34],220);
   if(mode!=='ADVANCE')assert(!rows[8][32]);
+ }
+});
+
+test('Each exported mode reimports with nominal rates and no hidden advanced inputs',()=>{
+ for(const mode of ['MINIMAL','BASIC','ADVANCE']){
+  const h=runtime(),request={...fixture(h.c),uiMode:mode};
+  request.equipment[0].nominalRatePerSecond=220/60;
+  request.equipment[0].processData.equipment.maximumSpeedBpm=250;
+  request.equipment[0].processData.equipment.internalCapacityBottles=30;
+  request.equipment[0].processData.equipment.residenceTimeSeconds=8;
+  request.equipment[1].processData.accumulation.restartToFirstPackageSeconds=5;
+  assert(h.c.exportEquipmentSheet(request).ok);
+  const mock=(grid,name,id)=>({getLastRow:()=>grid.length,getMaxRows:()=>grid.length,getMaxColumns:()=>grid[0].length,getSheetId:()=>id,getName:()=>name,getRange:(r,col,count=1,width=1)=>({getValues:()=>grid.slice(r-1,r-1+count).map(row=>row.slice(col-1,col-1+width)),getNumberFormats:()=>Array.from({length:count},()=>Array(width).fill('0.00'))})});
+  const equipment=mock(h.writes[0].values,'Equipment',1),catalog=mock(h.writes[1].values,'Products & Formats',2);
+  h.c.getCase_=()=>({});
+  h.c.SpreadsheetApp.openById=()=>({getSheets:()=>[equipment,catalog],getSheetByName:()=>equipment,getSpreadsheetTimeZone:()=> 'America/Mexico_City'});
+  const p=h.c.previewSheetImport_({caseId:'mine',spreadsheet:'new-sheet-id',uiMode:mode},{email:'owner@test'});
+  assert(p.canImport,JSON.stringify(p.errors));
+  assert.equal(p.equipment[0].nominalRatePerSecond,220/60);
+  assert.equal(p.equipment[0].processData.equipment.maximumSpeedBpm,mode==='ADVANCE'?250:undefined);
+  assert.equal(p.equipment[0].processData.equipment.internalCapacityBottles,mode==='MINIMAL'?undefined:30);
+  assert.equal(p.equipment[1].processData.accumulation.restartToFirstPackageSeconds,mode==='ADVANCE'?5:undefined);
+  assert.equal(p.source.restartFirstPackageColumn,mode==='ADVANCE'?true:undefined);
  }
 });

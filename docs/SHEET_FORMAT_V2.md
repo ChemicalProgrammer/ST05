@@ -93,3 +93,17 @@ Basic y Minimal ocultan la velocidad máxima de las máquinas; se conserva el va
 ### Startup Time y First Bottle After Resume
 
 Los nombres visibles de los modos son Basic (MINIMAL), Standard (BASIC) y Advance (ADVANCE). La configuración general de Basic y Standard muestra Startup Time (columna M), conservando cualquier valor importado del tiempo hasta el primer envase (columna opcional AG) en accumulation.restartToFirstPackageSeconds. Advance muestra ambos. Conveyor Analysis conserva el campo L62 en los tres modos; se puede editar desde la evaluación del conveyor del editor y se guarda en el mismo modelo. En evaluaciones de corridas numéricas o 2D, una edición es una hipótesis temporal del análisis y no modifica la corrida. El tiempo hasta el primer envase incluye Startup Time y se utiliza para la recuperación CAT, no como retardo adicional del motor. Un valor ausente queda pendiente; no se infiere automáticamente a partir de Startup Time.
+
+### Plantillas específicas por modo (2026-11-26)
+
+| Campo | Basic (MINIMAL) | Standard (BASIC) | Advance |
+|---|---|---|---|
+| Startup Time | S | S | S |
+| First Bottle After Resume | No se exporta ni importa | No se exporta ni importa | AG |
+| Velocidad nominal | J | J | AI |
+| Velocidad máxima | No | No | J (opcional) |
+| Capacidad interna | No | AE | AE |
+| Tiempo de residencia | No | AH | AH |
+| Pestañas | Equipment, Products & Formats | Equipment, Products & Formats | Equipment, Products & Formats, Real Data |
+
+Las letras anteriores corresponden exclusivamente a las hojas compactas nuevas; M era Startup Time en la hoja original v1 sin columnas adicionales. Basic crea 32 columnas, Standard 34 (AG reservada sin encabezado ni datos y oculta), Advance 35. Se conserva el identificador interno AD oculto para no romper el mapeo de filas y los catálogos. Las hojas históricas se siguen leyendo: la antigua velocidad única inicializa la nominal; los modos simplificados no aplican máximas ni tiempos de primera botella importados desde una hoja avanzada. La importación selectiva no borra valores avanzados previamente guardados. El campo de primera botella continúa en Conveyor Analysis en los tres modos.

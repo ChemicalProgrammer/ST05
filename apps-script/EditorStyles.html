@@ -170,6 +170,9 @@ button.equipment-table-symbol:disabled { cursor:default; opacity:1; }
 .equipment-table-control.equipment-table-calculated,output.equipment-table-control { background:transparent; color:var(--ink); border:var(--border-width) solid transparent; font-variant-numeric:tabular-nums; }
 output.equipment-table-control { display:flex; align-items:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .equipment-table-na { color:var(--muted); }
+/* Non-applicable cells retain table-cell alignment; only the placeholder is centered. */
+.equipment-editor-table td:has(> .equipment-table-na:not([hidden])) { text-align:center; vertical-align:middle; }
+.equipment-table-na:not([hidden]) { display:block; text-align:center; }
 .equipment-table-action.icon-button { --icon-button-size:var(--size-28); }
 .equipment-editor-table .equipment-table-verdict,.equipment-editor-table .equipment-table-verdict.st-status-pill { font-size:var(--font-secondary); width:max-content; max-width:none; white-space:nowrap; overflow:visible; text-overflow:clip; flex-shrink:0; }
 .equipment-editor-table th[data-column=evaluation] {white-space:nowrap;}

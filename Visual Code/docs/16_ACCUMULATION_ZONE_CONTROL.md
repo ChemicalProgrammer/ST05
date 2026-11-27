@@ -27,7 +27,7 @@ in millimetres and all times are in seconds.
 | Conveyor speed factor | Converts upstream discharge velocity into belt speed. |
 | Discharge/reject runout, blocked delay, residual bottles, insurance | Calculate the required overflow length `L_bu`. |
 | Installed Back-up position | Is checked against `L_bu`; it is not silently replaced. |
-| Back-up blocked / clear delay | Debounce sustained photocell states. They are configured per conveyor; normal package pulses and gaps do not by themselves command a stop or restart. |
+| Back-up blocked / clear delay | Debounce physical photocell occupancy and clearance. In discrete transport, a passing package can activate the stop timer if its pulse is longer than the configured blocked delay. |
 | Downstream high speed, infeed pitch, ramp-up | Calculate downstream consumption and recovery margin. |
 
 The Case stores the raw inputs. The engine derives belt speed, pitch, capacity,
@@ -43,15 +43,19 @@ Positions are measured from upstream discharge toward downstream infeed.
   `product gap ÷ conveyor speed`. These are calculated from geometry and are
   visible in the conveyor panel. A product stream therefore does not look like
   a permanently blocked sensor.
-- **Prime photocell:** when the leading product reaches `L_act − L_p`, its
-  passing pulse authorizes the downstream machine to start and follow its
-  configured ramp-up. `WAITING_FOR_PRIME` is therefore different from
-  starvation.
+- **Prime reserve:** the machine starts only after the physical reserve from
+  the infeed back to `L_act − L_p` has filled. A passing package alone is not
+  sufficient. The start authorization remains latched during normal service
+  and transfers; it is rearmed after actual starvation or a control that
+  requires a new start. `WAITING_FOR_PRIME` is different from processing a
+  package already admitted to the machine.
 - **Back-up photocell:** a queue that physically reaches the installed
-  Back-up position holds the photocell continuously blocked. Only that
-  sustained condition, for `Blocked_Time_Delay`, sends an upstream stop
-  request; normal product pulses are recorded as `PULSING` and are ignored by
-  the stop timer.
+  Back-up position holds the photocell continuously blocked. In the discrete
+  model, both accumulated product and a passing package obstruct the same
+  physical beam. Occupancy lasting `Blocked_Time_Delay` sends an upstream
+  stop request. Pulse/queue diagnostics do not override the actual beam or its
+  timers. The continuous legacy route distinguishes transient pulses from a
+  queue; it must not be used to infer the discrete control response.
 - **Residual discharge:** the upstream machine may still discharge its declared
   residual bottles after the stop request.
 - **Clear delay:** after product clears Back-up, the signal must remain
@@ -66,9 +70,12 @@ audits whether they are longer than the normal calculated product pulse and
 gap; the demo values remain synthetic assumptions.
 
 The line begins empty. A downstream machine remains `WAITING_FOR_PRIME` (and
-has zero effective speed) until its upstream conveyor has physically carried
-product to Prime. A stopped conveyor freezes product travel; it never
-teleports material to the next machine.
+has zero effective speed) until the required reserve has physically filled.
+A stopped conveyor freezes product travel; it never teleports material to
+the next machine. Advancing the next package during a machine's processing
+cycle does not itself mean the supply was exhausted. See
+[`docs/PRIME_DISCRETE_SERVICE.md`](../../docs/PRIME_DISCRETE_SERVICE.md) for the
+Basic admission/service contract and validation requirements.
 
 ## Derived engineering quantities
 

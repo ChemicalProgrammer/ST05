@@ -30,6 +30,9 @@ test('Back-up stop response/residual counters integrate only observed stopping t
 test('bottle equivalents use each active format factor, including changes from 12 to 6 bottles/case',()=>{
  const i=input({durationSeconds:20,plannedStops:[{category:'changeoverMinutes',startSeconds:8,endSeconds:10,targetProductId:'b',restartPolicy:'RESTART'}]});
  i.case.equipment.forEach(e=>{e.nominalRatePerSecond=e.id==='source'?2:100;e.processData.flowUnits={input:'CASES',output:'CASES'};});i.case.equipment[0].type='CASE_PACKER';i.case.equipment[0].processData.flowUnits.input='BOTTLES';i.case.equipment[0].processData.upstream.startupTimeSeconds=0;
+ // The derived moving pitch at 2 cases/s is 500,000 mm at this fixture's
+ // deliberately fast belt speed. Keep one full pitch inside the test belt.
+ i.case.equipment[1].processData.accumulation.usableLengthMm=1000000;
  i.run.productCatalog=[{id:'a',name:'12-pack',bottlesPerCase:12,bottleLengthMm:50,caseLengthMm:200,equipment:{belt:{movingGapMm:0,accumulatedGapMm:0,dischargeGapMm:0,infeedGapMm:0}}},{id:'b',name:'6-pack',bottlesPerCase:6,bottleLengthMm:50,caseLengthMm:200,equipment:{belt:{movingGapMm:0,accumulatedGapMm:0,dischargeGapMm:0,infeedGapMm:0}}}];i.run.initialProductId='a';
  const r=run(i),m=r.equipmentMetrics.source;assert.equal(m.unitOfFlow,'cases');assert.equal(m.startRampSeconds,8);assert.equal(m.startRampOutputUnits,6);assert.equal(m.startRampBottleEquivalents,54);assert.equal(m.startRampCount,2);
 });

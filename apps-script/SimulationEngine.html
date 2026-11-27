@@ -1966,6 +1966,10 @@ function createRuntime(input) {
   ));
 
   equipment.forEach((equipment, index) => {
+    // Basic still processes whole packages. Retain one output lot between
+    // admission and discharge without enabling advanced storage/residence data.
+    if(input.run.discretePackages&&!equipment.residence&&!isConveyorEquipment(equipment))
+      equipment.processing={inventory:0,work:0,intakeCredit:1};
     const incomingZone = zones.find((zone) => zone.downstreamControlEquipmentId === equipment.id && zone.hasPrimeSensor);
     const outgoingZone = zones[index];
     if ((equipment.type === 'CONVEYOR' || equipment.processData?.role === 'CONVEYOR') && outgoingZone?.physicalModelEnabled) {
@@ -2518,6 +2522,11 @@ function dynamicBeltSnapshot(c){
     rampSeconds:round(c.rampSeconds),stoppedSeconds:round(c.stoppedSeconds),observedSeconds:round(c.observedSeconds)};
 }
 
+function discretePrimeReserveCovered(zone,queued){
+  const tail=zone.usableLengthMm-zone.productLengthMm-(queued-1)*zone.accumulatedPitchMm;
+  return queued>0&&queued>=zone.primeTriggerWaitingUnits&&zone.primeSensorPositionMm+1e-6>=tail;
+}
+
 function advanceDiscreteConveyor(runtime,zone,stopped){
   zone.discreteItems??=[];
   const items=zone.discreteItems,tick=runtime.run.tickSeconds;
@@ -2531,17 +2540,21 @@ function advanceDiscreteConveyor(runtime,zone,stopped){
   if(stationary&&stationary.count===items.length&&stationary.first===items[0]
     &&stationary.last===items.at(-1)&&stationary.end===end&&stationary.pitch===pitch
     &&stationary.half===half&&stationary.productPitch===zone.productPitchMm
-    &&stationary.backup===backup&&stationary.backupPosition===backupPosition){
+    &&stationary.backup===backup&&stationary.backupPosition===backupPosition
+    &&stationary.prime===prime&&stationary.primePosition===primePosition){
     // A fully packed queue cannot move until a package is removed. No transit
     // positions or sensor crossings change, but debounce/start timers still
     // receive every physical tick. Format changes build new zone runtimes.
-    zone.waitingUnits=items.length;zone.physicalPrimeReady=items.length>=zone.primeTriggerWaitingUnits;
+    zone.waitingUnits=items.length;zone.physicalPrimeReady=discretePrimeReserveCovered(zone,items.length);
+    zone.physicalPrimeOccupied=stationary.primeOccupied;
+    zone.physicalPrimePacked=stationary.primePacked;
+    zone.physicalBackupBlocked=stationary.backupBlocked;
     zone.accountingPackedPairIndex=canPack?items.length-1:-1;
     updatePrimeSensorSignal(runtime,zone);
     updateBackupSensorSegment(runtime,zone,tick,stationary.occupied,endSecond);
     return;
   }
-  let limit=end,previousCenter,queued=0,beam=false,packed=false,unmoved=true,packedPairIndex=-1;
+  let limit=end,previousCenter,queued=0,beam=false,packed=false,primeBeam=false,primePacked=false,unmoved=true,packedPairIndex=-1;
   // Packages remain ordered downstream-to-upstream. Fuse the position, queue
   // and sensor passes without changing the integration step or crossing rules.
   // Keeping the previous center in a local also avoids an array per belt/tick.
@@ -2560,19 +2573,27 @@ function advanceDiscreteConveyor(runtime,zone,stopped){
       zone.primePassedUnits++;zone.primeLastPassAtVirtualSecond=endSecond;
     }
     if(backup&&!beam&&Math.abs(item.x-backupPosition)<=half+1e-6)beam=true;
+    if(prime&&!primeBeam&&Math.abs(item.x-primePosition)<=half+1e-6)primeBeam=true;
     if(canPack&&index>0&&previousCenter-item.x<=pitch+1e-6){
       packedPairIndex=index;
       if(!packed&&backupPosition>=item.x&&backupPosition<=previousCenter)packed=true;
+      if(prime&&!primePacked&&primePosition>=item.x&&primePosition<=previousCenter)primePacked=true;
     }
     previousCenter=item.x;
   }
   zone.accountingPackedPairIndex=packedPairIndex;
   zone.waitingUnits=queued;
   zone.transit=items.slice(queued);
-  zone.physicalPrimeReady=queued>=zone.primeTriggerWaitingUnits;
+  zone.physicalPrimeReady=discretePrimeReserveCovered(zone,queued);
+  // A start reserve, an optical beam and a retained run authorization are
+  // distinct. Motion of a packed queue must not erase a covered photoeye.
+  zone.physicalPrimeOccupied=primeBeam;
+  zone.physicalPrimePacked=primePacked;
+  zone.physicalBackupBlocked=packed||backup&&beam&&queued>=zone.backupTriggerWaitingUnits;
   zone.stationaryPacked=unmoved&&items.length>0&&queued===items.length
     ?{count:items.length,first:items[0],last:items.at(-1),end,pitch,half,
-      productPitch:zone.productPitchMm,backup,backupPosition,occupied:beam||packed}:null;
+      productPitch:zone.productPitchMm,backup,backupPosition,occupied:beam||packed,
+      prime,primePosition,primeOccupied:primeBeam,primePacked,backupBlocked:zone.physicalBackupBlocked}:null;
   updatePrimeSensorSignal(runtime,zone);
   updateBackupSensorSegment(runtime,zone,tick,beam||packed,endSecond);
 }
@@ -2660,9 +2681,9 @@ function updatePrimeSensorSignal(runtime, zone) {
   if (!zone.hasPrimeSensor) return;
   const queueCoversPrime = zone.discreteItems?zone.physicalPrimeReady:zone.waitingUnits + 1e-8 >= zone.primeTriggerWaitingUnits;
   if (queueCoversPrime) triggerPrimeSensor(runtime, zone);
-  zone.primeSignalState = queueCoversPrime
+  zone.primeSignalState = queueCoversPrime || zone.discreteItems && zone.physicalPrimePacked
     ? 'BLOCKED'
-    : isNormalPulseActive(zone.primePulseUntilVirtualSecond, runtime.virtualSecond)
+    : (zone.discreteItems?zone.physicalPrimeOccupied:isNormalPulseActive(zone.primePulseUntilVirtualSecond, runtime.virtualSecond))
       ? 'PULSING'
       : 'CLEAR';
 }
@@ -2720,7 +2741,7 @@ function updateBackupSensor(runtime,zone){
 
 function updateBackupSensorSegment(runtime, zone, seconds, occupied, atSecond) {
   if (!zone.hasBackupSensor) return;
-  const queueCoversBackup = !zone.discreteItems&&zone.waitingUnits >= zone.backupTriggerWaitingUnits;
+  const queueCoversBackup = zone.discreteItems?zone.physicalBackupBlocked:zone.waitingUnits >= zone.backupTriggerWaitingUnits;
   const signalState=queueCoversBackup?'BLOCKED':occupied?'PULSING':'CLEAR';
   zone.backupSignalState = signalState;
   recordBackupSignalDuration(zone, signalState, seconds);
@@ -2816,6 +2837,10 @@ function advanceEquipmentControlTimers(runtime) {
     if (control?.active && control.responseRemainingSeconds > 0) {
       control.responseRemainingSeconds = Math.max(0, control.responseRemainingSeconds - runtime.run.tickSeconds);
       if (control.responseRemainingSeconds === 0) {
+        // Basic has one real in-process lot, not an unbounded run-out supply.
+        // The configured residual remains a ceiling; retain incomplete lots.
+        if(equipment.processing)control.residualRemainingUnits=Math.min(control.residualRemainingUnits,
+          Math.floor(equipment.processing.inventory+1e-8));
         runtime.events.push({
           type: 'BACKUP_STOP_RESPONSE_COMPLETED',
           atVirtualSecond: runtime.virtualSecond,
@@ -2845,11 +2870,12 @@ function manualDischargeControl(equipment){
     equipment.failureRemainingSeconds<=0&&equipment.microStopRemainingSeconds<=0&&equipment.mode!=='PAUSE'?c:null;
 }
 function beginManualDischarge(runtime,equipment){
-  if(!equipment.residence||equipment.calendarStopped||equipment.failureRemainingSeconds>0||equipment.repairRestartPending)return;
+  const material=equipment.residence||equipment.processing;
+  if(!material||equipment.calendarStopped||equipment.failureRemainingSeconds>0||equipment.repairRestartPending)return;
   const zone=runtime.zones.find(z=>z.physicalModelEnabled&&z.upstreamControlEquipmentId===equipment.id);
   const backup=activeBackupControl(equipment);
   const configured=Math.floor(backup?backup.residualRemainingUnits:zone?.bottlesDischargedAtStop||0);
-  const remaining=Math.min(configured,Math.floor(equipment.residence.inventory+1e-8));
+  const remaining=Math.min(configured,Math.floor(material.inventory+1e-8));
   if(remaining>0)equipment.manualStopControl={manual:true,responseRemainingSeconds:0,residualRemainingUnits:remaining};
 }
 function chargeMacroStopScrap(equipment,stopClass){
@@ -3067,7 +3093,7 @@ function processEquipment(runtime, index) {
   processEquipmentFlow(runtime,index);
   const flow=equipment.outputCount-before;
   if(equipment.availabilityState==='STARVED'&&equipment.primeZoneId&&
-    !(equipment.residence?.inventory>1e-8)&&runtime.zones[index-1]?.waitingUnits<=1e-8){
+    !(equipment.residence?.inventory>1e-8)&&!(equipment.processing?.inventory>1e-8)&&runtime.zones[index-1]?.waitingUnits<=1e-8){
     rearmPrime(runtime,equipment);
   }
   if(['RUNNING','RAMPING_UP','BACKUP_STOPPING'].includes(equipment.availabilityState)){
@@ -3127,6 +3153,11 @@ function processEquipmentFlow(runtime, index) {
   if (!manual&&isStartDelayed(equipment)) {
     equipment.actualRatePerSecond = 0;
     equipment.availabilityState = 'STARTING';
+    return;
+  }
+
+  if(equipment.processing){
+    processBasicDiscreteMachine(runtime,index,control);
     return;
   }
 
@@ -3273,12 +3304,108 @@ function processEquipmentFlow(runtime, index) {
   }
 }
 
+// A nominal rate is completed lots per second with adequate supply. Admission
+// moves real input into one in-process lot; processing can overlap the advance
+// of the next input. Partial packer intake earns only work on admitted material,
+// so collecting twelve bottles does not add a second full case-making cycle.
+function processBasicDiscreteMachine(runtime,index,control){
+  const equipment=runtime.equipment[index],processing=equipment.processing;
+  const tick=runtime.run.tickSeconds,ratio=equipment.inputPerOutput||1;
+  const incoming=runtime.zones[index-1];
+  const stopping=Boolean(control&&control.responseRemainingSeconds<=0);
+  if(stopping)control.residualRemainingUnits=Math.min(control.residualRemainingUnits,
+    Math.floor(processing.inventory+1e-8));
+  if(stopping&&control.residualRemainingUnits<=0){
+    equipment.actualRatePerSecond=0;equipment.backupStopSeconds+=tick;
+    equipment.availabilityState='BACKUP_STOP';
+    return;
+  }
+  const requested=getRequestedFlow(equipment,tick);
+  const transport=index===0||!incoming.physicalModelEnabled?Infinity:
+    isTransportAvailable(getEquipment(runtime,incoming.ownerEquipmentId))
+      ?incoming.conveyorSpeedMmPerSecond/incoming.accumulatedPitchMm:0;
+  // Idle/full machines retain at most the permission for one immediate intake.
+  // The position solver and this transport credit jointly bound real admission.
+  const credit=Number.isFinite(transport)?processing.intakeCredit+transport*tick:Infinity;
+  let admissionBudget=stopping?0:credit;
+  let serviceBudget=requested,flow=0,worked=0,workAvailable=0,admitted=0;
+  const downstreamSpace=getDownstreamSpace(runtime,index);
+  // Real run-out may spill when the downstream reserve is insufficient. Only
+  // its amount is limited to admitted material; do not hide physical overflow.
+  const outputLimit=stopping?control.residualRemainingUnits:downstreamSpace;
+  // Each iteration can finish at most one lot. The bound covers the carry-in
+  // lot plus all service possible during this tick, including coarse API runs.
+  const iterations=Math.ceil(requested)+2;
+  for(let iteration=0;iteration<iterations;iteration++){
+    if(!stopping&&transport>0){
+      const available=index===0?Infinity:incoming.waitingUnits;
+      const count=Math.floor(Math.min((1-processing.inventory)*ratio,available,admissionBudget)+1e-8);
+      if(count>0){
+        const amount=count/ratio;
+        consumeFlow(runtime,index,amount);
+        processing.inventory=Math.round((processing.inventory+amount)*ratio)/ratio;
+        admissionBudget-=count;admitted+=amount;
+      }
+    }
+    const unfinished=Math.max(0,processing.inventory-processing.work);
+    workAvailable+=unfinished;
+    const work=Math.min(serviceBudget,unfinished);
+    processing.work+=work;serviceBudget-=work;worked+=work;
+    if(processing.inventory<1-1e-8||processing.work<1-1e-8||flow+1>outputLimit+1e-8)break;
+    flow++;processing.inventory=0;processing.work=0;
+    // A completed lot leaves before the following lot is admitted. Remaining
+    // service within this tick is preserved instead of losing a tick per box.
+    if(serviceBudget<=1e-10){
+      if(!stopping&&transport>0){
+        const available=index===0?Infinity:incoming.waitingUnits;
+        const count=Math.floor(Math.min(ratio,available,admissionBudget)+1e-8);
+        if(count>0){consumeFlow(runtime,index,count/ratio);processing.inventory=count/ratio;admissionBudget-=count;admitted+=count/ratio;}
+      }
+      break;
+    }
+  }
+  if(!stopping)processing.intakeCredit=Number.isFinite(credit)?Math.max(0,Math.min(1,admissionBudget)):1;
+  const blocked=processing.work>=1-1e-8&&processing.inventory>=1-1e-8&&flow+1>outputLimit+1e-8;
+  const productive=worked>1e-10||flow>0||admitted>0||requested<=0&&processing.inventory>0&&isRampingUp(equipment);
+  const residual=stopping&&control.residualRemainingUnits>0;
+  recordMaterialState(equipment,requested,productive?Math.max(requested,1):0,
+    blocked&&!productive?0:Infinity,productive?Math.max(requested,flow,1e-12):0,tick,control,residual);
+  const phase=control?'STOP':isRampingUp(equipment)?'RAMP':null;
+  if(phase){
+    // Attribute lost service credit, even when no whole box completes in the
+    // ramp. Supply and a completed blocked lot cannot create ramp losses.
+    const potential=Math.min(equipment.nominalRatePerSecond*tick,workAvailable);
+    const lost=Math.max(0,potential-worked);
+    const seconds=lost/equipment.nominalRatePerSecond;
+    if(phase==='RAMP')equipment.rampRateLossSeconds+=seconds;
+    else equipment.stopTransitionRateLossSeconds+=seconds;
+    if(index===runtime.equipment.length-1){
+      const reference=runtime.product?runtime.productReferenceRate:runtime.lineReferenceRate;
+      const factor=equipment.outputBottleFactor||1;
+      const lineLoss=reference>0?Math.max(0,Math.min(tick,potential*factor/reference)-Math.min(tick,worked*factor/reference)):0;
+      if(phase==='RAMP')runtime.lineRateLossRampSeconds+=lineLoss;
+      else runtime.lineRateLossStopTransitionSeconds+=lineLoss;
+    }
+  }
+  moveFlow(runtime,index,flow,residual,requested,processing.inventory,phase);
+  equipment.outputCount+=flow;equipment.actualRatePerSecond=flow/tick;
+  if(runtime.product)equipment.productiveNativeSeconds=(equipment.productiveNativeSeconds||0)+flow/equipment.nominalRatePerSecond;
+  if(stopping){
+    control.residualRemainingUnits=Math.max(0,control.residualRemainingUnits-flow);
+    if(control.manual){
+      const backup=activeBackupControl(equipment);
+      if(backup)backup.residualRemainingUnits=Math.max(0,backup.residualRemainingUnits-flow);
+      if(control.residualRemainingUnits<=1e-8)equipment.manualStopControl=null;
+    }
+  }
+}
+
 function getRequestedFlow(equipment, tickSeconds) {
   if (isStartDelayed(equipment)) return 0;
   if (isRampingUp(equipment)) {
     const rampFactor = equipment.startRampDurationSeconds <= 0
       ? 1
-      : Math.min(1,(equipment.startRampElapsedSeconds+(equipment.residence&&equipment.discreteResidentStep?tickSeconds/2:0)) / equipment.startRampDurationSeconds);
+      : Math.min(1,(equipment.startRampElapsedSeconds+((equipment.residence&&equipment.discreteResidentStep||equipment.processing)?tickSeconds/2:0)) / equipment.startRampDurationSeconds);
     return equipment.nominalRatePerSecond * tickSeconds * rampFactor;
   }
   return equipment.nominalRatePerSecond * tickSeconds;
@@ -3354,7 +3481,7 @@ function advanceEquipmentStart(runtime, equipment) {
     equipment.startDelayRemainingSeconds = Math.max(0, equipment.startDelayRemainingSeconds - runtime.run.tickSeconds);
     return;
   }
-  if (isRampingUp(equipment)&&!(equipment.discreteResidentStep&&equipment.availabilityState==='BLOCKED')) {
+  if (isRampingUp(equipment)&&!((equipment.discreteResidentStep||equipment.processing)&&equipment.availabilityState==='BLOCKED')) {
     equipment.startRampElapsedSeconds = Math.min(
       equipment.startRampDurationSeconds,
       equipment.startRampElapsedSeconds + runtime.run.tickSeconds
@@ -3435,7 +3562,7 @@ function consumeFlow(runtime,index,flow) {
   }
 }
 function moveFlow(runtime, index, flow, allowOverflow, requestedFlow, inputAvailable, phase, entries) {
-  if(!runtime.equipment[index].residence)consumeFlow(runtime,index,flow);
+  if(!runtime.equipment[index].residence&&!runtime.equipment[index].processing)consumeFlow(runtime,index,flow);
   if (index === runtime.equipment.length - 1) {
     const output=flow*(runtime.equipment[index].outputBottleFactor||1);
     runtime.outputCount += output;
@@ -3702,6 +3829,7 @@ function recordLiveTelemetry(runtime) {
       backup:{controlActive:zone.backupActive}
     })),
     equipment:runtime.equipment.map(item=>({
+      ...processingMetrics(item),
       ...macroScrapMetrics(item),
       id:item.id,unitOfFlow:item.unitOfFlow,mode:item.mode,
       availabilityState:item.availabilityState,
@@ -3761,6 +3889,7 @@ function createSample(runtime,complete=false) {
       const effectiveness = createEquipmentEffectiveness(item, runtime.virtualSecond);
       return {
         ...(complete?createEquipmentMetrics(item,runtime.virtualSecond):{stateAccounting:numericalAccountingSnapshot(item,runtime.virtualSecond,false)}),
+        ...processingMetrics(item),
         ...macroScrapMetrics(item),
         id: item.id,
         mode: item.mode,
@@ -3920,7 +4049,7 @@ function createResult(runtime,partial=false) {
     },
     caseId: runtime.caseId,
     unitOfFlow: runtime.unitOfFlow,
-    engineVersion: (runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'0.20.6-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'0.20.5-dlb1':'0.20.7')+(runtime.equipment.some(item=>item.macroScrap)?'-scrap3':'')+'-stoprefill1',
+    engineVersion: '0.20.8-basicservice1'+(runtime.equipment.some(item=>item.processData?.accumulation?.speedMode==='DYNAMIC')?'-dlb2':runtime.run.dynamicLineBalancingEnabled===true?'-dlb1':'')+(runtime.equipment.some(item=>item.macroScrap)?'-scrap3':'')+'-stoprefill1',
     numerics:runtime.numerics,
     discretePackages:runtime.run.discretePackages===true||undefined,
     products: runtime.product ? {activeProductId:runtime.product.id,timeline:runtime.productTimeline,rows:Object.values(runtime.productRows).map(row=>({...row,completeCases:row.outputUnit==='CASES'?Math.floor((row.outputNative+1e-8)):null,partialCaseEquivalent:row.outputUnit==='CASES'?Math.max(0,row.outputNative-Math.floor(row.outputNative+1e-8)):null,oeePercent:row.idealBottleOutput>0?100*row.outputBottleEquivalents/row.idealBottleOutput:0})),model:runtime.run.discretePackages?'DISCRETE_PACKAGES':'CONTINUOUS_EQUIVALENT_FLOW',changeoverPolicy:'CLEAR_OUT_REMAINING_INVENTORY',clearoutBottleEquivalents:runtime.clearoutBottleEquivalents} : undefined,
@@ -3970,6 +4099,7 @@ function createSummary(runtime) {
     lineRateImpactOutputUnit: runtime.unitOfFlow||'units',
     lineRateImpactBasis: 'ACTIVE_FORMAT_REFERENCE_OVER_FULL_SIMULATED_IDEAL_OUTPUT',
     lineRateLossBasis: 'FINAL_OUTPUT_GROSS_SHORTFALL_AND_RECOVERY_PER_FORMAT_REFERENCE',
+    ...(runtime.equipment.at(-1)?.processing?{lineRatePhaseLossBasis:'DISCRETE_SERVICE_CREDIT_BEFORE_REFERENCE_RATE_RECOVERY'}:{}),
     lineRateRecoveryInterpretation: 'Above-reference output may reflect buffer discharge. Runtime - effective runtime = gross loss - recovery; negative net balance alone does not invalidate the reference.',
     equipmentFailureTimeBasis: 'SUM_OF_OVERLAPPING_EQUIPMENT_DURATIONS_NOT_EXCLUSIVE_LINE_DOWNTIME',
     lineRateLossStatus: !validRate?'INCONSISTENT_REFERENCE':runtime.lineRateRecoverySeconds>1e-7?'ABOVE_REFERENCE_OUTPUT':'AVAILABLE',
@@ -4022,11 +4152,20 @@ function equipmentInventoryBottles(equipment) {
 }
 function materialInventory(runtime) {
   return sum(runtime.zones.map(zone=>getZoneInventory(zone)*(zone.bottleFactor||1)))+
-    sum(runtime.equipment.map(item=>(item.residence?.inventory||0)*(item.outputBottleFactor||1)));
+    sum(runtime.equipment.map(item=>((item.residence?.inventory||0)+(item.processing?.inventory||0))*(item.outputBottleFactor||1)));
+}
+
+function processingMetrics(equipment){
+  const processing=equipment.processing;
+  const factor=equipment.outputBottleFactor??(['BOTTLE','BOTTLES'].includes(String(equipment.unitOfFlow||'').toUpperCase())?1:null);
+  return processing?{processingInventoryUnits:round(processing.inventory),
+    processingServiceUnits:round(processing.work),
+    processingInventoryBottles:factor===null?null:round(processing.inventory*factor)}:{};
 }
 function createEquipmentMetrics(equipment, durationSeconds, accountingElapsedSeconds=durationSeconds) {
   const effectiveness = createEquipmentEffectiveness(equipment, durationSeconds);
   return {
+    ...processingMetrics(equipment),
     ...macroScrapMetrics(equipment),
     internalInventoryBottles:equipmentInventoryBottles(equipment),
     internalCapacityBottles:equipment.residence?equipmentCapacityBottles(equipment):undefined,
@@ -4222,6 +4361,7 @@ function switchRuntimeProduct(runtime,id){
   const product=runtime.run.productCatalog.find(p=>p.id===id);
   const removed=materialInventory(runtime);
   for(const e of runtime.equipment)if(e.residence){e.residence={clock:0,positionClock:0,inventory:0,ready:0,queue:[],head:0,intakeCredit:1};e.packageRemainder=0;}
+  for(const e of runtime.equipment)if(e.processing)e.processing={inventory:0,work:0,intakeCredit:1};
   runtime.clearoutBottleEquivalents+=removed;currentProductRow(runtime).clearoutBottleEquivalents+=removed;
   runtime.productTimeline.at(-1).endSeconds=runtime.virtualSecond;
   const models=applyProductProfile(runtime.baseEquipment,product);
@@ -4885,7 +5025,7 @@ function createSimPyBrowserEngine(host, files) {
 
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
-const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.7/DES:0.5.0/cache:35';
+const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.8/DES:0.5.0/cache:36';
 
 function canonicalSimulationInputSignature(input) {
   input=projectMachineDesignInput(input);

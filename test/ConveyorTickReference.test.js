@@ -6,6 +6,8 @@ import {createLinePlaybackSession} from '../src/simulation/LineSimulationEngine.
 // Model-versioned trajectory after derived moving pitch and fixed packed spacing.
 // The historical pre-policy fixture remains unchanged for provenance; this
 // baseline protects the new behavior and is not independent plant validation.
+// Sensor labels describe physical beam coverage, including a moving packed
+// queue. The diagnostic correction changes no trajectory values or timestamps.
 const reference=JSON.parse(fs.readFileSync(new URL('./fixtures/conveyor-tick-reference-derived-pitch.json',import.meta.url),'utf8'));
 function projection(frame){
   return JSON.parse(JSON.stringify([frame.virtualSecond,frame.outputCount,frame.effectiveRuntimeSeconds,

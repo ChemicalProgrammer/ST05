@@ -2,7 +2,7 @@ import {projectMachineDesignInput} from './SimulationValidation.js';
 
 // One namespace for cached simulation outputs and consumers of their evidence.
 // Bump it when simulation mathematics or the serialized result contract changes.
-export const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.7/DES:0.5.0/cache:35';
+export const SIMULATION_PROVENANCE_VERSION = 'ST_CURRENT:0.20.8/DES:0.5.0/cache:36';
 
 export function canonicalSimulationInputSignature(input) {
   input=projectMachineDesignInput(input);

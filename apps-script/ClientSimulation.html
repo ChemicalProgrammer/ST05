@@ -831,6 +831,9 @@
         var last=previous?.samples.at(-1)?.virtualSecond??-1;
         partial.samples=(previous?.samples||[]).concat(partial.samples.filter(function(sample){return sample.virtualSecond>last;}));
         partial.stateTransitions=(previous?.stateTransitions||[]).concat(partial.stateTransitions||[]);
+        // Live partials belong to this exact, current calculation too. Keep
+        // playback provenance stable when the completed first round replaces it.
+        partial.inputSignature=SimulatorEngine.inputSignature(input);
         partial.replicationStatus={state:'CALCULATING',rounds:session.run.rounds,baseSeed:session.run.seed};
         session.streaming=true;state.run.result=partial;state.run.representative=partial;state.run.roundIndex=0;
         if(!previous)state.run.sampleIndex=0;

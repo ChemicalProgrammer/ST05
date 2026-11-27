@@ -48,6 +48,7 @@
     var playbackClock;
     var playbackMetricTimer=null;
     var numericalPlaybackSession=null;
+    var numericalPlaybackHistoricalResult=null;
     var numericalPlaybackEpoch=0;
     var playbackStateTimelineCache={result:null,length:-1,byEquipment:[]};
     // Refresh only numeric playback indicators four times per second.
@@ -80,7 +81,7 @@
     // The saved, compact chart history is never the clock for these values.
     function numericalPlaybackContext(){
       return [state.activeCase?.id,state.activeSimulationId,state.run.roundIndex||0,
-        state.run.result?.seed].join('|');
+        state.run.result?.seed,state.run.result?.inputSignature||''].join('|');
     }
 
     function numericalPlaybackFrame(){
@@ -143,16 +144,37 @@
       return session.controller.finished||frame.virtualSecond+1e-6>=target;
     }
 
+    function numericalPlaybackProvenanceMatches(input){
+      // A current cursor may reconstruct only the same engine contract. Keep
+      // historical/unsigned archives readable without recalculating their path
+      // under different mathematics and mixing it with their saved totals.
+      var signature=state.run.result?.inputSignature;
+      if(!signature||typeof window.SimulatorEngine?.inputSignature!=='function')return false;
+      try{
+        var recorded=JSON.parse(signature);
+        if(!Array.isArray(recorded?.equipment)||typeof recorded.unitOfFlow!=='string'
+          ||!recorded.run||typeof recorded.run!=='object'||Array.isArray(recorded.run))return false;
+        var current=JSON.parse(window.SimulatorEngine.inputSignature(input))?.version;
+        return typeof recorded.version==='string'&&recorded.version===current;
+      }catch(_){return false;}
+    }
+
     function startNumericalPlayback(){
+      numericalPlaybackHistoricalResult=null;
       if(typeof window.SimulatorEngine?.createPlayback!=='function'
         ||state.run.result?.engineId==='DES_SIMPY_EXPERIMENTAL')return false;
+      var input=numericalPlaybackInput();
+      if(!numericalPlaybackProvenanceMatches(input)){
+        disposeNumericalPlayback();
+        if(state.run.result?.provisional!==true)numericalPlaybackHistoricalResult=state.run.result;
+        return false;
+      }
       var context=numericalPlaybackContext(),session=numericalPlaybackSession;
       if(!session||session.context!==context){
         var base=state.run.result?.samples?.[state.run.sampleIndex];
         var resume=Number.isFinite(state.run._resumeVirtualSecond)
           ?state.run._resumeVirtualSecond:base?.virtualSecond||0;
         disposeNumericalPlayback();
-        var input=numericalPlaybackInput();
         session={context:context,epoch:numericalPlaybackEpoch,
           controller:window.SimulatorEngine.createPlayback(input),
           frame:base||null,history:[],chartView:null,pending:false,pendingFrame:null,
@@ -1826,7 +1848,8 @@ function summarizeGeometrySources(sources, assumptions) {
 
     function setPlaybackStatus(message) {
       var target = document.getElementById('playback-status');
-      if (target) target.textContent = message;
+      if (target) target.textContent = message+(numericalPlaybackHistoricalResult===state.run.result&&state.run.result
+        ?(document.documentElement.lang==='es'?' · Reproducción histórica; recalcula para usar el motor actual.':' · Historical playback; recalculate to use the current engine.'):'');
     }
 
 

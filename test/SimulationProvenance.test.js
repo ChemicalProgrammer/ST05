@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {canonicalSimulationInputSignature,SIMULATION_PROVENANCE_VERSION} from '../src/simulation/SimulationProvenance.js';
+import {projectMachineDesign} from '../src/simulation/SimulationValidation.js';
 import {scenarioSignature} from '../src/analysis/ScenarioPlanner.js';
 import {scenarioEvidenceInput} from './helpers/ScenarioEvidenceFixture.js';
 
@@ -52,7 +53,7 @@ test('scenario signature changes with the active model namespace and survives st
   // Exercise the real planner with an alternate active namespace, without
   // modifying its source or pretending historical results use a current engine.
   const planner=fs.readFileSync('src/analysis/ScenarioPlanner.js','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,'');
-  const withNamespace=namespace=>vm.runInNewContext(planner+'\nscenarioSignature(simulation)',{SIMULATION_PROVENANCE_VERSION:namespace,simulation});
+  const withNamespace=namespace=>vm.runInNewContext(planner+'\nscenarioSignature(simulation)',{SIMULATION_PROVENANCE_VERSION:namespace,simulation,projectMachineDesign});
   assert.equal(withNamespace(SIMULATION_PROVENANCE_VERSION),signature);
   assert.notEqual(withNamespace(SIMULATION_PROVENANCE_VERSION+'/changed-mathematics'),signature);
   const normalized=structuredClone(simulation);

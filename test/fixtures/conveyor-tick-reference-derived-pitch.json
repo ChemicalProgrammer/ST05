@@ -456,7 +456,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -545,7 +545,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -634,7 +634,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -738,7 +738,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "BLOCKED",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -840,7 +840,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -937,7 +937,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -1019,7 +1019,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -1108,7 +1108,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -1197,7 +1197,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -1390,7 +1390,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -1488,7 +1488,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -1588,7 +1588,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": false,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -1688,7 +1688,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": false,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -1788,7 +1788,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "BLOCKED",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -1890,7 +1890,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -2369,7 +2369,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -2458,7 +2458,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -2547,7 +2547,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -2651,7 +2651,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "BLOCKED",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -2753,7 +2753,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -2850,7 +2850,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -2932,7 +2932,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -3021,7 +3021,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -3110,7 +3110,7 @@
               18,
               {
                 "configured": true,
-                "state": "PULSING",
+                "state": "BLOCKED",
                 "controlActive": true,
                 "positionMm": 100,
                 "restartPositionMm": 200,
@@ -3303,7 +3303,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -3787,7 +3787,7 @@
               },
               {
                 "configured": true,
-                "state": "CLEAR",
+                "state": "PULSING",
                 "latched": true,
                 "positionMm": 900,
                 "thresholdUnits": 2,
@@ -3811,5 +3811,6 @@
         ]
       ]
     }
-  ]
+  ],
+  "sensorDiagnosticsPolicy": "Physical beam occupancy and packed queues; 26 state labels corrected without recapturing times, counts, positions or control decisions."
 }

@@ -1,5 +1,14 @@
 # Referencia de src/simulation/LineSimulationEngine.js
 
+> **Referencia histórica.** La instantánea siguiente no describe el contrato
+> vigente de paquetes discretos, Prime o Back-up. La fuente ejecutable es
+> `src/simulation/LineSimulationEngine.js`. La corrección del servicio Basic,
+> el material en proceso y el rearme de Prime se documentan en
+> [`docs/PRIME_DISCRETE_SERVICE.md`](../../docs/PRIME_DISCRETE_SERVICE.md).
+> No copiar la autorización por pulso de Prime de esta instantánea al motor
+> actual: el arranque exige la reserva física y debe conservar su autorización
+> durante las transferencias normales.
+
 Instantánea 853fb188222deff59c4a145335de1a97ca3cd67b. Código técnico existente, sin datos de planta.
 Adjuntar en la etapa del motor. Es referencia, no un archivo para pegar directamente
 en Apps Script. Adaptar import/export a la carga modular descrita en ARQUITECTURA.

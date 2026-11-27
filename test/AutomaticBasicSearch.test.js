@@ -17,8 +17,8 @@ test('Basic owns a bounded automatic profile while preserving failure exposure a
     const profile=scenarioSearchProfile(depth,settings,{run,equipment});
     assert.equal(profile.maxCandidates,24);assert.equal(profile.passes,1);assert.equal(profile.maxFactors,3);assert.equal(profile.finalists,2);assert.equal(profile.fullHorizonFinalists,1);assert.equal(profile.basicTimeLimitMs,300000);assert.equal(profile.hardCandidateLimit,true);
     assert.equal(profile.explorationSeconds,900);assert.equal(profile.confirmationSeconds,1800);
-    const full=scenarioSearchRun(run,depth,'validation',23,settings,equipment);assert.equal(full.durationSeconds,86400);assert.equal(full.rounds,23);assert.equal(full.seed,17);
-    const ranking=planScenarioFinalistRanking(run,depth,3,{searchSettings:settings,equipment});assert.equal(ranking.fullHorizonFinalists,1);assert.equal(ranking.fullRun.durationSeconds,86400);
+    const full=scenarioSearchRun(run,depth,'validation',23,settings,equipment);assert.equal(full.durationSeconds,3600);assert.equal(full.scenarioFidelity,'PHYSICAL_PRECISE_V1');assert.equal(full.rounds,23);assert.equal(full.seed,17);
+    const ranking=planScenarioFinalistRanking(run,depth,3,{searchSettings:settings,equipment});assert.equal(ranking.fullHorizonFinalists,1);assert.equal(ranking.fullRun.durationSeconds,3600);assert.equal(ranking.fullRun.scenarioFidelity,'PHYSICAL_FAST_V1');
   }
   const result=(delta,seed)=>({throughput:100+delta,oee:70+delta,durationSeconds:86400,unitOfFlow:'bottles',roundMetrics:[0,1,2].map(i=>({seed:seed+i,durationSeconds:86400,throughput:100+delta,oee:70+delta}))});
   assert.equal(planScenarioConfirmation(result(0,21),result(5,21)).rounds,6,'automatic search keeps the existing independent sample-size rule');

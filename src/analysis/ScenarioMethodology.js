@@ -71,8 +71,8 @@ function scenarioStudyConfirmationPlan(value) {
     'targetHalfWidth', 'plannedHalfWidth', 'pilotSeeds', 'pilotRounds', 'confidenceLevel', 'minRounds', 'maxRounds',
     'confirmationMustExcludePilotSeeds', 'method', 'policy', 'pilotRole', 'minimumPracticalGain', 'comparisonBasis',
     'comparisonDurationSeconds', 'comparisonUnitOfFlow', 'baselineMeanThroughput', 'pilotStandardDeviation',
-    'sourceEffectiveRuntimeTargetSeconds', 'interpretation']);
-  if (value.pilotRun) plan.pilotRun = scenarioStudyPick(value.pilotRun, ['durationSeconds', 'rounds', 'seed', 'durationMode', 'engineId']);
+    'sourceEffectiveRuntimeTargetSeconds', 'confirmationHorizon', 'pilotFidelity', 'confirmationFidelity', 'interpretation']);
+  if (value.pilotRun) plan.pilotRun = scenarioStudyPick(value.pilotRun, ['durationSeconds', 'rounds', 'seed', 'durationMode', 'engineId','scenarioFidelity','numericalResolution']);
   return plan;
 }
 function scenarioStudyDOEObservations(value) {
@@ -369,7 +369,7 @@ export function buildScenarioStudy(simulation, evaluation) {
         minimumPracticalGainMet: scenarioStudyNumber(objective.minimumPracticalGain) !== null && actualBase[objectiveMetric] !== null ? actualCandidate[objectiveMetric] - actualBase[objectiveMetric] >= objective.minimumPracticalGain : null } : { status: 'NOT_EVALUATED', reason: objective && !objectiveValid ? 'INVALID_OBJECTIVE_OR_UNIT' : 'OBJECTIVE_OR_CONFIRMATION_MISSING' } },
     baseline: { status: check?.baseline ? 'CONFIRMATION_BASELINE' : evaluation?.baseline ? 'SCREENING_BASELINE' : 'MISSING',
       metrics: check?.baseline ? actualBase : scenarioStudyMetrics(evaluation?.baseline), unitOfFlow: scenarioStudyFlowUnit(evaluation?.unitOfFlow || simulation?.unitOfFlow),
-      run: scenarioStudyPick(check || evaluation?.run, ['durationSeconds', 'rounds', 'seed']) },
+      run: scenarioStudyPick(check || evaluation?.run, ['durationSeconds', 'rounds', 'seed','scenarioFidelity']) },
     diagnosis: {
       causalStatus: 'HYPOTHESES_ONLY',
       observedLosses: scenarioStudyPick(evaluation?.lossDiagnosis, ['status', 'reason', 'sourceStatus', 'provenance', 'referenceId', 'durationSeconds', 'durationBasis',
@@ -382,14 +382,14 @@ export function buildScenarioStudy(simulation, evaluation) {
       screening: { baseline: scenarioStudyMetrics(evaluation?.baseline), candidate: scenarioStudyMetrics(evaluation?.candidate), role: 'EXPLORATION_ONLY' },
       finalistSelection:{status:rankingPlan?'RECORDED':'NOT_RECORDED',role:'EXPLORATORY_SELECTION_NOT_CONFIRMATION',
         policy:scenarioStudyText(rankingPlan?.policy),staged:rankingPlan?.staged===true,reason:scenarioStudyText(rankingPlan?.reason),
-        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId']),
-        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId']),
+        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId','scenarioFidelity','numericalResolution']),
+        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId','scenarioFidelity','numericalResolution']),
         candidatesScreened:Array.isArray(finalistScreen?.observations)?finalistScreen.observations.length:null,
         selected:scenarioStudyNumber(finalistScreen?.selected),omitted:scenarioStudyNumber(finalistScreen?.omitted),
         protectedReliabilityCandidates:scenarioStudyNumber(finalistScreen?.protectedReliabilityCandidates),
         fullHorizonFinalists:scenarioStudyNumber(ranking?.finalists)??scenarioStudyNumber(rankingPlan?.fullHorizonFinalists),
         shortScreenMayMissLateBenefits:rankingPlan?.staged===true,
-        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the full-horizon independent confirmation supports a reproduced improvement.'},
+        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the independent physical confirmation at its recorded horizon supports a reproduced improvement.'},
       experiment: {
         status: doe ? doe.analysis?.complete === true ? 'COMPLETE_DESIGN' : 'INCOMPLETE_DESIGN' : 'NOT_PERFORMED',
         type: scenarioStudyText(doe?.type || doe?.design?.type),
@@ -399,7 +399,7 @@ export function buildScenarioStudy(simulation, evaluation) {
           interpretation: 'Effects apply to the tested factor region conditional on these fixed changes and the saved baseline; they are not isolated causal shares or guarantees outside that region.' },
         combinations: scenarioStudyNumber(doe?.combinations) ?? (Array.isArray(doe?.observations) ? doe.observations.length : null),
         roundsPerCombination: scenarioStudyNumber(doe?.roundsPerCombination),
-        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds']) : {},
+        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds','scenarioFidelity','numericalResolution']) : {},
         observations: scenarioStudyDOEObservations(doe?.observations),
         observationsOmitted: Math.max(0, (Array.isArray(doe?.observations) ? doe.observations.length : 0) - 16),
         analysis: scenarioStudyPick(doe?.analysis, ['complete', 'reason', 'effects', 'interpretation']),
@@ -409,7 +409,7 @@ export function buildScenarioStudy(simulation, evaluation) {
       },
       confirmation: { status: confirmationStatus, reportedPassed: check?.passed === true,
         kind: scenarioStudyText(check?.confirmationKind || evaluation?.confirmationKind),
-        baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed']),
+        baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed','scenarioFidelity']),
         confirmationPlan,
         precision: scenarioStudyPick(check?.precision, ['targetHalfWidth', 'achievedHalfWidth', 'met', 'plannedRounds', 'requiredRounds', 'capped']),
         practicalThreshold: scenarioStudyNumber(check?.practicalThreshold), reason: scenarioStudyText(check?.reason),
@@ -417,7 +417,7 @@ export function buildScenarioStudy(simulation, evaluation) {
         delta: { throughputPerMinute: actualBase.throughput !== null && actualCandidate.throughput !== null ? actualCandidate.throughput - actualBase.throughput : null,
           oeePercentagePoints: actualBase.oee !== null && actualCandidate.oee !== null ? actualCandidate.oee - actualBase.oee : null },
         statisticalEvidence: stats,
-        interpretation: 'Independent simulation evidence; descriptive reproduction is distinct from statistical inference and plant validation.' }
+        interpretation: 'Independent physical simulation evidence on the recorded horizon; descriptive reproduction is distinct from statistical inference, full-calendar coverage, and plant validation.' }
     },
     feasibility: { status: 'REQUIRES_ENGINEERING_REVIEW', verified: false,
       exploratoryTargets: hypotheses.some(item => ['EXPLORATORY_SENSITIVITY','EXPLORATORY_REPLACEMENT'].includes(item.classification)),

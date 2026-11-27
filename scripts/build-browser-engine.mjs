@@ -26,6 +26,7 @@ const sourceFiles = [
   'src/analysis/ScenarioStatistics.js',
   'src/analysis/ScenarioDOE.js',
   'src/analysis/ScenarioSearch.js',
+  'src/analysis/ScenarioScreeningEngine.js',
   'src/analysis/ReliabilityTargetSearch.js',
   'src/analysis/FlowFactorScreening.js',
   'src/analysis/ScenarioMethodology.js'
@@ -106,6 +107,13 @@ function createBrowserPlayback(input){
   return controller;
 }
 async function calculateBrowserBatch(input,options={}){
+  if(input.run.scenarioFidelity==='FLUID_SCREEN_V1'){
+    const validation=validateSimulationInput(input);if(!validation.ok)return validation;
+    return simulateBatch(input,{...options,summaryOnly:true,representativeReplay:false,concurrency:1,workerFirstRound:true,runRound:async(model,settings)=>{
+      await new Promise(resolve=>setTimeout(resolve,0));
+      return simulateScenarioFluidRound(model,settings);
+    }});
+  }
   if(input.run.effectiveRuntimeTargetSeconds!==undefined&&selectedEngine(input)===SIMPY_ENGINE_ID)return effectiveRuntimeUnsupported();
   if(selectedEngine(input)===SIMPY_ENGINE_ID)return simulateBatch(input,{...options,runRound:simPyRuntime.run,workerFirstRound:true,concurrency:options.parallel===false?1:simPyRuntime.size,laterSummaryOnly:options.laterSummaryOnly!==false});
   let published=false;
@@ -136,7 +144,7 @@ function simulationInputSignature(input){
 async function simulateBrowserBatch(input,options={}){
   const signature=simulationInputSignature(input);
   const response=await calculateBrowserBatch(input,options);
-  if(response.ok)response.result.inputSignature=signature;
+  if(response.ok){response.result.inputSignature=signature;if(input.run.scenarioFidelity==='PHYSICAL_FAST_V1'||input.run.scenarioFidelity==='PHYSICAL_PRECISE_V1')response.result.scenarioFidelity=input.run.scenarioFidelity;}
   return response;
 }
 window.addEventListener?.('pagehide',()=>{workerPool?.close();workerPool=null;for(const controller of playbackControllers)controller.close();});

@@ -33,7 +33,7 @@ function harness({reliability=true,durationSeconds=86400,compact=true,uiMode='ba
     }
     gain=Math.min(25,gain);const throughput=100+gain,oee=50+gain/5;
     const rows=Array.from({length:input.run.rounds},(_,i)=>({seed:input.run.seed+i,durationSeconds:input.run.durationSeconds,summary:{lineOeePercent:oee,outputCount:throughput*input.run.durationSeconds/60}}));
-    return {ok:true,result:{durationSeconds:input.run.durationSeconds,unitOfFlow:'bottles',summary:rows[0].summary,batch:{rounds:rows.length,rows,statistics:{lineOeePercent:{mean:oee},throughputPerMinute:{mean:throughput}}}}};
+    return {ok:true,result:{scenarioFidelity:input.run.scenarioFidelity,durationSeconds:input.run.durationSeconds,unitOfFlow:'bottles',summary:rows[0].summary,batch:{rounds:rows.length,rows,statistics:{lineOeePercent:{mean:oee},throughputPerMinute:{mean:throughput}}}}};
   };
   w.STScenarioSearch.screenFlow=async()=>{throw Error('Basic must not run the preliminary factor-and-pair screen.');};
   w.STScenarioExplorer.connectCase(()=>record,()=>{});
@@ -61,7 +61,7 @@ function verifyAutomatic(entry,h){
   assert(entry.phaseAudit.exploration.testedCandidates<=7,'At most seven selected nonempty subsets are explored');
   assert.equal(entry.infeasibleTrials,0,'Every expanded package combination must reach a valid experiment');
   assert(entry.phaseAudit.ranking.finalists<=1);assert(entry.independentCheck.rounds<=6);
-  assert.equal(entry.independentCheck.durationSeconds,Math.max(1800,h.before.dynamicConfig.durationSeconds));
+  assert.equal(entry.independentCheck.durationSeconds,entry.rankingPlan.confirmationHorizon.seconds);assert.equal(entry.independentCheck.scenarioFidelity,'PHYSICAL_PRECISE_V1');
   assert.equal(entry.independentCheck.rounds,entry.confirmationPlan.rounds);
   assert(entry.confirmationPlan.pilotSeeds.every(seed=>!entry.independentCheck.baseline.roundMetrics.some(row=>row.seed===seed)));
   assert.equal(entry.phaseAudit.doe.plannedCombinations,entry.phaseAudit.doe.evaluatedCombinations);
@@ -195,7 +195,7 @@ test('Basic short negative screen exits without spending full-horizon simulation
     assert.equal(entry.status,'NO_PROMISING_CANDIDATE');assert.equal(entry.screeningOnly,true);
     assert.equal(entry.independentCheck,null);assert(h.calls.every(call=>call.run.durationSeconds<86400));
     assert(h.cards.ZERO.querySelector('.scenario-create').disabled);
-    assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/Full-horizon confirmation not performed/);
+    assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/Physical confirmation not performed/);
   }finally{h.close();}
 });
 test('Basic deadline interrupts calculation without marking the candidate confirmed',async()=>{
@@ -214,7 +214,7 @@ test('Basic displays a provisional estimate while the full-horizon candidate is 
  const h=harness({reliability:false,durationSeconds:86400});try{
   const original=h.w.SimulatorEngine.simulateBatch;let sawPreview=false;
   h.w.SimulatorEngine.simulateBatch=async input=>{
-   if(input.run.durationSeconds===86400){
+   if(input.run.scenarioFidelity==='PHYSICAL_FAST_V1'&&input.run.durationSeconds===3600){
     const notice=h.cards.ZERO.querySelector('.scenario-result-notice');
     sawPreview ||= !notice.hidden&&/Provisional estimate/.test(notice.textContent);
     assert(h.cards.ZERO.querySelector('.scenario-create').disabled);

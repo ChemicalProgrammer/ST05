@@ -14,7 +14,7 @@ export function scenarioSearchSettings(raw) {
 }
 export function scenarioSearchSettingsSignature(raw) {
   const settings=scenarioSearchSettings(raw);
-  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_PROGRESSIVE_V2':'SCENARIO_SEARCH_SPEED_V1',settings]);
+  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_MULTIFIDELITY_V3':'SCENARIO_SEARCH_SPEED_V1',settings]);
 }
 export function scenarioSearchProfile(level,settings,context) {
   const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
@@ -44,6 +44,40 @@ export function scenarioSearchProfile(level,settings,context) {
   return {...selected,explorationSeconds:exploration,confirmationSeconds:confirmation,
     fullHorizonFinalists:selected.automaticBasic?1:Math.max(2,selected.fullHorizonFinalists),
     horizonBasis:'RELIABILITY_AWARE_SCREENING',medianMtbfMinutes:median};
+}
+
+// Basic alone uses a matched, versioned low-fidelity engine. Unsupported
+// topology or calendar mechanisms use the physical engine for the entire phase.
+export function scenarioScreeningEligibility(run,equipment=[]){
+  if(run?.engineId&&run.engineId!=='ST_CURRENT')return {supported:false,reason:'ENGINE'};
+  if(run?.eventsEnabled!==false&&((run?.commands||[]).length||resolvePlannedStops({...run,tickSeconds:run?.tickSeconds??.25}).events.length))return {supported:false,reason:'SCHEDULED_CONDITIONS'};
+  const belt=e=>e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR';
+  if(!equipment.length||belt(equipment[0])||belt(equipment.at(-1))||equipment.some((e,i)=>belt(e)&&i>0&&belt(equipment[i-1])))return {supported:false,reason:'TOPOLOGY'};
+  if(equipment.some(e=>e.initialMode&&e.initialMode!=='AUTO'||e.processData?.productApplies===false||e.processData?.equipment?.macroStopScrapBottles>0||e.processData?.accumulation?.speedMode==='DYNAMIC'||run?.dynamicLineBalancingEnabled===true&&e.processData?.dynamicLineBalancing?.enabled===true))return {supported:false,reason:'COMPLEX_PHYSICAL_CONTROL'};
+  const product=run?.productCatalog?.find(p=>p.id===(run.initialFormatId??run.initialProductId));
+  if(product&&equipment.some(e=>product.equipment?.[e.id]?.applies===false))return {supported:false,reason:'PRODUCT_BYPASS'};
+  return {supported:true,reason:null};
+}
+export function basicScenarioConfirmationHorizon(run,equipment=[]){
+  const configured=Math.max(1800,Number(run?.durationSeconds)||0);
+  const scheduled=run?.eventsEnabled!==false&&((run?.commands||[]).length||resolvePlannedStops({...run,tickSeconds:run?.tickSeconds??.25}).events.length);
+  if(scheduled)return {seconds:configured,configuredSeconds:configured,reason:'SCHEDULED_CONDITIONS'};
+  let seconds=Math.min(configured,3600),reason=seconds<3600?'SHORT_SOURCE_HORIZON':'ONE_HOUR';
+  if(run?.reliabilityEnabled!==false){
+    const categories=run?.reliabilityCategories||{};
+    for(const e of equipment){
+      if(e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')continue;
+      const split=e.processData?.equipment?.stopInputs,r=e.noiseProfile?.reliability;
+      const profiles=split?['minor','major'].filter(k=>categories[k]!==false).map(k=>split[k]):categories.general!==false?[r]:[];
+      // Extend only for a material modeled downtime mechanism. A long MTBF
+      // with negligible downtime should not force every category to a full day.
+      for(const p of profiles)if(p?.mtbfMinutes>60&&p.mttrMinutes>0&&p.mttrMinutes/(p.mtbfMinutes+p.mttrMinutes)>=.02){
+        const extended=Math.min(configured,Math.ceil(p.mtbfMinutes/60)*3600);
+        if(extended>seconds){seconds=extended;reason='MATERIAL_RARE_FAILURE';}
+      }
+    }
+  }
+  return {seconds,configuredSeconds:configured,reason};
 }
 
 // A package is one intervention: every coupled field is either installed or
@@ -111,6 +145,19 @@ export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings
   // A runtime-target stop changes calendar exposure as the candidate improves.
   // What-If compares complete equal calendar horizons and records that choice.
   delete copy.effectiveRuntimeTargetSeconds;
+  if(settings?.automaticBasic===true){
+    const eligible=scenarioScreeningEligibility(run,equipment||[]),horizon=basicScenarioConfirmationHorizon(run,equipment||[]);
+    if(confirmation==='validation'||confirmation==='ranking'){
+      copy.durationSeconds=horizon.seconds;copy.numericalResolution=confirmation==='validation'?'PRECISE':'FAST';
+      copy.scenarioFidelity=confirmation==='validation'?'PHYSICAL_PRECISE_V1':'PHYSICAL_FAST_V1';
+    }else if(confirmation==='physical-screen'){
+      copy.durationSeconds=Math.min(horizon.seconds,900);copy.numericalResolution='FAST';copy.scenarioFidelity='PHYSICAL_FAST_V1';
+    }else{
+      copy.durationSeconds=Math.min(horizon.seconds,eligible.supported?(confirmation==='sensitivity'?Math.max(300,profile.explorationSeconds):1800):profile.explorationSeconds);
+      copy.scenarioFidelity=eligible.supported?'FLUID_SCREEN_V1':'PHYSICAL_FAST_V1';
+      if(!eligible.supported)copy.numericalResolution='FAST';
+    }
+  }
   return copy;
 }
 
@@ -119,7 +166,12 @@ export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings
 export function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
   const settings=scenarioSearchSettings(options.searchSettings),profile=scenarioSearchProfile(level,settings,{run,equipment:options.equipment}),fullRun=scenarioSearchRun(run,level,'validation',3,settings,options.equipment);
   const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
-  const screenRun=scenarioSearchRun(run,level,true,3,settings,options.equipment);
+  const screenRun=scenarioSearchRun(run,level,settings.automaticBasic?'physical-screen':true,3,settings,options.equipment);
+  if(settings.automaticBasic){
+    const horizon=basicScenarioConfirmationHorizon(run,options.equipment||[]),rankRun=scenarioSearchRun(run,level,'ranking',3,settings,options.equipment);
+    const staged=candidateCount>1;
+    return {policy:'BASIC_MULTIFIDELITY_V3',staged,reason:staged?'PHYSICAL_CHECK_OF_APPROXIMATE_RANKING':'ONE_FINALIST',screenRun,fullRun:rankRun,confirmationRun:fullRun,confirmationHorizon:horizon,fullHorizonFinalists:1,screeningSeedOffset:50003,rankingSeedOffset:100003,confirmationSeedOffset:1000003,interpretation:'Exploratory fluid ranking, physical FAST finalist checks, and independent PRECISE confirmation on the recorded comparison horizon; not a global optimum or validation of the full original calendar unless horizons coincide.'};
+  }
   // A short prefix does not represent an entire shift/calendar/product program.
   // Keep every finalist when the run has explicit changes over time.
   const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);
@@ -174,11 +226,14 @@ export function selectProgressiveBasicFinalists(items,baseline,run,equipment=[],
     return {item,delta,meanOee:value.oee-baseline.oee,potential:delta>threshold||(matched&&paired.some(d=>d>threshold)),uncertain:!matched};
   }).sort((a,b)=>Number(!a.potential)-Number(!b.potential)||Number(!!a.item.result.warnings?.length)-Number(!!b.item.result.warnings?.length)||Number(a.meanOee<0)-Number(b.meanOee<0)||b.delta-a.delta);
   if(scored.some(item=>item.uncertain))reasons.push('INCOMPLETE_PAIRED_SCREEN');
+  const approximate=baseline?.scenarioFidelity==='FLUID_SCREEN_V1';
+  if(approximate)reasons.push('APPROXIMATE_SCREEN_REQUIRES_PHYSICAL_PROBE');
   const promising=scored.filter(item=>item.potential),chosen=promising.slice(0,Math.max(1,Math.min(2,limit)));
   const lateMechanism=item=>item.item.changes.some(change=>change.path.startsWith('noiseProfile.reliability.')||change.interventionType==='ACCUMULATION'||change.interventionType==='REPLACEMENT');
   if(!chosen.length&&reasons.length&&scored.length)chosen.push((rare&&short?scored.find(lateMechanism):null)||scored[0]);
   if(chosen.length===1&&limit>1&&reasons.length){
-    const late=scored.find(item=>!chosen.includes(item)&&lateMechanism(item));
+    const sensor=item=>item.item.changes.some(c=>/sensor|timedelay|lpPrimeMm/i.test(c.path));
+    const late=(approximate?scored.find(item=>!chosen.includes(item)&&sensor(item)):null)||scored.find(item=>!chosen.includes(item)&&lateMechanism(item))||(approximate?scored.find(item=>!chosen.includes(item)):null);
     if(late)chosen.push(late);
   }
   return {selected:chosen.map(row=>row.item),evaluated:valid.length,promising:promising.length,omitted:valid.length-chosen.length,precautionary:chosen.some(row=>!row.potential),reasons,threshold,
@@ -214,6 +269,7 @@ export function scenarioPairedEvidence(base,candidate) {
 // looking at the independent confirmation. No optional stopping on its p-value.
 export function planScenarioConfirmation(base,candidate,methodology={},options={}) {
   const issue=scenarioComparisonEvidenceIssue(base,candidate);
+  if(options.automaticBasic&&((base?.scenarioFidelity&&base.scenarioFidelity!=='PHYSICAL_FAST_V1')||(candidate?.scenarioFidelity&&candidate.scenarioFidelity!=='PHYSICAL_FAST_V1')))return {rounds:null,status:'BASIC_PHYSICAL_PILOT_REQUIRED',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   if(issue)return {rounds:null,status:issue,policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   const baseSeeds=base.roundMetrics.map(row=>row.seed),candidateSeeds=candidate.roundMetrics.map(row=>row.seed);
   if(!scenarioValidConfirmationPilotSeeds(baseSeeds)||!scenarioValidConfirmationPilotSeeds(candidateSeeds)||baseSeeds.length!==candidateSeeds.length||baseSeeds.some(seed=>!candidateSeeds.includes(seed)))return {rounds:null,status:'INVALID_PILOT_REPLICATIONS',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
@@ -243,7 +299,7 @@ export function scenarioPracticalGain(base,methodology={}) {
 
 export function assessScenarioConfirmation(base,candidate,plan,methodology={}) {
   const planIssue=scenarioConfirmationPlanIssue(plan,methodology);
-  const evidenceIssue=scenarioComparisonEvidenceIssue(base,candidate,plan);
+  const evidenceIssue=plan?.automaticBasic&&(base?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')?'BASIC_PRECISE_CONFIRMATION_REQUIRED':scenarioComparisonEvidenceIssue(base,candidate,plan);
   const statisticalEvidence=scenarioPairedSummary(base,candidate,{confidenceLevel:plan?.confidenceLevel??methodology?.replications?.confidenceLevel??.95});
   const threshold=planIssue?null:plan.minimumPracticalGain,throughput=statisticalEvidence.metrics?.throughput,oee=statisticalEvidence.metrics?.oee;
   const pilotSeeds=Array.isArray(plan?.pilotSeeds)?plan.pilotSeeds:[];

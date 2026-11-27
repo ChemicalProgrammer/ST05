@@ -180,10 +180,10 @@ window.STScenarioExplorer=(function(){
     if(cancelled?.())throw Error('BATCH_CANCELLED');
     var validity=SimulatorEngine.validateSimulationInput?.(input);if(validity&&!validity.ok)throw Error(validity.error?.message||'Invalid simulation input.');
     var key=SimulatorEngine.inputSignature?.(input),rounds=input.run.rounds||1,cached=key&&(!changes.length&&baselineCache.get(key)||summaryCache.get(key)),cacheSource='MEMORY';
-    if(!validMetrics(cached,rounds,input.run.durationSeconds,input.case.unitOfFlow))cached=null;
+    if(!validMetrics(cached,rounds,input.run.durationSeconds,input.case.unitOfFlow)||input.run.scenarioFidelity&&cached?.scenarioFidelity!==input.run.scenarioFidelity)cached=null;
     var live=(caseProvider?.()?.simulations||[]).find(s=>s.id===sim.id)||sim;
-    if(key&&!cached){var stored=(live.whatIf?.measurements||[]).find(e=>e.key===key&&validMetrics(e.value,rounds,input.run.durationSeconds,input.case.unitOfFlow));if(stored){cached=stored.value;cacheSource='SAVED_EVALUATION';}}
-    if(key&&!cached){
+    if(key&&!cached){var stored=(live.whatIf?.measurements||[]).find(e=>e.key===key&&validMetrics(e.value,rounds,input.run.durationSeconds,input.case.unitOfFlow)&&(!input.run.scenarioFidelity||e.value.scenarioFidelity===input.run.scenarioFidelity));if(stored){cached=stored.value;cacheSource='SAVED_EVALUATION';}}
+    if(key&&!cached&&!input.run.scenarioFidelity){
       var records=[sim,...(caseProvider?.()?.simulations||[])];
       var matching=records.find(s=>s.results?.inputSignature===key&&s.results.replicationStatus?.state==='COMPLETE'&&s.results.summary&&s.results.durationSeconds===input.run.durationSeconds);
       if(matching){var savedMetric=metric(matching.results);if(validMetrics(savedMetric,rounds,input.run.durationSeconds,input.case.unitOfFlow)){cached=savedMetric;cacheSource='SAVED_SIMULATION';}}
@@ -193,7 +193,7 @@ window.STScenarioExplorer=(function(){
     var response=await SimulatorEngine.simulateBatch(input,{cancelled:cancelled,summaryOnly:true,progress:onProgress});
     if(!response.ok)throw Error(response.error?.message||JSON.stringify(response.errors||response));
     if(cancelled?.())throw Error('BATCH_CANCELLED');
-    var value=metric(response.result);value.unitOfFlow=input.case.unitOfFlow||response.result.unitOfFlow||'units';
+    var value=metric(response.result);if(input.run.scenarioFidelity){if(response.result.scenarioFidelity!==input.run.scenarioFidelity)throw Error('SCENARIO_FIDELITY_RESULT_REQUIRED');value.scenarioFidelity=response.result.scenarioFidelity;}value.unitOfFlow=input.case.unitOfFlow||response.result.unitOfFlow||'units';
     if(!validMetrics(value,rounds,input.run.durationSeconds,input.case.unitOfFlow))throw Error('Incomplete simulation metrics; evaluation cannot be reused.');
     if(key){rememberMetrics(key,value);rememberBaseline(value);saveMeasurement(sim,key,value,silent);}
     return Object.assign({},value,{cacheSource:'CALCULATED',warnings:evaluationWarnings(candidate,value)});
@@ -271,14 +271,14 @@ window.STScenarioExplorer=(function(){
     }
     function compactTerminal(state){return ['NO_DEMONSTRATED_IMPROVEMENT','NO_PROMISING_CANDIDATE','SEARCH_BUDGET_REACHED','NO_ELIGIBLE_TARGETS','INFEASIBLE','CANCELLED','NOT_REPRODUCED'].includes(state);}
     function compactOutcomeNotice(entry){
-      var message=entry.status==='SEARCH_BUDGET_REACHED'?'Time limit reached. Preliminary evidence only; improvement not confirmed.':entry.status==='NO_PROMISING_CANDIDATE'?'No promising candidate in the short screening. Full-horizon confirmation not performed.':entry.status==='NO_ELIGIBLE_TARGETS'?'No eligible intervention targets for this CAPEX category.':entry.status==='INFEASIBLE'?'No physically valid candidate.':entry.status==='CANCELLED'?'Search stopped. Improvement not confirmed.':entry.status==='NOT_REPRODUCED'?'Improvement did not reproduce; baseline retained.':entry.status==='NO_DEMONSTRATED_IMPROVEMENT'?'No demonstrated improvement. Baseline retained.':'';
+      var message=entry.status==='SEARCH_BUDGET_REACHED'?'Time limit reached. Preliminary evidence only; improvement not confirmed.':entry.status==='NO_PROMISING_CANDIDATE'?'No promising candidate in the short screening. Physical confirmation not performed.':entry.status==='NO_ELIGIBLE_TARGETS'?'No eligible intervention targets for this CAPEX category.':entry.status==='INFEASIBLE'?'No physically valid candidate.':entry.status==='CANCELLED'?'Search stopped. Improvement not confirmed.':entry.status==='NOT_REPRODUCED'?'Improvement did not reproduce; baseline retained.':entry.status==='NO_DEMONSTRATED_IMPROVEMENT'?'No demonstrated improvement. Baseline retained.':'';
       return message?configText(message)+((entry.status==='SEARCH_BUDGET_REACHED'||entry.status==='NO_PROMISING_CANDIDATE'||entry.status==='CANCELLED')&&entry.baseline?.durationSeconds>0?' · '+Number((entry.baseline.durationSeconds/60).toFixed(2))+' min × '+(entry.baseline.roundMetrics?.length||1)+' '+configText('rounds'):''):'';
     }
     function provisionalNotice(entry){
       return configText('Provisional estimate — improvement not confirmed.')+(entry.baseline?.durationSeconds>0?' · '+Number((entry.baseline.durationSeconds/60).toFixed(2))+' min × '+(entry.baseline.roundMetrics?.length||1)+' '+configText('rounds'):'');
     }
     var depth=automaticBasic?'MEDIUM':restored?.depth||simulation.whatIf?.searchDepth||'MEDIUM';if(!STScenarioSearch.profiles[depth])depth='MEDIUM';
-    var previewRun=searchRun(),context=el('p','','scenario-preview-context');host.append(context);function contextText(){var profile=searchProfile();context.textContent=searchSettings.speedProfile+' · '+depth+' · exploration '+profile.explorationSeconds/60+' min × 3 rounds · finalist ranking '+searchRun('validation').durationSeconds/60+' min (long runs first screen finalists for '+profile.confirmationSeconds/60+' min) · final confirmation '+searchRun('validation').durationSeconds/60+' min · confirmation rounds planned from pilot precision'+(depth==='LIGHT'?' · DOE omitted':'')+' · seed '+previewRun.seed;}contextText();
+    var previewRun=searchRun(),context=el('p','','scenario-preview-context');host.append(context);function contextText(){var profile=searchProfile();if(automaticBasic){var screening=searchRun(),confirmation=searchRun('validation');context.textContent='Automatic multi-fidelity · '+screening.scenarioFidelity+' · '+screening.durationSeconds/60+' min × 3 · physical confirmation '+confirmation.durationSeconds/60+' min × 3–6 · independent seeds';return;}context.textContent=searchSettings.speedProfile+' · '+depth+' · exploration '+profile.explorationSeconds/60+' min × 3 rounds · finalist ranking '+searchRun('validation').durationSeconds/60+' min (long runs first screen finalists for '+profile.confirmationSeconds/60+' min) · final confirmation '+searchRun('validation').durationSeconds/60+' min · confirmation rounds planned from pilot precision'+(depth==='LIGHT'?' · DOE omitted':'')+' · seed '+previewRun.seed;}contextText();
     var dialog=el('dialog','','scenario-config-dialog'),heading=el('div','','dialog-heading'),body=el('div','','dialog-body'),footer=el('div','','dialog-actions');
     dialog.setAttribute('aria-label','Scenario changes and DOE');dialog.dataset.scenarioScope=primaryTier;var close=iconButton('Close scenario configuration','x',function(){dialog.close();});close.className='ghost icon-button';var done=button('Done',function(){if(validateConfiguration(true,false))dialog.close();});done.className='';heading.append(el('h2','Scenario configuration · '+(primaryTier==='ALL'?'All CAPEX':primaryTier.charAt(0)+primaryTier.slice(1).toLowerCase()+' CAPEX')),close);footer.append(done);dialog.append(heading,body,footer);host.append(dialog);
     var configure=iconButton('Configure changes & DOE','settings',function(){if(!activeHost){refreshDOE();refreshFactors();if(!dialog.open)dialog.showModal();validateRows();}});configure.classList.add('scenario-configure');
@@ -528,7 +528,7 @@ window.STScenarioExplorer=(function(){
     function renderSuggestions(evidence){
       suggestionReport.hidden=true;
     }
-    function discoveryConfiguration(){var discoveryRun=searchRun();return {run:discoveryRun,scope:reliabilitySettings.scope,equipmentIds:reliabilitySettings.equipmentIds,equipmentLimits:reliabilitySettings.equipmentLimits,maximumTargets:reliabilitySettings.maximumTargets,automaticBasic:automaticBasic};}
+    function discoveryConfiguration(){var discoveryRun=searchRun(automaticBasic?'sensitivity':undefined);return {run:discoveryRun,scope:reliabilitySettings.scope,equipmentIds:reliabilitySettings.equipmentIds,equipmentLimits:reliabilitySettings.equipmentLimits,maximumTargets:reliabilitySettings.maximumTargets,automaticBasic:automaticBasic};}
     async function reliabilityContext(measure,cancelled,progress){
       if(primaryTier!=='ZERO'||depth==='LIGHT'||!exploreReliability.checked||!STScenarioSearch.reliabilityTargets)return null;
       var options=discoveryConfiguration(),key=JSON.stringify(canonicalExperiment({policy:'ZERO_DOWNTIME_V12',source:sourceSignature,options:options}));
@@ -945,7 +945,7 @@ window.STScenarioExplorer=(function(){
         var reliabilityTargets=null;
         if(all&&depth!=='LIGHT'&&exploreReliability.checked&&STScenarioSearch.reliabilityTargets){
           maximum=Math.max(maximum,limits.maxCandidates+80+limits.finalists+16);setStage('Exploratory reliability targets');searchCanFinish=false;setIcon(run,'Cancel reliability exploration','stop');
-          var discoveryRun=searchRun(false,3);
+          var discoveryRun=searchRun(automaticBasic?'sensitivity':false,3);
           reliabilityTargets=await reliabilityContext(async(model,changes,r)=>measured(changes,0,model,r),cancelled,screeningProgress);
           if(cancelled())return;if(reliabilityTargets){setCounter('Machines screened','Machines screened',reliabilityTargets.ranking?.length||0,reliabilityTargets.coverage?.screened);setCounter('targets','Targets tested',reliabilityTargets.targetTests?.length||0);setCounter('packages','Packages tested',reliabilityTargets.candidateSets?.length||0);}evidence.reliabilityTargetSearch=reliabilityTargets;evidence.phaseAudit.reliabilityTargets={calculations:reliabilityTargets.calculations,screenedMachines:reliabilityTargets.coverage?.screened,selectedTargets:reliabilityTargets.selectedChanges?.length||0};
           searchCanFinish=true;setIcon(run,'Finish search and validate best found','stop');
@@ -1113,7 +1113,7 @@ window.STScenarioExplorer=(function(){
           [changes,previousEvaluation?.sourceSignature===sourceSignature?previousEvaluation.evaluatedChanges:null].filter(Boolean).forEach(proposal=>{var item=finalistPool.get(keyOf(proposal));if(item&&!finalists.some(f=>keyOf(f.changes)===keyOf(proposal)))finalists.push(item);});
           evidence.screening={baseline:baseline,candidate:best,run:Object.assign({},previewRun)};
           function stopAfterScreen(selection,screenBase,phase){
-            var message=selection.outcome==='NO_FEASIBLE_CANDIDATE'?'No physically valid candidate.':'No promising candidate in the short screening. Full-horizon confirmation not performed.';
+            var message=selection.outcome==='NO_FEASIBLE_CANDIDATE'?'No physically valid candidate.':'No promising candidate in the short screening. Physical confirmation not performed.';
             status.textContent=message;status.dataset.state='rejected';
             record(selection.outcome==='NO_FEASIBLE_CANDIDATE'?'INFEASIBLE':'NO_PROMISING_CANDIDATE',Object.assign({},evidence,{baseline:screenBase,candidate:null,evaluatedChanges:[],independentCheck:null,delta:null,screeningOnly:true,screeningPhase:phase}));
           }
@@ -1157,7 +1157,7 @@ window.STScenarioExplorer=(function(){
         }
         if(!bestChanges.length||!improves(baseline,best)){
           var tested=(evidence.phaseAudit.ranking?.observations||[]).slice().sort((a,b)=>b.result.throughput-a.result.throughput)[0];
-          status.textContent='No tested configuration improved the matched baseline ('+baseline.oee.toFixed(2)+'% OEE). Baseline retained; no better scenario is recommended.';
+          status.textContent='No tested configuration improved the matched comparison baseline ('+baseline.oee.toFixed(2)+'% OEE). Baseline retained; no better scenario is recommended.';
           if(tested)status.textContent+=' Best tested finalist: '+tested.result.oee.toFixed(2)+'% OEE.';
           status.dataset.state='rejected';
           record('NO_DEMONSTRATED_IMPROVEMENT',Object.assign({},evidence,{candidate:null,bestTested:tested?.result||null,bestTestedChanges:tested?.changes||[],evaluatedChanges:[],delta:null}));return;
@@ -1165,7 +1165,7 @@ window.STScenarioExplorer=(function(){
         // Fix the sample size from ranking before seeing any independent outcomes.
         checkBudget();var confirmationPlan=STScenarioSearch.planConfirmation(baseline,best,source.whatIf?.methodology||{},{automaticBasic:automaticBasic});
         if(!Number.isInteger(confirmationPlan.rounds)||confirmationPlan.rounds<3)throw Error('SCENARIO_CONFIRMATION_PLAN: '+confirmationPlan.status);
-        evidence.confirmationPlan=Object.assign({},confirmationPlan,{pilotRun:Object.assign({},previewRun),comparisonBasis:'FIXED_CALENDAR_HORIZON',sourceEffectiveRuntimeTargetSeconds:config(source).effectiveRuntimeTargetSeconds??null});
+        evidence.confirmationPlan=Object.assign({},confirmationPlan,{pilotRun:Object.assign({},previewRun),comparisonBasis:automaticBasic?'MATCHED_VALIDATION_WINDOW':'FIXED_CALENDAR_HORIZON',confirmationHorizon:automaticBasic?rankingPlan.confirmationHorizon:undefined,pilotFidelity:automaticBasic?'PHYSICAL_FAST_V1':undefined,confirmationFidelity:automaticBasic?'PHYSICAL_PRECISE_V1':undefined,sourceEffectiveRuntimeTargetSeconds:config(source).effectiveRuntimeTargetSeconds??null});
         previewRun=searchRun('validation',confirmationPlan.rounds);baselineRun=null;maximum=completed+2+(reliabilityTargets?.baseline&&!automaticBasic?1:0);setStage('Independent confirmation');setCounter('primary','Baseline and candidate',0,2);updateProgress(true);record('VALIDATING',evidence);status.textContent=text+' · Checking independent seeds…';
         var offset=Math.max(1000003,Number(previewRun.rounds)+1),confirmed=await Promise.allSettled([measured([],offset),measured(bestChanges,offset)]);
         var rejectedConfirmation=confirmed.find(function(item){return item.status==='rejected';});if(rejectedConfirmation)throw rejectedConfirmation.reason;
@@ -1182,7 +1182,7 @@ window.STScenarioExplorer=(function(){
           if(!warnings.some(w=>w.equipmentId===c.equipmentId&&w.rule==='VERIFY_SENSOR_TIMING_AND_OVERFLOW_RESERVE'))
             warnings.push({equipmentId:c.equipmentId,rule:'VERIFY_SENSOR_TIMING_AND_OVERFLOW_RESERVE',before:c.before,after:c.after});
         });
-        evidence.independentCheck={seed:(Number(previewRun.seed)+offset)%2147483647,rounds:previewRun.rounds,durationSeconds:previewRun.durationSeconds,unitOfFlow:source.unitOfFlow||'units',baseline:validationBase,candidate:validation,passed:validated,confirmationKind:confirmation.kind,reason:confirmation.reason,statisticalEvidence:confirmation.statisticalEvidence,precision:confirmation.precision,oeeGuard:confirmation.oeeGuard,practicalThreshold:confirmation.threshold,interpretation:confirmation.interpretation,delta:{oeePercentagePoints:validation.oee-validationBase.oee,throughputPerMinute:validation.throughput-validationBase.throughput}};
+        evidence.independentCheck={scenarioFidelity:previewRun.scenarioFidelity,seed:(Number(previewRun.seed)+offset)%2147483647,rounds:previewRun.rounds,durationSeconds:previewRun.durationSeconds,unitOfFlow:source.unitOfFlow||'units',baseline:validationBase,candidate:validation,passed:validated,confirmationKind:confirmation.kind,reason:confirmation.reason,statisticalEvidence:confirmation.statisticalEvidence,precision:confirmation.precision,oeeGuard:confirmation.oeeGuard,practicalThreshold:confirmation.threshold,interpretation:confirmation.interpretation,delta:{oeePercentagePoints:validation.oee-validationBase.oee,throughputPerMinute:validation.throughput-validationBase.throughput}};
         var finalModel=STScenarios.apply(source,bestChanges,{previewOnly:true});
         evidence.finalCapacityDiagnosis=SimulatorEngine.diagnoseLineEfficiency?SimulatorEngine.diagnoseLineEfficiency(SimulatorEngine.projectMachineDesign?.(finalModel.equipment,source.dynamicConfig)||finalModel.equipment,null):STScenarios.plan(finalModel).capacityDiagnosis;
         evidence.phaseAudit.confirmation={seed:evidence.independentCheck.seed,rounds:previewRun.rounds,durationSeconds:previewRun.durationSeconds,passed:validated};evidence.warnings=warnings;record(!validated?'NOT_REPRODUCED':warnings.length?'ENGINEERING_REVIEW_REQUIRED':'IMPROVEMENT_REPRODUCED',evidence);

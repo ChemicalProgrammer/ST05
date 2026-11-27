@@ -66,6 +66,7 @@ function buildSavedScenarioStudy_(source,proposal,sourceSignature,warnings,searc
     var check=evidence.independentCheck,confirmation=STScenarioEngine_.confirm(check.baseline,check.candidate,evidence.confirmationPlan,source.whatIf?.methodology||{});
     check.passed=confirmation.passed&&check.passed===true;check.confirmationKind=confirmation.kind;check.statisticalEvidence=confirmation.statisticalEvidence;check.precision=confirmation.precision;check.reason=confirmation.reason;
     check.oeeGuard=confirmation.oeeGuard;check.practicalThreshold=confirmation.threshold;
+    if(evidence.uiMode==='minimal'&&(!evidence.confirmationPlan?.automaticBasic||check.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.baseline?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')){check.passed=false;check.reason='BASIC_PRECISE_CONFIRMATION_REQUIRED';}
     if(check.durationSeconds!==check.baseline?.durationSeconds||check.rounds!==evidence.confirmationPlan?.rounds||check.unitOfFlow!==(source.unitOfFlow||source.results?.unitOfFlow||source.results?.replay?.unitOfFlow||'units')||check.unitOfFlow!==check.baseline?.unitOfFlow){check.passed=false;check.reason='CONFIRMATION_METADATA_MISMATCH';}
   }
   return STScenarioEngine_.study(source,evidence);

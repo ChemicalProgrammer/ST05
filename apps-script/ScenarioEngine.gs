@@ -2723,7 +2723,7 @@ function scenarioSearchSettings(raw) {
 }
 function scenarioSearchSettingsSignature(raw) {
   const settings=scenarioSearchSettings(raw);
-  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_PROGRESSIVE_V2':'SCENARIO_SEARCH_SPEED_V1',settings]);
+  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_MULTIFIDELITY_V3':'SCENARIO_SEARCH_SPEED_V1',settings]);
 }
 function scenarioSearchProfile(level,settings,context) {
   const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
@@ -2753,6 +2753,40 @@ function scenarioSearchProfile(level,settings,context) {
   return {...selected,explorationSeconds:exploration,confirmationSeconds:confirmation,
     fullHorizonFinalists:selected.automaticBasic?1:Math.max(2,selected.fullHorizonFinalists),
     horizonBasis:'RELIABILITY_AWARE_SCREENING',medianMtbfMinutes:median};
+}
+
+// Basic alone uses a matched, versioned low-fidelity engine. Unsupported
+// topology or calendar mechanisms use the physical engine for the entire phase.
+function scenarioScreeningEligibility(run,equipment=[]){
+  if(run?.engineId&&run.engineId!=='ST_CURRENT')return {supported:false,reason:'ENGINE'};
+  if(run?.eventsEnabled!==false&&((run?.commands||[]).length||resolvePlannedStops({...run,tickSeconds:run?.tickSeconds??.25}).events.length))return {supported:false,reason:'SCHEDULED_CONDITIONS'};
+  const belt=e=>e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR';
+  if(!equipment.length||belt(equipment[0])||belt(equipment.at(-1))||equipment.some((e,i)=>belt(e)&&i>0&&belt(equipment[i-1])))return {supported:false,reason:'TOPOLOGY'};
+  if(equipment.some(e=>e.initialMode&&e.initialMode!=='AUTO'||e.processData?.productApplies===false||e.processData?.equipment?.macroStopScrapBottles>0||e.processData?.accumulation?.speedMode==='DYNAMIC'||run?.dynamicLineBalancingEnabled===true&&e.processData?.dynamicLineBalancing?.enabled===true))return {supported:false,reason:'COMPLEX_PHYSICAL_CONTROL'};
+  const product=run?.productCatalog?.find(p=>p.id===(run.initialFormatId??run.initialProductId));
+  if(product&&equipment.some(e=>product.equipment?.[e.id]?.applies===false))return {supported:false,reason:'PRODUCT_BYPASS'};
+  return {supported:true,reason:null};
+}
+function basicScenarioConfirmationHorizon(run,equipment=[]){
+  const configured=Math.max(1800,Number(run?.durationSeconds)||0);
+  const scheduled=run?.eventsEnabled!==false&&((run?.commands||[]).length||resolvePlannedStops({...run,tickSeconds:run?.tickSeconds??.25}).events.length);
+  if(scheduled)return {seconds:configured,configuredSeconds:configured,reason:'SCHEDULED_CONDITIONS'};
+  let seconds=Math.min(configured,3600),reason=seconds<3600?'SHORT_SOURCE_HORIZON':'ONE_HOUR';
+  if(run?.reliabilityEnabled!==false){
+    const categories=run?.reliabilityCategories||{};
+    for(const e of equipment){
+      if(e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')continue;
+      const split=e.processData?.equipment?.stopInputs,r=e.noiseProfile?.reliability;
+      const profiles=split?['minor','major'].filter(k=>categories[k]!==false).map(k=>split[k]):categories.general!==false?[r]:[];
+      // Extend only for a material modeled downtime mechanism. A long MTBF
+      // with negligible downtime should not force every category to a full day.
+      for(const p of profiles)if(p?.mtbfMinutes>60&&p.mttrMinutes>0&&p.mttrMinutes/(p.mtbfMinutes+p.mttrMinutes)>=.02){
+        const extended=Math.min(configured,Math.ceil(p.mtbfMinutes/60)*3600);
+        if(extended>seconds){seconds=extended;reason='MATERIAL_RARE_FAILURE';}
+      }
+    }
+  }
+  return {seconds,configuredSeconds:configured,reason};
 }
 
 // A package is one intervention: every coupled field is either installed or
@@ -2820,6 +2854,19 @@ function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings,equipm
   // A runtime-target stop changes calendar exposure as the candidate improves.
   // What-If compares complete equal calendar horizons and records that choice.
   delete copy.effectiveRuntimeTargetSeconds;
+  if(settings?.automaticBasic===true){
+    const eligible=scenarioScreeningEligibility(run,equipment||[]),horizon=basicScenarioConfirmationHorizon(run,equipment||[]);
+    if(confirmation==='validation'||confirmation==='ranking'){
+      copy.durationSeconds=horizon.seconds;copy.numericalResolution=confirmation==='validation'?'PRECISE':'FAST';
+      copy.scenarioFidelity=confirmation==='validation'?'PHYSICAL_PRECISE_V1':'PHYSICAL_FAST_V1';
+    }else if(confirmation==='physical-screen'){
+      copy.durationSeconds=Math.min(horizon.seconds,900);copy.numericalResolution='FAST';copy.scenarioFidelity='PHYSICAL_FAST_V1';
+    }else{
+      copy.durationSeconds=Math.min(horizon.seconds,eligible.supported?(confirmation==='sensitivity'?Math.max(300,profile.explorationSeconds):1800):profile.explorationSeconds);
+      copy.scenarioFidelity=eligible.supported?'FLUID_SCREEN_V1':'PHYSICAL_FAST_V1';
+      if(!eligible.supported)copy.numericalResolution='FAST';
+    }
+  }
   return copy;
 }
 
@@ -2828,7 +2875,12 @@ function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings,equipm
 function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
   const settings=scenarioSearchSettings(options.searchSettings),profile=scenarioSearchProfile(level,settings,{run,equipment:options.equipment}),fullRun=scenarioSearchRun(run,level,'validation',3,settings,options.equipment);
   const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
-  const screenRun=scenarioSearchRun(run,level,true,3,settings,options.equipment);
+  const screenRun=scenarioSearchRun(run,level,settings.automaticBasic?'physical-screen':true,3,settings,options.equipment);
+  if(settings.automaticBasic){
+    const horizon=basicScenarioConfirmationHorizon(run,options.equipment||[]),rankRun=scenarioSearchRun(run,level,'ranking',3,settings,options.equipment);
+    const staged=candidateCount>1;
+    return {policy:'BASIC_MULTIFIDELITY_V3',staged,reason:staged?'PHYSICAL_CHECK_OF_APPROXIMATE_RANKING':'ONE_FINALIST',screenRun,fullRun:rankRun,confirmationRun:fullRun,confirmationHorizon:horizon,fullHorizonFinalists:1,screeningSeedOffset:50003,rankingSeedOffset:100003,confirmationSeedOffset:1000003,interpretation:'Exploratory fluid ranking, physical FAST finalist checks, and independent PRECISE confirmation on the recorded comparison horizon; not a global optimum or validation of the full original calendar unless horizons coincide.'};
+  }
   // A short prefix does not represent an entire shift/calendar/product program.
   // Keep every finalist when the run has explicit changes over time.
   const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);
@@ -2883,11 +2935,14 @@ function selectProgressiveBasicFinalists(items,baseline,run,equipment=[],limit=1
     return {item,delta,meanOee:value.oee-baseline.oee,potential:delta>threshold||(matched&&paired.some(d=>d>threshold)),uncertain:!matched};
   }).sort((a,b)=>Number(!a.potential)-Number(!b.potential)||Number(!!a.item.result.warnings?.length)-Number(!!b.item.result.warnings?.length)||Number(a.meanOee<0)-Number(b.meanOee<0)||b.delta-a.delta);
   if(scored.some(item=>item.uncertain))reasons.push('INCOMPLETE_PAIRED_SCREEN');
+  const approximate=baseline?.scenarioFidelity==='FLUID_SCREEN_V1';
+  if(approximate)reasons.push('APPROXIMATE_SCREEN_REQUIRES_PHYSICAL_PROBE');
   const promising=scored.filter(item=>item.potential),chosen=promising.slice(0,Math.max(1,Math.min(2,limit)));
   const lateMechanism=item=>item.item.changes.some(change=>change.path.startsWith('noiseProfile.reliability.')||change.interventionType==='ACCUMULATION'||change.interventionType==='REPLACEMENT');
   if(!chosen.length&&reasons.length&&scored.length)chosen.push((rare&&short?scored.find(lateMechanism):null)||scored[0]);
   if(chosen.length===1&&limit>1&&reasons.length){
-    const late=scored.find(item=>!chosen.includes(item)&&lateMechanism(item));
+    const sensor=item=>item.item.changes.some(c=>/sensor|timedelay|lpPrimeMm/i.test(c.path));
+    const late=(approximate?scored.find(item=>!chosen.includes(item)&&sensor(item)):null)||scored.find(item=>!chosen.includes(item)&&lateMechanism(item))||(approximate?scored.find(item=>!chosen.includes(item)):null);
     if(late)chosen.push(late);
   }
   return {selected:chosen.map(row=>row.item),evaluated:valid.length,promising:promising.length,omitted:valid.length-chosen.length,precautionary:chosen.some(row=>!row.potential),reasons,threshold,
@@ -2923,6 +2978,7 @@ function scenarioPairedEvidence(base,candidate) {
 // looking at the independent confirmation. No optional stopping on its p-value.
 function planScenarioConfirmation(base,candidate,methodology={},options={}) {
   const issue=scenarioComparisonEvidenceIssue(base,candidate);
+  if(options.automaticBasic&&((base?.scenarioFidelity&&base.scenarioFidelity!=='PHYSICAL_FAST_V1')||(candidate?.scenarioFidelity&&candidate.scenarioFidelity!=='PHYSICAL_FAST_V1')))return {rounds:null,status:'BASIC_PHYSICAL_PILOT_REQUIRED',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   if(issue)return {rounds:null,status:issue,policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   const baseSeeds=base.roundMetrics.map(row=>row.seed),candidateSeeds=candidate.roundMetrics.map(row=>row.seed);
   if(!scenarioValidConfirmationPilotSeeds(baseSeeds)||!scenarioValidConfirmationPilotSeeds(candidateSeeds)||baseSeeds.length!==candidateSeeds.length||baseSeeds.some(seed=>!candidateSeeds.includes(seed)))return {rounds:null,status:'INVALID_PILOT_REPLICATIONS',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
@@ -2952,7 +3008,7 @@ function scenarioPracticalGain(base,methodology={}) {
 
 function assessScenarioConfirmation(base,candidate,plan,methodology={}) {
   const planIssue=scenarioConfirmationPlanIssue(plan,methodology);
-  const evidenceIssue=scenarioComparisonEvidenceIssue(base,candidate,plan);
+  const evidenceIssue=plan?.automaticBasic&&(base?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')?'BASIC_PRECISE_CONFIRMATION_REQUIRED':scenarioComparisonEvidenceIssue(base,candidate,plan);
   const statisticalEvidence=scenarioPairedSummary(base,candidate,{confidenceLevel:plan?.confidenceLevel??methodology?.replications?.confidenceLevel??.95});
   const threshold=planIssue?null:plan.minimumPracticalGain,throughput=statisticalEvidence.metrics?.throughput,oee=statisticalEvidence.metrics?.oee;
   const pilotSeeds=Array.isArray(plan?.pilotSeeds)?plan.pilotSeeds:[];
@@ -3083,8 +3139,8 @@ function scenarioStudyConfirmationPlan(value) {
     'targetHalfWidth', 'plannedHalfWidth', 'pilotSeeds', 'pilotRounds', 'confidenceLevel', 'minRounds', 'maxRounds',
     'confirmationMustExcludePilotSeeds', 'method', 'policy', 'pilotRole', 'minimumPracticalGain', 'comparisonBasis',
     'comparisonDurationSeconds', 'comparisonUnitOfFlow', 'baselineMeanThroughput', 'pilotStandardDeviation',
-    'sourceEffectiveRuntimeTargetSeconds', 'interpretation']);
-  if (value.pilotRun) plan.pilotRun = scenarioStudyPick(value.pilotRun, ['durationSeconds', 'rounds', 'seed', 'durationMode', 'engineId']);
+    'sourceEffectiveRuntimeTargetSeconds', 'confirmationHorizon', 'pilotFidelity', 'confirmationFidelity', 'interpretation']);
+  if (value.pilotRun) plan.pilotRun = scenarioStudyPick(value.pilotRun, ['durationSeconds', 'rounds', 'seed', 'durationMode', 'engineId','scenarioFidelity','numericalResolution']);
   return plan;
 }
 function scenarioStudyDOEObservations(value) {
@@ -3381,7 +3437,7 @@ function buildScenarioStudy(simulation, evaluation) {
         minimumPracticalGainMet: scenarioStudyNumber(objective.minimumPracticalGain) !== null && actualBase[objectiveMetric] !== null ? actualCandidate[objectiveMetric] - actualBase[objectiveMetric] >= objective.minimumPracticalGain : null } : { status: 'NOT_EVALUATED', reason: objective && !objectiveValid ? 'INVALID_OBJECTIVE_OR_UNIT' : 'OBJECTIVE_OR_CONFIRMATION_MISSING' } },
     baseline: { status: check?.baseline ? 'CONFIRMATION_BASELINE' : evaluation?.baseline ? 'SCREENING_BASELINE' : 'MISSING',
       metrics: check?.baseline ? actualBase : scenarioStudyMetrics(evaluation?.baseline), unitOfFlow: scenarioStudyFlowUnit(evaluation?.unitOfFlow || simulation?.unitOfFlow),
-      run: scenarioStudyPick(check || evaluation?.run, ['durationSeconds', 'rounds', 'seed']) },
+      run: scenarioStudyPick(check || evaluation?.run, ['durationSeconds', 'rounds', 'seed','scenarioFidelity']) },
     diagnosis: {
       causalStatus: 'HYPOTHESES_ONLY',
       observedLosses: scenarioStudyPick(evaluation?.lossDiagnosis, ['status', 'reason', 'sourceStatus', 'provenance', 'referenceId', 'durationSeconds', 'durationBasis',
@@ -3394,14 +3450,14 @@ function buildScenarioStudy(simulation, evaluation) {
       screening: { baseline: scenarioStudyMetrics(evaluation?.baseline), candidate: scenarioStudyMetrics(evaluation?.candidate), role: 'EXPLORATION_ONLY' },
       finalistSelection:{status:rankingPlan?'RECORDED':'NOT_RECORDED',role:'EXPLORATORY_SELECTION_NOT_CONFIRMATION',
         policy:scenarioStudyText(rankingPlan?.policy),staged:rankingPlan?.staged===true,reason:scenarioStudyText(rankingPlan?.reason),
-        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId']),
-        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId']),
+        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId','scenarioFidelity','numericalResolution']),
+        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId','scenarioFidelity','numericalResolution']),
         candidatesScreened:Array.isArray(finalistScreen?.observations)?finalistScreen.observations.length:null,
         selected:scenarioStudyNumber(finalistScreen?.selected),omitted:scenarioStudyNumber(finalistScreen?.omitted),
         protectedReliabilityCandidates:scenarioStudyNumber(finalistScreen?.protectedReliabilityCandidates),
         fullHorizonFinalists:scenarioStudyNumber(ranking?.finalists)??scenarioStudyNumber(rankingPlan?.fullHorizonFinalists),
         shortScreenMayMissLateBenefits:rankingPlan?.staged===true,
-        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the full-horizon independent confirmation supports a reproduced improvement.'},
+        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the independent physical confirmation at its recorded horizon supports a reproduced improvement.'},
       experiment: {
         status: doe ? doe.analysis?.complete === true ? 'COMPLETE_DESIGN' : 'INCOMPLETE_DESIGN' : 'NOT_PERFORMED',
         type: scenarioStudyText(doe?.type || doe?.design?.type),
@@ -3411,7 +3467,7 @@ function buildScenarioStudy(simulation, evaluation) {
           interpretation: 'Effects apply to the tested factor region conditional on these fixed changes and the saved baseline; they are not isolated causal shares or guarantees outside that region.' },
         combinations: scenarioStudyNumber(doe?.combinations) ?? (Array.isArray(doe?.observations) ? doe.observations.length : null),
         roundsPerCombination: scenarioStudyNumber(doe?.roundsPerCombination),
-        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds']) : {},
+        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds','scenarioFidelity','numericalResolution']) : {},
         observations: scenarioStudyDOEObservations(doe?.observations),
         observationsOmitted: Math.max(0, (Array.isArray(doe?.observations) ? doe.observations.length : 0) - 16),
         analysis: scenarioStudyPick(doe?.analysis, ['complete', 'reason', 'effects', 'interpretation']),
@@ -3421,7 +3477,7 @@ function buildScenarioStudy(simulation, evaluation) {
       },
       confirmation: { status: confirmationStatus, reportedPassed: check?.passed === true,
         kind: scenarioStudyText(check?.confirmationKind || evaluation?.confirmationKind),
-        baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed']),
+        baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed','scenarioFidelity']),
         confirmationPlan,
         precision: scenarioStudyPick(check?.precision, ['targetHalfWidth', 'achievedHalfWidth', 'met', 'plannedRounds', 'requiredRounds', 'capped']),
         practicalThreshold: scenarioStudyNumber(check?.practicalThreshold), reason: scenarioStudyText(check?.reason),
@@ -3429,7 +3485,7 @@ function buildScenarioStudy(simulation, evaluation) {
         delta: { throughputPerMinute: actualBase.throughput !== null && actualCandidate.throughput !== null ? actualCandidate.throughput - actualBase.throughput : null,
           oeePercentagePoints: actualBase.oee !== null && actualCandidate.oee !== null ? actualCandidate.oee - actualBase.oee : null },
         statisticalEvidence: stats,
-        interpretation: 'Independent simulation evidence; descriptive reproduction is distinct from statistical inference and plant validation.' }
+        interpretation: 'Independent physical simulation evidence on the recorded horizon; descriptive reproduction is distinct from statistical inference, full-calendar coverage, and plant validation.' }
     },
     feasibility: { status: 'REQUIRES_ENGINEERING_REVIEW', verified: false,
       exploratoryTargets: hypotheses.some(item => ['EXPLORATORY_SENSITIVITY','EXPLORATORY_REPLACEMENT'].includes(item.classification)),

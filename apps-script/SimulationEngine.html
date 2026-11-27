@@ -6202,7 +6202,7 @@ function scenarioSearchSettings(raw) {
 }
 function scenarioSearchSettingsSignature(raw) {
   const settings=scenarioSearchSettings(raw);
-  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_PROGRESSIVE_V2':'SCENARIO_SEARCH_SPEED_V1',settings]);
+  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_MULTIFIDELITY_V3':'SCENARIO_SEARCH_SPEED_V1',settings]);
 }
 function scenarioSearchProfile(level,settings,context) {
   const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
@@ -6232,6 +6232,40 @@ function scenarioSearchProfile(level,settings,context) {
   return {...selected,explorationSeconds:exploration,confirmationSeconds:confirmation,
     fullHorizonFinalists:selected.automaticBasic?1:Math.max(2,selected.fullHorizonFinalists),
     horizonBasis:'RELIABILITY_AWARE_SCREENING',medianMtbfMinutes:median};
+}
+
+// Basic alone uses a matched, versioned low-fidelity engine. Unsupported
+// topology or calendar mechanisms use the physical engine for the entire phase.
+function scenarioScreeningEligibility(run,equipment=[]){
+  if(run?.engineId&&run.engineId!=='ST_CURRENT')return {supported:false,reason:'ENGINE'};
+  if(run?.eventsEnabled!==false&&((run?.commands||[]).length||resolvePlannedStops({...run,tickSeconds:run?.tickSeconds??.25}).events.length))return {supported:false,reason:'SCHEDULED_CONDITIONS'};
+  const belt=e=>e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR';
+  if(!equipment.length||belt(equipment[0])||belt(equipment.at(-1))||equipment.some((e,i)=>belt(e)&&i>0&&belt(equipment[i-1])))return {supported:false,reason:'TOPOLOGY'};
+  if(equipment.some(e=>e.initialMode&&e.initialMode!=='AUTO'||e.processData?.productApplies===false||e.processData?.equipment?.macroStopScrapBottles>0||e.processData?.accumulation?.speedMode==='DYNAMIC'||run?.dynamicLineBalancingEnabled===true&&e.processData?.dynamicLineBalancing?.enabled===true))return {supported:false,reason:'COMPLEX_PHYSICAL_CONTROL'};
+  const product=run?.productCatalog?.find(p=>p.id===(run.initialFormatId??run.initialProductId));
+  if(product&&equipment.some(e=>product.equipment?.[e.id]?.applies===false))return {supported:false,reason:'PRODUCT_BYPASS'};
+  return {supported:true,reason:null};
+}
+function basicScenarioConfirmationHorizon(run,equipment=[]){
+  const configured=Math.max(1800,Number(run?.durationSeconds)||0);
+  const scheduled=run?.eventsEnabled!==false&&((run?.commands||[]).length||resolvePlannedStops({...run,tickSeconds:run?.tickSeconds??.25}).events.length);
+  if(scheduled)return {seconds:configured,configuredSeconds:configured,reason:'SCHEDULED_CONDITIONS'};
+  let seconds=Math.min(configured,3600),reason=seconds<3600?'SHORT_SOURCE_HORIZON':'ONE_HOUR';
+  if(run?.reliabilityEnabled!==false){
+    const categories=run?.reliabilityCategories||{};
+    for(const e of equipment){
+      if(e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR')continue;
+      const split=e.processData?.equipment?.stopInputs,r=e.noiseProfile?.reliability;
+      const profiles=split?['minor','major'].filter(k=>categories[k]!==false).map(k=>split[k]):categories.general!==false?[r]:[];
+      // Extend only for a material modeled downtime mechanism. A long MTBF
+      // with negligible downtime should not force every category to a full day.
+      for(const p of profiles)if(p?.mtbfMinutes>60&&p.mttrMinutes>0&&p.mttrMinutes/(p.mtbfMinutes+p.mttrMinutes)>=.02){
+        const extended=Math.min(configured,Math.ceil(p.mtbfMinutes/60)*3600);
+        if(extended>seconds){seconds=extended;reason='MATERIAL_RARE_FAILURE';}
+      }
+    }
+  }
+  return {seconds,configuredSeconds:configured,reason};
 }
 
 // A package is one intervention: every coupled field is either installed or
@@ -6299,6 +6333,19 @@ function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings,equipm
   // A runtime-target stop changes calendar exposure as the candidate improves.
   // What-If compares complete equal calendar horizons and records that choice.
   delete copy.effectiveRuntimeTargetSeconds;
+  if(settings?.automaticBasic===true){
+    const eligible=scenarioScreeningEligibility(run,equipment||[]),horizon=basicScenarioConfirmationHorizon(run,equipment||[]);
+    if(confirmation==='validation'||confirmation==='ranking'){
+      copy.durationSeconds=horizon.seconds;copy.numericalResolution=confirmation==='validation'?'PRECISE':'FAST';
+      copy.scenarioFidelity=confirmation==='validation'?'PHYSICAL_PRECISE_V1':'PHYSICAL_FAST_V1';
+    }else if(confirmation==='physical-screen'){
+      copy.durationSeconds=Math.min(horizon.seconds,900);copy.numericalResolution='FAST';copy.scenarioFidelity='PHYSICAL_FAST_V1';
+    }else{
+      copy.durationSeconds=Math.min(horizon.seconds,eligible.supported?(confirmation==='sensitivity'?Math.max(300,profile.explorationSeconds):1800):profile.explorationSeconds);
+      copy.scenarioFidelity=eligible.supported?'FLUID_SCREEN_V1':'PHYSICAL_FAST_V1';
+      if(!eligible.supported)copy.numericalResolution='FAST';
+    }
+  }
   return copy;
 }
 
@@ -6307,7 +6354,12 @@ function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings,equipm
 function planScenarioFinalistRanking(run,level,candidateCount,options={}) {
   const settings=scenarioSearchSettings(options.searchSettings),profile=scenarioSearchProfile(level,settings,{run,equipment:options.equipment}),fullRun=scenarioSearchRun(run,level,'validation',3,settings,options.equipment);
   const limit=Math.max(1,Math.min(candidateCount,Number.isInteger(options.fullHorizonFinalists)?options.fullHorizonFinalists:profile.fullHorizonFinalists));
-  const screenRun=scenarioSearchRun(run,level,true,3,settings,options.equipment);
+  const screenRun=scenarioSearchRun(run,level,settings.automaticBasic?'physical-screen':true,3,settings,options.equipment);
+  if(settings.automaticBasic){
+    const horizon=basicScenarioConfirmationHorizon(run,options.equipment||[]),rankRun=scenarioSearchRun(run,level,'ranking',3,settings,options.equipment);
+    const staged=candidateCount>1;
+    return {policy:'BASIC_MULTIFIDELITY_V3',staged,reason:staged?'PHYSICAL_CHECK_OF_APPROXIMATE_RANKING':'ONE_FINALIST',screenRun,fullRun:rankRun,confirmationRun:fullRun,confirmationHorizon:horizon,fullHorizonFinalists:1,screeningSeedOffset:50003,rankingSeedOffset:100003,confirmationSeedOffset:1000003,interpretation:'Exploratory fluid ranking, physical FAST finalist checks, and independent PRECISE confirmation on the recorded comparison horizon; not a global optimum or validation of the full original calendar unless horizons coincide.'};
+  }
   // A short prefix does not represent an entire shift/calendar/product program.
   // Keep every finalist when the run has explicit changes over time.
   const scheduled=!!(run.commands?.length||resolvePlannedStops({...run,tickSeconds:run.tickSeconds??.25}).events.length);
@@ -6362,11 +6414,14 @@ function selectProgressiveBasicFinalists(items,baseline,run,equipment=[],limit=1
     return {item,delta,meanOee:value.oee-baseline.oee,potential:delta>threshold||(matched&&paired.some(d=>d>threshold)),uncertain:!matched};
   }).sort((a,b)=>Number(!a.potential)-Number(!b.potential)||Number(!!a.item.result.warnings?.length)-Number(!!b.item.result.warnings?.length)||Number(a.meanOee<0)-Number(b.meanOee<0)||b.delta-a.delta);
   if(scored.some(item=>item.uncertain))reasons.push('INCOMPLETE_PAIRED_SCREEN');
+  const approximate=baseline?.scenarioFidelity==='FLUID_SCREEN_V1';
+  if(approximate)reasons.push('APPROXIMATE_SCREEN_REQUIRES_PHYSICAL_PROBE');
   const promising=scored.filter(item=>item.potential),chosen=promising.slice(0,Math.max(1,Math.min(2,limit)));
   const lateMechanism=item=>item.item.changes.some(change=>change.path.startsWith('noiseProfile.reliability.')||change.interventionType==='ACCUMULATION'||change.interventionType==='REPLACEMENT');
   if(!chosen.length&&reasons.length&&scored.length)chosen.push((rare&&short?scored.find(lateMechanism):null)||scored[0]);
   if(chosen.length===1&&limit>1&&reasons.length){
-    const late=scored.find(item=>!chosen.includes(item)&&lateMechanism(item));
+    const sensor=item=>item.item.changes.some(c=>/sensor|timedelay|lpPrimeMm/i.test(c.path));
+    const late=(approximate?scored.find(item=>!chosen.includes(item)&&sensor(item)):null)||scored.find(item=>!chosen.includes(item)&&lateMechanism(item))||(approximate?scored.find(item=>!chosen.includes(item)):null);
     if(late)chosen.push(late);
   }
   return {selected:chosen.map(row=>row.item),evaluated:valid.length,promising:promising.length,omitted:valid.length-chosen.length,precautionary:chosen.some(row=>!row.potential),reasons,threshold,
@@ -6402,6 +6457,7 @@ function scenarioPairedEvidence(base,candidate) {
 // looking at the independent confirmation. No optional stopping on its p-value.
 function planScenarioConfirmation(base,candidate,methodology={},options={}) {
   const issue=scenarioComparisonEvidenceIssue(base,candidate);
+  if(options.automaticBasic&&((base?.scenarioFidelity&&base.scenarioFidelity!=='PHYSICAL_FAST_V1')||(candidate?.scenarioFidelity&&candidate.scenarioFidelity!=='PHYSICAL_FAST_V1')))return {rounds:null,status:'BASIC_PHYSICAL_PILOT_REQUIRED',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   if(issue)return {rounds:null,status:issue,policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   const baseSeeds=base.roundMetrics.map(row=>row.seed),candidateSeeds=candidate.roundMetrics.map(row=>row.seed);
   if(!scenarioValidConfirmationPilotSeeds(baseSeeds)||!scenarioValidConfirmationPilotSeeds(candidateSeeds)||baseSeeds.length!==candidateSeeds.length||baseSeeds.some(seed=>!candidateSeeds.includes(seed)))return {rounds:null,status:'INVALID_PILOT_REPLICATIONS',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
@@ -6431,7 +6487,7 @@ function scenarioPracticalGain(base,methodology={}) {
 
 function assessScenarioConfirmation(base,candidate,plan,methodology={}) {
   const planIssue=scenarioConfirmationPlanIssue(plan,methodology);
-  const evidenceIssue=scenarioComparisonEvidenceIssue(base,candidate,plan);
+  const evidenceIssue=plan?.automaticBasic&&(base?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')?'BASIC_PRECISE_CONFIRMATION_REQUIRED':scenarioComparisonEvidenceIssue(base,candidate,plan);
   const statisticalEvidence=scenarioPairedSummary(base,candidate,{confidenceLevel:plan?.confidenceLevel??methodology?.replications?.confidenceLevel??.95});
   const threshold=planIssue?null:plan.minimumPracticalGain,throughput=statisticalEvidence.metrics?.throughput,oee=statisticalEvidence.metrics?.oee;
   const pilotSeeds=Array.isArray(plan?.pilotSeeds)?plan.pilotSeeds:[];
@@ -6488,6 +6544,158 @@ function scenarioComparisonEvidenceIssue(base,candidate,plan) {
     }
   }
   return null;
+}
+
+
+
+// Approximate event-driven fluid model for CAPEX screening only. It does not
+// replace the physical simulation or establish sensor / overflow feasibility.
+// A delayed fluid stream plus a finite ready queue replaces individual items.
+const FLUID_EPS=1e-7;
+const FLUID_EVENT_LIMIT=200000;
+function fluidExp(random,mean){return Math.max(1e-5,-Math.log(1-Math.max(random.next(),1e-12))*mean);}
+function fluidPositive(value,fallback=0){return Number.isFinite(value)&&value>0?value:fallback;}
+function fluidFinite(value){return Number.isFinite(value);}
+function fluidTime(value){return fluidPositive(value);}
+function fluidReference(equipment){return equipment.find(e=>e.type==='PACEMAKER'||e.processData?.role==='PACEMAKER'||e.characteristics?.isPacemaker===true)||equipment.find(e=>e.type==='FILLER')||equipment[0];}
+function fluidClamp(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
+function fluidBuild(input){
+  const original=input;input=projectMachineDesignInput(input);
+  const run=input.run,product=run.productCatalog?.find(p=>p.id===(run.initialFormatId??run.initialProductId));
+  const equipment=product?applyProductProfile(input.case.equipment,product):input.case.equipment;
+  const eligible=scenarioScreeningEligibility(original.run,original.case.equipment);
+  if(!eligible.supported)throw Error('SCENARIO_FLUID_UNSUPPORTED: '+eligible.reason);
+  const factor=e=>product?productUnitFactor(e,product):1;
+  const machines=[],links=[];
+  for(let i=0;i<equipment.length;i++){
+    const e=equipment[i];
+    if(isConveyorEquipment(e))continue;
+    const rate=machineOperatingRatePerSecond(e)*factor(e);
+    if(!(rate>0&&Number.isFinite(rate)))throw Error('SCENARIO_FLUID_INVALID_RATE');
+    const reliability=run.reliabilityEnabled===false?null:stopReliabilityProfile(e,run.reliabilityCategories);
+    const random=createEquipmentRandom(run.seed,e.id,'failure'),categoryRandom=createEquipmentRandom(run.seed,e.id,'failure-class');
+    const micro=e.noiseProfile?.microStop,microRandom=createEquipmentRandom(run.seed,e.id,'microstop-occurrence'),microDuration=createEquipmentRandom(run.seed,e.id,'microstop-duration');
+    const microMean=micro?.probabilityPerMinute>0?60/micro.probabilityPerMinute:Infinity;
+    const start=fluidTime(e.startupDelaySeconds??e.processData?.upstream?.startupTimeSeconds)+fluidTime(e.restartRampUpSeconds??e.processData?.downstream?.rampUpTimeSeconds)/2;
+    machines.push({index:i,e,rate,reliability,random,categoryRandom,micro,microRandom,microDuration,microMean,exposure:reliability?fluidExp(random,reliability.mtbfMinutes*60):Infinity,microExposure:microMean<Infinity?fluidExp(microRandom,microMean):Infinity,repairUntil:0,microUntil:0,startUntil:0,start,prime:false,authorized:false,everStarted:false,failures:0,microStops:0,output:0});
+  }
+  for(let i=0;i<machines.length-1;i++){
+    const up=machines[i],down=machines[i+1],between=down.index-up.index-1;
+    if(between===0){links.push(null);continue;}
+    const belt=equipment[up.index+1],d=resolveAccumulationZoneDefinition(equipment,up.index+1).definition;
+    const pitch=d?.productPitchMm||((d?.productLengthMm||0)+(d?.gapMm||0)),packed=d?.accumulatedPitchMm??pitch;
+    const length=d?.usableLengthMm,speed=d?.conveyorSpeedMmPerSecond,mult=factor(belt);
+    if(![pitch,packed,length,speed,mult].every(v=>Number.isFinite(v)&&v>0))throw Error('SCENARIO_FLUID_INVALID_GEOMETRY');
+    const cap=Math.floor(length/packed)*mult;
+    if(!(cap>0))throw Error('SCENARIO_FLUID_INVALID_CAPACITY');
+    const threshold=p=>fluidClamp(Math.ceil((length-p)/packed)*mult,mult,cap);
+    const prime=fluidFinite(d.primeSensorPositionMm)?threshold(d.primeSensorPositionMm):0;
+    const backup=fluidFinite(d.backupSensorPositionMm)?threshold(d.backupSensorPositionMm):Infinity;
+    // Use a one-package hysteresis if positions round to the same queue count.
+    const clear=Number.isFinite(backup)?Math.max(0,Math.min(backup-mult,Math.floor((length-(d.backupRestartPositionMm??d.backupSensorPositionMm))/packed)*mult)):0;
+    const travel=length/speed;
+    links.push({cap,prime,backup,clear,travel,inCap:speed/pitch*mult,outCap:speed/packed*mult,delay:fluidTime(d.blockedTimeDelaySeconds),clearDelay:fluidTime(d.clearTimeDelaySeconds),response:fluidTime(d.upstreamStopResponseSeconds)+fluidTime(d.bottlesDischargedAtStop)*mult/up.rate,total:0,ready:0,arrival:0,lastIn:0,arrivals:[],head:0,blocked:false,blockAt:Infinity,clearAt:Infinity,stopAt:Infinity});
+    down.prime=prime>0;
+  }
+  const ref=fluidReference(machines.map(m=>m.e));
+  const reference=machineOperatingRatePerSecond(ref)*factor(ref);
+  return {machines,links,reference,unitOfFlow:product?'bottles':input.case.unitOfFlow||'units',run};
+}
+function fluidRearm(machine){machine.authorized=!machine.prime;}
+function fluidStart(machine,t,delay){machine.authorized=true;machine.startUntil=Math.max(machine.startUntil,t+delay);machine.everStarted=true;}
+function fluidUpdate(model,t){
+  const {machines,links}=model;
+  for(const link of links)if(link){
+    while(link.head<link.arrivals.length&&link.arrivals[link.head].t<=t+FLUID_EPS){link.arrival=link.arrivals[link.head++].rate;}
+    if(link.head>128&&link.head*2>link.arrivals.length){link.arrivals=link.arrivals.slice(link.head);link.head=0;}
+  }
+  for(let i=0;i<machines.length;i++){
+    const m=machines[i],incoming=links[i-1],outgoing=links[i];
+    if(m.repairUntil>0&&m.repairUntil<=t+FLUID_EPS){m.repairUntil=0;m.exposure=fluidExp(m.random,m.reliability.mtbfMinutes*60);fluidRearm(m);if(!m.prime&&m.e.processData?.downstream?.rampAfterRepair===true)m.startUntil=t+fluidTime(m.e.restartRampUpSeconds??m.e.processData?.downstream?.rampUpTimeSeconds)/2;}
+    if(m.microUntil>0&&m.microUntil<=t+FLUID_EPS){m.microUntil=0;m.microExposure=fluidExp(m.microRandom,m.microMean);fluidRearm(m);}
+    if(!m.repairUntil&&!m.microUntil&&m.exposure<=FLUID_EPS&&m.reliability){const category=selectReliabilityStop(m.reliability,m.categoryRandom);m.repairUntil=t+Math.max(1e-5,category.mttrMinutes*60);m.failures++;m.startUntil=t;fluidRearm(m);}
+    if(!m.repairUntil&&!m.microUntil&&m.microExposure<=FLUID_EPS&&m.microMean<Infinity){const min=fluidTime(m.micro.minDurationSeconds),max=m.micro.maxDurationSeconds??min;m.microUntil=t+Math.max(1e-5,min+(max-min)*m.microDuration.next());m.microStops++;m.startUntil=t;fluidRearm(m);}
+    if(outgoing){
+      if(!outgoing.blocked){
+        if(outgoing.ready>=outgoing.backup-FLUID_EPS){if(!Number.isFinite(outgoing.blockAt))outgoing.blockAt=t+outgoing.delay;if(outgoing.blockAt<=t+FLUID_EPS){outgoing.blocked=true;outgoing.stopAt=t+outgoing.response;outgoing.blockAt=Infinity;}}
+        else outgoing.blockAt=Infinity;
+      }else if(outgoing.ready<=outgoing.clear+FLUID_EPS){
+        if(!Number.isFinite(outgoing.clearAt))outgoing.clearAt=t+outgoing.clearDelay;
+        if(outgoing.clearAt<=t+FLUID_EPS){outgoing.blocked=false;outgoing.clearAt=Infinity;outgoing.stopAt=Infinity;fluidRearm(m);if(!m.prime)m.startUntil=Math.max(m.startUntil,t+m.start);}
+      }else outgoing.clearAt=Infinity;
+    }
+    if(m.repairUntil||m.microUntil)continue;
+    if(!m.everStarted&&!m.prime)fluidStart(m,t,m.start);
+    if(m.prime){
+      if(m.authorized&&incoming.ready<=FLUID_EPS&&incoming.arrival<=FLUID_EPS)m.authorized=false;
+      if(!m.authorized&&incoming.ready>=incoming.prime-FLUID_EPS)fluidStart(m,t,m.start);
+    }
+  }
+}
+function fluidRates(model,t){
+  const {machines,links}=model;
+  const rates=machines.map((m,i)=>m.repairUntil||m.microUntil||m.startUntil>t+FLUID_EPS||m.prime&&!m.authorized||links[i]?.blocked&&links[i].stopAt<=t+FLUID_EPS?0:m.rate);
+  for(let pass=0;pass<rates.length;pass++){
+    let changed=false;
+    for(let i=0;i<links.length;i++){
+      const l=links[i],a=rates[i],b=rates[i+1];
+      if(!l){rates[i]=rates[i+1]=Math.min(a,b);}
+      else{rates[i]=Math.min(a,l.inCap);rates[i+1]=Math.min(b,l.outCap,l.ready<=FLUID_EPS?l.arrival:Infinity);if(l.total>=l.cap-FLUID_EPS)rates[i]=Math.min(rates[i],rates[i+1]);}
+      if(a-rates[i]>FLUID_EPS||b-rates[i+1]>FLUID_EPS)changed=true;
+    }
+    if(!changed)break;
+  }
+  return rates;
+}
+
+// Solve each constant-rate segment analytically. Stop at the next failure,
+// repair, start, arrival-rate change, sensor threshold or buffer boundary.
+function simulateScenarioFluidRound(input,{cancelled,progress}={}){
+  const model=fluidBuild(input),{machines,links,run}=model,horizon=run.durationSeconds;
+  if(!(horizon>0&&Number.isFinite(horizon)))throw Error('SCENARIO_FLUID_INVALID_HORIZON');
+  let t=0,source=0,output=0,events=0;
+  progress?.(0);
+  while(t<horizon-FLUID_EPS){
+    if(cancelled?.())throw Error('BATCH_CANCELLED');
+    if(++events>FLUID_EVENT_LIMIT)throw Error('SCENARIO_FLUID_EVENT_LIMIT');
+    fluidUpdate(model,t);
+    const rates=fluidRates(model,t);
+    let next=horizon;
+    const at=x=>{if(Number.isFinite(x)&&x>t+FLUID_EPS&&x<next)next=x;};
+    const crossing=(v,rate,target)=>{if(Number.isFinite(target)&&Math.abs(rate)>FLUID_EPS){const dt=(target-v)/rate;if(dt>FLUID_EPS)at(t+dt);}};
+    for(let i=0;i<machines.length;i++){
+      const m=machines[i];
+      at(m.repairUntil);at(m.microUntil);at(m.startUntil);
+      if(!m.repairUntil&&!m.microUntil){if(rates[i]>FLUID_EPS)at(t+m.exposure);at(t+m.microExposure);}
+      const l=links[i];if(!l)continue;
+      if(Math.abs(l.lastIn-rates[i])>FLUID_EPS){l.lastIn=rates[i];l.arrivals.push({t:t+l.travel,rate:rates[i]});}
+      if(l.head<l.arrivals.length)at(l.arrivals[l.head].t);
+      const net=rates[i]-rates[i+1],qnet=l.arrival-rates[i+1];
+      crossing(l.total,net,l.cap);crossing(l.ready,qnet,0);crossing(l.ready,qnet,l.prime);crossing(l.ready,qnet,l.backup);crossing(l.ready,qnet,l.clear);
+      at(l.blockAt);at(l.clearAt);at(l.stopAt);
+      // A debounce condition can cease immediately at a threshold crossing.
+      // Re-evaluate its timer just past the crossing rather than charging a
+      // long interval with a stale condition.
+      if((!l.blocked&&Number.isFinite(l.blockAt)&&qnet<0&&l.ready<=l.backup+FLUID_EPS)||(l.blocked&&Number.isFinite(l.clearAt)&&qnet>0&&l.ready>=l.clear-FLUID_EPS))at(t+Math.min(.01,Math.max(1e-5,10*FLUID_EPS/Math.abs(qnet))));
+    }
+    const dt=next-t;
+    if(!(dt>0))throw Error('SCENARIO_FLUID_CLOCK');
+    for(let i=0;i<machines.length;i++){
+      const m=machines[i];m.output+=rates[i]*dt;
+      if(!m.repairUntil&&!m.microUntil){if(rates[i]>FLUID_EPS)m.exposure-=dt;m.microExposure-=dt;}
+      const l=links[i];if(!l)continue;
+      const total=l.total+(rates[i]-rates[i+1])*dt,ready=l.ready+(l.arrival-rates[i+1])*dt;
+      if(total<-1e-4||total>l.cap+1e-4||ready<-1e-4||ready>total+1e-4)throw Error('SCENARIO_FLUID_BALANCE');
+      l.total=fluidClamp(total,0,l.cap);l.ready=fluidClamp(ready,0,l.total);
+    }
+    source+=rates[0]*dt;output+=rates.at(-1)*dt;t=next;
+    if(events%128===0)progress?.(Math.min(1,t/horizon));
+  }
+  const inventory=links.reduce((n,l)=>n+(l?.total||0),0),residual=source-output-inventory;
+  if(Math.abs(residual)>Math.max(1e-4,source*1e-8))throw Error('SCENARIO_FLUID_MASS_BALANCE');
+  const summary={outputCount:output,lineOeePercent:Math.min(100,100*output/(model.reference*horizon)),totalOverflowUnits:0,materialBalance:{inputUnits:source,outputUnits:output,inventoryUnits:inventory,overflowUnits:0,residualUnits:residual},fluidEvents:events,totalFailureCount:machines.reduce((n,m)=>n+m.failures,0)};
+  progress?.(1);
+  return {ok:true,result:{caseId:input.case.id,unitOfFlow:model.unitOfFlow,engineVersion:'CAPEX_FLUID_SCREEN_V1',scenarioFidelity:'FLUID_SCREEN_V1',durationSeconds:horizon,seed:run.seed,summary,equipmentMetrics:Object.fromEntries(machines.map(m=>[m.e.id,{outputCount:m.output,failureCount:m.failures,microStopCount:m.microStops}])),screeningLimitations:['CONTINUOUS_FLOW','FIXED_TRANSPORT_DELAY','APPROXIMATE_SENSOR_HYSTERESIS','AVERAGE_RAMP_DELAY','NO_INDIVIDUAL_PACKAGES_OR_INTERNAL_RESIDENCE','NO_PHYSICAL_OVERFLOW_CERTIFICATION']}};
 }
 
 
@@ -6737,8 +6945,8 @@ function scenarioStudyConfirmationPlan(value) {
     'targetHalfWidth', 'plannedHalfWidth', 'pilotSeeds', 'pilotRounds', 'confidenceLevel', 'minRounds', 'maxRounds',
     'confirmationMustExcludePilotSeeds', 'method', 'policy', 'pilotRole', 'minimumPracticalGain', 'comparisonBasis',
     'comparisonDurationSeconds', 'comparisonUnitOfFlow', 'baselineMeanThroughput', 'pilotStandardDeviation',
-    'sourceEffectiveRuntimeTargetSeconds', 'interpretation']);
-  if (value.pilotRun) plan.pilotRun = scenarioStudyPick(value.pilotRun, ['durationSeconds', 'rounds', 'seed', 'durationMode', 'engineId']);
+    'sourceEffectiveRuntimeTargetSeconds', 'confirmationHorizon', 'pilotFidelity', 'confirmationFidelity', 'interpretation']);
+  if (value.pilotRun) plan.pilotRun = scenarioStudyPick(value.pilotRun, ['durationSeconds', 'rounds', 'seed', 'durationMode', 'engineId','scenarioFidelity','numericalResolution']);
   return plan;
 }
 function scenarioStudyDOEObservations(value) {
@@ -7035,7 +7243,7 @@ function buildScenarioStudy(simulation, evaluation) {
         minimumPracticalGainMet: scenarioStudyNumber(objective.minimumPracticalGain) !== null && actualBase[objectiveMetric] !== null ? actualCandidate[objectiveMetric] - actualBase[objectiveMetric] >= objective.minimumPracticalGain : null } : { status: 'NOT_EVALUATED', reason: objective && !objectiveValid ? 'INVALID_OBJECTIVE_OR_UNIT' : 'OBJECTIVE_OR_CONFIRMATION_MISSING' } },
     baseline: { status: check?.baseline ? 'CONFIRMATION_BASELINE' : evaluation?.baseline ? 'SCREENING_BASELINE' : 'MISSING',
       metrics: check?.baseline ? actualBase : scenarioStudyMetrics(evaluation?.baseline), unitOfFlow: scenarioStudyFlowUnit(evaluation?.unitOfFlow || simulation?.unitOfFlow),
-      run: scenarioStudyPick(check || evaluation?.run, ['durationSeconds', 'rounds', 'seed']) },
+      run: scenarioStudyPick(check || evaluation?.run, ['durationSeconds', 'rounds', 'seed','scenarioFidelity']) },
     diagnosis: {
       causalStatus: 'HYPOTHESES_ONLY',
       observedLosses: scenarioStudyPick(evaluation?.lossDiagnosis, ['status', 'reason', 'sourceStatus', 'provenance', 'referenceId', 'durationSeconds', 'durationBasis',
@@ -7048,14 +7256,14 @@ function buildScenarioStudy(simulation, evaluation) {
       screening: { baseline: scenarioStudyMetrics(evaluation?.baseline), candidate: scenarioStudyMetrics(evaluation?.candidate), role: 'EXPLORATION_ONLY' },
       finalistSelection:{status:rankingPlan?'RECORDED':'NOT_RECORDED',role:'EXPLORATORY_SELECTION_NOT_CONFIRMATION',
         policy:scenarioStudyText(rankingPlan?.policy),staged:rankingPlan?.staged===true,reason:scenarioStudyText(rankingPlan?.reason),
-        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId']),
-        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId']),
+        intermediateRun:scenarioStudyPick(finalistScreen?.run||rankingPlan?.screenRun,['durationSeconds','rounds','seed','engineId','scenarioFidelity','numericalResolution']),
+        fullRun:scenarioStudyPick(ranking?.run||rankingPlan?.fullRun,['durationSeconds','rounds','seed','engineId','scenarioFidelity','numericalResolution']),
         candidatesScreened:Array.isArray(finalistScreen?.observations)?finalistScreen.observations.length:null,
         selected:scenarioStudyNumber(finalistScreen?.selected),omitted:scenarioStudyNumber(finalistScreen?.omitted),
         protectedReliabilityCandidates:scenarioStudyNumber(finalistScreen?.protectedReliabilityCandidates),
         fullHorizonFinalists:scenarioStudyNumber(ranking?.finalists)??scenarioStudyNumber(rankingPlan?.fullHorizonFinalists),
         shortScreenMayMissLateBenefits:rankingPlan?.staged===true,
-        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the full-horizon independent confirmation supports a reproduced improvement.'},
+        interpretation:scenarioStudyText(rankingPlan?.interpretation)||'Selection allocates simulation effort; only the independent physical confirmation at its recorded horizon supports a reproduced improvement.'},
       experiment: {
         status: doe ? doe.analysis?.complete === true ? 'COMPLETE_DESIGN' : 'INCOMPLETE_DESIGN' : 'NOT_PERFORMED',
         type: scenarioStudyText(doe?.type || doe?.design?.type),
@@ -7065,7 +7273,7 @@ function buildScenarioStudy(simulation, evaluation) {
           interpretation: 'Effects apply to the tested factor region conditional on these fixed changes and the saved baseline; they are not isolated causal shares or guarantees outside that region.' },
         combinations: scenarioStudyNumber(doe?.combinations) ?? (Array.isArray(doe?.observations) ? doe.observations.length : null),
         roundsPerCombination: scenarioStudyNumber(doe?.roundsPerCombination),
-        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds']) : {},
+        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds','scenarioFidelity','numericalResolution']) : {},
         observations: scenarioStudyDOEObservations(doe?.observations),
         observationsOmitted: Math.max(0, (Array.isArray(doe?.observations) ? doe.observations.length : 0) - 16),
         analysis: scenarioStudyPick(doe?.analysis, ['complete', 'reason', 'effects', 'interpretation']),
@@ -7075,7 +7283,7 @@ function buildScenarioStudy(simulation, evaluation) {
       },
       confirmation: { status: confirmationStatus, reportedPassed: check?.passed === true,
         kind: scenarioStudyText(check?.confirmationKind || evaluation?.confirmationKind),
-        baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed']),
+        baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed','scenarioFidelity']),
         confirmationPlan,
         precision: scenarioStudyPick(check?.precision, ['targetHalfWidth', 'achievedHalfWidth', 'met', 'plannedRounds', 'requiredRounds', 'capped']),
         practicalThreshold: scenarioStudyNumber(check?.practicalThreshold), reason: scenarioStudyText(check?.reason),
@@ -7083,7 +7291,7 @@ function buildScenarioStudy(simulation, evaluation) {
         delta: { throughputPerMinute: actualBase.throughput !== null && actualCandidate.throughput !== null ? actualCandidate.throughput - actualBase.throughput : null,
           oeePercentagePoints: actualBase.oee !== null && actualCandidate.oee !== null ? actualCandidate.oee - actualBase.oee : null },
         statisticalEvidence: stats,
-        interpretation: 'Independent simulation evidence; descriptive reproduction is distinct from statistical inference and plant validation.' }
+        interpretation: 'Independent physical simulation evidence on the recorded horizon; descriptive reproduction is distinct from statistical inference, full-calendar coverage, and plant validation.' }
     },
     feasibility: { status: 'REQUIRES_ENGINEERING_REVIEW', verified: false,
       exploratoryTargets: hypotheses.some(item => ['EXPLORATORY_SENSITIVITY','EXPLORATORY_REPLACEMENT'].includes(item.classification)),
@@ -7148,6 +7356,13 @@ function createBrowserPlayback(input){
   return controller;
 }
 async function calculateBrowserBatch(input,options={}){
+  if(input.run.scenarioFidelity==='FLUID_SCREEN_V1'){
+    const validation=validateSimulationInput(input);if(!validation.ok)return validation;
+    return simulateBatch(input,{...options,summaryOnly:true,representativeReplay:false,concurrency:1,workerFirstRound:true,runRound:async(model,settings)=>{
+      await new Promise(resolve=>setTimeout(resolve,0));
+      return simulateScenarioFluidRound(model,settings);
+    }});
+  }
   if(input.run.effectiveRuntimeTargetSeconds!==undefined&&selectedEngine(input)===SIMPY_ENGINE_ID)return effectiveRuntimeUnsupported();
   if(selectedEngine(input)===SIMPY_ENGINE_ID)return simulateBatch(input,{...options,runRound:simPyRuntime.run,workerFirstRound:true,concurrency:options.parallel===false?1:simPyRuntime.size,laterSummaryOnly:options.laterSummaryOnly!==false});
   let published=false;
@@ -7178,7 +7393,7 @@ function simulationInputSignature(input){
 async function simulateBrowserBatch(input,options={}){
   const signature=simulationInputSignature(input);
   const response=await calculateBrowserBatch(input,options);
-  if(response.ok)response.result.inputSignature=signature;
+  if(response.ok){response.result.inputSignature=signature;if(input.run.scenarioFidelity==='PHYSICAL_FAST_V1'||input.run.scenarioFidelity==='PHYSICAL_PRECISE_V1')response.result.scenarioFidelity=input.run.scenarioFidelity;}
   return response;
 }
 window.addEventListener?.('pagehide',()=>{workerPool?.close();workerPool=null;for(const controller of playbackControllers)controller.close();});

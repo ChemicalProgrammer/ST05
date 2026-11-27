@@ -3,6 +3,10 @@ function exportEquipmentSheet_(request, user) {
   if (!request || typeof request !== 'object') throw createSimulatorError_('INVALID_SHEET_REQUEST','Equipment export inputs are required.');
   var mode=sheetRequestUiMode_(request);
   if(request.caseSnapshot)browserCaseSnapshot_(request,user);else getOwnedCaseFile_(request.caseId, user, true);
+  return writeEquipmentWorkbook_(request,mode,false);
+}
+
+function writeEquipmentWorkbook_(request,mode,blankTemplate) {
   if (!Array.isArray(request.equipment) || request.equipment.length > 1000) {
     throw createSimulatorError_('INVALID_SHEET_REQUEST','Export at most 1,000 equipment rows.');
   }
@@ -28,6 +32,7 @@ function exportEquipmentSheet_(request, user) {
       if(volume!==undefined)metadata.containerSize=Number((volume/STScenarioEngine_.productVolumeUnits[unit]).toPrecision(12))+' '+unit;
     }
     var data=equipmentSheetData_(equipment,metadata,mode);
+    if(blankTemplate)data.metadata.fill('');
     stage='VALIDATE_EQUIPMENT';
     var date=sheetAnalysisDate_(data.metadata[5])||sheetAnalysisDate_(data.metadata[6]);
     data.metadata[5]=date||'';
@@ -46,7 +51,7 @@ function exportEquipmentSheet_(request, user) {
     if (!review.canImport) throw createSimulatorError_('INVALID_SHEET_EXPORT','Some values cannot be represented in the import format.',review.errors.map(function(issue){return issue.cell+': '+issue.message;}));
     stage='OPEN_EXPORTS_FOLDER';
     var folder=getWorkspaceFolders_().exports;
-    var name=String(request.caseName||'Case').trim().slice(0,120)+' · '+String(request.simulationName||'Simulation').trim().slice(0,80)+' · Equipment';
+    var name=blankTemplate?'Equipment Template':String(request.caseName||'Case').trim().slice(0,120)+' · '+String(request.simulationName||'Simulation').trim().slice(0,80)+' · Equipment';
     var primary=sheetExportColor_(request.theme?.primary,'#5485a4');
     var width=policy.dischargeVelocity?36:32,slots=Math.min(1000,Math.max(100,equipment.length+50));
     stage='CREATE_SPREADSHEET';

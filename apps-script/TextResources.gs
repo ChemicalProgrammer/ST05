@@ -2,6 +2,9 @@
 var ST_TEXT_RESOURCES = {
   "brand.motion_label":"Bottles moving along a conveyor",
   "brand.motion_keys":"Hold a bottle to accumulate; drag away to remove; click for domino; double-click for robot. − / + speed; ← / → direction. Focus here: Space hold/release, Delete remove, R robot, D domino, Esc reset.",
+  "cases.template":"Template",
+  "cases.template_help":"Download the blank Excel workbook for this mode. Fill in the data, keep the tab names and headers, then convert it to Google Sheets and import its link.",
+  "cases.template_download":"Download Excel workbook",
   "exports.sheet_failed":"Google Sheets export failed",
   "exports.sheet_title":"Google Sheets template exported",
   "exports.sheet_message":"Spreadsheet created in Exports. Tabs: ",

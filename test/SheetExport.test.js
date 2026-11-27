@@ -468,3 +468,19 @@ test('Basic omits measured discharge velocity but retains optional stop response
   }
  }
 });
+
+test('Case Gallery creates an empty import workbook for each workspace mode without an open case',()=>{
+  for(const [mode,tabs] of [['MINIMAL',['Equipment']],['BASIC',['Equipment','Products & Formats']],['ADVANCE',['Equipment','Products & Formats','Real Data']]]){
+    const {c,writes,calls}=runtime();
+    const response=c.createGalleryTemplate(mode);
+    assert.equal(response.ok,true,JSON.stringify(response));
+    assert.deepEqual(Array.from(response.data.tabNames),tabs);
+    assert.equal(response.data.equipmentCount,0);
+    assert.deepEqual(['Equipment',...calls.filter(call=>call[0]==='insertSheet').map(call=>call[1])],tabs);
+    const grid=writes[0].values;
+    assert.equal(grid[0][1],'');
+    assert.equal(grid[1][1],'');
+    assert.equal(grid[1][29],'st-sheet-mode:'+mode);
+    assert(grid.slice(7).every(row=>row.every((value,index)=>index===29||value==='')));
+  }
+});

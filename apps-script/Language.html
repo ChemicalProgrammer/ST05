@@ -2293,6 +2293,10 @@ window.STLanguage=(function(){
   Object.assign(translations,{'Statistical Report':'Reporte estadístico','Complete the numerical simulation before exporting the statistical report.':'Completa la simulación numérica antes de exportar el reporte estadístico.'});
   Object.assign(translations,{'Ideal Line Benchmark':'Benchmark de línea ideal','Export statistical report':'Exportar reporte estadístico','Run benchmark':'Ejecutar benchmark','Verify original horizon':'Verificar horizonte original','Target':'Objetivo'});
   Object.assign(translations,{'Zero CAPEX only · Medium and High CAPEX paused · Reliability and installed lengths frozen.':'Solo Zero CAPEX · Medium y High CAPEX en pausa · Confiabilidad y longitudes instaladas sin cambios.','OFAT physical sensitivity':'Sensibilidad física OFAT','Refining physical levels':'Refinamiento de niveles físicos','No tested sensor or conveyor configuration improved throughput without increasing overflow.':'Ninguna configuración probada mejoró el throughput sin incrementar el overflow.'});
+  Object.assign(translations,{
+    'Download Excel workbook':'Descargar archivo de Excel',
+    'Download the blank Excel workbook for this mode. Fill in the data, keep the tab names and headers, then convert it to Google Sheets and import its link.':'Descarga la plantilla de Excel vacía para este modo. Llena los datos, conserva los nombres de las pestañas y los encabezados, convierte el archivo a Hojas de cálculo de Google e importa su enlace.'
+  });
   function setLanguage(value){
     var next=value==='es'?'es':'en';
     if(language!==next){language=next;window.STPreferences?.write('language',next);}

@@ -174,6 +174,13 @@ function getSheetTemplateCapabilities() {
   });
 }
 
+function createGalleryTemplate(uiMode) {
+  return executeServerAction_(function() {
+    var mode=sheetRequestUiMode_({uiMode:uiMode});
+    return writeEquipmentWorkbook_({equipment:[],metadata:{}},mode,true);
+  });
+}
+
 function exportEquipmentSheet(request) {
   return executeServerAction_(function(user) { return exportEquipmentSheet_(request, user); });
 }

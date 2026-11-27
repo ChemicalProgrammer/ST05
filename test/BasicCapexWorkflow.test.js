@@ -15,8 +15,8 @@ function fixture(outcome,options={}){
   _cancelMinimalSearch:({discard})=>{assert.equal(discard,true);calls.push('cancel');}
  }));
  const context={executionPolicy,sim,state,paints,owner:()=>sim,result:()=>r,busy:()=>false,ownerKey:()=>sim.id,sourceSignature:()=> 'current',
-  window:{STScenarioExplorer:{executionPolicy},STScenarios:{readiness:()=>({ready:options.ready!==false,reason:options.ready===false?'NO_RESULTS':null})}},
-  document:{visibilityState:'hidden',documentElement:{lang:'en'}},setTimeout:fn=>fn(),scenarioCards:()=>cards,expandForAction:()=>{},isMinimal:()=>true,
+  window:{requestAnimationFrame:options.frame,STScenarioExplorer:{executionPolicy},STScenarios:{readiness:()=>({ready:options.ready!==false,reason:options.ready===false?'NO_RESULTS':null})}},
+  document:{visibilityState:options.frame?'visible':'hidden',documentElement:{lang:'en'}},setTimeout:fn=>fn(),scenarioCards:()=>cards,expandForAction:()=>{},isMinimal:()=>true,
   actions:{error:e=>calls.push('error:'+e.message),markReset:()=>calls.push('dirty'),save:async()=>calls.push('save')},
   progress:(_id,value)=>percentages.push(value),clearScenarios:()=>calls.push('clear'),show:()=>{}};
  const run=new Function(...Object.keys(context),`
@@ -77,4 +77,21 @@ test('individual Medium restart preserves saved Zero evidence, including after c
 test('individual Zero restart leaves Medium out of the queue',async()=>{
  const h=fixture(complete('NO_DEMONSTRATED_IMPROVEMENT'));
  await h.run.startSearch(h.cards[0]);assert.deepEqual(h.calls,['prepare ZERO','ZERO','save']);
+});
+
+test('the first visible search frame precedes resetting and running the selected levels',async()=>{
+ for(const single of [false,true]){
+  let paint,ready;
+  const nextPaint=new Promise(resolve=>{ready=resolve;});
+  const h=fixture(complete('NO_ELIGIBLE_TARGETS'),{frame:callback=>{if(paint)ready(callback);else paint=callback;}});
+  const pending=h.run.startSearch(single?h.cards[1]:undefined);
+  assert.equal(h.run.status().searching,true);
+  assert.equal(h.run.status().searchProgress,0);
+  assert.deepEqual(h.calls,[]);
+  paint();
+  const finishPaint=await nextPaint;
+  finishPaint();
+  await pending;
+  assert.deepEqual(h.calls,single?['prepare MEDIUM','MEDIUM','save']:['prepare ZERO','prepare MEDIUM','ZERO','MEDIUM','save']);
+ }
 });

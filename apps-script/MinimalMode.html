@@ -22,7 +22,7 @@ window.STMinimalMode=(function(){
   function headerProgress(){
     if(!initialized||!isMinimal()||!state.activeCase)return null;
     if(starting)return {fraction:runStopRequested||runProgress>=100?null:runProgress/100};
-    if(searching)return {fraction:stopRequested?null:Math.min(.999,searchProgress/100)};
+    if(searching)return {fraction:stopRequested||searchProgress===0?null:Math.min(.999,searchProgress/100)};
     if(searchSaving)return {fraction:null};
     return null;
   }
@@ -231,6 +231,10 @@ window.STMinimalMode=(function(){
     var current=Number(searchCard?._minimalSearchProgress?.())||0;
     searchProgress=Math.max(searchProgress,Math.min(99.9,(searchCompleted+Math.min(current,99.9)/100)/searchTotal*100));
     progress('minimal-search-progress',searchProgress);
+    var tier=cardTier(searchCard,owner()?.id)||searchTiers[0];
+    var label=tier==='MEDIUM'?tr('Medium CAPEX'):tr('Zero CAPEX');
+    var position=searchTiers.indexOf(tier)+1;
+    el('minimal-search-tier').textContent=searchTotal>1?label+' ('+position+'/'+searchTotal+')':label;
   }
   // The existing simulation management controls are shared with Standard
   // and Advance. Protect the source while a Basic simulation/search is active.
@@ -336,17 +340,23 @@ window.STMinimalMode=(function(){
     var sim=owner(),r=result(),key=ownerKey(),signature=sourceSignature(sim),readiness=window.STScenarios?.readiness?.(sim);
     if(!readiness?.ready){searchMessage='Optimization is unavailable for this configuration.'+(readiness?.reason?' ('+readiness.reason+')':'');sync(state);return;}
     var cards;
-    try{cards=scenarioCards(sim,r,true);}catch(error){searchMessage=error.message||'Evaluation failed';actions.error(error);sync(state);return;}
+    try{cards=scenarioCards(sim,r,!onlyCard);}catch(error){searchMessage=error.message||'Evaluation failed';actions.error(error);sync(state);return;}
     // Fail closed on stale cards and mixed-version Apps Script deployments.
-    var ordered=tiers.map(tier=>cards.find(card=>cardTier(card,sim.id)===tier));
-    if(window.STScenarioExplorer?.executionPolicy!==executionPolicy||cards.length!==tiers.length||ordered.includes(undefined)||(onlyCard&&!ordered.includes(onlyCard))){
+    var work=onlyCard?[onlyCard]:tiers.map(tier=>cards.find(card=>cardTier(card,sim.id)===tier));
+    var valid=onlyCard?cards.includes(onlyCard)&&!!cardTier(onlyCard,sim.id):cards.length===tiers.length&&!work.includes(undefined);
+    if(window.STScenarioExplorer?.executionPolicy!==executionPolicy||!valid){
       searchMessage=document.documentElement.lang==='es'?'Actualiza la aplicación y recarga las tarjetas CAPEX.':'Update the application and reload the CAPEX cards.';sync(state);return;
     }
-    var work=onlyCard?[onlyCard]:ordered;
     searchTiers=work.map(card=>cardTier(card,sim.id));
     searching=true;searchStartedAt=performance.now();stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
     var failures=[],evaluated=false;
     try{
+      // Give the browser a paint before resetting cards or preparing simulation batches.
+      if(document.visibilityState==='visible'&&typeof window.requestAnimationFrame==='function'){
+        await new Promise(resolve=>window.requestAnimationFrame(()=>setTimeout(resolve,0)));
+        if(stopRequested)throw Error('Search stopped.');
+        if(ownerKey()!==key||sourceSignature(sim)!==signature)throw Error('Source inputs changed.');
+      }
       // Reset the complete requested queue before starting its first category.
       // The single-card refresh only resets that card.
       if(work.some(card=>typeof card._prepareMinimalRestart!=='function'))throw Error('CAPEX reset is unavailable.');
@@ -359,7 +369,7 @@ window.STMinimalMode=(function(){
         if(stopRequested)break;
         if(!cardTier(card,sim.id))throw Error('SCENARIO_CAPEX_DISABLED');
         if(!isMinimal()||ownerKey()!==key||sourceSignature(sim)!==signature){failures.push('Source inputs changed.');break;}
-        searchCard=card;
+        searchCard=card;sync(state);
         var label=card.querySelector('.analysis-capex')?.textContent||'CAPEX';
         var outcome;
         try{outcome=await card._runMinimalSearch();}

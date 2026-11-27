@@ -60,7 +60,7 @@ function verifyAutomatic(entry,h){
   assert.deepEqual(JSON.parse(JSON.stringify(entry.reproducibility.categoryInclusions)),{});
   assert(entry.phaseAudit.exploration.testedCandidates<=7,'At most seven selected nonempty subsets are explored');
   assert.equal(entry.infeasibleTrials,0,'Every expanded package combination must reach a valid experiment');
-  assert(entry.phaseAudit.ranking.finalists<=3);
+  assert(entry.phaseAudit.ranking.finalists<=1);assert(entry.independentCheck.rounds<=6);
   assert.equal(entry.independentCheck.durationSeconds,Math.max(1800,h.before.dynamicConfig.durationSeconds));
   assert.equal(entry.independentCheck.rounds,entry.confirmationPlan.rounds);
   assert(entry.confirmationPlan.pilotSeeds.every(seed=>!entry.independentCheck.baseline.roundMetrics.some(row=>row.seed===seed)));
@@ -182,4 +182,30 @@ test('Basic, Standard and Advance render three independent CAPEX categories usin
       assert.equal(h.calls.length,0,'Rendering categories must not launch an experiment');
     }finally{h.close();}
   }
+});
+
+test('Basic short negative screen exits without spending full-horizon simulations',async()=>{
+  const h=harness({reliability:false,durationSeconds:86400});try{
+    // Clear any long-transit precaution on this synthetic response fixture.
+    const orig=h.w.STScenarioSearch.progressiveFinalists;
+    h.w.STScenarioSearch.progressiveFinalists=(items,base,run,equipment,limit)=>orig(items,base,run,[],limit);
+    const simulate=h.w.SimulatorEngine.simulateBatch;
+    h.w.SimulatorEngine.simulateBatch=input=>simulate({...input,case:{...input.case,equipment:h.before.equipment}});
+    const entry=await search(h,'ZERO');
+    assert.equal(entry.status,'NO_PROMISING_CANDIDATE');assert.equal(entry.screeningOnly,true);
+    assert.equal(entry.independentCheck,null);assert(h.calls.every(call=>call.run.durationSeconds<86400));
+    assert(h.cards.ZERO.querySelector('.scenario-create').disabled);
+    assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/Full-horizon confirmation not performed/);
+  }finally{h.close();}
+});
+test('Basic deadline interrupts calculation without marking the candidate confirmed',async()=>{
+  const h=harness({reliability:false});try{
+    h.w.ST_SCENARIO_SEARCH_LIMITS.basicTimeLimitMs=1;
+    const result=await h.cards.ZERO._runMinimalSearch();
+    assert.equal(result.status,'SEARCH_BUDGET_REACHED',JSON.stringify(result));
+    const entry=h.sim.whatIf.evaluations.find(e=>e.tier==='ZERO');
+    assert.equal(entry.independentCheck,null);assert.equal(entry.stopReason,'BASIC_TIME_LIMIT');
+    assert(h.cards.ZERO.querySelector('.scenario-create').disabled);
+    assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/Time limit reached/);
+  }finally{h.close();}
 });

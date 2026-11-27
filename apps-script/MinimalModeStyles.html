@@ -42,6 +42,8 @@ html[data-workspace-mode=MINIMAL] #minimal-scenario-cards .analysis-recommendati
 .minimal-progress {position:relative;display:flex;align-items:center;gap:var(--space-3);}
 .minimal-progress progress {flex:1;min-width:0;width:100%;height:var(--progress-capsule-height,1rem);accent-color:var(--accent);}
 .minimal-progress output {font-size:var(--font-secondary);font-variant-numeric:tabular-nums;min-width:4em;text-align:right;}
+#minimal-search-progress output {max-width:60%;overflow-wrap:anywhere;}
+@media(max-width:640px){#minimal-search-progress {flex-wrap:wrap;}#minimal-search-progress progress {flex-basis:100%;}#minimal-search-progress output {max-width:100%;margin-inline-start:auto;}}
 #minimal-import-dialog {width:min(100% - var(--space-6),var(--size-480,480px));}
 #minimal-import-status {color:var(--danger);font-size:var(--font-secondary);}
 @media(max-width:760px){.minimal-result-grid {grid-template-columns:1fr;}}

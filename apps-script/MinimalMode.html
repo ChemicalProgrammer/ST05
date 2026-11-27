@@ -1,7 +1,7 @@
 <script>
 window.STMinimalMode=(function(){
   'use strict';
-  var state,actions,initialized=false,importing=false,starting=false,searching=false,searchSaving=false,buildingCards=false,timer=null;
+  var state,actions,initialized=false,importing=false,starting=false,searching=false,searchSaving=false,buildingCards=false,timer=null,stopRequested=false;
   var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=3,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
   var tiers=['ZERO','MEDIUM','HIGH'];
   function el(id){return document.getElementById(id);}
@@ -115,8 +115,8 @@ window.STMinimalMode=(function(){
     var cards=[];
     try{cards=scenarioCards(sim,r,saved&&!searching&&!searchMessage&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL');}
     catch(error){searchMessage=error.message||'Evaluation failed';el('minimal-search-message').textContent=tr(searchMessage);show('minimal-search-message',true);}
-    show('minimal-scenario-cards',cards.length>0&&!searching);
-    el('minimal-search').textContent=tr(saved?'Restart search':'Find optimizations');
+    show('minimal-scenario-cards',cards.length>0);
+    el('minimal-search').textContent=tr(searching?(stopRequested?'Stopping search…':'Stop search'):saved?'Restart search':'Find optimizations');
   }
   function stopMonitor(){if(timer!==null){clearInterval(timer);timer=null;}}
   function monitor(){if(timer===null)timer=setInterval(function(){sync(state);if(!busy())stopMonitor();},180);}
@@ -124,7 +124,8 @@ window.STMinimalMode=(function(){
     if(!searching)return;
     var current=Number(searchCard?._minimalSearchProgress?.())||0;
     searchProgress=Math.max(searchProgress,Math.min(99.9,(searchCompleted+Math.min(current,99.9)/100)/searchTotal*100));
-    progress('minimal-search-progress',searchProgress);
+    var label=searchCard?.querySelector('.analysis-capex')?.textContent,stage=searchCard?._minimalSearchLabel?.();
+    progress('minimal-search-progress',searchProgress,[label,stage].filter(Boolean).join(' · '));
   }
   function sync(current){
     state=current;if(!initialized)return;
@@ -148,8 +149,8 @@ window.STMinimalMode=(function(){
     show('minimal-optimization',!!r&&!running);
     var readiness=sourceReadiness(sim,r);
     var canSearch=!!r&&!review&&readiness?.ready===true&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL';
-    el('minimal-search').hidden=searching;
-    el('minimal-search').disabled=!canSearch||lock||running||state.saving;
+    el('minimal-search').hidden=false;
+    el('minimal-search').disabled=searching?stopRequested:!canSearch||lock||running||state.saving;
     show('minimal-search-progress',searching);
     if(searching)updateSearchProgress();
     var message=searchMessage||(!canSearch&&r?'Optimization is unavailable for this configuration.'+(readiness?.reason?' ('+readiness.reason+(readiness.differencePath?' · '+readiness.differencePath:'')+')':''):'');
@@ -174,7 +175,11 @@ window.STMinimalMode=(function(){
   // A terminal evaluated outcome is different from a blocked, cancelled or
   // failed call. In particular, an early return must never fill the global bar.
   function completedOutcome(outcome){
-    return outcome?.started===true&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NO_DEMONSTRATED_IMPROVEMENT','NO_ELIGIBLE_TARGETS','NOT_REPRODUCED','INFEASIBLE'].includes(outcome.status);
+    return outcome?.started===true&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NO_DEMONSTRATED_IMPROVEMENT','NO_PROMISING_CANDIDATE','NO_ELIGIBLE_TARGETS','NOT_REPRODUCED','INFEASIBLE'].includes(outcome.status);
+  }
+  function stopSearch(){
+    if(!searching||stopRequested)return;
+    stopRequested=true;searchCard?._cancelMinimalSearch?.();sync(state);
   }
   async function startSearch(onlyCard){
     if(busy()||state.saving||!result()||!owner())return;
@@ -185,10 +190,11 @@ window.STMinimalMode=(function(){
     var requested=onlyCard?[onlyCard.dataset.motionKey]:tiers.map(t=>JSON.stringify([sim.id,'CAPEX',t]));
     var work=requested.map(id=>cards.find(card=>card.dataset.motionKey===id));
     if(work.some(card=>!card)){searchMessage='CAPEX search cards could not be initialized.';sync(state);return;}
-    searching=true;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
+    searching=true;stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
     var failures=[],evaluated=false;
     try{
       for(var card of work){
+        if(stopRequested)break;
         if(!isMinimal()||ownerKey()!==key||sourceSignature(sim)!==signature){failures.push('Source inputs changed.');break;}
         searchCard=card;
         var label=card.querySelector('.analysis-capex')?.textContent||'CAPEX';
@@ -201,12 +207,15 @@ window.STMinimalMode=(function(){
         searchCard=null;
         searchProgress=searchCompleted/searchTotal*100;
         progress('minimal-search-progress',searchProgress);
+        sync(state);
+        if(stopRequested)break;
       }
+      if(stopRequested)failures.push('Search stopped. Completed categories retained.');
       if(failures.length)searchMessage=failures.join(' · ');
     }catch(error){searchMessage=error.message||'Evaluation failed';actions.error(error);}
     finally{
       searchSaving=evaluated&&ownerKey()===key&&sourceSignature(sim)===signature;
-      searching=false;searchCard=null;sync(state);
+      searching=false;searchCard=null;stopRequested=false;sync(state);
     }
     // Let the real result cards paint before serializing evidence for Drive.
     if(searchSaving){
@@ -227,7 +236,7 @@ window.STMinimalMode=(function(){
   }
   function init(current,callbacks){
     state=current;actions=callbacks;if(initialized)return;initialized=true;
-    el('minimal-run').onclick=startRun;el('minimal-search').onclick=function(){return startSearch();};
+    el('minimal-run').onclick=startRun;el('minimal-search').onclick=function(){return searching?stopSearch():startSearch();};
     el('minimal-duration').onchange=applyDuration;el('minimal-duration-unit').onchange=applyDuration;
     var dialog=el('minimal-import-dialog'),link=el('minimal-import-link'),submit=el('minimal-import-submit'),close=el('minimal-import-close');
     close.onclick=function(){if(!importing)dialog.close();};

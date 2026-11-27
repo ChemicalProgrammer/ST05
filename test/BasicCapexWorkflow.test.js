@@ -17,10 +17,10 @@ function fixture(outcomes,options={}){
   actions:{error:e=>calls.push('error:'+e.message),save:async()=>calls.push('save')},
   progress:(_id,value)=>percentages.push(value)};
  const run=new Function(...Object.keys(context),`
- var searching=false,searchSaving=false,searchProgress=0,searchCompleted=0,searchTotal=3,searchCard=null,searchMessage='';
+ var searching=false,stopRequested=false,searchSaving=false,searchProgress=0,searchCompleted=0,searchTotal=3,searchCard=null,searchMessage='';
  function sync(){paints.push({searching,searchSaving,searchMessage});}
  `+section+`
- return {startSearch,completedOutcome,status:()=>({searching,searchSaving,searchMessage,searchCompleted,searchProgress})};`)(...Object.values(context));
+ return {startSearch,stopSearch,completedOutcome,status:()=>({searching,searchSaving,searchMessage,searchCompleted,searchProgress})};`)(...Object.values(context));
  return {run,calls,percentages,paints,cards};
 }
 const complete=status=>({started:true,status});
@@ -48,4 +48,15 @@ test('missing cards and stale baseline stop the search before invoking any categ
 test('individual card search uses the same global progress and only runs that category',async()=>{
  const h=fixture([complete('NO_ELIGIBLE_TARGETS'),complete('NOT_REPRODUCED'),complete('INFEASIBLE')]);
  await h.run.startSearch(h.cards[1]);assert.deepEqual(h.calls,['MEDIUM','save']);assert.equal(h.percentages.at(-1),100);
+});
+
+test('a clear screening exit completes a category, but a time limit remains explicitly incomplete',async()=>{
+ const h=fixture([complete('NO_PROMISING_CANDIDATE'),{started:true,status:'SEARCH_BUDGET_REACHED',reason:'Time limit reached'},complete('NO_ELIGIBLE_TARGETS')]);
+ await h.run.startSearch();assert.equal(h.run.status().searchCompleted,2);assert(h.percentages.every(value=>value<100));assert.match(h.run.status().searchMessage,/Time limit reached/);assert(h.calls.includes('save'));
+});
+test('stop cancels the current category and retains completed categories without starting the next',async()=>{
+ const h=fixture([complete('IMPROVEMENT_REPRODUCED'),complete('NO_ELIGIBLE_TARGETS'),complete('NO_ELIGIBLE_TARGETS')]);
+ h.cards[1]._runMinimalSearch=async()=>{h.calls.push('MEDIUM');h.run.stopSearch();return {started:true,status:'CANCELLED'};};
+ h.cards[1]._cancelMinimalSearch=()=>h.calls.push('cancel');
+ await h.run.startSearch();assert.deepEqual(h.calls,['ZERO','MEDIUM','cancel','save']);assert.equal(h.run.status().searchCompleted,1);assert.match(h.run.status().searchMessage,/Search stopped/);
 });

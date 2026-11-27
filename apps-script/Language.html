@@ -2281,6 +2281,7 @@ window.STLanguage=(function(){
     var picker=document.getElementById('settings-language');
     if(picker)picker.value=language;
   }
+  Object.assign(translations,{'Minitab (CSV ZIP)':'Minitab (ZIP de CSV)','Complete the numerical simulation before exporting to Minitab.':'Completa la simulación numérica antes de exportar a Minitab.'});
   function setLanguage(value){
     var next=value==='es'?'es':'en';
     if(language!==next){language=next;window.STPreferences?.write('language',next);}

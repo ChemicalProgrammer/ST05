@@ -146,6 +146,8 @@ window.STMinimalMode=(function(){
     el('minimal-run').hidden=false;el('minimal-run').disabled=lock||state.saving||!sim;
     el('minimal-run').textContent=tr(r?'Restart simulation':'Run simulation');
     renderResults(r);
+    var statExport=el('minimal-export-minitab'),statMenu=el('minimal-export-menu');
+    if(statExport&&statMenu){statMenu.hidden=!r||!window.STStatExport;statExport.disabled=!r||lock||running||state.saving||!window.STStatExport?.canExport(sim);if(statExport.disabled)statMenu.removeAttribute('open');}
     show('minimal-optimization',!!r&&!running);
     var readiness=sourceReadiness(sim,r);
     var canSearch=!!r&&!review&&readiness?.ready===true&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL';
@@ -245,6 +247,7 @@ window.STMinimalMode=(function(){
   function init(current,callbacks){
     state=current;actions=callbacks;if(initialized)return;initialized=true;
     el('minimal-run').onclick=startRun;el('minimal-search').onclick=function(){return searching?stopSearch():startSearch();};
+    var statExport=el('minimal-export-minitab');if(statExport)statExport.onclick=function(){if(busy()||state.saving||!result())return;statExport.closest('details')?.removeAttribute('open');try{window.STStatExport.download(owner(),state.activeCase);}catch(error){actions.error(error);}};
     el('minimal-duration').onchange=applyDuration;el('minimal-duration-unit').onchange=applyDuration;
     var dialog=el('minimal-import-dialog'),link=el('minimal-import-link'),submit=el('minimal-import-submit'),close=el('minimal-import-close');
     close.onclick=function(){if(!importing)dialog.close();};

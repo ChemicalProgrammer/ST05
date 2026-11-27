@@ -15,6 +15,7 @@
       <div class="fold-tools button-row minimal-simulation-tools">
         <label class="time-value-label"><span>Duration</span><span class="time-value-control"><input id="minimal-duration" type="number" min="0.001" step="any" required value="8" aria-label="Duration"><select id="minimal-duration-unit" aria-label="Duration time unit"><option value="SECONDS">s</option><option value="MINUTES">min</option><option value="HOURS" selected>h</option><option value="DAYS">d</option></select></span></label>
         <button id="minimal-run" type="button">Run simulation</button>
+        <details id="minimal-export-menu" class="export-menu" hidden><summary class="secondary icon-button" data-icon="upload" title="Export" aria-label="Export"></summary><div><button id="minimal-export-minitab" class="ghost" type="button" disabled>Minitab (CSV ZIP)</button></div></details>
       </div>
     </div>
     <div id="minimal-simulation-content" class="fold-content">

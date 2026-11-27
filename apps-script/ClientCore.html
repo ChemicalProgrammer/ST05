@@ -113,6 +113,15 @@
         });
         STProducts.init(state,{navigate:function(){state.basicView='products';navigateView('products');},simulation:activePersistentSimulation,locked:runControlsLocked,capture:syncEquipmentFromEditor,edited:function(){markCaseDirty();},changed:function(all){invalidateActiveResult();renderEditor();markCaseDirty();renderRunWorkspace();renderSimulationAnalysis();shell.sync();}});
         STRealData.init(state,{changed:queueCaseEvidenceSave});
+        // Export from a cloned persisted simulation and recover richer live
+        // history only through the existing matching-case/signature guard.
+        window.STStatExport?.connect(function(simulation,activeCase){
+          const record=activeCase||state.activeCase,current=activePersistentSimulation();
+          if(!record||!current||current.id!==simulation?.id||record.id!==state.activeCase?.id)return {simulation,activeCase:record};
+          const snapshot={id:record.id,name:record.name,unitOfFlow:record.unitOfFlow,simulations:[cloneJson(current)]};
+          captureCaseNumerical(snapshot);
+          return {simulation:snapshot.simulations[0],activeCase:snapshot};
+        });
         STMinimalMode.init(state,{run:runSimulation,locked:runControlsLocked,progress:function(){return roundSession?.pending?roundSession.batchProgress?.value||0:0;},prepareSearch:function(target){renderSimulationAnalysis({prepareBasic:true,target:target});},simulation:activePersistentSimulation,setDuration:function(value,unit){
           document.getElementById('duration-mode').value='FIXED';state.run.durationMode='FIXED';
           var input=document.getElementById('run-duration');input.value=String(value);document.getElementById('run-duration-unit').value=unit;

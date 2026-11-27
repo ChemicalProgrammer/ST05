@@ -1,0 +1,328 @@
+<script>
+/* Statistical data exchange: tabular CSV files in a single local ZIP.
+   No external libraries, requests, changes to the case, or synthetic observations. */
+window.STStatExport=(function(){
+  'use strict';
+  var capture=null;
+  const version='ST_MINITAB_CSV_V1';
+  const finite=x=>typeof x==='number'&&Number.isFinite(x);
+  const arr=x=>Array.isArray(x)?x:[];
+  const obj=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
+  const div=(a,b)=>finite(a)&&finite(b)&&b>0?a/b:null;
+  const mul=(a,b)=>finite(a)?a*b:null;
+  const delta=(a,b)=>finite(a)&&finite(b)&&a>=b?a-b:null;
+  const scalar=x=>x===null||['number','string','boolean'].includes(typeof x);
+  const diff=(a,b)=>finite(a)&&finite(b)?a-b:null;
+  function flat(value,prefix='',out={}){
+    for(const [key,val] of Object.entries(obj(value))){
+      const path=prefix?prefix+'.'+key:key;
+      if(scalar(val))out[path]=val;
+      else if(val&&typeof val==='object'&&!Array.isArray(val))flat(val,path,out);
+    }return out;
+  }
+  function leaves(value,path,visit){
+    if(value===undefined)return;
+    if(scalar(value)){visit(path,value);return;}
+    if(Array.isArray(value)){value.forEach((v,i)=>leaves(v,path+'['+i+']',visit));return;}
+    for(const [k,v] of Object.entries(obj(value)))leaves(v,path?path+'.'+k:k,visit);
+  }
+  function csvCell(value){
+    if(value==null||typeof value==='number'&&!finite(value))return '';
+    if(typeof value==='number')return String(value);
+    if(typeof value==='boolean')return value?'1':'0';
+    var text=String(value);
+    // Safe when opened in a spreadsheet, too. Numeric values retain their type.
+    if(/^[\s\u0000-\u001f]*[=+@-]|^[\t\r\n]/.test(text))text="'"+text;
+    return '"'+text.replace(/"/g,'""')+'"';
+  }
+  function csv(table){
+    return '\ufeff'+[table.columns.map(csvCell).join(','),...table.rows.map(r=>table.columns.map(c=>csvCell(r[c])).join(','))].join('\r\n')+'\r\n';
+  }
+  function canExport(simulation){
+    const r=simulation?.results;
+    return !!r?.summary&&!r.provisional&&(!r.replicationStatus?.state||r.replicationStatus.state==='COMPLETE');
+  }
+  function buildTables(simulation,activeCase={}){
+    if(!canExport(simulation))throw Error('Complete the numerical simulation before exporting to Minitab.');
+    const result=simulation.results, tables=new Map();
+    const create=(name,observation,notes,columns=[])=>{
+      const table={name,observation,notes,columns:[...columns],keys:new Set(columns),rows:[]};tables.set(name,table);return table;
+    };
+    const put=(name,row)=>{
+      const table=tables.get(name);
+      for(const k of Object.keys(row))if(!table.keys.has(k)){table.keys.add(k);table.columns.push(k);}
+      table.rows.push(row);
+    };
+    let provenance;try{provenance=JSON.parse(result.inputSignature||result.replay?.inputSignature||'null');}catch(_){}
+    const exactInputs=Array.isArray(provenance?.equipment)&&provenance.run&&typeof provenance.run==='object';
+    const eq=exactInputs?provenance.equipment:arr(simulation.equipment),run=exactInputs?provenance.run:obj(simulation.dynamicConfig);
+    const names=new Map(arr(simulation.equipment).map(e=>[e.id,e.name]));
+    const models=new Map(eq.map(e=>[e.id,e])), name=id=>models.get(id)?.name||names.get(id)||id||null;
+    const unit=result.unitOfFlow||result.replay?.unitOfFlow||simulation.unitOfFlow||activeCase?.unitOfFlow||null;
+    const id={Simulation_ID:simulation.id,Simulation:simulation.name};
+    const eqId=e=>({Equipment_ID:e,Equipment:name(e),Equipment_type:models.get(e)?.type});
+    const baseSeed=result.batch?.baseSeed??result.replay?.seed??result.seed;
+    const batchRows=arr(result.batch?.rows);
+    // A summary export may have a batch mean but no rows. The stored top-level
+    // summary is the first trajectory, not n independent measurements.
+    const rounds=batchRows.length?batchRows:finite(result.seed??result.replay?.seed)?[{
+      round:1,seed:result.replay?.seed??result.seed,durationSeconds:result.durationSeconds,
+      summary:result.summary,equipmentMetrics:result.equipmentMetrics,shifts:result.shifts,products:result.products,
+      plantCalendar:result.plantCalendar,numerics:result.numerics}]:[];
+    const expected=result.batch?.rounds??result.replicationStatus?.rounds??result.rounds??null;
+    const actualRound=(row,i)=>row.round??i+1;
+    const rowDuration=row=>row.durationSeconds??result.batch?.durationSeconds??result.durationSeconds;
+    const roundInfo=(row,i)=>({...id,Round:actualRound(row,i),Seed:row.seed,Duration_s:rowDuration(row),Flow_unit:unit});
+        const meta=create('01_metadata.csv','One exported simulation','Executed inputs from result signature when available. Current edited inputs are not silently substituted.');
+    put(meta.name,{...id,Case_ID:activeCase?.id,Case:activeCase?.name,Engine:result.engineId||result.replay?.engineId||run.engineId,Engine_version:result.replay?.engineVersion||result.engineVersion,Resolution:result.numerics?.resolution||run.numericalResolution,Base_seed:baseSeed,Duration_s:result.durationSeconds,Expected_rounds:expected,Available_round_rows:rounds.length,Replication_status:result.replicationStatus?.state||'UNKNOWN',Input_basis:exactInputs?'EXECUTED_INPUT_SIGNATURE':'UNVERIFIED_CURRENT_INPUTS',Flow_unit:unit,Completed_at:result.completedAt,Export_schema:version,...flat(result.detailCoverage,'Engine_coverage')});
+    const config=create('02_run_inputs.csv','One configuration scalar','Run configuration as executed; array indices are paths. Units remain in native property names.',['Path','Value_numeric','Value_text']);
+    leaves(run,'',(path,value)=>put(config.name,{Path:path,Value_numeric:finite(value)?value:null,Value_text:finite(value)?null:value}));
+    const inputs=create('03_equipment_inputs.csv','One equipment unit','Executed inputs. Speeds are native output units/min; conveyor belt speed stays in mm/s.');
+    eq.forEach((e,i)=>put(inputs.name,{Line_order:i+1,...eqId(e.id),Native_flow_unit:e.unitOfFlow,Nominal_rate_per_min:mul(e.nominalRatePerSecond,60),MTBF_min:e.noiseProfile?.reliability?.mtbfMinutes,MTTR_min:e.noiseProfile?.reliability?.mttrMinutes,...flat(e,'Input')}));
+    const line=create('04_line_rounds.csv','One actual simulation round','Use for descriptive statistics across independent seeds. Does not duplicate the mean or create missing rounds.');
+    const em=create('05_equipment_rounds.csv','One equipment per actual round','All recorded scalar equipment metrics; OEE and outputs use the reported native units.');
+    const states=create('06_equipment_states.csv','One exclusive state per equipment and round','Use exclusive state accounting when recorded. LEGACY_STATE_COUNTERS may overlap. Missing state duration is not inferred.', ['Round','Seed','Equipment_ID','Equipment','State','State_seconds','State_pct','State_basis']);
+    const failures=create('07_failure_episodes.csv','One recorded failure episode','Exposure and wall-clock durations differ; MTTR is a configured duration. Review end reason and completeness before reliability analysis.',['Round','Seed','Equipment_ID','Equipment','Episode','History_complete','Repair_completed','startSecond','endSecond','stopClass','configuredRepairSeconds','sampledExposureSeconds','cumulativeChargedSecondsAtStart','observedFailureSeconds','endReason']);
+    const zoneRounds=create('08_conveyor_rounds.csv','One conveyor zone per actual round','Use full first-round metrics or recorded round summaries; unsupported fields are blank.');
+    const shifts=create('09_shifts.csv','One recorded shift per round','Shifts within a seed are not independent replicates.');
+    const products=create('10_product_results.csv','One recorded product/format per round','Includes reported bottle equivalents, native output and ideal production.');
+    const cal=create('11_calendar_metrics.csv','One recorded calendar scalar per round','Values retain their original property paths.');
+    const cover=create('12_recording_coverage.csv','One round and recording type','Counts are actual exported records, not reconstructed samples. Omission metadata is preserved; unknown omissions stay blank.');
+    const lts=create('13_line_intervals.csv','One retained line time sample','Interval rates are differences between consecutive retained cumulative counts; the first row and counter resets have no rate. Intervals may have unequal durations.',['Round','Seed','Sample','Time_s','Interval_s','Product_ID','Flow_unit','Cumulative_output','Interval_output','Interval_throughput_per_min','Cumulative_throughput_per_min']);
+    const ets=create('14_equipment_intervals.csv','One equipment per retained time sample','Output increments are native units. States are snapshots; recorded cumulative counters are not independent observations.');
+    const zts=create('15_conveyor_samples.csv','One conveyor zone per retained time sample','Includes inventory, fill, sensor signal and timer counters when recorded.');
+    const transitions=create('16_state_transitions.csv','One recorded state transition','May be truncated; do not infer full dwell times from these transitions. Equipment index is zero based.',['Round','Seed','Time_s','Equipment_index','Equipment_ID','Equipment','State']);
+    const events=create('17_events.csv','One recorded event','Event logs may have been truncated or removed at save time. No event is reconstructed.',['Round','Seed','Event_index','Time_s','Event_type','Equipment_ID','Zone_ID']);
+    const statistics=create('18_replication_statistics.csv','One saved aggregate metric','Means, dispersion and intervals reported by the simulator; not individual replications.');
+    const histories=new Map(), zoneMap=new Map();
+    function addReplay(recording,round,seed){
+      if(!recording||!finite(round)||!finite(seed))return;
+      const matching=rounds.find((row,i)=>actualRound(row,i)===round&&row.seed===seed);
+      if(!matching)return;
+      const old=histories.get(round);
+      if(!old){histories.set(round,{...recording,round,seed});return;}
+      // Choose the richer source independently for each retained record type.
+      const richer=arr(recording.samples).length>arr(old.samples).length?recording:old;
+      const combined={...old,...richer,round,seed};
+      ['events','stateTransitions'].forEach(k=>{combined[k]=arr(recording[k]).length>arr(old[k]).length?recording[k]:old[k];});
+      if(Object.keys(obj(recording.accumulationZoneMetrics)).length>Object.keys(obj(old.accumulationZoneMetrics)).length)combined.accumulationZoneMetrics=recording.accumulationZoneMetrics;
+      histories.set(round,combined);
+    }
+    const first=result.replay||result;
+    addReplay(first,1,first.seed??baseSeed);
+    arr(result.batch?.replays).forEach((r,i)=>addReplay(r,r?.round??i+2,r?.seed));
+    const rr=result.batch?.representativeReplay;addReplay(rr,rr?.round,rr?.seed);
+    for(const [key,z] of Object.entries(obj(first.zoneDefinitions)))zoneMap.set(key,z);
+    for(const [key,z] of Object.entries(obj(result.accumulationZoneMetrics)))zoneMap.set(key,{...zoneMap.get(key),...z});
+    rounds.forEach((row,i)=>{
+      const info=roundInfo(row,i),s=obj(row.summary),duration=info.Duration_s,round=info.Round,h=histories.get(round);
+      put(line.name,{...info,Row_basis:batchRows.length?'ACTUAL_BATCH_ROW':'STORED_FIRST_ROUND',OEE_pct:s.lineOeePercent,Output_count:s.outputCount,Throughput_per_min:mul(div(s.outputCount,duration),60),...flat(s,'Summary'),...flat(row.numerics||result.numerics,'Numerics')});
+      for(const [equipmentId,m] of Object.entries(obj(row.equipmentMetrics))){
+        const native=m.unitOfFlow||models.get(equipmentId)?.unitOfFlow||null,history=m.failureHistory;
+        put(em.name,{...info,...eqId(equipmentId),Native_flow_unit:native,OEE_pct:m.oeePercent,Output_count:m.outputCount,Throughput_per_min:mul(div(m.outputCount,duration),60),Failure_history_complete:history?.complete,Recorded_failure_episodes:history?arr(history.episodes).length:null,...flat(m,'Metric')});
+        const exclusive=m.stateAccounting?.stateSeconds;
+        for(const [state,seconds] of Object.entries(obj(exclusive||m.stateSeconds)))if(finite(seconds))put(states.name,{...info,...eqId(equipmentId),State:state,State_seconds:seconds,State_pct:mul(div(seconds,duration),100),State_basis:exclusive?'EXCLUSIVE':'LEGACY_STATE_COUNTERS',Native_flow_unit:native});
+        arr(history?.episodes).forEach((episode,j)=>{
+          const values=Array.isArray(episode)?Object.fromEntries(arr(history.fields).map((k,kidx)=>[k,episode[kidx]])):obj(episode);
+          put(failures.name,{...info,...eqId(equipmentId),Episode:j+1,History_complete:history.complete,Repair_completed:values.endReason==='REPAIRED'?1:values.endReason?0:null,...flat(values)});
+        });
+        put(cover.name,{...info,Recording:'FAILURE_HISTORY',Equipment_ID:equipmentId,Recorded_rows:history?arr(history.episodes).length:0,Reported_failure_count:m.failureCount,History_complete:history?.complete,Available:!!history,...flat(history,'History')});
+      }
+      const zs=Object.values(obj(round===1?result.accumulationZoneMetrics:h?.accumulationZoneMetrics));
+      const seen=new Set();
+      [...zs,...arr(row.conveyorResults)].forEach(z=>{
+        const zid=z.id||z.ownerEquipmentId;if(!zid||seen.has(zid))return;seen.add(zid);
+        const d=zoneMap.get(zid),equipmentId=z.ownerEquipmentId||d?.ownerEquipmentId;
+        put(zoneRounds.name,{...info,Zone_ID:zid,...eqId(equipmentId),Native_flow_unit:models.get(equipmentId)?.unitOfFlow||z.packageUnit,Record_basis:zs.includes(z)?'FULL_ZONE_METRICS':'ROUND_CONVEYOR_SUMMARY',...flat(z,'Zone')});
+      });
+      arr(row.shifts).forEach(shift=>put(shifts.name,{...info,...flat(shift)}));
+      arr(row.products?.rows).forEach(p=>put(products.name,{...info,...flat(p)}));
+      leaves(row.plantCalendar,'',(path,value)=>put(cal.name,{...info,Path:path,Value_numeric:finite(value)?value:null,Value_text:finite(value)?null:value}));
+      const frames=arr(h?.samples).filter(s=>finite(s?.virtualSecond)).slice().sort((a,b)=>a.virtualSecond-b.virtualSecond);
+      const coverage={...obj(round===1?result.detailCoverage:null),...obj(h?.detailCoverage)};
+      for(const [kind,count] of [['TIME_SAMPLES',frames.length],['STATE_TRANSITIONS',arr(h?.stateTransitions).length],['EVENTS',arr(h?.events).length]])put(cover.name,{...info,Recording:kind,Recorded_rows:count,Available:count>0,...flat(coverage,'Coverage')});
+      let prev=null;const prevEquipment=new Map();
+      frames.forEach((frame,j)=>{
+        const t=frame.virtualSecond,dt=prev&&t>prev.virtualSecond?t-prev.virtualSecond:null,increment=dt?delta(frame.outputCount,prev.outputCount):null;
+        const time={...info,Sample:j+1,Time_s:t,Interval_s:dt,Product_ID:frame.productId,Crosses_product_change:prev&&prev.productId!=null&&frame.productId!=null?prev.productId!==frame.productId:null};
+        put(lts.name,{...time,Cumulative_output:frame.outputCount,Interval_output:increment,Interval_throughput_per_min:mul(div(increment,dt),60),Cumulative_throughput_per_min:mul(div(frame.outputCount,t),60),Effective_runtime_s:frame.effectiveRuntimeSeconds,Runtime_loss_s:frame.runtimeLossSeconds,...flat(frame,'Sample')});
+        arr(frame.equipment).forEach(m=>{
+          const p=prevEquipment.get(m.id),elapsed=p&&t>p.time?t-p.time:null,out=m.outputCount??m.processedUnits,native=m.unitOfFlow||row.equipmentMetrics?.[m.id]?.unitOfFlow||models.get(m.id)?.unitOfFlow,inc=elapsed&&p.native===native?delta(out,p.output):null;
+          put(ets.name,{...time,Interval_s:elapsed,...eqId(m.id),Native_flow_unit:native,State:m.availabilityState,Mode:m.mode,Cumulative_output:out,Interval_output:inc,Interval_throughput_per_min:mul(div(inc,elapsed),60),Recorded_actual_rate_per_min:mul(m.actualRatePerSecond,60),Recorded_mean_rate_per_min:mul(m.meanRatePerSecond,60),OEE_pct:m.oeePercent,...flat(m,'Sample')});
+          prevEquipment.set(m.id,{time:t,output:out,native});
+        });
+        arr(frame.accumulationZones).forEach(z=>{
+          const d=zoneMap.get(z.id),equipmentId=z.ownerEquipmentId||d?.ownerEquipmentId;
+          put(zts.name,{...time,Zone_ID:z.id,...eqId(equipmentId),Native_flow_unit:z.packageUnit||models.get(equipmentId)?.unitOfFlow,Inventory_units:z.inventoryUnits,Fill_pct:z.fillPercent,Prime_state:z.prime?.state,Backup_state:z.backup?.state,...flat(z,'Sample')});
+        });
+        prev=frame;
+      });
+      arr(h?.stateTransitions).forEach(tr=>{
+        if(Array.isArray(tr)){const [time,index,state]=tr;put(transitions.name,{...info,Time_s:time,Equipment_index:index,...eqId(eq[index]?.id),State:state});}
+        else put(transitions.name,{...info,Time_s:tr?.atVirtualSecond??tr?.virtualSecond,...eqId(tr?.equipmentId),State:tr?.state,...flat(tr,'Transition')});
+      });
+      arr(h?.events).forEach((ev,j)=>put(events.name,{...info,Event_index:j+1,Time_s:ev.atVirtualSecond??ev.virtualSecond,Event_type:ev.type,Equipment_ID:ev.equipmentId,Zone_ID:ev.zoneId,...flat(ev,'Event')}));
+    });
+    for(const [scope,values] of [['LINE',result.batch?.statistics],['FAILURE_OVERLAP',result.batch?.failureOverlapStatistics]])for(const [key,value] of Object.entries(obj(values)))put(statistics.name,{Scope:scope,Metric:key,...flat(value)});
+    for(const [equipmentId,values] of Object.entries(obj(result.batch?.equipmentStatistics)))for(const [key,value] of Object.entries(obj(values)))put(statistics.name,{Scope:'EQUIPMENT',...eqId(equipmentId),Metric:key,...flat(value)});
+    const zones=create('19_conveyor_definitions.csv','One recorded zone definition','Recorded effective geometry and sensor positions. Do not interpret missing positions as zero.');
+    for(const [zoneId,z] of zoneMap)put(zones.name,{Zone_ID:zoneId,...eqId(z.ownerEquipmentId),...flat(z,'Zone')});
+    const scenarioSummary=create('20_CAPEX_summary.csv','One saved CAPEX evaluation','One row per saved study; separate approximate screening, short confirmation, and original-run verification.');
+    const exp=create('21_CAPEX_experiments.csv','One saved experiment/comparison','Means only; repeated records from different audit phases may describe reused calculations. Do not treat as independent experiments.');
+    const er=create('22_CAPEX_rounds.csv','One seed per experiment and arm','Use comparison ID and arm to group. Same seed used by multiple alternatives is a block, not a new independent replicate.');
+    const pairs=create('23_CAPEX_paired_deltas.csv','One exactly matched seed pair','Only matching seed, horizon, unit and fidelity comparisons; original-run verification is a separate descriptive comparison.');
+    const changes=create('24_CAPEX_changes.csv','One changed parameter per candidate','Link via comparison ID. Includes tested values, units and hypothetical/analysis-only flags.');
+    const factorMap=create('25_DOE_factors.csv','One factor per saved design','A/B/C etc. are coded factor columns. For a package, -1 is unchanged and +1 applies all package changes.');
+    const factorChanges=create('26_DOE_factor_changes.csv','One parameter in a DOE factor package','Shows actual values of coupled inputs; use DOE factor column as identifier.');
+    const anova=create('27_DOE_effects.csv','One saved factorial effect per response','Existing ST statistics, including Holm-adjusted p-values when saved; not a fresh Minitab fit.');
+    const warnings=create('28_CAPEX_warnings.csv','One recorded engineering warning','Scenario review and experiment-specific warnings.');
+    const timing=create('29_CAPEX_progress.csv','One recorded analysis stage','Elapsed real milliseconds and stage work counts, not virtual process observations.');
+    const contrasts=create('30_DOE_seed_contrasts.csv','One factorial effect per complete independent seed block and response','High-minus-low orthogonal contrast on coded two-level combinations. Useful for one-sample tests across seeds; incomplete blocks omitted, no p-values calculated.');
+    const evaluations=arr(simulation.whatIf?.evaluations);
+    function fields(c){return {...eqId(c.equipmentId),Parameter:c.path,Before:c.before,After:c.after,Unit:c.unit,Package_ID:c.packageId,Intervention:c.interventionType,Analysis_only:c.analysisOnly,Origin_tier:c.originTier,Justification:c.justification,...flat(c,'Change')};}
+    evaluations.forEach((ev,idx)=>{
+      const study='S'+String(idx+1).padStart(3,'0'),tier=ev.tier||ev.searchScope,tag={Study_ID:study,CAPEX:tier,Evaluation_status:ev.status};
+      const audit=obj(ev.phaseAudit),check=ev.independentCheck,original=ev.originalVerification,screen=ev.screening,discovery=ev.reliabilityTargetSearch,control=audit.controlDiagnosis,doe=ev.doe;
+      let current=null;try{if(ev.sourceSignature&&window.STScenarios?.signature)current=ev.sourceSignature===window.STScenarios.signature(simulation);}catch(_){}
+      put(scenarioSummary.name,{...tag,Updated_at:ev.updatedAt,Source_inputs_match:current,Policy:ev.searchSettingsSignature,Trial_count:ev.trials,Trial_history_omitted:ev.trialHistoryOmitted,Screening_fidelity:screen?.run?.scenarioFidelity||screen?.candidate?.scenarioFidelity,Screening_base_OEE:screen?.baseline?.oee,Screening_candidate_OEE:screen?.candidate?.oee,Confirmation_passed:check?.passed,Confirmation_base_OEE:check?.baseline?.oee,Confirmation_candidate_OEE:check?.candidate?.oee,Confirmation_gain_per_min:check?.delta?.throughputPerMinute,Original_passed:original?.passed,Original_base_OEE:original?.baseline?.oee,Original_candidate_OEE:original?.candidate?.oee,Original_base_throughput:original?.baseline?.throughput,Original_candidate_throughput:original?.candidate?.throughput,Original_gain_per_min:original?.delta?.throughputPerMinute,Original_duration_s:original?.durationSeconds,Analysis_only:ev.analysisOnly,Plant_validated:ev.plantValidated});
+      let count=0;
+      function compare(stage,b,c,run,proposal=[],extra={}){
+        if(!b&&!c&&!proposal.length)return;
+        const cid=study+'-E'+String(++count).padStart(4,'0'),fidelity=c?.scenarioFidelity||b?.scenarioFidelity||run?.scenarioFidelity||null,
+          duration=c?.durationSeconds??b?.durationSeconds??run?.durationSeconds,flow=c?.unitOfFlow||b?.unitOfFlow||ev.unitOfFlow||unit;
+        const row={...tag,Comparison_ID:cid,Stage:stage,Fidelity:fidelity,Duration_s:duration,Flow_unit:flow,Warmup_s:run?.scenarioWarmupSeconds??null,Base_OEE_pct:b?.oee,Candidate_OEE_pct:c?.oee,Base_throughput:b?.throughput,Candidate_throughput:c?.throughput,Gain_OEE_pp:diff(c?.oee,b?.oee),Gain_throughput_per_min:diff(c?.throughput,b?.throughput),Candidate_overflow_units:c?.overflowUnits,Warning_count:c?.warnings?.length,Base_round_count:Array.isArray(b?.roundMetrics)?b.roundMetrics.length:null,Candidate_round_count:Array.isArray(c?.roundMetrics)?c.roundMetrics.length:null,...extra};
+        put(exp.name,row);
+        for(const [arm,metric] of [['BASE',b],['CANDIDATE',c]])arr(metric?.roundMetrics).forEach(r=>put(er.name,{...tag,Comparison_ID:cid,Stage:stage,Arm:arm,Fidelity:metric.scenarioFidelity||fidelity,Seed:r.seed,Duration_s:r.durationSeconds??metric.durationSeconds,Flow_unit:metric.unitOfFlow||flow,OEE_pct:r.oee,Throughput_per_min:r.throughput,Output_count:r.outputCount}));
+        const validPair=b&&c&&((b.scenarioFidelity||fidelity)===(c.scenarioFidelity||fidelity)||(stage==='ORIGINAL_VERIFICATION'&&b.scenarioFidelity==='ORIGINAL_PHYSICAL_RUN'))&&b.durationSeconds===c.durationSeconds&&b.unitOfFlow===c.unitOfFlow&&arr(b.roundMetrics).length===arr(c.roundMetrics).length;
+        if(validPair){const match=new Map(arr(b.roundMetrics).map(r=>[r.seed,r]));const cr=arr(c.roundMetrics);if(match.size===cr.length&&new Set(cr.map(r=>r.seed)).size===cr.length&&cr.every(r=>finite(r.seed)&&match.has(r.seed)&&r.durationSeconds===match.get(r.seed).durationSeconds))cr.forEach(r=>{const before=match.get(r.seed);put(pairs.name,{...tag,Comparison_ID:cid,Stage:stage,Fidelity:fidelity,Seed:r.seed,Duration_s:r.durationSeconds,Flow_unit:flow,Base_OEE_pct:before.oee,Candidate_OEE_pct:r.oee,Delta_OEE_pp:diff(r.oee,before.oee),Base_throughput:before.throughput,Candidate_throughput:r.throughput,Delta_throughput_per_min:diff(r.throughput,before.throughput)});});}
+        arr(proposal).forEach(p=>put(changes.name,{...tag,Comparison_ID:cid,Stage:stage,...fields(p)}));
+        arr(c?.warnings).forEach(w=>put(warnings.name,{...tag,Comparison_ID:cid,Stage:stage,...flat(w)}));
+      }
+      if(control){
+        compare('CONTROL_NO_MTBF_MTTR',control.baseline,control.failureFree,control.run,[],{Counterfactual:'DISABLE_MODELED_FAILURES'});
+        arr(control.observations).forEach(o=>compare('PHYSICAL_CONTROL',control.baseline,o.result,control.run,o.changes,{Level:o.level,Kind:o.kind,Error:o.error}));
+      }
+      if(discovery){
+        compare('RELIABILITY_NO_FAILURES',discovery.baseline,discovery.failureFree,discovery.run,[],{Counterfactual:'DISABLE_MODELED_FAILURES'});
+        arr(discovery.targetTests).forEach(o=>compare('RELIABILITY_TARGET',discovery.baseline,o.candidate,discovery.run,o.changes,{Kind:o.mechanism,Level:JSON.stringify(o.grade||{})}));
+        arr(discovery.candidateSets).forEach(o=>compare('RELIABILITY_PACKAGE',discovery.baseline,o.candidate,discovery.run,o.changes,{Kind:o.kind}));
+        arr(discovery.ranking).forEach(o=>compare('RELIABILITY_RANKING',discovery.baseline,o.candidate,discovery.run,[],{Equipment_ID:o.equipmentId,Counterfactual:'SEE_SOURCE_REPORT'}));
+      }
+      arr(audit.physicalPackageSelection?.observations).forEach(o=>compare('PHYSICAL_PACKAGE_SELECTION',audit.baseline?.metrics,o,audit.physicalPackageSelection.run,o.changes,{Kind:o.kind,Level:o.level}));
+      arr(audit.isolatedScreen?.observations).forEach(o=>compare('ISOLATED_SCREEN',audit.baseline?.metrics,o,audit.isolatedScreen.run,o.changes,{Level:o.packageId}));
+      arr(ev.trialHistory).forEach(o=>compare('RETAINED_TRIAL_MEAN',audit.baseline?.metrics||screen?.baseline,o,ev.explorationRun,o.changes,{Feasible:o.feasible,Mean_only:1}));
+      if(screen)compare('SCREENING_SELECTED',screen.baseline,screen.candidate,screen.run,screen.changes||[],{Parameter_link:screen.changes?'RECORDED':'NOT_RECORDED_FOR_THIS_STAGE'});
+      arr(audit.finalistScreening?.observations).forEach(o=>compare('FINALIST_SCREEN',audit.finalistScreening.baseline,o.result,audit.finalistScreening.run,o.changes));
+      arr(audit.ranking?.observations).forEach(o=>compare('FINALIST_RANKING',audit.ranking.baseline||ev.baseline,o.result||o.candidate||o,audit.ranking.run,o.changes));
+      if(check)compare('INDEPENDENT_CONFIRMATION',check.baseline,check.candidate,{...ev.rankingPlan?.confirmationRun,scenarioFidelity:check.scenarioFidelity,durationSeconds:check.durationSeconds},ev.evaluatedChanges,{Passed:check.passed});
+      if(original)compare('ORIGINAL_VERIFICATION',original.baseline,original.candidate,original.run,ev.evaluatedChanges,{Passed:original.passed});
+      arr(ev.warnings).forEach(w=>put(warnings.name,{...tag,Stage:'FINAL_EVALUATION',...flat(w)}));
+      arr(ev.progressTrace?.steps).forEach(p=>put(timing.name,{...tag,Stage:p.name,...flat(p)}));
+      if(doe&&arr(doe.factors).length){
+        const factors=doe.factors,letter=i=>i<26?String.fromCharCode(65+i):'F'+(i+1),cols=factors.map((_,i)=>letter(i)),doeFile='DOE_'+String(tier||'OTHER').replace(/[^A-Za-z0-9_-]/g,'_')+'_'+study+'.csv';
+        const data=create(doeFile,'One observed replication per factorial combination','Analyze this design separately. A/B/C are coded levels; Seed_Block is the independent random-number block. No invented replicates.',['Point_Index','Seed_Block','Seed',...cols,'OEE_pct','Throughput_per_min','Output_count','Duration_s','Fidelity','Warmup_s','Feasible']);
+        const seeds=[...new Set(arr(doe.observations).flatMap(o=>arr(o.roundMetrics).map(r=>r.seed)).filter(finite))].sort((a,b)=>a-b),blocks=new Map(seeds.map((seed,i)=>[seed,i+1]));
+        factors.forEach((f,i)=>{
+          put(factorMap.name,{...tag,DOE_file:doeFile,Factor_column:cols[i],Label:f.label||f.path,...eqId(f.equipmentId),Parameter:f.path,Low:f.low,High:f.high,Unit:f.unit,Package_ID:f.packageId});
+          const members=arr(f.packageChanges);(members.length?members:[{...f,after:f.high}]).forEach(c=>put(factorChanges.name,{...tag,DOE_file:doeFile,Factor_column:cols[i],...fields(c)}));
+        });
+        const doeRun=doe.run||audit.doe?.run||ev.explorationRun||{};
+        arr(doe.observations).forEach(o=>{
+          const codes=Object.fromEntries(cols.map((col,i)=>[col,o.levels?.[i]]));
+          const common={Point_Index:o.index,...codes,Duration_s:doeRun.durationSeconds,Fidelity:doeRun.scenarioFidelity||null,Warmup_s:doeRun.scenarioWarmupSeconds??null,Feasible:o.feasible};
+          const observations=arr(o.roundMetrics);
+          observations.forEach(r=>put(data.name,{...common,Seed_Block:blocks.get(r.seed),Seed:r.seed,Duration_s:r.durationSeconds??doeRun.durationSeconds,OEE_pct:r.oee,Throughput_per_min:r.throughput,Output_count:r.outputCount}));
+          // A missing replication is not replaced with a treatment mean.
+          compare('DOE_POINT',null,{oee:o.oee,throughput:o.throughput,roundMetrics:o.roundMetrics,warnings:o.warnings},doeRun,arr(doe.fixedChanges).concat(arr(o.changes)),{DOE_file:doeFile,Point_Index:o.index,Feasible:o.feasible});
+        });
+        if(factors.length<=12&&factors.length>0){
+          const pointCount=2**factors.length;
+          for(const seed of seeds){
+            const cells=new Map();let invalid=false;
+            for(const o of arr(doe.observations)){
+              const levels=arr(o.levels),matches=arr(o.roundMetrics).filter(r=>r.seed===seed);
+              if(!matches.length)continue;
+              if(matches.length!==1||levels.length!==factors.length||levels.some(v=>v!==-1&&v!==1)){invalid=true;break;}
+              const key=levels.join(',');if(cells.has(key)){invalid=true;break;}
+              cells.set(key,{levels,row:matches[0]});
+            }
+            if(invalid||cells.size!==pointCount)continue;
+            for(const response of ['oee','throughput']){
+              if([...cells.values()].some(c=>!finite(c.row[response])))continue;
+              for(let mask=1;mask<pointCount;mask++){
+                const indexes=cols.map((_,i)=>i).filter(i=>mask&(1<<i));
+                const effect=[...cells.values()].reduce((sum,c)=>sum+c.row[response]*indexes.reduce((sign,i)=>sign*c.levels[i],1),0)*2/pointCount;
+                put(contrasts.name,{...tag,DOE_file:doeFile,Seed:seed,Seed_Block:blocks.get(seed),Response:response,Effect:indexes.map(i=>cols[i]).join('*'),Effect_value:effect,Duration_s:doeRun.durationSeconds,Fidelity:doeRun.scenarioFidelity,Point_count:pointCount});
+              }
+            }
+          }
+        }
+        arr(doe.analysis?.effects).forEach(e=>{for(const [response,stat] of Object.entries(obj(e.statistics)))put(anova.name,{...tag,DOE_file:doeFile,Response:response,Statistic_source:'PAIRED_SEED_CONTRAST',Effect:arr(e.factors).map(i=>cols[i]||i).join('*'),Effect_type:e.type,...flat(stat)});});
+        for(const [response,metric] of Object.entries(obj(doe.anova?.metrics)))for(const effect of arr(metric.effects))put(anova.name,{...tag,DOE_file:doeFile,Response:response,Effect:arr(effect.factors).map(i=>cols[i]||i).join('*'),Statistic_source:'ANOVA_TABLE',...flat(effect)});
+      }
+    });
+    // Include exact arrays and less common nested details without exploding
+    // columns or inventing rows for omitted events/trajectories.
+    const raw={schema:version,case:{id:activeCase?.id,name:activeCase?.name,unitOfFlow:activeCase?.unitOfFlow},simulation:{id:simulation.id,name:simulation.name,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,results:result,whatIf:simulation.whatIf}};
+    return {tables:[...tables.values()],raw,version};
+  }
+  const readme=[
+    'ST05 | Minitab statistical data package | '+version,
+    'Extract this ZIP first. Open individual CSV files with File > Open in Minitab.',
+    'UTF-8, comma-separated, dot decimals, quoted text, first row contains column names. Blank = unavailable, not zero. Boolean 1/0. Text that could be interpreted as a spreadsheet formula is prefixed with an apostrophe.',
+    'Use 00_index.csv to see the unit of observation, row counts and coverage. Column paths retain the simulator field names. *_s / *Seconds = seconds; *_min / *Minutes = minutes; *_pct / *Percent = percent; *_pp = percentage points; *_mm / *Mm = millimeters. Rate columns state their time basis. Flow units are native unless the recorded summary uses bottle equivalents.',
+    '04_line_rounds.csv: actual independent rounds only. 05/06: equipment and exclusive-state analysis; do not sum overlapping machine downtime as line downtime.',
+    '07_failure_episodes.csv: only recorded failure episodes. Configured MTTR is not a fitted repair distribution. Review history completeness and endReason.',
+    '13/14/15: time-series observations within a round are serially correlated. Interval length may vary. Do not use samples as independent Monte Carlo replications. No interpolation.',
+    '12_recording_coverage.csv: summary-only, truncated and compact saved recordings may lack events or samples. A missing history is not proof that no failure occurred.',
+    'DOE_*.csv: each file is one saved design. Use coded A/B/C etc. and Seed_Block as a block. 25/26 map factor names and real parameter levels. An imported CSV is not a native Minitab design object; define the custom factorial design before analyzing. Incomplete designs may require different analysis. ST effects and pooled-error ANOVA can differ; common random numbers create correlated responses across treatments.',
+    '30_DOE_seed_contrasts.csv: complete two-level factorial blocks only. Each contrast is one observation per independent seed; use a one-sample test across seeds if appropriate.','20-29: CAPEX stages and paired evidence. Compare only matching engine, fidelity, duration, units and seeds. Some audit rows refer to the same reused computation. Fluid screening is approximate. Original verification is descriptive, not another independent replication study.',
+    'raw_simulation.json preserves the available numerical result, equipment, settings and scenario evidence, including nested arrays omitted from the rectangular CSVs. No assistant chat or original import source is included.',
+    '',
+    'ES: Extrae el ZIP. Abre cada CSV en Minitab con Archivo > Abrir. Primera fila = nombres; separador coma; decimal punto; vacío = no disponible. Los nombres técnicos se conservan en inglés.',
+    'Usa 04 para estadísticas por réplica; 06 para Pareto por estado/equipo; 07 para confiabilidad; 13-15 para tendencias. Las muestras temporales no son réplicas independientes.',
+    'Cada DOE_* corresponde a un diseño; Seed_Block identifica la semilla común. No combines motores ni horizontes. Las filas omitidas no se inventan. Los resultados son del modelo, no mediciones reales de planta.'
+  ].join('\r\n')+'\r\n';
+  function entries(data){
+    const index={columns:['File','Included','Rows','Columns','Observation','Notes'],rows:data.tables.map(t=>({File:t.name,Included:t.columns.length>0,Rows:t.rows.length,Columns:t.columns.length,Observation:t.observation,Notes:t.notes}))};
+    const files=[{name:'00_README.txt',text:readme},{name:'00_index.csv',text:csv(index)}];
+    data.tables.forEach(t=>{if(t.columns.length)files.push({name:t.name,text:csv(t)});});
+    files.push({name:'raw_simulation.json',text:JSON.stringify(data.raw)});
+    return files;
+  }
+  // Uncompressed standard ZIP (UTF-8 names, CRC-32, local and central headers).
+  // Use Blob parts to avoid a second full-size archive buffer in the browser.
+  const crcTable=Uint32Array.from({length:256},(_,i)=>{let v=i;for(let j=0;j<8;j++)v=v&1?(v>>>1)^0xedb88320:v>>>1;return v>>>0;});
+  function crc32(bytes){let c=0xffffffff;for(let i=0;i<bytes.length;i++)c=(c>>>8)^crcTable[(c^bytes[i])&255];return (c^0xffffffff)>>>0;}
+  function utf8(s){
+    if(typeof TextEncoder==='function')return new TextEncoder().encode(s);
+    const a=[];for(const ch of s){let n=ch.codePointAt(0);if(n<128)a.push(n);else if(n<2048)a.push(192|n>>6,128|n&63);else if(n<65536)a.push(224|n>>12,128|n>>6&63,128|n&63);else a.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|n&63);}return Uint8Array.from(a);
+  }
+  function archiveParts(files){
+    if(files.length>65535)throw Error('Too many files for ZIP.');
+    const chunks=[],central=[];let offset=0,centralSize=0;
+    for(const file of files){
+      const nm=utf8(file.name),data=utf8(file.text),crc=crc32(data);
+      if(nm.length>65535||offset+data.length>512*1024*1024)throw Error('Statistical export exceeds the 512 MB browser limit. Export a smaller case.');
+      const local=new Uint8Array(30+nm.length),l=new DataView(local.buffer);
+      l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x800,true);l.setUint16(12,33,true);
+      l.setUint32(14,crc,true);l.setUint32(18,data.length,true);l.setUint32(22,data.length,true);l.setUint16(26,nm.length,true);local.set(nm,30);
+      const dir=new Uint8Array(46+nm.length),d=new DataView(dir.buffer);
+      d.setUint32(0,0x02014b50,true);d.setUint16(4,20,true);d.setUint16(6,20,true);d.setUint16(8,0x800,true);d.setUint16(14,33,true);
+      d.setUint32(16,crc,true);d.setUint32(20,data.length,true);d.setUint32(24,data.length,true);d.setUint16(28,nm.length,true);d.setUint32(42,offset,true);dir.set(nm,46);
+      chunks.push(local,data);central.push(dir);offset+=local.length+data.length;centralSize+=dir.length;
+    }
+    const end=new Uint8Array(22),d=new DataView(end.buffer);
+    d.setUint32(0,0x06054b50,true);d.setUint16(8,files.length,true);d.setUint16(10,files.length,true);d.setUint32(12,centralSize,true);d.setUint32(16,offset,true);
+    return chunks.concat(central,[end]);
+  }
+  function download(simulation,activeCase){
+    const selected=capture?.(simulation,activeCase)||{simulation,activeCase};
+    const data=buildTables(selected.simulation,selected.activeCase||{});
+    const blob=new Blob(archiveParts(entries(data)),{type:'application/zip'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+    const title=[selected.activeCase?.name,selected.simulation?.name].filter(Boolean).join('-').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').slice(0,120)||'simulation';
+    link.href=url;link.download=title+'-Minitab.zip';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  return {version,canExport,buildTables,entries,archiveParts,csv,download,connect:fn=>{capture=fn;}};
+})();
+</script>

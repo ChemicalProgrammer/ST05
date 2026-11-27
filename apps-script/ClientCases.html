@@ -18,10 +18,8 @@
       bar.classList.toggle('hidden',!(Math.max(0,state.pendingRequests-STDialog.localizedRequests())||localCalculations||running||basic));
       if(Number.isFinite(basic?.fraction)){
         var percent=Math.max(0,Math.min(100,100*basic.fraction));
-        bar.dataset.determinate='true';bar.style.setProperty('--st-header-progress',percent+'%');
         bar.setAttribute('role','progressbar');bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','100');bar.setAttribute('aria-valuenow',String(Math.round(percent)));
       }else{
-        delete bar.dataset.determinate;bar.style.removeProperty('--st-header-progress');
         bar.setAttribute('role','status');['aria-valuemin','aria-valuemax','aria-valuenow'].forEach(key=>bar.removeAttribute(key));
       }
     }

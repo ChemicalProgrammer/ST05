@@ -3,7 +3,7 @@ window.STMinimalMode=(function(){
   'use strict';
   var state,actions,initialized=false,importing=false,starting=false,searching=false,searchSaving=false,buildingCards=false,timer=null,stopRequested=false;
   var runStopRequested=false,runStopTask=null;
-  var runStartedAt=null;
+  var runStartedAt=null,searchStartedAt=null;
   var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=1,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
   var tiers=['ZERO'];
   var executionPolicy='ZERO_ONLY_PHYSICAL_V6';
@@ -27,13 +27,12 @@ window.STMinimalMode=(function(){
     var seconds=Math.floor(Math.max(0,Number(milliseconds)||0)/1000);
     return [Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':');
   }
-  function progress(id,value,stage){
+  function progress(id,value){
     var holder=el(id),p=Math.max(0,Math.min(100,Number(value)||0));
     holder.querySelector('progress').value=p;
     var percentage=p.toFixed(1).replace(/\.0$/,'')+'%';
-    holder.querySelector('output').textContent=id==='minimal-run-progress'
-      ?percentage+' · '+elapsedCalculationLabel(runStartedAt===null?0:performance.now()-runStartedAt)
-      :percentage+(stage?' · '+tr(stage):'');
+    var startedAt=id==='minimal-search-progress'?searchStartedAt:runStartedAt;
+    holder.querySelector('output').textContent=percentage+' · '+elapsedCalculationLabel(startedAt===null?0:performance.now()-startedAt);
   }
   function owner(){return actions.simulation();}
   function ownerKey(){return state.activeCase&&owner()?state.activeCase.id+'|'+owner().id:null;}
@@ -229,8 +228,7 @@ window.STMinimalMode=(function(){
     if(!searching)return;
     var current=Number(searchCard?._minimalSearchProgress?.())||0;
     searchProgress=Math.max(searchProgress,Math.min(99.9,(searchCompleted+Math.min(current,99.9)/100)/searchTotal*100));
-    var label=searchCard?'Zero CAPEX · V6 (OFAT/DOE)':null,stage=searchCard?._minimalSearchLabel?.();
-    progress('minimal-search-progress',searchProgress,[label,stage].filter(Boolean).join(' · '));
+    progress('minimal-search-progress',searchProgress);
   }
   // The existing simulation management controls are shared with Standard
   // and Advance. Protect the source while a Basic simulation/search is active.
@@ -246,7 +244,7 @@ window.STMinimalMode=(function(){
     });
   }
   function sync(current){
-    state=current;if(!initialized)return;
+    state=current;if(!initialized||state.restoringCaseView||state.restoringSimulation)return;
     var active=isMinimal()&&!!state.activeCase,sim=active?owner():null,k=active?ownerKey():null;
     var workspace=el('minimal-workspace'),becameVisible=active&&workspace.classList.contains('hidden');
     workspace.classList.toggle('hidden',!active);
@@ -340,7 +338,7 @@ window.STMinimalMode=(function(){
     // Fail closed on stale cards and mixed-version Apps Script deployments.
     if(window.STScenarioExplorer?.executionPolicy!==executionPolicy||cards.length!==1||!zeroCard(cards[0],sim.id)||(onlyCard&&onlyCard!==cards[0])){searchMessage=document.documentElement.lang==='es'?'Zero CAPEX V6 no está sincronizado. Actualiza la aplicación y recarga la página.':'Zero CAPEX V6 is not synchronized. Update the application and reload.';sync(state);return;}
     var work=[cards[0]];
-    searching=true;stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
+    searching=true;searchStartedAt=performance.now();stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
     var failures=[],evaluated=false;
     try{
       // Reset the complete requested queue before starting its first category.
@@ -376,7 +374,7 @@ window.STMinimalMode=(function(){
       var discarded=stopRequested,sameOwner=owner()===sim&&ownerKey()===key&&sourceSignature(sim)===signature;
       if(discarded&&sameOwner){discardZeroResults(sim);searchProgress=0;searchCompleted=0;searchMessage='';clearScenarios();progress('minimal-search-progress',0);actions.markReset();}
       searchSaving=(discarded||evaluated)&&sameOwner;
-      searching=false;searchCard=null;stopRequested=false;sync(state);
+      searching=false;searchStartedAt=null;searchCard=null;stopRequested=false;sync(state);
     }
     // Let the real result cards paint before serializing evidence for Drive.
     if(searchSaving){

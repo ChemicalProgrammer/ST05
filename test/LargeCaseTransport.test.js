@@ -40,6 +40,6 @@ test('Basic progress is visible at header and animated controls use the shared m
  assert(!read('MinimalModeStyles.html').includes('.case-open #request-progress,'));
  assert.match(read('MinimalMode.html'),/headerProgress:headerProgress/);
  assert.match(read('MinimalMode.html'),/STMotion\.visibility\(element,visible\)/);
- assert.match(read('ClientCases.html'),/bar\.dataset\.determinate='true'/);
- assert.match(read('ShellStyles.html'),/#request-progress\[data-determinate=true\]/);
+ assert.match(read('ClientCases.html'),/setAttribute\('aria-valuenow'/);
+ assert.doesNotMatch(read('ShellStyles.html'),/#request-progress[^}]*animation:\s*none/);
 });

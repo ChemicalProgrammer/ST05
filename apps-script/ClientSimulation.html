@@ -124,68 +124,71 @@
 
     function activatePersistentSimulation(simulationId, initial) {
       window.STSimulation2D?.pause();
-      captureSimulationView();
+      if(!initial)captureSimulationView();
       var hadUnsavedChanges = state.isDirty;
       if (!initial && !syncPersistentSimulation()) return;
       var simulation = (state.activeCase.simulations || []).find(function(item) { return item.id === simulationId; });
       if (!simulation) return;
-      cancelRoundSession();stopPlaybackTimer();
-      state.run.sampleIndex = 0;
-      state.run.liveTelemetry=[];
-      state.run.restoredSpeedHistory=null;
-      state.run._resumeVirtualSecond=0;
-      state.activeSimulationId = simulation.id;
-      state.workspaceView = 'simulation';
-      state.uiView = 'simulation';
-      toggle('comparison-panel', false);
-      // A legacy/misaligned saved active simulation may have an empty equipment
-      // snapshot even when the case-level mirror still contains the line.
-      // Recover only from the *same active simulation's* case mirror.
-      var mirror=state.activeCase.equipment,stored=Array.isArray(simulation.equipment)?simulation.equipment:[];
-      var isActiveSnapshot=state.activeCase.activeSimulationId
-        ?state.activeCase.activeSimulationId===simulation.id
-        :state.activeCase.simulations?.[0]?.id===simulation.id;
-      var useMirror=initial&&isActiveSnapshot&&stored.length===0&&Array.isArray(mirror)&&mirror.length>0;
-      state.activeCase.equipment=cloneJson(useMirror?mirror:stored);
-      state.run.commands = cloneJson(simulation.dynamicConfig?.commands || []);
-      state.run.plannedStops=simulation.dynamicConfig?.plannedStops===undefined?undefined:
-        cloneJson(simulation.dynamicConfig.plannedStops.filter(function(event){return event?.source!=='PLANT_CALENDAR';}));
-      state.run.eventPage=0;
-      applyScenarioRunInputs(simulation.dynamicConfig);
-      var matchingSpeedPolicy=maximumSpeedPolicyMatches(simulation);
-      state.run.configuration=matchingSpeedPolicy&&simulation.results?copyRunConfiguration(simulation.dynamicConfig||{}):null;
-      restorePlaybackSpeed(document.getElementById('run-playback-rate'),simulation.playbackRate);
-      state.run.result = matchingSpeedPolicy&&simulation.results?.replay ? expandStoredReplay(simulation.results.replay,simulation.results) : null;
-      if(state.run.result&&simulation.results.batch)state.run.result.batch=cloneJson(simulation.results.batch);
-      state.run.representative=state.run.result;
-      state.run.roundIndex=0;
-      state.run.active=false;
-      state.run.playing=false;
-      var view=matchingSpeedPolicy?simulation.results?.view:undefined;
-      if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock(view?.executionWallMs??simulation.results?.executionWallMs??(simulation.results?null:0));
-      state.run.calculationWallMs=simulation.results?.calculationWallMs??null;
-      markNumericalPlaybackAction(view?.playbackAction);
-      state.run.equipmentControlActions=cloneJson(view?.equipmentControlActions||{});
-      state.run.playbackPositions={result:state.run.representative,times:{...view?.roundTimes}};
-      if(Number.isFinite(view?.virtualSecond))state.run.playbackPositions.times[view.roundIndex||0]=view.virtualSecond;
-      state.liveZoneDetails=cloneJson(view?.zoneDetails||{});
-      var initialRound=view?.roundIndex??((state.run.representative?.batch?.representativeRound||1)-1);
-      if(state.run.result?.samples.length){
-        state.run.sampleIndex=playbackRoundFrame(state.run.result.samples,state.run.playbackPositions.times[0]);
-        state.run._resumeVirtualSecond=state.run.playbackPositions.times[0]??state.run.result.samples[state.run.sampleIndex].virtualSecond;
-        if(initialRound>0&&playbackReplay(state.run.representative.batch,initialRound))selectPlaybackRound(initialRound,false);
-      }
-      if(typeof charts!=='undefined')charts.restoreSpeedHistory?.(view?.speedHistory);
-      syncPlaybackRounds();
-      state.isDirty = autosave.pending() || hadUnsavedChanges;
-      document.querySelectorAll('#live-equipment .live-equipment-card').forEach(function(card){card.dataset.losses='closed';card.classList.remove('show-losses');card.querySelector('.loss-toggle')?.setAttribute('aria-expanded','false');});
-      renderEditor();
-      if (state.run.result) {
-        renderResultJsonPreview(state.run.result);
-        toggle('simulation-results', true);
-        renderPlaybackFrame();
-        (view?.lossesOpen||[]).forEach(function(id){var card=Array.from(document.querySelectorAll('#live-equipment .live-equipment-card')).find(function(c){return c.dataset.equipmentId===id;});if(card){card.dataset.losses='open';card.classList.add('show-losses');card.querySelector('.loss-toggle')?.setAttribute('aria-expanded','true');}});
-      }
+      state.restoringSimulation=true;
+      try{
+        cancelRoundSession();stopPlaybackTimer();
+        state.run.sampleIndex = 0;
+        state.run.liveTelemetry=[];
+        state.run.restoredSpeedHistory=null;
+        state.run._resumeVirtualSecond=0;
+        state.activeSimulationId = simulation.id;
+        state.workspaceView = 'simulation';
+        state.uiView = 'simulation';
+        toggle('comparison-panel', false);
+        // A legacy/misaligned saved active simulation may have an empty equipment
+        // snapshot even when the case-level mirror still contains the line.
+        // Recover only from the *same active simulation's* case mirror.
+        var mirror=state.activeCase.equipment,stored=Array.isArray(simulation.equipment)?simulation.equipment:[];
+        var isActiveSnapshot=state.activeCase.activeSimulationId
+          ?state.activeCase.activeSimulationId===simulation.id
+          :state.activeCase.simulations?.[0]?.id===simulation.id;
+        var useMirror=initial&&isActiveSnapshot&&stored.length===0&&Array.isArray(mirror)&&mirror.length>0;
+        state.activeCase.equipment=cloneJson(useMirror?mirror:stored);
+        state.run.commands = cloneJson(simulation.dynamicConfig?.commands || []);
+        state.run.plannedStops=simulation.dynamicConfig?.plannedStops===undefined?undefined:
+          cloneJson(simulation.dynamicConfig.plannedStops.filter(function(event){return event?.source!=='PLANT_CALENDAR';}));
+        state.run.eventPage=0;
+        applyScenarioRunInputs(simulation.dynamicConfig);
+        var matchingSpeedPolicy=maximumSpeedPolicyMatches(simulation);
+        state.run.configuration=matchingSpeedPolicy&&simulation.results?copyRunConfiguration(simulation.dynamicConfig||{}):null;
+        restorePlaybackSpeed(document.getElementById('run-playback-rate'),simulation.playbackRate);
+        state.run.result = matchingSpeedPolicy&&simulation.results?.replay ? expandStoredReplay(simulation.results.replay,simulation.results) : null;
+        if(state.run.result&&simulation.results.batch)state.run.result.batch=cloneJson(simulation.results.batch);
+        state.run.representative=state.run.result;
+        state.run.roundIndex=0;
+        state.run.active=false;
+        state.run.playing=false;
+        var view=matchingSpeedPolicy?simulation.results?.view:undefined;
+        if(typeof resetNumericalExecutionClock==='function')resetNumericalExecutionClock(view?.executionWallMs??simulation.results?.executionWallMs??(simulation.results?null:0));
+        state.run.calculationWallMs=simulation.results?.calculationWallMs??null;
+        markNumericalPlaybackAction(view?.playbackAction);
+        state.run.equipmentControlActions=cloneJson(view?.equipmentControlActions||{});
+        state.run.playbackPositions={result:state.run.representative,times:{...view?.roundTimes}};
+        if(Number.isFinite(view?.virtualSecond))state.run.playbackPositions.times[view.roundIndex||0]=view.virtualSecond;
+        state.liveZoneDetails=cloneJson(view?.zoneDetails||{});
+        var initialRound=view?.roundIndex??((state.run.representative?.batch?.representativeRound||1)-1);
+        if(state.run.result?.samples.length){
+          state.run.sampleIndex=playbackRoundFrame(state.run.result.samples,state.run.playbackPositions.times[0]);
+          state.run._resumeVirtualSecond=state.run.playbackPositions.times[0]??state.run.result.samples[state.run.sampleIndex].virtualSecond;
+          if(initialRound>0&&playbackReplay(state.run.representative.batch,initialRound))selectPlaybackRound(initialRound,false);
+        }
+        if(typeof charts!=='undefined')charts.restoreSpeedHistory?.(view?.speedHistory);
+        syncPlaybackRounds();
+        state.isDirty = autosave.pending() || hadUnsavedChanges;
+        document.querySelectorAll('#live-equipment .live-equipment-card').forEach(function(card){card.dataset.losses='closed';card.classList.remove('show-losses');card.querySelector('.loss-toggle')?.setAttribute('aria-expanded','false');});
+        renderEditor();
+        if (state.run.result) {
+          renderResultJsonPreview(state.run.result);
+          toggle('simulation-results', true);
+          renderPlaybackFrame();
+          (view?.lossesOpen||[]).forEach(function(id){var card=Array.from(document.querySelectorAll('#live-equipment .live-equipment-card')).find(function(c){return c.dataset.equipmentId===id;});if(card){card.dataset.losses='open';card.classList.add('show-losses');card.querySelector('.loss-toggle')?.setAttribute('aria-expanded','true');}});
+        }
+      }finally{state.restoringSimulation=false;}
       renderSimulationAnalysis();
       shell.sync();
       setStatus(__ST_TEXT__('client.active_simulation') + simulation.name + '.');

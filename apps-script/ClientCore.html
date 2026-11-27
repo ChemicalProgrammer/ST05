@@ -245,7 +245,7 @@
       document.getElementById('create-demo-case').addEventListener('click', createDemoCase);
       document.getElementById('clone-case').addEventListener('click', cloneActiveSimulation);
       document.getElementById('rename-simulation').onclick = renameSimulation;
-      document.getElementById('simulation-selector').onchange=function(){activatePersistentSimulation(this.value);this.value=state.activeSimulationId||'';};
+      document.getElementById('simulation-selector').onchange=function(){if(!window.STMinimalMode?.busy?.()&&!runControlsLocked())activatePersistentSimulation(this.value);this.value=state.activeSimulationId||'';};
       document.getElementById('delete-simulation').onclick = deleteSimulation;
       document.getElementById('add-equipment').addEventListener('click', addEquipment);
       document.getElementById('export-equipment-sheet').onclick=exportEquipmentSheet;

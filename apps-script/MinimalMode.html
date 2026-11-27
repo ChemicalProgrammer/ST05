@@ -210,6 +210,19 @@ window.STMinimalMode=(function(){
     var label=searchCard?'Zero CAPEX · V6 (OFAT/DOE)':null,stage=searchCard?._minimalSearchLabel?.();
     progress('minimal-search-progress',searchProgress,[label,stage].filter(Boolean).join(' · '));
   }
+  // The existing simulation management controls are shared with Standard
+  // and Advance. Protect the source while a Basic simulation/search is active.
+  function syncSimulationManagement(active,lock){
+    ['simulation-selector','rename-simulation','clone-case','delete-simulation'].forEach(function(id){
+      var control=el(id);if(!control)return;
+      if(!active){
+        if(control.dataset.minimalSimulationLock==='true'){control.disabled=false;delete control.dataset.minimalSimulationLock;}
+        return;
+      }
+      control.disabled=lock||(id==='delete-simulation'&&(state.activeCase?.simulations?.length||0)<2);
+      control.dataset.minimalSimulationLock='true';
+    });
+  }
   function sync(current){
     state=current;if(!initialized)return;
     var active=isMinimal()&&!!state.activeCase,sim=active?owner():null,k=active?ownerKey():null;
@@ -218,6 +231,7 @@ window.STMinimalMode=(function(){
     if(becameVisible)window.STEquipmentTable?.refresh();
     if(k!==lastOwner){lastOwner=k;durationKey=roundsKey=tableKey=resultKey='';resetRoundView();clearScenarios();readinessCache=null;searchMessage='';runProgress=0;searchProgress=0;}
     var lock=busy();
+    syncSimulationManagement(active,lock||state.saving||!!window.STSimulation2D?.isRunning?.());
     document.querySelectorAll('#basic-case-actions button').forEach(function(b){if(lock&&!b.disabled){b.disabled=true;b.dataset.minimalLock='true';}else if(!lock&&b.dataset.minimalLock==='true'){b.disabled=false;delete b.dataset.minimalLock;}});
     if(!active){if(!busy()){stopMonitor();if(scenarioOwner)clearScenarios();}return;}
     syncTable(lock||state.saving);syncDuration(lock||state.saving);syncRounds(lock||state.saving);
@@ -229,8 +243,6 @@ window.STMinimalMode=(function(){
     el('minimal-run').hidden=false;el('minimal-run').disabled=lock||state.saving||!sim;
     el('minimal-run').textContent=tr(r?'Restart simulation':'Run simulation');
     syncRoundView(running?null:r,lock||state.saving);renderResults(r);
-    var statExport=el('minimal-export-minitab');
-    if(statExport){statExport.hidden=!r||!window.STStatExport;statExport.disabled=!r||running||!window.STStatExport?.canExport(sim);}
     var benchmark=el('minimal-ideal-benchmark');if(benchmark){benchmark.hidden=true;benchmark.disabled=true;}
     show('minimal-optimization',!!r&&!running);
     var readiness=sourceReadiness(sim,r);
@@ -332,7 +344,6 @@ window.STMinimalMode=(function(){
   function init(current,callbacks){
     state=current;actions=callbacks;if(initialized)return;initialized=true;
     el('minimal-run').onclick=startRun;el('minimal-search').onclick=function(){return searching?stopSearch():startSearch();};
-    var statExport=el('minimal-export-minitab');if(statExport)statExport.onclick=function(){if(!result()||!window.STStatExport?.canExport(owner()))return;try{window.STStatExport.download(owner(),state.activeCase);}catch(error){actions.error(error);}};
     el('minimal-duration').onchange=applyDuration;el('minimal-duration-unit').onchange=applyDuration;
     el('minimal-rounds').onchange=applyRounds;
     el('minimal-round-view').onchange=function(){

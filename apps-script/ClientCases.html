@@ -340,23 +340,27 @@ async function openCase(caseId, initialView) {
       return copy;
     }
     async function cloneActiveSimulation() {
-      if(!state.activeCase)return;
+      if(!state.activeCase||window.STMinimalMode?.busy?.())return;
+      var record=state.activeCase,source=activePersistentSimulation();if(!source)return;
       try{await flushCase();}catch(error){showError(error);return;}
-      var copy=makeSimulationClone(activePersistentSimulation());
+      if(state.activeCase!==record||activePersistentSimulation()!==source||window.STMinimalMode?.busy?.())return;
+      var copy=makeSimulationClone(source);
       state.activeCase.simulations.push(copy);
       activatePersistentSimulation(copy.id,true);state.uiView='editor';shell.sync();autosave.change(true);
     }
     async function renameSimulation() {
-      var source=activePersistentSimulation();if(!source)return;
+      var source=activePersistentSimulation();if(!source||window.STMinimalMode?.busy?.())return;
       var answer=await STDialog.open({title:__ST_TEXT__('simulation.rename'),input:{label:__ST_TEXT__('simulation.name'),value:source.name},buttons:[{id:'cancel',label:__ST_TEXT__('view.cancel')},{id:'ok',label:__ST_TEXT__('dialog.ok')}]});
-      if(answer.action!=='ok'||activePersistentSimulation()?.id!==source.id||answer.value===source.name)return;
+      if(answer.action!=='ok'||activePersistentSimulation()!==source||window.STMinimalMode?.busy?.()||answer.value===source.name)return;
       source.name=answer.value;source.updatedAt=new Date().toISOString();renderEditorMeta();renderWorkspaceTabs();autosave.change(true);
     }
     async function deleteSimulation() {
-      var source=activePersistentSimulation();if(!source)return;
+      var record=state.activeCase,source=activePersistentSimulation();if(!source||window.STMinimalMode?.busy?.())return;
       if(state.activeCase.simulations.length<2){await STDialog.alert(__ST_TEXT__('simulation.delete'),__ST_TEXT__('simulation.keep_one'));return;}
       if(!await STDialog.confirm(__ST_TEXT__('simulation.delete'),__ST_TEXT__('simulation.delete_message')+source.name,true))return;
+      if(state.activeCase!==record||activePersistentSimulation()!==source||window.STMinimalMode?.busy?.())return;
       try{await flushCase();}catch(error){showError(error);return;}
+      if(state.activeCase!==record||activePersistentSimulation()!==source||record.simulations.length<2||window.STMinimalMode?.busy?.())return;
       state.activeCase.simulations=state.activeCase.simulations.filter(function(s){return s.id!==source.id;});
       activatePersistentSimulation(state.activeCase.simulations[0].id,true);state.uiView='editor';shell.sync();autosave.change(true);
     }

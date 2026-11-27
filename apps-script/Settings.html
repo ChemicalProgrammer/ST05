@@ -49,6 +49,7 @@ window.STSettings = (function() {
       if(tab.getAttribute('aria-selected')==='true')selectTab('appearance',page.contains(document.activeElement)||document.activeElement===tab);
     }
     syncSettingsPresentation();
+    syncStatisticalReport();
     modelControls();
   }
 
@@ -82,7 +83,16 @@ window.STSettings = (function() {
 
   var simulationProvider,engineChanged,engineLocked,calendarChanged,renderCalendar,calculationActivity=0;
   function performanceLocked(){return !!engineLocked?.()||calculationActivity>0;}
+  function statisticalReportAvailable(){
+    return !!activeCase()&&!performanceLocked()&&!window.STMinimalMode?.busy?.()&&!window.STSimulation2D?.isRunning?.()
+      &&!!window.STStatExport?.canExport(simulationProvider?.());
+  }
+  function syncStatisticalReport(){
+    var button=el('settings-export-statistical-report');
+    if(button)button.disabled=!statisticalReportAvailable();
+  }
   function syncPerformanceControls(){
+    syncStatisticalReport();
     var simulation=simulationProvider?.(),locked=performanceLocked();
     el('settings-numerical-resolution').disabled=!simulation||locked||(simulation.dynamicConfig?.engineId||'ST_CURRENT')!=='ST_CURRENT';
     el('settings-scenario-search-speed').disabled=!activeCase()||locked;
@@ -167,7 +177,7 @@ window.STSettings = (function() {
     return (catalog.products?.length||0)>1||(catalog.formats?.length||0)>1||
       (Array.isArray(legacy)&&legacy.length>1)?'multiple':'single';
   }
-  function refreshSettingsControls(){renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-realdata-section').classList.toggle('hidden',document.documentElement.dataset.uiMode==='basic');el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
+  function refreshSettingsControls(){syncStatisticalReport();renderRateLossSettings();var options=STPreferences.caseOptions(),record=activeCase();['case','simulation'].forEach(function(name){el('settings-tab-'+name).classList.toggle('hidden',!record);});el('settings-factory-section').classList.toggle('hidden',document.documentElement.dataset.uiMode!=='advance');el('settings-factory-note').textContent=record?__ST_TEXT__('settings.factory_close_case'):__ST_TEXT__('settings.factory_note');el('settings-factory-reset').disabled=!!record||sending||resetting;el('settings-seed-section').classList.toggle('hidden',!record);promptVisibility();el('settings-seed-policy').value=options.seedPolicy;el('settings-realdata-section').classList.toggle('hidden',document.documentElement.dataset.uiMode==='basic');el('settings-show-real-data').checked=options.showRealData;el('settings-equipment-layout').value=options.equipmentLayout;
     el('settings-product-format-mode').value=productFormatMode(record);el('settings-basic-simulation-note').classList.toggle('hidden',!record||document.documentElement.dataset.uiMode!=='basic');}
   // Global chord: keep Ctrl + Shift held, press M five distinct times in
   // the original three-second window. Browser key repeat does not count.
@@ -301,6 +311,12 @@ window.STSettings = (function() {
   }
   function init(){
     initializeSettingsSubsections();
+    var report=el('settings-export-statistical-report');
+    report.onclick=function(){
+      if(!statisticalReportAvailable()){syncStatisticalReport();return;}
+      try{window.STStatExport.download(simulationProvider(),activeCase());}
+      catch(error){el('settings-error').textContent=window.STLanguage?.translate(error.message)||error.message;STErrors.capture('settings-error',error);}
+    };
     syncMode();
     window.addEventListener('st-calculation-activity',function(event){calculationActivity=Math.max(0,calculationActivity+(event.detail?.active?1:-1));syncPerformanceControls();});
     renderCalendar=STPlantCalendar.mount(el('settings-plant-calendar'),function(){return simulationProvider?.();},function(detail){calendarChanged?.(detail);},function(){return !!engineLocked?.();});

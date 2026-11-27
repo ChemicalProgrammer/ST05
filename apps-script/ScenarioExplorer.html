@@ -131,6 +131,39 @@ window.STScenarioExplorer=(function(){
   function doeEnabled(){var record=caseProvider?.();return record?record.metadata?.includeDOE===true:window.STPreferences?.read('scenarioDoe')==='yes';}
   function currentSearchSettings(automaticBasic){return STScenarioSearch.settings(Object.assign({},caseProvider?.()?.metadata?.scenarioSearch,automaticBasic?{automaticBasic:true}:{}));}
   function setDOE(enabled){var record=caseProvider?.();if(!record&&!STPreferences.write('scenarioDoe',enabled?'yes':'no'))return false;if(record){record.metadata=record.metadata||{};record.metadata.includeDOE=enabled;caseChanged?.();}window.dispatchEvent(new Event('st-doe-change'));return true;}
+  // Compact Basic comparisons are presentation only. Use a real matched
+  // pair (prefer the original horizon); do not project shorter-window gains
+  // onto a different baseline or replace missing observations with zeros.
+  function compactComparison(entry){
+    if(!entry)return {baseline:null,candidate:null,verified:false};
+    var original=entry.originalVerification,independent=entry.independentCheck;
+    var pair=original?.baseline&&original?.candidate?original:independent?.baseline&&independent?.candidate?independent:entry;
+    var verified=pair===original&&original?.passed===true;
+    return {baseline:pair.baseline||null,candidate:pair.candidate||null,verified,
+      durationSeconds:pair.durationSeconds??pair.baseline?.durationSeconds,rounds:pair.rounds??pair.baseline?.roundMetrics?.length,
+      unitOfFlow:pair.unitOfFlow||pair.baseline?.unitOfFlow||entry.unitOfFlow};
+  }
+  function compactDifference(before,after){
+    if(!Number.isFinite(before)||!Number.isFinite(after))return {delta:null,percent:null};
+    var delta=after-before;
+    return {delta,percent:before!==0?100*delta/Math.abs(before):null};
+  }
+  function compactInputRows(entry,changes,equipment){
+    return (changes||[]).filter(c=>c.before!==c.after).map(c=>{
+      var info=STWhatIf.changeInfo(c,equipment),group=entry?.phaseAudit?.ofat?.groups?.find(g=>g.id===c.equipmentId+':'+c.path);
+      var derived=!Number.isFinite(c.before)&&Number.isFinite(group?.baselineEffective);
+      var before=derived?group.baselineEffective:c.before,after=c.after,unit=c.unit||STScenarios.fields[c.path]?.[2]||'';
+      return {name:info.equipment+' · '+info.parameter,before,after,unit,derived};
+    });
+  }
+  function compactPerformanceRows(pair,rateUnit,countUnit){
+    var base=pair.baseline||{},candidate=pair.candidate||{},physical=base.scenarioFidelity!=='FLUID_SCREEN_V1'&&candidate.scenarioFidelity!=='FLUID_SCREEN_V1';
+    if(!pair.baseline)return [];
+    var rows=[{name:'OEE',before:physical?base.oee:null,after:physical?candidate.oee:null,unit:'%',differenceUnit:'pp'},
+      {name:'Throughput',before:base.throughput,after:candidate.throughput,unit:rateUnit}];
+    if(Number.isFinite(base.overflowUnits)||Number.isFinite(candidate.overflowUnits))rows.push({name:'Overflow',before:base.overflowUnits,after:candidate.overflowUnits,unit:countUnit});
+    return rows;
+  }
   function savedEntries(simulation){return simulation.whatIf?.evaluations||[];}
   function changed(simulation){window.dispatchEvent(new CustomEvent('st-whatif-change',{detail:{simulation:simulation}}));}
   function displayedOutcome(entry){
@@ -271,7 +304,7 @@ window.STScenarioExplorer=(function(){
       if(entry.baseline&&(entry.candidate||project.compact&&compactTerminal(state)))renderMetrics(entry);else if(entry.lastResult&&state!=='NO_DEMONSTRATED_IMPROVEMENT'&&!(project.compact&&compactTerminal(state)))renderMetrics(entry.lastResult);else if(metrics)metrics.replaceChildren();if(state==='NOT_EVALUATED'&&entry.lastResult?.status==='NO_DEMONSTRATED_IMPROVEMENT'){traceHistorical=true;resultNotice.textContent=configText('Previous analysis')+': '+(entry.lastResult.message||'No demonstrated improvement.');resultNotice.hidden=false;}
       if(project.compact){
         if(compactTerminal(state)){resultNotice.textContent=compactOutcomeNotice(entry);resultNotice.hidden=!resultNotice.textContent;}
-        else if(state==='VALIDATING'&&entry.candidate){resultNotice.textContent=entry.originalVerificationRequired&&entry.independentCheck?.passed===true?'Short-window improvement confirmed. Verifying original horizon; displayed estimate is not a simulated result.':provisionalNotice(entry);resultNotice.hidden=false;}
+        else if(state==='VALIDATING'&&entry.candidate){resultNotice.textContent=entry.originalVerificationRequired&&entry.independentCheck?.passed===true?'Short-window improvement confirmed. Verifying original horizon.':provisionalNotice(entry);resultNotice.hidden=false;}
         else if(['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED'].includes(state)){resultNotice.textContent=entry.originalVerification?.passed?'Verified on the original run · '+entry.originalVerification.durationSeconds/60+' min × '+entry.originalVerification.rounds+' matching round(s).'+(entry.warnings?.length?' Engineering review required.':''):'';resultNotice.hidden=!resultNotice.textContent;}
       }
       syncSavedWarning(sourceSignature);
@@ -803,9 +836,48 @@ window.STScenarioExplorer=(function(){
         if(latest?.progressTrace?.steps?.length){progressTrace=latest.progressTrace.steps;tracePercent=latest.progressTrace.percent;traceOutcome=latest.progressTrace.outcome;traceSummary=Object.assign({},latest.progressTrace.summary);activity.hidden=false;paintOverallProgress();}if(latest)renderWarnings(latest.warnings||[],!previousSaveDisabled,latest.evaluatedChanges,latest);syncSavedWarning();clearNotice.replaceChildren();changed(simulation);
       });undo.className='ghost';clearNotice.replaceChildren(el('span','Result deleted.'),undo);changed(simulation);
     });clearResultButton.classList.add('scenario-clear-result');actions.append(clearResultButton);
+    function appendCompactComparison(parent,rows,title){
+      if(!rows.length)return;
+      var tr=value=>window.STLanguage?.translate(value)||value;
+      var body=parameterTable(parent,['Variable','Original value','Scenario value','Numerical difference','Percentage difference'].map(tr),'scenario-compact-comparison',tr(title));
+      function number(value,unit,signed){
+        if(!Number.isFinite(value))return '—';
+        var normalized=Math.abs(value)<1e-10?0:value;
+        var formatted=normalized.toLocaleString(document.documentElement.lang==='es'?'es-MX':'en-US',{maximumFractionDigits:3});
+        return (signed&&normalized>0?'+':'')+formatted+(unit?(unit==='%'?'%':' '+unit):'');
+      }
+      rows.forEach(value=>{
+        var row=el('tr'),difference=compactDifference(value.before,value.after),original=el('td',number(value.before,value.unit));
+        if(value.derived){original.title=tr('Derived original value');original.setAttribute('aria-label',original.textContent+' · '+original.title);}
+        row.append(el('td',tr(value.name)),original,el('td',number(value.after,value.unit)),
+          el('td',number(difference.delta,value.differenceUnit||value.unit,true)),el('td',number(difference.percent,'%',true)));
+        body.append(row);
+      });
+    }
+    function compactResultStatus(parent,pair,entry,historical){
+      var tr=value=>window.STLanguage?.translate(value)||value;
+      if(!pair.baseline)return;
+      var message=historical?tr('Historical')+' · ':'';
+      message+=pair.verified?tr('Verified on original run'):pair.candidate?tr('Preliminary comparison — improvement not confirmed.'):tr('No candidate value available.');
+      if(Number.isFinite(pair.durationSeconds)&&pair.durationSeconds>0)message+=' · '+formatTarget(pair.durationSeconds/60)+' min'+(pair.rounds>0?' × '+pair.rounds+' '+tr('rounds'):'');
+      if(entry?.warnings?.length||entry?.status==='ENGINEERING_REVIEW_REQUIRED')message+=' · '+tr('Engineering review required.');
+      var note=el('p',message,'scenario-baseline-note');note.setAttribute('role','status');parent.append(note);
+    }
     function showResults(){
       resultsBody.replaceChildren();var historical=syncSavedWarning();
       var entry=historical?displayedOutcome(latest):latest?.status==='NOT_EVALUATED'?latest:latest?.evaluatedChanges?latest:latest?.lastResult||latest,changes=entry?.evaluatedChanges;
+      if(project.compact){
+        var tr=value=>window.STLanguage?.translate(value)||value,pair=compactComparison(entry),labels=STFlowUnits.labels(pair.unitOfFlow||source.unitOfFlow);
+        if(historical){var warning=el('p',historical.message,'scenario-history-notice');warning.setAttribute('role','alert');resultsBody.append(warning);}
+        var comparisonRows=compactPerformanceRows(pair,labels.rate,labels.count);
+        // Only retained/evaluated inputs, never speculative untested proposals.
+        var inputRows=compactInputRows(entry,Array.isArray(changes)?changes:[],source.equipment);
+        if(comparisonRows.length||inputRows.length)appendCompactComparison(resultsBody,comparisonRows.concat(inputRows),'Scenario results');
+        else resultsBody.append(el('p',tr('No evaluated scenario available.')));
+        if(!inputRows.length&&comparisonRows.length)resultsBody.append(el('p',tr('No retained input changes.'),'scenario-baseline-note'));
+        compactResultStatus(resultsBody,pair,entry,false);
+        resultsDialog.showModal();return;
+      }
       if(historical){var warning=el('p','','scenario-history-notice');warning.innerHTML=STIcons.svg('warning');warning.append(document.createTextNode(historical.message));resultsBody.append(warning);}
       if(entry?.message)resultsBody.append(el('p',entry.message,'scenario-saved-outcome'));
       if(!resultNotice.hidden)resultsBody.append(el('p',resultNotice.textContent,'chart-note'));
@@ -886,6 +958,13 @@ window.STScenarioExplorer=(function(){
       lastMetricEntry=entry;
       var tr=value=>window.STLanguage?.translate(value)||value,previousText=metrics.textContent;
       metrics.replaceChildren();
+      if(project.compact){
+        var pair=compactComparison(entry),labels=STFlowUnits.labels(pair.unitOfFlow||source.unitOfFlow);
+        appendCompactComparison(metrics,compactPerformanceRows(pair,labels.rate,labels.count),'Scenario results');
+        compactResultStatus(metrics,pair,entry,entry.sourceSignature&&entry.sourceSignature!==sourceSignature);
+        if(host.closest('.scenario-tier-grid'))window.STMotion?.cancel(metrics);
+        pendingMetricsReveal=false;return;
+      }
       var original=entry.originalVerification,originalRequired=entry.originalVerificationRequired===true,shortCheck=entry.independentCheck,displayed=original?.baseline&&original?.candidate?original:shortCheck||entry,unconfirmed=shortCheck?.passed===false||originalRequired&&!!original&&original.passed!==true,provisional=!shortCheck||originalRequired&&!original?.passed;
       var projected=false;
       if(originalRequired&&shortCheck?.passed===true&&!original?.candidate&&!original&&entry.status==='VALIDATING'){

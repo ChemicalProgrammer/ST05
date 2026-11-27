@@ -51,12 +51,12 @@ test('overflow is never a demonstrated target, and cancellation stops the search
   let cancelled=false;const run=simulator(),stop=await api.runStudy(ctx,{durationSeconds:900,target:99,simulate:async (input,options)=>{const result=await run(input,options);cancelled=true;return result;},stop:()=>cancelled});
   assert.equal(stop.status,'CANCELLED');
 });
-test('Minitab is a direct button in every workspace; Basic does not close a dropdown on autosave',()=>{
-  const workspace=fs.readFileSync('apps-script/MinimalWorkspace.html','utf8'),mode=fs.readFileSync('apps-script/MinimalMode.html','utf8'),web=fs.readFileSync('apps-script/WebApp.html','utf8');
-  assert.match(workspace,/<button id="minimal-export-minitab"/);
-  assert(!workspace.includes('id="minimal-export-menu"'));
-  assert(!mode.includes("el('minimal-export-menu')"));
-  assert.match(mode,/statExport\.disabled=!r\|\|running\|\|!window\.STStatExport/);
-  assert.match(web,/<\/details><button id="export-minitab-results"/);
-  assert.match(web,/<\/details><button id="export-minitab-whatif"/);
+test('statistical report is available exclusively in common Settings',()=>{
+  const workspace=fs.readFileSync('apps-script/MinimalWorkspace.html','utf8'),mode=fs.readFileSync('apps-script/MinimalMode.html','utf8'),web=fs.readFileSync('apps-script/WebApp.html','utf8'),settings=fs.readFileSync('apps-script/Settings.html','utf8');
+  assert(!workspace.includes('minimal-export-minitab'));
+  assert(!mode.includes('minimal-export-minitab'));
+  assert(!web.includes('export-minitab-results'));
+  assert(!web.includes('export-minitab-whatif'));
+  assert.match(web,/<button id="settings-export-statistical-report"/);
+  assert.match(settings,/STStatExport\.download\(simulationProvider\(\),activeCase\(\)\)/);
 });

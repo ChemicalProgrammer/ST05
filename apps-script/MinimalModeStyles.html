@@ -2,12 +2,14 @@
 /* Presentation-only adapter; existing editor, playback and scenario engines stay mounted. */
 html[data-workspace-mode=MINIMAL] .case-open .workspace-content > section:not(#minimal-workspace):not(#status) {display:none!important;}
 html[data-workspace-mode=MINIMAL] .case-open #basic-navigation,
-html[data-workspace-mode=MINIMAL] .case-open #simulation-toolbar,
 html[data-workspace-mode=MINIMAL] .case-open #toggle-gemini,
 html[data-workspace-mode=MINIMAL] .case-open #request-progress,
 html[data-workspace-mode=MINIMAL] .case-open #equipment-inspector {display:none!important;}
-html[data-workspace-mode=MINIMAL] .case-open #basic-section-row:not(.hidden) {display:contents;}
-html[data-workspace-mode=MINIMAL] .case-open #header-case-actions {flex:0 0 auto;width:auto;margin-left:0;}
+/* Keep the common second header row; only the navigation tabs are hidden. */
+html[data-workspace-mode=MINIMAL] .case-open #basic-section-row:not(.hidden) {display:flex;flex-basis:100%;justify-content:flex-end;flex-wrap:wrap;}
+html[data-workspace-mode=MINIMAL] .case-open #header-case-actions {flex:0 1 auto;width:auto;min-width:0;max-width:100%;margin-left:auto;justify-content:flex-end;}
+html[data-workspace-mode=MINIMAL] .case-open #simulation-toolbar {flex-wrap:wrap;justify-content:flex-end;}
+@media(max-width:600px){html[data-workspace-mode=MINIMAL] .case-open #header-case-actions {width:100%;flex:1 1 100%;}html[data-workspace-mode=MINIMAL] .case-open #simulation-toolbar {flex:1;}}
 html[data-workspace-mode=MINIMAL] .case-open .breadcrumb {flex:1 1 var(--size-220);}
 html[data-workspace-mode=MINIMAL] .case-open #basic-case-actions {margin-left:auto;}
 /* Basic uses the same Subsection contract and exterior gutter as every
@@ -35,10 +37,15 @@ html[data-workspace-mode=MINIMAL] #minimal-equipment-table-host {min-width:0;max
 .minimal-result-grid .metric-value {font-variant-numeric:tabular-nums;}
 /* All four baseline KPIs use the existing featured-card component. */
 #minimal-result-cards .metric-card--featured > strong {font-size:var(--font-kpi);}
-/* Same Standard cards and hover motion; only the compact grid has three
-   CAPEX categories and one global progress indicator. */
+/* One active Zero category: give its compact five-column table the full width. */
 #minimal-scenario-cards {min-width:0;}
-html[data-workspace-mode=MINIMAL] #minimal-scenario-cards .scenario-tier-grid {grid-template-columns:repeat(3,minmax(210px,1fr));}
+html[data-workspace-mode=MINIMAL] #minimal-scenario-cards .scenario-tier-grid {grid-template-columns:minmax(0,1fr);}
+html[data-workspace-mode=MINIMAL] .scenario-compact-comparison {overflow-x:auto;min-width:0;margin:0;}
+html[data-workspace-mode=MINIMAL] .scenario-compact-comparison table {width:100%;min-width:470px;border-collapse:collapse;font-size:var(--font-secondary);}
+html[data-workspace-mode=MINIMAL] .scenario-compact-comparison :is(th,td) {padding:var(--space-2);border-bottom:var(--border-width) solid var(--line);text-align:left;vertical-align:middle;}
+html[data-workspace-mode=MINIMAL] .scenario-compact-comparison :is(th,td):not(:first-child) {text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+html[data-workspace-mode=MINIMAL] .scenario-compact-comparison td:first-child {white-space:normal;overflow-wrap:anywhere;}
+html[data-workspace-mode=MINIMAL] .scenario-compact-comparison tbody tr:last-child td {border-bottom:0;}
 html[data-workspace-mode=MINIMAL] #minimal-scenario-cards .analysis-recommendation > :is(.scenario-activity,.scenario-progress-label,.scenario-trace-panel,.scenario-search-progress) {display:none!important;}
 .minimal-message {font-size:var(--font-secondary);color:var(--muted);}
 .minimal-progress {position:relative;display:flex;align-items:center;gap:var(--space-3);}

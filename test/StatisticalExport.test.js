@@ -79,12 +79,16 @@ test('ZIP directory, UTF-8 names and CRC are valid for stored files',()=>{
 
 
 test('statistical report is software-neutral in all workspaces and exported instructions',()=>{
-  for(const [path,count] of [['MinimalWorkspace.html',1],['WebApp.html',2]]){
-    const html=fs.readFileSync('apps-script/'+path,'utf8');
-    const buttons=[...html.matchAll(/<button\b[^>]*id="(?:minimal-export-minitab|export-minitab-results|export-minitab-whatif)"[^>]*>[^<]*<\/button>/g)].map(m=>m[0]);
-    assert.equal(buttons.length,count);
-    for(const button of buttons){assert.match(button,/>Statistical Report<\/button>/);assert.match(button,/title="Export statistical report"/);assert.match(button,/aria-label="Export statistical report"/);assert.doesNotMatch(button.replace(/id="[^"]*"/g,''),/minitab/i);}
-  }
+  const workspace=fs.readFileSync('apps-script/MinimalWorkspace.html','utf8'),html=fs.readFileSync('apps-script/WebApp.html','utf8');
+  assert.doesNotMatch(workspace,/Statistical Report|export-minitab/);
+  assert.doesNotMatch(html,/export-minitab-(results|whatif)/);
+  const buttons=[...html.matchAll(/<button\b[^>]*id="settings-export-statistical-report"[^>]*>[^<]*<\/button>/g)].map(m=>m[0]);
+  assert.equal(buttons.length,1);
+  assert(html.indexOf(buttons[0])>html.indexOf('id="settings-dialog"'));
+  assert(html.indexOf(buttons[0])<html.indexOf('id="settings-page-appearance"'));
+  assert.match(buttons[0],/>Statistical Report<\/button>/);
+  assert.match(buttons[0],/title="Export statistical report"/);
+  assert.match(buttons[0],/aria-label="Export statistical report"/);
   const language=fs.readFileSync('apps-script/Language.html','utf8');
   assert(language.includes("'Statistical Report':'Reporte estadístico'"));
   assert(language.includes("'Export statistical report':'Exportar reporte estadístico'"));

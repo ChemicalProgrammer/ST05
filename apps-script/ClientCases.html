@@ -575,13 +575,12 @@ async function openCase(caseId, initialView) {
       button.disabled=true;
       var mode=state.bootstrap?.uiMode||document.documentElement.dataset.workspaceMode||'MINIMAL';
       callServer('createGalleryTemplate',[mode],function(response){
-        if(!response?.ok||!response.data?.spreadsheetId){
+        if(!response?.ok||!response.data?.url){
           showError(response?.error||{message:__ST_TEXT__('exports.sheet_failed')});
           return;
         }
-        var url='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(response.data.spreadsheetId)+'/export?format=xlsx';
         STDialog.open({title:__ST_TEXT__('cases.template'),message:__ST_TEXT__('cases.template_help'),
-          link:{url:url,label:__ST_TEXT__('cases.template_download')}});
+          link:{url:response.data.url,label:__ST_TEXT__('cases.template_open')}});
       },function(){button.disabled=false;});
     }
 

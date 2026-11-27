@@ -304,7 +304,7 @@ window.STScenarioExplorer=(function(){
       if(entry.baseline&&(entry.candidate||project.compact&&compactTerminal(state)))renderMetrics(entry);else if(entry.lastResult&&state!=='NO_DEMONSTRATED_IMPROVEMENT'&&!(project.compact&&compactTerminal(state)))renderMetrics(entry.lastResult);else if(metrics)metrics.replaceChildren();if(state==='NOT_EVALUATED'&&entry.lastResult?.status==='NO_DEMONSTRATED_IMPROVEMENT'){traceHistorical=true;resultNotice.textContent=configText('Previous analysis')+': '+(entry.lastResult.message||'No demonstrated improvement.');resultNotice.hidden=false;}
       if(project.compact){
         if(compactTerminal(state)){resultNotice.textContent=compactOutcomeNotice(entry);resultNotice.hidden=!resultNotice.textContent;}
-        else if(state==='VALIDATING'&&entry.candidate){resultNotice.textContent=entry.originalVerificationRequired&&entry.independentCheck?.passed===true?'Short-window improvement confirmed. Verifying original horizon.':provisionalNotice(entry);resultNotice.hidden=false;}
+        else if(state==='VALIDATING'&&entry.candidate){resultNotice.textContent=entry.originalVerificationRequired&&entry.independentCheck?.passed===true?'Short-window improvement confirmed. Verifying original horizon; displayed estimate is not a simulated result.':provisionalNotice(entry);resultNotice.hidden=false;}
         else if(['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED'].includes(state)){resultNotice.textContent=entry.originalVerification?.passed?'Verified on the original run · '+entry.originalVerification.durationSeconds/60+' min × '+entry.originalVerification.rounds+' matching round(s).'+(entry.warnings?.length?' Engineering review required.':''):'';resultNotice.hidden=!resultNotice.textContent;}
       }
       syncSavedWarning(sourceSignature);
@@ -958,13 +958,6 @@ window.STScenarioExplorer=(function(){
       lastMetricEntry=entry;
       var tr=value=>window.STLanguage?.translate(value)||value,previousText=metrics.textContent;
       metrics.replaceChildren();
-      if(project.compact){
-        var pair=compactComparison(entry),labels=STFlowUnits.labels(pair.unitOfFlow||source.unitOfFlow);
-        appendCompactComparison(metrics,compactPerformanceRows(pair,labels.rate,labels.count),'Scenario results');
-        compactResultStatus(metrics,pair,entry,entry.sourceSignature&&entry.sourceSignature!==sourceSignature);
-        if(host.closest('.scenario-tier-grid'))window.STMotion?.cancel(metrics);
-        pendingMetricsReveal=false;return;
-      }
       var original=entry.originalVerification,originalRequired=entry.originalVerificationRequired===true,shortCheck=entry.independentCheck,displayed=original?.baseline&&original?.candidate?original:shortCheck||entry,unconfirmed=shortCheck?.passed===false||originalRequired&&!!original&&original.passed!==true,provisional=!shortCheck||originalRequired&&!original?.passed;
       var projected=false;
       if(originalRequired&&shortCheck?.passed===true&&!original?.candidate&&!original&&entry.status==='VALIDATING'){

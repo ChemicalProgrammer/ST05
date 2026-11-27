@@ -29,11 +29,16 @@ test('derived original sensor positions use recorded OFAT evidence, never the cu
   assert.equal(rows[0].before,5400);assert(rows[0].derived);
   assert.equal(rows[1].before,null);assert.equal(api.compactDifference(rows[1].before,10).percent,null);
 });
-test('compact dialog and cards share the five-column table; detailed Standard and Advance content remains',()=>{
+test('only the compact results dialog uses the five-column table; the scenario card keeps its original KPI layout',()=>{
   assert.match(scenario,/\['Variable','Original value','Scenario value','Numerical difference','Percentage difference'\]/);
   assert.match(scenario,/if\(project\.compact\)\{\s*var tr=value=>window\.STLanguage/);
   assert.match(scenario,/appendCompactComparison\(resultsBody,comparisonRows\.concat\(inputRows\)/);
-  assert.match(scenario,/appendCompactComparison\(metrics,compactPerformanceRows/);
+  const card=block(scenario,'    function renderMetrics(entry){','    function show(){');
+  assert.doesNotMatch(card,/appendCompactComparison|scenario-compact-comparison/);
+  assert.match(card,/scenario-basic-metric/);
+  assert.match(card,/scenario-basic-change/);
+  assert.match(styles,/#minimal-scenario-cards \.scenario-tier-grid \{grid-template-columns:repeat\(3,minmax\(210px,1fr\)\)/);
+  assert.match(styles,/\.scenario-results-dialog \.scenario-compact-comparison table/);
   assert.match(scenario,/OFAT — Individual physical sensitivity/);
 });
 test('Settings is the sole statistical report action, gated by completed saved results and active work',()=>{

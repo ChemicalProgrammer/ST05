@@ -177,6 +177,8 @@ window.STStatExport=(function(){
     const anova=create('27_DOE_effects.csv','One saved factorial effect per response','Existing ST statistics, including Holm-adjusted p-values when saved; not a fresh Minitab fit.');
     const warnings=create('28_CAPEX_warnings.csv','One recorded engineering warning','Scenario review and experiment-specific warnings.');
     const timing=create('29_CAPEX_progress.csv','One recorded analysis stage','Elapsed real milliseconds and stage work counts, not virtual process observations.');
+    const ofatCsv=create('31_Zero_OFAT.csv','One individual parameter level per matched seed','One field at a time; original reliability and installed geometry frozen. Use matching seed blocks; baseline appears once per study.');
+    const refineCsv=create('32_Zero_refinement.csv','One refinement candidate per matched seed','Coordinates refined with the same DOE horizon; do not pool different windows.');
     const contrasts=create('30_DOE_seed_contrasts.csv','One factorial effect per complete independent seed block and response','High-minus-low orthogonal contrast on coded two-level combinations. Useful for one-sample tests across seeds; incomplete blocks omitted, no p-values calculated.');
     const evaluations=arr(simulation.whatIf?.evaluations);
     function fields(c){return {...eqId(c.equipmentId),Parameter:c.path,Before:c.before,After:c.after,Unit:c.unit,Package_ID:c.packageId,Intervention:c.interventionType,Analysis_only:c.analysisOnly,Origin_tier:c.originTier,Justification:c.justification,...flat(c,'Change')};}
@@ -198,6 +200,13 @@ window.STStatExport=(function(){
         arr(proposal).forEach(p=>put(changes.name,{...tag,Comparison_ID:cid,Stage:stage,...fields(p)}));
         arr(c?.warnings).forEach(w=>put(warnings.name,{...tag,Comparison_ID:cid,Stage:stage,...flat(w)}));
       }
+      const ofat=audit.ofat,refinement=audit.refinement;
+      if(ofat){
+        const appendLevel=(o,base,stage,idx)=>{const c=o.changes?.[0];arr(o.result?.roundMetrics).forEach(r=>{const b=arr(base?.roundMetrics).find(x=>x.seed===r.seed&&x.durationSeconds===r.durationSeconds);put(ofatCsv.name,{...tag,Stage:stage,Experiment:idx,Seed:r.seed,Duration_s:r.durationSeconds,Fidelity:o.result?.scenarioFidelity,Equipment_ID:c?.equipmentId,Equipment:c?name(c.equipmentId):null,Parameter:c?.path,Before:c?.before,Level:c?.after,Unit:c?.unit,OEE_pct:r.oee,Throughput_per_min:r.throughput,Delta_OEE_pp:diff(r.oee,b?.oee),Delta_throughput_per_min:diff(r.throughput,b?.throughput),Mean_overflow:o.result?.overflowUnits});});};
+        appendLevel({changes:[],result:ofat.baseline},ofat.baseline,'BASELINE',0);
+        arr(ofat.observations).forEach((o,i)=>{appendLevel(o,ofat.baseline,'OFAT',i+1);compare('ZERO_OFAT',ofat.baseline,o.result,ofat.run,o.changes,{Level:o.level,Kind:o.kind,Experiment:i+1});});
+      }
+      if(refinement){arr(refinement.observations).forEach((o,i)=>{compare('ZERO_REFINEMENT',refinement.baseline,o.result,refinement.run,o.changes,{Experiment:i+1});arr(o.result?.roundMetrics).forEach(r=>{const b=arr(refinement.baseline?.roundMetrics).find(x=>x.seed===r.seed&&x.durationSeconds===r.durationSeconds);put(refineCsv.name,{...tag,Experiment:i+1,Seed:r.seed,Duration_s:r.durationSeconds,Fidelity:o.result.scenarioFidelity,OEE_pct:r.oee,Throughput_per_min:r.throughput,Delta_OEE_pp:diff(r.oee,b?.oee),Delta_throughput_per_min:diff(r.throughput,b?.throughput),Mean_overflow:o.result.overflowUnits,Changes:JSON.stringify(o.changes)});});});}
       if(control){
         compare('CONTROL_NO_MTBF_MTTR',control.baseline,control.failureFree,control.run,[],{Counterfactual:'DISABLE_MODELED_FAILURES'});
         arr(control.observations).forEach(o=>compare('PHYSICAL_CONTROL',control.baseline,o.result,control.run,o.changes,{Level:o.level,Kind:o.kind,Error:o.error}));
@@ -276,7 +285,7 @@ window.STStatExport=(function(){
     '13/14/15: time-series observations within a round are serially correlated. Interval length may vary. Do not use samples as independent Monte Carlo replications. No interpolation.',
     '12_recording_coverage.csv: summary-only, truncated and compact saved recordings may lack events or samples. A missing history is not proof that no failure occurred.',
     'DOE_*.csv: each file is one saved design. Use coded A/B/C etc. and Seed_Block as a block. 25/26 map factor names and real parameter levels. An imported CSV is not a native Minitab design object; define the custom factorial design before analyzing. Incomplete designs may require different analysis. ST effects and pooled-error ANOVA can differ; common random numbers create correlated responses across treatments.',
-    '30_DOE_seed_contrasts.csv: complete two-level factorial blocks only. Each contrast is one observation per independent seed; use a one-sample test across seeds if appropriate.','20-29: CAPEX stages and paired evidence. Compare only matching engine, fidelity, duration, units and seeds. Some audit rows refer to the same reused computation. Fluid screening is approximate. Original verification is descriptive, not another independent replication study.',
+    '31_Zero_OFAT.csv: one recorded level and matched seed; compare one parameter at a time. 32_Zero_refinement.csv: coordinated refinements on the DOE window. Keep phases and horizons separate.','30_DOE_seed_contrasts.csv: complete two-level factorial blocks only. Each contrast is one observation per independent seed; use a one-sample test across seeds if appropriate.','20-29: CAPEX stages and paired evidence. Compare only matching engine, fidelity, duration, units and seeds. Some audit rows refer to the same reused computation. Fluid screening is approximate. Original verification is descriptive, not another independent replication study.',
     'raw_simulation.json preserves the available numerical result, equipment, settings and scenario evidence, including nested arrays omitted from the rectangular CSVs. No assistant chat or original import source is included.',
     '',
     'ES: Extrae el ZIP. Abre cada CSV en Minitab con Archivo > Abrir. Primera fila = nombres; separador coma; decimal punto; vacío = no disponible. Los nombres técnicos se conservan en inglés.',

@@ -28,10 +28,10 @@ window.STWhatIf = (function() {
     target.append(node('p',message,'notice'));
     var grid=node('div','','scenario-tier-grid'),basic=window.STBasicMode?.isBasic();
     if(basic){var current=node('article','','analysis-recommendation scenario-current metric-card metric-card--scenario');current.append(node('h4','Current scenario','scenario-current-title'));var metrics=node('div','','scenario-basic-metrics');[['OEE',simulation.results?.batch?.statistics?.lineOeePercent?.mean??simulation.results?.summary?.lineOeePercent,'%'],['Throughput',simulation.results?.batch?.statistics?.throughputPerMinute?.mean??(simulation.results?.durationSeconds>0?simulation.results.summary?.outputCount/simulation.results.durationSeconds*60:null),' '+STFlowUnits.labels(simulation.results?.unitOfFlow||simulation.unitOfFlow).rate]].forEach(function(spec){var item=node('div','','scenario-basic-metric');var amount=node('strong',Number.isFinite(spec[1])?spec[1].toFixed(2):'—','metric-value');if(Number.isFinite(spec[1]))amount.append(node('span',spec[2],'metric-unit'));item.append(node('span',spec[0]),amount);metrics.append(item);});current.append(metrics);grid.append(current);}
-    ['ZERO','MEDIUM','HIGH'].forEach(function(tier){var card=node('article','','analysis-recommendation metric-card metric-card--scenario');card.append(cardHeader(tier,null,tier==='ALL'),node('h4',tier==='ALL'?'All CAPEX':label(tier)),node('p','No validated scenario available for this configuration.','chart-note'));grid.append(card);});target.append(grid);
+    ['ZERO'].forEach(function(tier){var card=node('article','','analysis-recommendation metric-card metric-card--scenario');card.append(cardHeader(tier,null,tier==='ALL'),node('h4',tier==='ALL'?'All CAPEX':label(tier)),node('p','No validated scenario available for this configuration.','chart-note'));grid.append(card);});target.append(grid);
     STReports.bindWhatIf(simulation,{projects:[],candidates:[],checks:[]},[]);
   }
-  function visibleProjects(plan){return (plan.candidates||plan.projects).filter(function(p){return p.changes?.length&&p.disabledReason!=='SCENARIO_INSUFFICIENT_EVIDENCE';});}
+  function visibleProjects(plan){return (plan.candidates||plan.projects).filter(function(p){return p.tier==='ZERO'&&p.changes?.length&&p.disabledReason!=='SCENARIO_INSUFFICIENT_EVIDENCE';});}
   function changeInfo(change,equipment){
     if(change.packageChanges)return {equipment:(equipment||[]).find(e=>e.id===change.equipmentId)?.name||change.equipmentId,parameter:change.label||change.packageId,before:'Current equipment',after:'Complete intervention',explanation:'The DOE switches every parameter in this intervention together.'};
     var field=fields[change.path],unit=change.unit||field?.[2]||'',equipmentName=(equipment||[]).find(function(e){return e.id===change.equipmentId;})?.name||change.equipmentId;
@@ -47,6 +47,7 @@ window.STWhatIf = (function() {
     'processData.accumulation.blockedTimeDelaySeconds':[__ST_TEXT__('client.back_up_blocked_delay_s'),__ST_TEXT__('scenario.explain_blocked'),'s'],
     'processData.accumulation.clearTimeDelaySeconds':[__ST_TEXT__('client.back_up_clear_delay_s'),__ST_TEXT__('scenario.explain_clear'),'s'],
     'processData.accumulation.backupSensorPositionMm':[__ST_TEXT__('client.installed_back_up_position_mm'),__ST_TEXT__('scenario.explain_backup'),'mm'],
+    'processData.accumulation.primeSensorPositionMm':['Prime sensor position (mm)','Position measured from the upstream discharge toward downstream infeed.','mm'],
     'processData.geometry.lactMm':[__ST_TEXT__('client.installed_length_l_act_mm'),__ST_TEXT__('scenario.explain_length'),'mm'],
     'processData.geometry.lpPrimeMm':[__ST_TEXT__('client.prime_reserve_l_p_mm'),__ST_TEXT__('scenario.explain_prime'),'mm'],
     'processData.accumulation.downstreamRampUpSeconds':[__ST_TEXT__('client.downstream_ramp_up_s'),__ST_TEXT__('scenario.explain_ramp'),'s'],

@@ -77,6 +77,7 @@ export const SCENARIO_FIELDS = Object.freeze({
   'processData.accumulation.blockedTimeDelaySeconds':[0,3600,'s'],
   'processData.accumulation.clearTimeDelaySeconds':[0,3600,'s'],
   'processData.accumulation.backupSensorPositionMm':[0,1000000,'mm'],
+  'processData.accumulation.primeSensorPositionMm':[0,1000000,'mm'],
   'processData.geometry.lactMm':[1,1000000,'mm'],
   'processData.geometry.lpPrimeMm':[0,1000000,'mm'],
   'processData.accumulation.downstreamRampUpSeconds':[0,3600,'s'],
@@ -557,7 +558,7 @@ function automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,doc
         targetFeasibility:'NOT_ESTABLISHED',supplierTarget:false,engineeringReviewRequired:true}}];
   });
 }
-export function planScenarios(simulation){
+export function planScenarios(simulation,{zeroOnly=false}={}){
   if(simulation.dynamicConfig?.machineDesignEnabled===false||simulation.dynamicConfig?.machineMaximumSpeedEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
   const audit=scenarioAudit(simulation),engineeringEquipment=scenarioEngineeringEquipment(simulation),diagnosis=diagnoseScenarioLosses(simulation);
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
@@ -567,6 +568,7 @@ export function planScenarios(simulation){
   const equipmentReliability=(simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR').map(e=>equipmentReliabilityAssessment(e,simulation.dynamicConfig));
   equipmentReliability.forEach(r=>checks.push({equipmentId:r.equipmentId,rule:'EQUIPMENT_RELIABILITY',status:r.status==='NOT EVALUATED'?'NOT_EVALUATED':r.status,assessment:r,interpretation:'Engineering screening thresholds; not a replacement mandate.'}));
   function add(kind,tier,equipment,changes,evidence,priority,basis){
+    if(zeroOnly&&(tier!=='ZERO'||changes.some(c=>c.external||c.analysisOnly||c.path.startsWith('noiseProfile.reliability.')||c.path==='nominalRatePerSecond'||c.path==='processData.geometry.lactMm'||c.path.endsWith('RampUpSeconds')||c.path.endsWith('startupTimeSeconds'))))return;
     changes=changes.filter(c=>c.before!==c.after).map(c=>({...c,originTier:tier}));if(!changes.length)return;
     let disabledReason=null;try{applyScenarioChanges(simulation,changes,{tier,previewOnly:true});}catch(error){disabledReason=error.message;}
     const losses=scenarioLossEvidence(simulation,diagnosis,equipment,kind);evidence={...evidence,...losses,
@@ -641,7 +643,7 @@ export function planScenarios(simulation){
     const observedStarvation=diagnosis.status==='OBSERVED'&&(observedDownstream?.starvedSeconds||0)>diagnosis.durationSeconds*.01;
     const observedBlocking=diagnosis.status==='OBSERVED'&&(observedUpstream?.blockedSeconds||0)>diagnosis.durationSeconds*.01;
     const criticalBefore=criticalIds.has(item.downstreamId),criticalAfter=criticalIds.has(item.upstreamId);
-    if(recoveryFailed||(coverage!==null&&coverage<1)||observedStarvation||observedBlocking){
+    if(!zeroOnly&&(recoveryFailed||(coverage!==null&&coverage<1)||observedStarvation||observedBlocking)){
       const downstream=simulation.equipment.find(x=>x.id===item.downstreamId),downstreamStopData=scenarioStopDataCoverage(simulation,downstream);
       const repairSeconds=(machine,coverage)=>coverage.enabledClasses.includes('MINOR')?machine.processData.equipment.stopInputs.minor.mttrMinutes*60:
         coverage.enabledClasses.includes('GENERAL')?machine.noiseProfile.reliability.mttrMinutes*60:0;
@@ -688,7 +690,7 @@ export function planScenarios(simulation){
   });
   checks.push({rule:'PACEMAKER_DESIRED_STATE_AND_V_GRAPH',status:'NOT_EVALUATED'});
   const documentedReplacementIds=new Set();
-  (simulation.whatIf?.externalOptions||[]).forEach((option,optionIndex)=>{
+  (zeroOnly?[]:simulation.whatIf?.externalOptions||[]).forEach((option,optionIndex)=>{
     if(simulation.dynamicConfig?.reliabilityEnabled===false&&option.changes?.some(c=>c.path.startsWith('noiseProfile.reliability.')))return;
     if(!['ZERO','MEDIUM','HIGH'].includes(option.tier)||!option.changes?.length||!option.changes.every(c=>scenarioCategoryAllows(c,option.tier)))return;
     for(const equipmentId of new Set(option.changes.map(c=>c.equipmentId))){
@@ -702,17 +704,17 @@ export function planScenarios(simulation){
       add(changes.some(c=>c.replacementMaximumBpm!==undefined)?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION',option.tier,equipment,changes,{targetSource:'USER_DOCUMENTED',interventionType:changes[0]?.interventionType,costClass:SCENARIO_INTERVENTIONS[changes[0]?.interventionType]?.costClass,interpretation:'Supported intervention hypothesis; dynamic benefit and shifted constraints require evaluation.'},changes.some(c=>c.replacementMaximumBpm!==undefined)&&capacityDiagnosis.limitingEquipment.some(e=>e.id===equipment.id)?120:90,'STATIC');
     }
   });
-  for(const replacement of automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,documentedReplacementIds))add(replacement.changes.some(c=>c.path==='nominalRatePerSecond')?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION','HIGH',replacement.equipment,replacement.changes,replacement.evidence,100+replacement.priority,'HYBRID');
+  for(const replacement of zeroOnly?[]:automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,documentedReplacementIds))add(replacement.changes.some(c=>c.path==='nominalRatePerSecond')?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION','HIGH',replacement.equipment,replacement.changes,replacement.evidence,100+replacement.priority,'HYBRID');
   // Rank the limited installation sites before combinatorial search. Every
   // subset of these sites (one, two or three) is then a separate hypothesis.
   const medium=candidates.filter(c=>c.tier==='MEDIUM').sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority||a.equipmentId.localeCompare(b.equipmentId));
   const retainedSites=new Set(medium.slice(0,SCENARIO_POLICY.maxAccumulationSites).map(c=>c.equipmentId));
   for(let i=candidates.length-1;i>=0;i--)if(candidates[i].tier==='MEDIUM'&&!retainedSites.has(candidates[i].equipmentId))candidates.splice(i,1);
-  const projects=['ZERO','MEDIUM','HIGH'].map(tier=>{
+  const projects=(zeroOnly?['ZERO']:['ZERO','MEDIUM','HIGH']).map(tier=>{
     const choices=candidates.filter(p=>p.tier===tier).sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority);
     return choices[0]||{tier,canApply:false,titleKey:'scenario.no_proposal',basis:'STATIC',changes:[],evidence:{},disabledReason:'SCENARIO_INSUFFICIENT_EVIDENCE'};
   });
-  return {sourceReadiness:scenarioSourceReadiness(simulation),proposalNeeds:scenarioProposalNeeds(simulation),equipmentReliability,capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
+  return {sourceReadiness:scenarioSourceReadiness(simulation),proposalNeeds:scenarioProposalNeeds(simulation),equipmentReliability,capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:zeroOnly?[]:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
 }
 
 

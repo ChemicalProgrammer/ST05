@@ -59,17 +59,18 @@ function buildSavedScenarioStudy_(source,proposal,sourceSignature,warnings,searc
   function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.keys(value).sort().reduce(function(copy,key){if(value[key]!==undefined)copy[key]=canonical(value[key]);return copy;},{});return value;}
   function changesKey(changes){return JSON.stringify((changes||[]).map(function(c){return canonical({equipmentId:c.equipmentId,path:c.path,before:c.before,after:c.after,replacementMaximumBpm:c.replacementMaximumBpm,analysisOnly:c.analysisOnly===true,external:c.external===true,interventionType:c.interventionType,originTier:c.originTier,packageId:c.packageId,targetId:c.targetId,packagePaths:Array.isArray(c.packagePaths)?c.packagePaths.slice().sort():undefined});}).sort(function(a,b){return (a.equipmentId+':'+a.path).localeCompare(b.equipmentId+':'+b.path);}));}
   var key=changesKey(proposal.changes),methodologySignature=JSON.stringify(STScenarioEngine_.methodologyInputs(source.whatIf?.methodology||{})),searchSettingsSignature=STScenarioEngine_.searchSettingsSignature(searchSettings);
-  var matched=(source.whatIf?.evaluations||[]).filter(function(entry){return entry.sourceSimulationId===source.id&&entry.sourceSignature===sourceSignature&&entry.searchPolicyVersion==='MATCHED_CAPEX_V12'&&entry.searchScope===proposal.tier&&entry.methodologySignature===methodologySignature&&entry.searchSettingsSignature===(entry.uiMode==='minimal'?STScenarioEngine_.searchSettingsSignature({speedProfile:'FAST',automaticBasic:true}):searchSettingsSignature)&&changesKey(entry.evaluatedChanges)===key&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(entry.status);}).sort(function(a,b){return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));})[0];
+  var matched=(source.whatIf?.evaluations||[]).filter(function(entry){return entry.sourceSimulationId===source.id&&entry.sourceSignature===sourceSignature&&entry.searchPolicyVersion==='MATCHED_CAPEX_V12'&&entry.searchScope===proposal.tier&&entry.methodologySignature===methodologySignature&&entry.searchSettingsSignature===STScenarioEngine_.searchSettingsSignature({speedProfile:'FAST',automaticBasic:true})&&changesKey(entry.evaluatedChanges)===key&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(entry.status);}).sort(function(a,b){return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));})[0];
   var evidence=matched?JSON.parse(JSON.stringify(matched)):{sourceSimulationId:source.id,sourceSignature:sourceSignature,unitOfFlow:source.unitOfFlow||'units',evaluatedChanges:proposal.changes,analysisOnly:proposal.analysisOnly,status:'NO_MATCHING_CURRENT_EVALUATION'};
   evidence.warnings=(evidence.warnings||[]).concat(warnings);
   if(evidence.independentCheck){
     var check=evidence.independentCheck,confirmation=STScenarioEngine_.confirm(check.baseline,check.candidate,evidence.confirmationPlan,source.whatIf?.methodology||{});
     check.passed=confirmation.passed&&check.passed===true;check.confirmationKind=confirmation.kind;check.statisticalEvidence=confirmation.statisticalEvidence;check.precision=confirmation.precision;check.reason=confirmation.reason;
     check.oeeGuard=confirmation.oeeGuard;check.practicalThreshold=confirmation.threshold;
-    if(evidence.uiMode==='minimal'&&(!evidence.confirmationPlan?.automaticBasic||check.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.baseline?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')){check.passed=false;check.reason='BASIC_PRECISE_CONFIRMATION_REQUIRED';}
+    if(!Number.isFinite(check.baseline?.overflowUnits)||!Number.isFinite(check.candidate?.overflowUnits)||check.candidate.overflowUnits>check.baseline.overflowUnits+1e-6){check.passed=false;check.reason='OVERFLOW_REGRESSION';}
+    if((!evidence.confirmationPlan?.automaticBasic||check.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.baseline?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')){check.passed=false;check.reason='BASIC_PRECISE_CONFIRMATION_REQUIRED';}
     if(check.durationSeconds!==check.baseline?.durationSeconds||check.rounds!==evidence.confirmationPlan?.rounds||check.unitOfFlow!==(source.unitOfFlow||source.results?.unitOfFlow||source.results?.replay?.unitOfFlow||'units')||check.unitOfFlow!==check.baseline?.unitOfFlow){check.passed=false;check.reason='CONFIRMATION_METADATA_MISMATCH';}
   }
-  if(evidence.uiMode==='minimal'){
+  if(proposal.tier==='ZERO'){
     evidence.originalVerificationRequired=true;
     if(evidence.independentCheck?.passed===true){evidence.originalVerification=STScenarioEngine_.verifyOriginal(source,evidence.originalVerification?.candidate||null,proposal.changes);}
     if(evidence.originalVerification?.passed!==true&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED'].includes(evidence.status))evidence.status='NOT_REPRODUCED';
@@ -93,7 +94,8 @@ function resolveLocalScenarioProposal_(proposal,source) {
 }
 function normalizeScenarioProposal_(proposal,source) {
   requireCompletedScenarioSource_(source);
-  if(!proposal||!['ZERO','MEDIUM','HIGH'].includes(proposal.tier)||!['STATIC','DYNAMIC','HYBRID'].includes(proposal.basis)||!Array.isArray(proposal.changes))throw createSimulatorError_('INVALID_SCENARIO','The scenario format is invalid.');
+  if(!proposal||proposal.tier!=='ZERO'||!['STATIC','DYNAMIC','HYBRID'].includes(proposal.basis)||!Array.isArray(proposal.changes))throw createSimulatorError_('INVALID_SCENARIO','The scenario format is invalid.');
+  if(!proposal.changes.every(c=>STScenarioEngine_.zeroAllowed(c,source.equipment)))throw createSimulatorError_('INVALID_SCENARIO','Only Zero CAPEX conveyor and sensor experiments are enabled.');
   if(proposal.basis!=='STATIC'&&!source.results?.summary)throw createSimulatorError_('INVALID_SCENARIO','Dynamic evidence requires a completed simulation.');
   var title=typeof proposal.title==='string'?proposal.title.trim().slice(0,120):'';
   if(!title)throw createSimulatorError_('INVALID_SCENARIO','A scenario title is required.');

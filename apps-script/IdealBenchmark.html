@@ -308,6 +308,8 @@ window.STIdealBenchmark=(function(){
   }
   function open(){
     if(active||callbacks?.locked?.())return;
+    callbacks?.error?.(Error('Ideal Line Benchmark is paused during the Zero CAPEX flow study.'));return;
+    // Preserved implementation for reactivation after Zero CAPEX validation.
     try{
       const sim=callbacks?.simulation?.(),record=callbacks?.activeCase?.();
       opened=context(sim,record);report=null;el('ideal-benchmark-results').replaceChildren();el('ideal-benchmark-status').textContent='';el('ideal-benchmark-progress').hidden=true;
@@ -326,7 +328,7 @@ window.STIdealBenchmark=(function(){
     el('ideal-benchmark-csv').onclick=()=>{if(report)download('ideal-line-benchmark.csv',csvStudy(report),'text/csv;charset=utf-8');};
     runButton.onclick=async()=>{
       if(active){cancelled=true;runButton.disabled=true;return;}
-      if(!opened||callbacks?.locked?.())return;
+      if(!opened||callbacks?.locked?.())return; // open() is paused; cannot initialize an active study.
       const current=callbacks?.simulation?.();
       if(current?.id!==opened.simulationId||current?.results?.inputSignature!==opened.sourceSignature){callbacks?.error?.(Error('Source simulation changed. Reopen the benchmark.'));return;}
       active=true;cancelled=false;report=null;el('ideal-benchmark-results').replaceChildren();

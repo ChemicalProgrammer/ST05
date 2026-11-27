@@ -2,8 +2,8 @@
 window.STMinimalMode=(function(){
   'use strict';
   var state,actions,initialized=false,importing=false,starting=false,searching=false,searchSaving=false,buildingCards=false,timer=null,stopRequested=false;
-  var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=3,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
-  var tiers=['ZERO','MEDIUM','HIGH'];
+  var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=1,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
+  var tiers=['ZERO'];
   function el(id){return document.getElementById(id);}
   function node(tag,text,cls){var n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;}
   function tr(value){return window.STLanguage?.translate(value)||value;}
@@ -111,7 +111,7 @@ window.STMinimalMode=(function(){
     if(!sim||!r||starting||actions.locked()){if(!searching&&(!sim||!r))clearScenarios();show('minimal-scenario-cards',false);return;}
     // Do not clone result cards or reconstruct candidates. The very same
     // Standard cards own the search, saved evidence, dialogs and actions.
-    var grid=el('minimal-scenario-cards'),saved=sim.whatIf?.evaluations?.length>0;
+    var grid=el('minimal-scenario-cards'),saved=sim.whatIf?.evaluations?.some(e=>(e.searchScope||e.tier)==='ZERO');
     var cards=[];
     try{cards=scenarioCards(sim,r,saved&&!searching&&!searchMessage&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL');}
     catch(error){searchMessage=error.message||'Evaluation failed';el('minimal-search-message').textContent=tr(searchMessage);show('minimal-search-message',true);}
@@ -148,7 +148,7 @@ window.STMinimalMode=(function(){
     renderResults(r);
     var statExport=el('minimal-export-minitab');
     if(statExport){statExport.hidden=!r||!window.STStatExport;statExport.disabled=!r||running||!window.STStatExport?.canExport(sim);}
-    var benchmark=el('minimal-ideal-benchmark');if(benchmark)benchmark.disabled=!r||lock||running||!window.STIdealBenchmark;
+    var benchmark=el('minimal-ideal-benchmark');if(benchmark){benchmark.hidden=true;benchmark.disabled=true;}
     show('minimal-optimization',!!r&&!running);
     var readiness=sourceReadiness(sim,r);
     var canSearch=!!r&&!review&&readiness?.ready===true&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL';

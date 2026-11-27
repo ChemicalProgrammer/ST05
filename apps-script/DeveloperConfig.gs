@@ -22,8 +22,8 @@ function getAppDevelopers_() {
 
 
 // Set a single approved support mailbox before deployment.
-// Leave empty to let the user enter a recipient in Gmail; never use a fake
-// developer address or send a report automatically.
+// Leave empty to let the user enter a recipient in Gmail. The optional
+// attachment flow creates a draft only; it never sends a report automatically.
 var ST_ERROR_REPORT_EMAIL = '';
 
 function getErrorReportEmail_() {

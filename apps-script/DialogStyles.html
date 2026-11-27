@@ -176,6 +176,8 @@ button.error-details-trigger:focus-visible, #header-error-button.error-details-t
 #header-errors { display:inline-flex; align-items:center; }
 .error-copy-status { margin-right:auto; font-size:var(--font-secondary); color:var(--muted); }
 .error-details-dialog .dialog-actions { flex-wrap:wrap; }
+.error-report-dialog {--dialog-width:var(--size-360,360px);width:min(360px,calc(100vw - var(--space-6)));}
+.error-report-dialog .dialog-body {display:grid;gap:var(--space-3);}
 .error-report-options { display:grid; gap:var(--space-2); margin-top:var(--space-4); padding-top:var(--space-3); border-top:var(--border-width) solid var(--line); }
 .error-report-options > .st-checkbox-card { width:fit-content; max-width:100%; margin:0; }
 .error-report-note,.error-report-status { margin:0; font-size:var(--font-secondary); color:var(--muted); overflow-wrap:anywhere; }

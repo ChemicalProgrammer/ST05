@@ -210,3 +210,5 @@ function prepareScenarioDraft(request) {
 // User-scoped temporary transport for oversized browser drafts.
 function stageCaseTransfer(request){return executeServerAction_(function(user){return stageCaseTransfer_(request,user);});}
 function discardCaseTransfer(token,count){return executeServerAction_(function(user){discardCaseTransfer_(token,count);return true;});}
+
+function createErrorReportDraft(request){return executeServerAction_(function(user){return createErrorReportDraft_(request,user);});}

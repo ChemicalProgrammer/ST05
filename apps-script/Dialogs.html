@@ -41,36 +41,55 @@ window.STDialog = (function() {
     return {url:url,truncated:truncated,recipient:recipient};
   }
   function mountErrorReport(options,dialog,body,footer){
-    var section=document.createElement('section');section.className='error-report-options';
-    var label=document.createElement('label');label.className='checkbox-label st-checkbox-card';
-    var attach=document.createElement('input');attach.type='checkbox';attach.className='error-report-attach';attach.checked=false;
-    attach.disabled=!errorReporting?.hasCase?.();label.append(attach,document.createTextNode(__ST_TEXT__('errors.report_attach')));section.append(label);
-    var note=document.createElement('p');note.className='error-report-note';
-    function updateNote(){note.textContent=attach.disabled?__ST_TEXT__('errors.report_no_case'):attach.checked?__ST_TEXT__('errors.report_attachment_help'):__ST_TEXT__('errors.report_review');}
-    attach.onchange=updateNote;updateNote();section.append(note);
-    if(!errorReportRecipient()){
-      var recipientNote=document.createElement('p');recipientNote.className='error-report-note';recipientNote.textContent=__ST_TEXT__('errors.report_no_recipient');section.append(recipientNote);
-    }
-    var status=document.createElement('p');status.className='error-report-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
-    var retry=document.createElement('a');retry.className='error-report-retry';retry.target='_blank';retry.rel='noopener noreferrer';retry.textContent=__ST_TEXT__('errors.report_open_gmail');retry.hidden=true;
-    section.append(status,retry);body.append(section);
-    var report=document.createElement('button');report.type='button';report.className='secondary error-report-button';report.innerHTML=STIcons.svg('send');report.append(document.createTextNode(__ST_TEXT__('errors.report_email')));footer.append(report);
+    var report=document.createElement('button');report.type='button';report.className='secondary error-report-button';report.innerHTML=STIcons.svg('send');report.append(document.createTextNode(errorReportText('errors.report_email')));footer.append(report);
+    var prompt=null;
     report.onclick=function(){
-      status.hidden=false;status.textContent='';retry.hidden=true;retry.removeAttribute('href');
-      var prepared=null;
-      if(attach.checked){
-        if(!errorReporting?.hasCase?.()){attach.checked=false;attach.disabled=true;updateNote();status.textContent=__ST_TEXT__('errors.report_no_case');return;}
-        try{prepared=errorReporting.downloadCase();if(!prepared)throw Error('No case snapshot');}
-        catch(error){status.textContent=__ST_TEXT__('errors.report_attachment_failed');return;}
+      if(prompt?.open)return;
+      prompt=document.createElement('dialog');prompt.className='message-dialog error-report-dialog';prompt.setAttribute('aria-label',errorReportText('errors.report_email'));
+      var heading=document.createElement('header');heading.className='dialog-heading';
+      var title=document.createElement('h2');title.textContent=errorReportText('errors.report_email');heading.append(title);
+      var content=document.createElement('div');content.className='dialog-body';
+      var label=document.createElement('label');label.className='checkbox-label st-checkbox-card';
+      var attach=document.createElement('input');attach.type='checkbox';attach.className='error-report-attach';attach.checked=false;attach.disabled=!errorReporting?.hasCase?.();
+      label.append(attach,document.createTextNode(errorReportText('errors.report_attach')));content.append(label);
+      var status=document.createElement('p');status.className='error-report-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
+      var link=document.createElement('a');link.className='error-report-retry';link.target='_blank';link.rel='noopener noreferrer';link.hidden=true;
+      content.append(status,link);
+      var buttons=document.createElement('footer');buttons.className='dialog-actions';
+      var cancel=document.createElement('button');cancel.type='button';cancel.className='ghost';cancel.textContent=errorReportText('view.cancel');
+      var proceed=document.createElement('button');proceed.type='button';proceed.className='error-report-continue';proceed.textContent=errorReportText('errors.report_continue');
+      buttons.append(cancel,proceed);prompt.append(heading,content,buttons);document.body.append(prompt);
+      var current=prompt,sending=false;
+      function close(){if(sending)return;current.close();current.remove();if(prompt===current)prompt=null;if(report.isConnected)report.focus();}
+      cancel.onclick=close;
+      current.addEventListener('cancel',function(event){event.preventDefault();close();});
+      dialog.addEventListener('close',function(){if(current.isConnected){current.close();current.remove();if(prompt===current)prompt=null;}},{once:true});
+      function openMail(url,text){link.href=url;link.textContent=text;link.hidden=false;try{window.open(url,'_blank','noopener,noreferrer');}catch(ignore){}}
+      function compose(prepared){
+        var result=errorReportCompose(options);
+        status.hidden=false;status.textContent=[prepared?errorReportText('errors.report_attachment_ready'):'',result.truncated?errorReportText('errors.report_long_help'):'',!result.recipient?errorReportText('errors.report_no_recipient'):''].filter(Boolean).join(' ');
+        status.hidden=!status.textContent;
+        openMail(result.url,errorReportText('errors.report_open_gmail'));
       }
-      var compose=errorReportCompose(options),messages=[];
-      if(prepared)messages.push(errorReportText(prepared.partial?'errors.report_attachment_partial':'errors.report_attachment_ready'));
-      if(compose.truncated)messages.push(errorReportText('errors.report_long_help'));
-      messages.push(errorReportText('errors.report_review'));
-      status.textContent=messages.join(' ');retry.href=compose.url;retry.hidden=false;
-      // Open on the explicit click. Keep a real link as a popup-blocker fallback.
-      // No Gmail/Drive upload, draft API, or send operation is performed.
-      try{window.open(compose.url,'_blank','noopener,noreferrer');}catch(ignore){}
+      proceed.onclick=async function(){
+        if(sending)return;
+        if(!attach.checked){compose(false);proceed.hidden=true;cancel.textContent=errorReportText('dialog.ok');return;}
+        sending=true;cancel.disabled=proceed.disabled=attach.disabled=true;status.hidden=false;status.textContent=errorReportText('errors.report_preparing');link.hidden=true;
+        try{
+          var snapshot=errorReporting?.captureCase?.();if(!snapshot?.record)throw Error('No case snapshot');
+          var draft;try{draft=await errorReporting.createDraft(options,snapshot);}catch(ignore){}
+          if(!current.isConnected)return;
+          if(draft?.attached===true){
+            status.textContent=errorReportText('errors.report_draft_ready');cancel.textContent=errorReportText('dialog.ok');
+            proceed.hidden=true;openMail('https://mail.google.com/mail/#drafts',errorReportText('errors.report_open_drafts'));
+          }else{
+            if(!errorReporting.downloadCase(snapshot))throw Error('Download failed');
+            compose(true);proceed.hidden=true;cancel.textContent=errorReportText('dialog.ok');
+          }
+        }catch(error){if(current.isConnected)status.textContent=errorReportText('errors.report_attachment_failed');}
+        finally{sending=false;cancel.disabled=proceed.disabled=false;attach.disabled=proceed.hidden||!errorReporting?.hasCase?.();}
+      };
+      current.showModal();proceed.focus();
     };
   }
   function open(options) {

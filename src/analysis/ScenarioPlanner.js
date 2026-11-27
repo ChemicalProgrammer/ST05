@@ -558,7 +558,7 @@ function automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,doc
         targetFeasibility:'NOT_ESTABLISHED',supplierTarget:false,engineeringReviewRequired:true}}];
   });
 }
-export function planScenarios(simulation,{zeroOnly=false}={}){
+export function planScenarios(simulation,{zeroOnly=false,mediumOnly=false}={}){
   if(simulation.dynamicConfig?.machineDesignEnabled===false||simulation.dynamicConfig?.machineMaximumSpeedEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
   const audit=scenarioAudit(simulation),engineeringEquipment=scenarioEngineeringEquipment(simulation),diagnosis=diagnoseScenarioLosses(simulation);
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
@@ -568,6 +568,7 @@ export function planScenarios(simulation,{zeroOnly=false}={}){
   const equipmentReliability=(simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR').map(e=>equipmentReliabilityAssessment(e,simulation.dynamicConfig));
   equipmentReliability.forEach(r=>checks.push({equipmentId:r.equipmentId,rule:'EQUIPMENT_RELIABILITY',status:r.status==='NOT EVALUATED'?'NOT_EVALUATED':r.status,assessment:r,interpretation:'Engineering screening thresholds; not a replacement mandate.'}));
   function add(kind,tier,equipment,changes,evidence,priority,basis){
+    if(mediumOnly&&tier!=='MEDIUM')return;
     if(zeroOnly&&(tier!=='ZERO'||changes.some(c=>c.external||c.analysisOnly||c.path.startsWith('noiseProfile.reliability.')||c.path==='nominalRatePerSecond'||c.path==='processData.geometry.lactMm'||c.path.endsWith('RampUpSeconds')||c.path.endsWith('startupTimeSeconds'))))return;
     changes=changes.filter(c=>c.before!==c.after).map(c=>({...c,originTier:tier}));if(!changes.length)return;
     let disabledReason=null;try{applyScenarioChanges(simulation,changes,{tier,previewOnly:true});}catch(error){disabledReason=error.message;}
@@ -704,17 +705,17 @@ export function planScenarios(simulation,{zeroOnly=false}={}){
       add(changes.some(c=>c.replacementMaximumBpm!==undefined)?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION',option.tier,equipment,changes,{targetSource:'USER_DOCUMENTED',interventionType:changes[0]?.interventionType,costClass:SCENARIO_INTERVENTIONS[changes[0]?.interventionType]?.costClass,interpretation:'Supported intervention hypothesis; dynamic benefit and shifted constraints require evaluation.'},changes.some(c=>c.replacementMaximumBpm!==undefined)&&capacityDiagnosis.limitingEquipment.some(e=>e.id===equipment.id)?120:90,'STATIC');
     }
   });
-  for(const replacement of zeroOnly?[]:automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,documentedReplacementIds))add(replacement.changes.some(c=>c.path==='nominalRatePerSecond')?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION','HIGH',replacement.equipment,replacement.changes,replacement.evidence,100+replacement.priority,'HYBRID');
+  for(const replacement of zeroOnly||mediumOnly?[]:automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,documentedReplacementIds))add(replacement.changes.some(c=>c.path==='nominalRatePerSecond')?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION','HIGH',replacement.equipment,replacement.changes,replacement.evidence,100+replacement.priority,'HYBRID');
   // Rank the limited installation sites before combinatorial search. Every
   // subset of these sites (one, two or three) is then a separate hypothesis.
   const medium=candidates.filter(c=>c.tier==='MEDIUM').sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority||a.equipmentId.localeCompare(b.equipmentId));
   const retainedSites=new Set(medium.slice(0,SCENARIO_POLICY.maxAccumulationSites).map(c=>c.equipmentId));
   for(let i=candidates.length-1;i>=0;i--)if(candidates[i].tier==='MEDIUM'&&!retainedSites.has(candidates[i].equipmentId))candidates.splice(i,1);
-  const projects=(zeroOnly?['ZERO']:['ZERO','MEDIUM','HIGH']).map(tier=>{
+  const projects=(mediumOnly?['MEDIUM']:zeroOnly?['ZERO']:['ZERO','MEDIUM','HIGH']).map(tier=>{
     const choices=candidates.filter(p=>p.tier===tier).sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority);
     return choices[0]||{tier,canApply:false,titleKey:'scenario.no_proposal',basis:'STATIC',changes:[],evidence:{},disabledReason:'SCENARIO_INSUFFICIENT_EVIDENCE'};
   });
-  return {sourceReadiness:scenarioSourceReadiness(simulation),proposalNeeds:scenarioProposalNeeds(simulation),equipmentReliability,capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:zeroOnly?[]:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
+  return {sourceReadiness:scenarioSourceReadiness(simulation),proposalNeeds:scenarioProposalNeeds(simulation),equipmentReliability,capacityDiagnosis,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,reliabilityOpportunities:zeroOnly||mediumOnly?[]:reliabilitySensitivityCandidates(simulation),projects,checks,candidates,diagnosis,hasDynamicEvidence:diagnosis.status==='OBSERVED'};
 }
 
 

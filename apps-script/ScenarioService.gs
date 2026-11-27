@@ -27,7 +27,7 @@ function prepareScenarioFromRecord_(request,record,user) {
     requireCompletedScenarioSource_(source);
     var sourceSignature=STScenarioEngine_.signature(source),submitted=request.proposal;
     // Reject paused CAPEX scopes before local planning or AI proposal binding.
-    if(submitted?.tier!=='ZERO'||submitted.searchScope&&submitted.searchScope!=='ZERO')throw createSimulatorError_('SCENARIO_CAPEX_DISABLED','Only Zero CAPEX is enabled.');
+    if(!['ZERO','MEDIUM'].includes(submitted?.tier)||submitted.searchScope&&submitted.searchScope!==submitted.tier||submitted.tier==='MEDIUM'&&(request.origin!=='REVIEWED'||record.metadata?.workspaceMode!=='MINIMAL'))throw createSimulatorError_('SCENARIO_CAPEX_DISABLED','This CAPEX scope is disabled.');
     if(request.origin==='LOCAL'){
       // Recompute the recommendation from the supplied source. A local
       // proposal is valid only if its exact edits still match a current candidate.
@@ -61,7 +61,7 @@ function buildSavedScenarioStudy_(source,proposal,sourceSignature,warnings,searc
   function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.keys(value).sort().reduce(function(copy,key){if(value[key]!==undefined)copy[key]=canonical(value[key]);return copy;},{});return value;}
   function changesKey(changes){return JSON.stringify((changes||[]).map(function(c){return canonical({equipmentId:c.equipmentId,path:c.path,before:c.before,after:c.after,replacementMaximumBpm:c.replacementMaximumBpm,analysisOnly:c.analysisOnly===true,external:c.external===true,interventionType:c.interventionType,originTier:c.originTier,packageId:c.packageId,targetId:c.targetId,packagePaths:Array.isArray(c.packagePaths)?c.packagePaths.slice().sort():undefined});}).sort(function(a,b){return (a.equipmentId+':'+a.path).localeCompare(b.equipmentId+':'+b.path);}));}
   var key=changesKey(proposal.changes),methodologySignature=JSON.stringify(STScenarioEngine_.methodologyInputs(source.whatIf?.methodology||{})),searchSettingsSignature=STScenarioEngine_.searchSettingsSignature(searchSettings);
-  var matched=(source.whatIf?.evaluations||[]).filter(function(entry){return entry.sourceSimulationId===source.id&&entry.sourceSignature===sourceSignature&&entry.searchPolicyVersion==='MATCHED_CAPEX_V12'&&entry.method==='ZERO_PHYSICAL_OFAT_DOE_V1'&&entry.tier==='ZERO'&&entry.searchScope===proposal.tier&&entry.methodologySignature===methodologySignature&&entry.searchSettingsSignature===STScenarioEngine_.searchSettingsSignature({speedProfile:'FAST',automaticBasic:true})&&changesKey(entry.evaluatedChanges)===key&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(entry.status);}).sort(function(a,b){return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));})[0];
+  var matched=(source.whatIf?.evaluations||[]).filter(function(entry){return entry.sourceSimulationId===source.id&&entry.sourceSignature===sourceSignature&&entry.searchPolicyVersion==='MATCHED_CAPEX_V12'&&entry.method===(proposal.tier==='MEDIUM'?'MEDIUM_BUFFER_PACKAGES_V1':'ZERO_PHYSICAL_OFAT_DOE_V1')&&entry.tier===proposal.tier&&entry.searchScope===proposal.tier&&entry.methodologySignature===methodologySignature&&entry.searchSettingsSignature===STScenarioEngine_.searchSettingsSignature({speedProfile:'FAST',automaticBasic:true})&&changesKey(entry.evaluatedChanges)===key&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED','NOT_REPRODUCED'].includes(entry.status);}).sort(function(a,b){return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));})[0];
   var evidence=matched?JSON.parse(JSON.stringify(matched)):{sourceSimulationId:source.id,sourceSignature:sourceSignature,unitOfFlow:source.unitOfFlow||'units',evaluatedChanges:proposal.changes,analysisOnly:proposal.analysisOnly,status:'NO_MATCHING_CURRENT_EVALUATION'};
   evidence.warnings=(evidence.warnings||[]).concat(warnings);
   if(evidence.independentCheck){
@@ -72,7 +72,7 @@ function buildSavedScenarioStudy_(source,proposal,sourceSignature,warnings,searc
     if((!evidence.confirmationPlan?.automaticBasic||check.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.baseline?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')){check.passed=false;check.reason='BASIC_PRECISE_CONFIRMATION_REQUIRED';}
     if(check.durationSeconds!==check.baseline?.durationSeconds||check.rounds!==evidence.confirmationPlan?.rounds||check.unitOfFlow!==(source.unitOfFlow||source.results?.unitOfFlow||source.results?.replay?.unitOfFlow||'units')||check.unitOfFlow!==check.baseline?.unitOfFlow){check.passed=false;check.reason='CONFIRMATION_METADATA_MISMATCH';}
   }
-  if(proposal.tier==='ZERO'){
+  if(['ZERO','MEDIUM'].includes(proposal.tier)){
     evidence.originalVerificationRequired=true;
     if(evidence.independentCheck?.passed===true){evidence.originalVerification=STScenarioEngine_.verifyOriginal(source,evidence.originalVerification?.candidate||null,proposal.changes);}
     if(evidence.originalVerification?.passed!==true&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED'].includes(evidence.status))evidence.status='NOT_REPRODUCED';
@@ -96,8 +96,8 @@ function resolveLocalScenarioProposal_(proposal,source) {
 }
 function normalizeScenarioProposal_(proposal,source) {
   requireCompletedScenarioSource_(source);
-  if(!proposal||proposal.tier!=='ZERO'||!['STATIC','DYNAMIC','HYBRID'].includes(proposal.basis)||!Array.isArray(proposal.changes))throw createSimulatorError_('INVALID_SCENARIO','The scenario format is invalid.');
-  if(!proposal.changes.every(c=>STScenarioEngine_.zeroAllowed(c,source.equipment)))throw createSimulatorError_('INVALID_SCENARIO','Only Zero CAPEX conveyor and sensor experiments are enabled.');
+  if(!proposal||!['ZERO','MEDIUM'].includes(proposal.tier)||!['STATIC','DYNAMIC','HYBRID'].includes(proposal.basis)||!Array.isArray(proposal.changes))throw createSimulatorError_('INVALID_SCENARIO','The scenario format is invalid.');
+  if(!proposal.changes.length||!proposal.changes.every(c=>proposal.tier==='MEDIUM'?c.interventionType==='ACCUMULATION'&&STScenarioEngine_.categoryAllows(c,'MEDIUM'):STScenarioEngine_.zeroAllowed(c,source.equipment)))throw createSimulatorError_('INVALID_SCENARIO','The changes do not belong to the selected CAPEX category.');
   if(proposal.basis!=='STATIC'&&!source.results?.summary)throw createSimulatorError_('INVALID_SCENARIO','Dynamic evidence requires a completed simulation.');
   var title=typeof proposal.title==='string'?proposal.title.trim().slice(0,120):'';
   if(!title)throw createSimulatorError_('INVALID_SCENARIO','A scenario title is required.');

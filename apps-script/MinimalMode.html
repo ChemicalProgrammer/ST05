@@ -5,9 +5,12 @@ window.STMinimalMode=(function(){
   var runStopRequested=false,runStopTask=null;
   var runStartedAt=null,searchStartedAt=null;
   var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=1,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
-  var tiers=['ZERO'];
-  var executionPolicy='ZERO_ONLY_PHYSICAL_V6';
-  function zeroCard(card,simulationId){return !!card&&card.dataset?.motionKey===JSON.stringify([simulationId,'CAPEX','ZERO'])&&card.dataset?.capexExecutionPolicy===executionPolicy&&typeof card._runMinimalSearch==='function';}
+  var tiers=['ZERO','MEDIUM'],searchTiers=[];
+  var executionPolicy='ZERO_V6_MEDIUM_BUFFER_V1';
+  function cardTier(card,simulationId){
+    if(card?.dataset?.capexExecutionPolicy!==executionPolicy||typeof card._runMinimalSearch!=='function')return null;
+    return tiers.find(tier=>card.dataset.motionKey===JSON.stringify([simulationId,'CAPEX',tier]))||null;
+  }
   function el(id){return document.getElementById(id);}
   function node(tag,text,cls){var n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;}
   function tr(value){return window.STLanguage?.translate(value)||value;}
@@ -182,10 +185,10 @@ window.STMinimalMode=(function(){
   function sourceSignature(sim){try{return window.STScenarios?.signature(sim)||null;}catch(_){return null;}}
   // Discard only generated Zero CAPEX evaluations belonging to this simulation.
   // Keep configuration, other CAPEX archives and separately created simulations.
-  function ownedZeroResult(entry,sim){return (entry.searchScope||entry.tier)==='ZERO'&&(!entry.sourceSimulationId||entry.sourceSimulationId===sim.id);}
-  function discardZeroResults(sim){
+  function ownedScenarioResult(entry,sim,scope=tiers){return scope.includes(entry.searchScope||entry.tier)&&(!entry.sourceSimulationId||entry.sourceSimulationId===sim.id);}
+  function discardScenarioResults(sim,scope=tiers){
     var entries=sim?.whatIf?.evaluations;
-    if(Array.isArray(entries))sim.whatIf.evaluations=entries.filter(entry=>!ownedZeroResult(entry,sim));
+    if(Array.isArray(entries))sim.whatIf.evaluations=entries.filter(entry=>!ownedScenarioResult(entry,sim,scope));
   }
   function clearScenarios(){
     var grid=el('minimal-scenario-cards');grid.replaceChildren();show('minimal-scenario-cards',false);scenarioOwner=scenarioResult=null;
@@ -193,7 +196,7 @@ window.STMinimalMode=(function(){
   function scenarioCards(sim,r,build){
     var grid=el('minimal-scenario-cards');
     if(scenarioOwner!==sim||scenarioResult!==r){clearScenarios();scenarioOwner=sim;scenarioResult=r;}
-    function mounted(){return Array.from(grid.querySelectorAll('.analysis-recommendation')).filter(c=>zeroCard(c,sim.id));}
+    function mounted(){return Array.from(grid.querySelectorAll('.analysis-recommendation')).filter(c=>cardTier(c,sim.id));}
     var cards=mounted();
     if(build&&!buildingCards&&cards.length!==tiers.length){
       buildingCards=true;
@@ -216,9 +219,8 @@ window.STMinimalMode=(function(){
     if(stopRequested||!sim||!r||starting||actions.locked()){if(!searching&&(!sim||!r))clearScenarios();show('minimal-scenario-cards',false);return;}
     // Do not clone result cards or reconstruct candidates. The very same
     // Standard cards own the search, saved evidence, dialogs and actions.
-    var grid=el('minimal-scenario-cards'),saved=sim.whatIf?.evaluations?.some(entry=>ownedZeroResult(entry,sim));
     var cards=[];
-    try{cards=scenarioCards(sim,r,saved&&!searching&&!searchMessage&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL');}
+    try{cards=scenarioCards(sim,r,!searching&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL');}
     catch(error){searchMessage=error.message||'Evaluation failed';el('minimal-search-message').textContent=tr(searchMessage);show('minimal-search-message',true);}
     show('minimal-scenario-cards',cards.length>0);
   }
@@ -270,7 +272,7 @@ window.STMinimalMode=(function(){
     show('minimal-optimization',!!r&&!running);
     var readiness=sourceReadiness(sim,r);
     var canSearch=!!r&&!review&&readiness?.ready===true&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL';
-    var searchButton=el('minimal-search'),saved=sim?.whatIf?.evaluations?.some(entry=>ownedZeroResult(entry,sim));
+    var searchButton=el('minimal-search'),saved=sim?.whatIf?.evaluations?.some(entry=>ownedScenarioResult(entry,sim));
     searchButton.hidden=false;
     searchButton.disabled=searching?stopRequested:!canSearch||lock||running||state.saving;
     var priorSearchLabel=searchButton.textContent;searchButton.textContent=tr(searching?(stopRequested?'Stopping…':'Stop'):saved?'Restart search':'Find optimizations');
@@ -301,7 +303,7 @@ window.STMinimalMode=(function(){
     runStopTask=Promise.resolve().then(async function(){
       await actions.stopRun();
       if(owner()!==sim||ownerKey()!==key)return;
-      discardZeroResults(sim);actions.markReset();await actions.save();
+      discardScenarioResults(sim);actions.markReset();await actions.save();
     }).catch(function(error){actions.error(error);});
     sync(state);return runStopTask;
   }
@@ -326,7 +328,7 @@ window.STMinimalMode=(function(){
   function stopSearch(){
     if(!searching||stopRequested)return;
     stopRequested=true;searchCard?._cancelMinimalSearch?.({discard:true});
-    discardZeroResults(owner());searchProgress=0;searchCompleted=0;searchMessage='';
+    discardScenarioResults(owner(),searchTiers);searchProgress=0;searchCompleted=0;searchMessage='';
     progress('minimal-search-progress',0);clearScenarios();show('minimal-search-progress',false);sync(state);
   }
   async function startSearch(onlyCard){
@@ -336,8 +338,12 @@ window.STMinimalMode=(function(){
     var cards;
     try{cards=scenarioCards(sim,r,true);}catch(error){searchMessage=error.message||'Evaluation failed';actions.error(error);sync(state);return;}
     // Fail closed on stale cards and mixed-version Apps Script deployments.
-    if(window.STScenarioExplorer?.executionPolicy!==executionPolicy||cards.length!==1||!zeroCard(cards[0],sim.id)||(onlyCard&&onlyCard!==cards[0])){searchMessage=document.documentElement.lang==='es'?'Zero CAPEX V6 no está sincronizado. Actualiza la aplicación y recarga la página.':'Zero CAPEX V6 is not synchronized. Update the application and reload.';sync(state);return;}
-    var work=[cards[0]];
+    var ordered=tiers.map(tier=>cards.find(card=>cardTier(card,sim.id)===tier));
+    if(window.STScenarioExplorer?.executionPolicy!==executionPolicy||cards.length!==tiers.length||ordered.includes(undefined)||(onlyCard&&!ordered.includes(onlyCard))){
+      searchMessage=document.documentElement.lang==='es'?'Actualiza la aplicación y recarga las tarjetas CAPEX.':'Update the application and reload the CAPEX cards.';sync(state);return;
+    }
+    var work=onlyCard?[onlyCard]:ordered;
+    searchTiers=work.map(card=>cardTier(card,sim.id));
     searching=true;searchStartedAt=performance.now();stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
     var failures=[],evaluated=false;
     try{
@@ -351,7 +357,7 @@ window.STMinimalMode=(function(){
       sync(state);
       for(var card of work){
         if(stopRequested)break;
-        if(!zeroCard(card,sim.id))throw Error('SCENARIO_CAPEX_DISABLED');
+        if(!cardTier(card,sim.id))throw Error('SCENARIO_CAPEX_DISABLED');
         if(!isMinimal()||ownerKey()!==key||sourceSignature(sim)!==signature){failures.push('Source inputs changed.');break;}
         searchCard=card;
         var label=card.querySelector('.analysis-capex')?.textContent||'CAPEX';
@@ -372,8 +378,8 @@ window.STMinimalMode=(function(){
     }catch(error){if(!stopRequested){searchMessage=error.message||'Evaluation failed';actions.error(error);}}
     finally{
       var discarded=stopRequested,sameOwner=owner()===sim&&ownerKey()===key&&sourceSignature(sim)===signature;
-      if(discarded&&sameOwner){discardZeroResults(sim);searchProgress=0;searchCompleted=0;searchMessage='';clearScenarios();progress('minimal-search-progress',0);actions.markReset();}
-      searchSaving=(discarded||evaluated)&&sameOwner;
+      if(discarded&&sameOwner){discardScenarioResults(sim,searchTiers);searchProgress=0;searchCompleted=0;searchMessage='';clearScenarios();progress('minimal-search-progress',0);actions.markReset();}
+      searchSaving=(discarded||evaluated)&&sameOwner;searchTiers=[];
       searching=false;searchStartedAt=null;searchCard=null;stopRequested=false;sync(state);
     }
     // Let the real result cards paint before serializing evidence for Drive.

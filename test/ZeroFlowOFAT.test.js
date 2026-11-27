@@ -38,19 +38,17 @@ test('All active experiment windows are physical and ranking matches confirmatio
  assert.equal(ranking.durationSeconds,confirm.durationSeconds);assert.equal(confirm.scenarioFidelity,'PHYSICAL_PRECISE_V1');assert.equal(confirm.rounds,6);
  assert(planScenarioConfirmation(value(100,3600),value(104,3600),{},{automaticBasic:true}).rounds>=6);
 });
-test('Active UI and server block legacy categories',()=>{
- const basic=fs.readFileSync('apps-script/MinimalMode.html','utf8'),explorer=fs.readFileSync('apps-script/ScenarioExplorer.html','utf8'),service=fs.readFileSync('apps-script/ScenarioService.gs','utf8');
- assert.match(basic,/var tiers=\['ZERO'\]/);
- assert.match(explorer,/SCENARIO_ZERO_FLOW_ONLY/);assert.match(explorer,/SCENARIO_ZERO_PHYSICAL_ONLY/);
- assert.match(service,/proposal\.tier!=='ZERO'/);assert.match(service,/STScenarioEngine_\.zeroAllowed/);
-});
-
-test('Zero-only queue rejects old, mixed-scope and mismatched cards before dispatch',()=>{
- const basic=fs.readFileSync('apps-script/MinimalMode.html','utf8'),explorer=fs.readFileSync('apps-script/ScenarioExplorer.html','utf8');
- const check=basic.match(/function zeroCard\(card,simulationId\)\{[^\n]+\}/)[0];
- const accepts=new Function('executionPolicy',check+';return zeroCard;')('ZERO_ONLY_PHYSICAL_V6');
- const card=(tier,policy='ZERO_ONLY_PHYSICAL_V6',id='a')=>({dataset:{motionKey:JSON.stringify([id,'CAPEX',tier]),capexExecutionPolicy:policy},_runMinimalSearch:()=>{throw Error('not executed');}});
- assert(accepts(card('ZERO'),'a'));assert(!accepts(card('MEDIUM'),'a'));assert(!accepts(card('HIGH'),'a'));assert(!accepts(card('ZERO','old'),'a'));assert(!accepts(card('ZERO',undefined,'other'),'a'));
- assert.match(basic,/var work=\[cards\[0\]\]/);assert.match(basic,/onlyCard&&onlyCard!==cards\[0\]/);assert.match(basic,/if\(!zeroCard\(card,sim.id\)\)throw Error\('SCENARIO_CAPEX_DISABLED'\)/);
- assert.match(explorer,/SCENARIO_SEARCH_ZERO_OFAT_V6/);assert.match(explorer,/if\(!zeroEngineReady\(\)\)throw Error\('SCENARIO_ZERO_VERSION_MISMATCH'\)/);
+test('Medium plans contain only applicable accumulation packages and preserve the Zero plan',()=>{
+ const s=fixture(),belt=s.equipment.find(e=>e.type==='CONVEYOR'),length=belt.processData.geometry.lactMm;
+ const original=planScenarios(s,{zeroOnly:true}).candidates;
+ s.whatIf={...s.whatIf,externalOptions:[{tier:'MEDIUM',changes:[{equipmentId:belt.id,path:'processData.geometry.lactMm',before:length,after:length*1.25,originTier:'MEDIUM',interventionType:'ACCUMULATION',packageId:'section'}]}]};
+ const medium=planScenarios(s,{mediumOnly:true});
+ assert.deepEqual(medium.projects.map(p=>p.tier),['MEDIUM']);
+ assert(medium.candidates.some(p=>p.canApply&&p.tier==='MEDIUM'));
+ for(const p of medium.candidates.filter(p=>p.canApply)){
+  assert.equal(p.tier,'MEDIUM');
+  const model=applyScenarioChanges(s,p.changes,{tier:'MEDIUM',previewOnly:true});
+  assert(model.equipment.some((e,i)=>e.processData.geometry?.lactMm>s.equipment[i].processData.geometry?.lactMm));
+ }
+ assert.deepEqual(planScenarios(s,{zeroOnly:true}).candidates,original);
 });

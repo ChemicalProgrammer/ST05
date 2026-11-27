@@ -193,6 +193,14 @@ window.STMinimalMode=(function(){
     searching=true;stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
     var failures=[],evaluated=false;
     try{
+      // Reset the complete requested queue before starting its first category.
+      // The single-card refresh only resets that card.
+      if(work.some(card=>typeof card._prepareMinimalRestart!=='function'))throw Error('CAPEX reset is unavailable.');
+      for(var index=0;index<work.length;index++){
+        if(!work[index]._prepareMinimalRestart({notify:index===work.length-1}))throw Error('CAPEX card could not be reset.');
+        evaluated=true;
+      }
+      sync(state);
       for(var card of work){
         if(stopRequested)break;
         if(!isMinimal()||ownerKey()!==key||sourceSignature(sim)!==signature){failures.push('Source inputs changed.');break;}

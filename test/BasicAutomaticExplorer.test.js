@@ -249,3 +249,42 @@ test('Basic separates independent improvement from a worse original-horizon cand
   const entry=await search(h,'ZERO');assert.equal(originalCalls,1);assert(entry.independentCheck.passed);assert.equal(entry.originalVerification.passed,false);assert.equal(entry.status,'NOT_REPRODUCED');assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/did not improve the original run/);
  }finally{h.close();}
 });
+
+
+test('Restart prepares all queued cards without displaying or restoring previous results',async()=>{
+  const h=harness({reliability:false,durationSeconds:86400});try{
+    // Seed a real previous evaluation and its UI, then restart the requested
+    // cards before any new simulation is submitted.
+    await search(h,'HIGH');
+    const old=h.sim.whatIf.evaluations.find(e=>e.tier==='HIGH');
+    assert(old.originalVerification?.passed);
+    assert(h.cards.HIGH.querySelector('.scenario-metrics').textContent.includes('%'));
+    const beforeCalls=h.calls.length,original=JSON.stringify(h.sim.results),measurements=JSON.stringify(h.sim.whatIf.measurements);
+    const cards=Object.values(h.cards);
+    cards.forEach((card,i)=>assert(card._prepareMinimalRestart({notify:i===cards.length-1})));
+    assert.equal(h.calls.length,beforeCalls);assert.equal(JSON.stringify(h.sim.results),original);assert.equal(JSON.stringify(h.sim.whatIf.measurements),measurements);
+    for(const card of cards){
+      assert.equal(card.querySelector('.scenario-metrics').textContent,'');
+      assert(card.querySelector('.scenario-create').disabled);
+      assert(card.querySelector('.scenario-result-notice').hidden);
+      assert(card.querySelector('.scenario-activity').hidden);
+      assert.equal(card._minimalSearchProgress(),0);
+    }
+    assert(h.sim.whatIf.evaluations.every(e=>e.restartPending&&e.status==='NOT_EVALUATED'&&!e.candidate&&!e.baseline&&!e.lastResult));
+    // A later refresh of the UI cannot resurrect the previous winner.
+    const target=h.w.document.getElementById('scenarios');target.replaceChildren();h.w.STWhatIf.render(h.sim,target,()=>{}, {compact:true});
+    for(const card of target.querySelectorAll('.analysis-recommendation')){assert.equal(card.querySelector('.scenario-metrics').textContent,'');assert(card.querySelector('.scenario-create').disabled);}
+  }finally{h.close();}
+});
+
+test('Fluid screening notice identifies the approximation and measurement horizon',async()=>{
+  const h=harness({reliability:false,durationSeconds:86400});try{
+    const original=h.w.SimulatorEngine.simulateBatch;let seen=false;
+    h.w.SimulatorEngine.simulateBatch=async input=>{
+      const notice=h.cards.HIGH.querySelector('.scenario-result-notice');
+      if(!notice.hidden&&notice.textContent.includes('Screening Engine (approximate OEE; not a physical result).')){assert.match(notice.textContent,/30 min × 3/);seen=true;}
+      return original(input);
+    };
+    await search(h,'HIGH');assert(seen,'The preliminary aggregate number identifies its model and horizon');
+  }finally{h.close();}
+});

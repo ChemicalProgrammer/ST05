@@ -3,60 +3,58 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const source=fs.readFileSync('apps-script/MinimalMode.html','utf8');
 const section=source.slice(source.indexOf('  function completedOutcome('),source.indexOf('  function openImport('));
-function fixture(outcomes,options={}){
- const tiers=['ZERO','MEDIUM','HIGH'],sim={id:'simulation-a'},r={summary:{}},state={saving:false},calls=[],percentages=[],paints=[];
- const cards=tiers.map((tier,i)=>({
-  dataset:{motionKey:JSON.stringify([sim.id,'CAPEX',tier])},
-  querySelector:()=>({textContent:tier+' CAPEX'}),
-  _runMinimalSearch:async()=>{calls.push(tier);if(outcomes[i] instanceof Error)throw outcomes[i];return outcomes[i];}
- })).filter((_,i)=>i!==options.missing);
- const context={tiers,state,paints,owner:()=>sim,result:()=>r,busy:()=>false,ownerKey:()=>sim.id,sourceSignature:()=> 'current',
-  window:{STScenarios:{readiness:()=>({ready:options.ready!==false,reason:options.ready===false?'NO_RESULTS':null})}},
-  document:{visibilityState:'hidden'},setTimeout:fn=>fn(),
-  scenarioCards:()=>cards,expandForAction:()=>{},isMinimal:()=>true,
-  actions:{error:e=>calls.push('error:'+e.message),save:async()=>calls.push('save')},
-  progress:(_id,value)=>percentages.push(value)};
+const helpers=source.slice(source.indexOf('  function ownedZeroResult('),source.indexOf('  function clearScenarios('));
+const zeroCard=source.match(/function zeroCard\(card,simulationId\)\{[^\n]+\}/)[0];
+function fixture(outcome,options={}){
+ const sim={id:'simulation-a',whatIf:{evaluations:[{tier:'ZERO',sourceSimulationId:'simulation-a'},{tier:'HIGH'},{tier:'ZERO',sourceSimulationId:'other'}],methodology:{keep:true}}},r={summary:{outputCount:123}},state={saving:false},calls=[],percentages=[],paints=[];
+ const executionPolicy='ZERO_ONLY_PHYSICAL_V6',cards=options.missing?[]:[{
+  dataset:{motionKey:JSON.stringify([sim.id,'CAPEX',options.tier||'ZERO']),capexExecutionPolicy:executionPolicy},
+  querySelector:()=>({textContent:'Zero CAPEX'}),
+  _prepareMinimalRestart:()=>{calls.push('prepare');return true;},
+  _runMinimalSearch:async()=>{calls.push('ZERO');if(outcome instanceof Error)throw outcome;return outcome;},
+  _cancelMinimalSearch:({discard})=>{assert.equal(discard,true);calls.push('cancel');}
+ }];
+ const context={executionPolicy,sim,state,paints,owner:()=>sim,result:()=>r,busy:()=>false,ownerKey:()=>sim.id,sourceSignature:()=> 'current',
+  window:{STScenarioExplorer:{executionPolicy},STScenarios:{readiness:()=>({ready:options.ready!==false,reason:options.ready===false?'NO_RESULTS':null})}},
+  document:{visibilityState:'hidden',documentElement:{lang:'en'}},setTimeout:fn=>fn(),scenarioCards:()=>cards,expandForAction:()=>{},isMinimal:()=>true,
+  actions:{error:e=>calls.push('error:'+e.message),markReset:()=>calls.push('dirty'),save:async()=>calls.push('save')},
+  progress:(_id,value)=>percentages.push(value),clearScenarios:()=>calls.push('clear'),show:()=>{}};
  const run=new Function(...Object.keys(context),`
- var searching=false,stopRequested=false,searchSaving=false,searchProgress=0,searchCompleted=0,searchTotal=3,searchCard=null,searchMessage='';
+ var searching=false,stopRequested=false,searchSaving=false,searchProgress=0,searchCompleted=0,searchTotal=1,searchCard=null,searchMessage='';
  function sync(){paints.push({searching,searchSaving,searchMessage});}
- `+section+`
+ `+zeroCard+helpers+section+`
  return {startSearch,stopSearch,completedOutcome,status:()=>({searching,searchSaving,searchMessage,searchCompleted,searchProgress})};`)(...Object.values(context));
- return {run,calls,percentages,paints,cards};
+ return {run,calls,percentages,paints,cards,sim,r};
 }
 const complete=status=>({started:true,status});
-test('three blocked categories cannot report 100% or trigger a save',async()=>{
- const h=fixture([{started:false,reason:'invalid configuration'},undefined,{started:false,reason:'NO_RESULTS'}]);
- await h.run.startSearch();assert.deepEqual(h.percentages,[0,0,0]);assert.equal(h.run.status().searchCompleted,0);
- assert.match(h.run.status().searchMessage,/invalid configuration/);assert.match(h.run.status().searchMessage,/NO_RESULTS/);
- assert(!h.calls.includes('save'));
-});
-test('all terminal outcomes count, including negative results, and cards are published before saving',async()=>{
- const h=fixture([complete('IMPROVEMENT_REPRODUCED'),complete('NO_DEMONSTRATED_IMPROVEMENT'),complete('NO_ELIGIBLE_TARGETS')]);
- await h.run.startSearch();assert.equal(h.percentages.at(-1),100);assert.equal(h.run.status().searchCompleted,3);
- assert.equal(h.run.status().searchMessage,'');assert.deepEqual(h.calls,['ZERO','MEDIUM','HIGH','save']);
- assert(h.paints.some(p=>!p.searching&&p.searchSaving));
-});
-test('an error and an interrupted search cannot be counted as complete',async()=>{
- const h=fixture([complete('NO_DEMONSTRATED_IMPROVEMENT'),new Error('worker failed'),complete('INTERRUPTED')]);
- await h.run.startSearch();assert.equal(h.run.status().searchCompleted,1);assert(h.percentages.every(p=>p<100));assert.match(h.run.status().searchMessage,/worker failed/);
-});
-test('missing cards and stale baseline stop the search before invoking any category',async()=>{
- for(const options of [{missing:1},{ready:false}]){
-  const h=fixture([],options);await h.run.startSearch();assert.equal(h.calls.length,0);assert.equal(h.percentages.length,0);assert(h.run.status().searchMessage);
+test('Zero-only dispatch publishes terminal outcomes and saves once',async()=>{
+ for(const status of ['IMPROVEMENT_REPRODUCED','NO_DEMONSTRATED_IMPROVEMENT','NO_ELIGIBLE_TARGETS','NO_PROMISING_CANDIDATE']){
+  const h=fixture(complete(status));await h.run.startSearch();assert.equal(h.percentages.at(-1),100);
+  assert.deepEqual(h.calls,['prepare','ZERO','save']);assert(h.paints.some(p=>!p.searching&&p.searchSaving));
  }
 });
-test('individual card search uses the same global progress and only runs that category',async()=>{
- const h=fixture([complete('NO_ELIGIBLE_TARGETS'),complete('NOT_REPRODUCED'),complete('INFEASIBLE')]);
- await h.run.startSearch(h.cards[1]);assert.deepEqual(h.calls,['MEDIUM','save']);assert.equal(h.percentages.at(-1),100);
+test('failed, blocked or budget-limited Zero evaluation never reports 100 percent',async()=>{
+ for(const outcome of [new Error('worker failed'),{started:false,reason:'invalid configuration'},complete('INTERRUPTED'),complete('SEARCH_BUDGET_REACHED')]){
+  const h=fixture(outcome);await h.run.startSearch();assert.equal(h.run.status().searchCompleted,0);assert(h.percentages.every(p=>p<100));assert(h.run.status().searchMessage);
+ }
 });
-
-test('a clear screening exit completes a category, but a time limit remains explicitly incomplete',async()=>{
- const h=fixture([complete('NO_PROMISING_CANDIDATE'),{started:true,status:'SEARCH_BUDGET_REACHED',reason:'Time limit reached'},complete('NO_ELIGIBLE_TARGETS')]);
- await h.run.startSearch();assert.equal(h.run.status().searchCompleted,2);assert(h.percentages.every(value=>value<100));assert.match(h.run.status().searchMessage,/Time limit reached/);assert(h.calls.includes('save'));
+test('missing cards, stale baseline and non-Zero cards cannot run',async()=>{
+ for(const options of [{missing:true},{ready:false},{tier:'MEDIUM'},{tier:'HIGH'}]){
+  const h=fixture(complete('IMPROVEMENT_REPRODUCED'),options);await h.run.startSearch();assert.equal(h.calls.length,0);assert(h.run.status().searchMessage);
+ }
 });
-test('stop cancels the current category and retains completed categories without starting the next',async()=>{
- const h=fixture([complete('IMPROVEMENT_REPRODUCED'),complete('NO_ELIGIBLE_TARGETS'),complete('NO_ELIGIBLE_TARGETS')]);
- h.cards[1]._runMinimalSearch=async()=>{h.calls.push('MEDIUM');h.run.stopSearch();return {started:true,status:'CANCELLED'};};
- h.cards[1]._cancelMinimalSearch=()=>h.calls.push('cancel');
- await h.run.startSearch();assert.deepEqual(h.calls,['ZERO','MEDIUM','cancel','save']);assert.equal(h.run.status().searchCompleted,1);assert.match(h.run.status().searchMessage,/Search stopped/);
+test('Stop discards current Zero evidence, clears progress, retains baseline and rejects a late success',async()=>{
+ const h=fixture(complete('IMPROVEMENT_REPRODUCED'));let finish;
+ h.cards[0]._runMinimalSearch=()=>{h.calls.push('ZERO');return new Promise(resolve=>{finish=resolve;});};
+ const pending=h.run.startSearch();assert(h.run.status().searching);h.run.stopSearch();
+ assert.deepEqual(h.sim.whatIf.evaluations,[{tier:'HIGH'},{tier:'ZERO',sourceSimulationId:'other'}]);
+ // Simulate a late cancelled worker callback attempting to repopulate the record.
+ h.sim.whatIf.evaluations.push({tier:'ZERO',sourceSimulationId:'simulation-a',candidate:{oee:80}});
+ finish(complete('IMPROVEMENT_REPRODUCED'));await pending;
+ assert.equal(h.run.status().searchProgress,0);assert.equal(h.run.status().searchCompleted,0);
+ assert.equal(h.run.status().searchMessage,'');assert(!h.run.status().searching);
+ assert.deepEqual(h.sim.whatIf.evaluations,[{tier:'HIGH'},{tier:'ZERO',sourceSimulationId:'other'}]);
+ assert.deepEqual(h.sim.whatIf.methodology,{keep:true});assert.equal(h.r.summary.outputCount,123);
+ assert.equal(h.calls.filter(x=>x==='cancel').length,1);assert.equal(h.calls.filter(x=>x==='save').length,1);
+ assert(h.percentages.every(p=>p===0));
 });

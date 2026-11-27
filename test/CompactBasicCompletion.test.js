@@ -26,7 +26,7 @@ function fixture(){
  };
  const start=new Function(...Object.keys(context),code+'\nreturn computeRoundSession;')(...Object.values(context));
  start(session,undefined,run);
- return {state,tab,session,calls,raf,timers,options,ready,complete:()=>finishBatch({ok:true,result}),fail:()=>finishBatch({ok:false,error:{message:'validation'}})};
+ return {state,tab,session,calls,raf,timers,options,ready,cancel:()=>{session.cancelled=true;session.resolveFirst(false);state.run.active=false;tab.results=null;},complete:()=>finishBatch({ok:true,result}),fail:()=>finishBatch({ok:false,error:{message:'validation'}})};
 }
 
 test('Basic publishes completed KPIs, archives once, and defers the save until a paint opportunity',async()=>{
@@ -51,4 +51,10 @@ test('Basic validation failure releases the run without archiving or scheduling 
  const h=fixture();h.fail();assert.equal(await h.ready,false);
  assert(!h.session.pending&&!h.state.run.active);assert.equal(h.tab.results,undefined);assert.equal(h.raf.length,0);
  assert(h.calls.includes('error:validation'));assert(!h.calls.includes('archive'));
+});
+
+test('cancelled compact session ignores a late batch success and exposes its settlement promise',async()=>{
+ const h=fixture();h.cancel();assert(h.options.cancelled());assert.equal(await h.ready,false);
+ h.complete();await h.session.completion;
+ assert.equal(h.tab.results,null);assert(!h.calls.includes('archive'));assert.equal(h.raf.length,0);
 });

@@ -817,7 +817,7 @@
       session.pending=true;session.firstProgress=null;syncRunControls();
       window.dispatchEvent(new CustomEvent('st-calculation-activity',{detail:{active:true}}));
       var input={case:cloneJson(session.caseModel),run:cloneJson(execution)};
-      SimulatorEngine.simulateBatch(input,{representativeReplay:!session.compact,onRepresentative:function(round){if(roundSessionActive(session)&&generation===session.generation){session.batchProgress={...session.batchProgress,stage:'representative',round:round};syncBatchProgress();}},firstResult:firstResult,cancelled:function(){return !roundSessionActive(session)||generation!==session.generation;},onFirstProgress:firstResult||session.run.calculationMode!=='LIVE'?undefined:function(partial){
+      session.completion=SimulatorEngine.simulateBatch(input,{representativeReplay:!session.compact,onRepresentative:function(round){if(roundSessionActive(session)&&generation===session.generation){session.batchProgress={...session.batchProgress,stage:'representative',round:round};syncBatchProgress();}},firstResult:firstResult,cancelled:function(){return !roundSessionActive(session)||generation!==session.generation;},onFirstProgress:firstResult||session.run.calculationMode!=='LIVE'?undefined:function(partial){
         if(!roundSessionActive(session)||generation!==session.generation)return;
         if(session.first&&!session.streaming)return;
         var previous=session.streaming?state.run.result:null;
@@ -919,6 +919,18 @@
         };
         computeRoundSession(session,undefined,execution);
       });
+    }
+
+    async function stopCompactSimulation(){
+      if(!window.STMinimalMode?.isMinimal()||!activePersistentSimulation())return;
+      var session=roundSession;
+      // Invalidate the generation before waiting for worker cancellation. A
+      // late completion cannot publish or schedule a save for this session.
+      invalidateActiveResult();
+      state.run._displayedVirtualSecond=0;state.run.playbackPositions=null;
+      state.run.restoredSpeedHistory=null;state.run.equipmentControlActions={};
+      markNumericalPlaybackAction(null);syncPlaybackRounds();syncRunControls();setStatus('Ready');
+      await session?.completion;
     }
 
     async function runSimulation() {

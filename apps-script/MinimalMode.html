@@ -2,6 +2,7 @@
 window.STMinimalMode=(function(){
   'use strict';
   var state,actions,initialized=false,importing=false,starting=false,searching=false,searchSaving=false,buildingCards=false,timer=null,stopRequested=false;
+  var runStopRequested=false,runStopTask=null;
   var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=1,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
   var tiers=['ZERO'];
   var executionPolicy='ZERO_ONLY_PHYSICAL_V6';
@@ -165,6 +166,13 @@ window.STMinimalMode=(function(){
     });
   }
   function sourceSignature(sim){try{return window.STScenarios?.signature(sim)||null;}catch(_){return null;}}
+  // Discard only generated Zero CAPEX evaluations belonging to this simulation.
+  // Keep configuration, other CAPEX archives and separately created simulations.
+  function ownedZeroResult(entry,sim){return (entry.searchScope||entry.tier)==='ZERO'&&(!entry.sourceSimulationId||entry.sourceSimulationId===sim.id);}
+  function discardZeroResults(sim){
+    var entries=sim?.whatIf?.evaluations;
+    if(Array.isArray(entries))sim.whatIf.evaluations=entries.filter(entry=>!ownedZeroResult(entry,sim));
+  }
   function clearScenarios(){
     var grid=el('minimal-scenario-cards');grid.replaceChildren();grid.hidden=true;scenarioOwner=scenarioResult=null;
   }
@@ -191,15 +199,14 @@ window.STMinimalMode=(function(){
     return readinessCache.value;
   }
   function renderScenarios(sim,r){
-    if(!sim||!r||starting||actions.locked()){if(!searching&&(!sim||!r))clearScenarios();show('minimal-scenario-cards',false);return;}
+    if(stopRequested||!sim||!r||starting||actions.locked()){if(!searching&&(!sim||!r))clearScenarios();show('minimal-scenario-cards',false);return;}
     // Do not clone result cards or reconstruct candidates. The very same
     // Standard cards own the search, saved evidence, dialogs and actions.
-    var grid=el('minimal-scenario-cards'),saved=sim.whatIf?.evaluations?.some(e=>(e.searchScope||e.tier)==='ZERO');
+    var grid=el('minimal-scenario-cards'),saved=sim.whatIf?.evaluations?.some(entry=>ownedZeroResult(entry,sim));
     var cards=[];
     try{cards=scenarioCards(sim,r,saved&&!searching&&!searchMessage&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL');}
     catch(error){searchMessage=error.message||'Evaluation failed';el('minimal-search-message').textContent=tr(searchMessage);show('minimal-search-message',true);}
     show('minimal-scenario-cards',cards.length>0);
-    el('minimal-search').textContent=tr(searching?(stopRequested?'Stopping search…':'Stop search'):saved?'Restart search':'Find optimizations');
   }
   function stopMonitor(){if(timer!==null){clearInterval(timer);timer=null;}}
   function monitor(){if(timer===null)timer=setInterval(function(){sync(state);if(!busy())stopMonitor();},180);}
@@ -236,23 +243,28 @@ window.STMinimalMode=(function(){
     if(!active){if(!busy()){stopMonitor();if(scenarioOwner)clearScenarios();}return;}
     syncTable(lock||state.saving);syncDuration(lock||state.saving);syncRounds(lock||state.saving);
     var sheetExport=el('minimal-export-equipment-sheet');if(sheetExport)sheetExport.disabled=lock||state.saving||sheetExport.dataset.busy==='true';
-    var running=starting||actions.locked(),r=result(),review=reviewRequired(sim);
+    var running=starting||actions.locked(),r=runStopRequested?null:result(),review=reviewRequired(sim);
     show('minimal-input-review',review||!!sim?.sourceImport?.simpleImportIssues?.length&&!r);
-    show('minimal-run-progress',running);
-    if(running){runProgress=Math.max(runProgress,Math.min(100,100*actions.progress()));progress('minimal-run-progress',runProgress,runProgress===100?'Preparing results…':null);}
-    el('minimal-run').hidden=false;el('minimal-run').disabled=lock||state.saving||!sim;
-    el('minimal-run').textContent=tr(r?'Restart simulation':'Run simulation');
+    show('minimal-run-progress',running&&!runStopRequested);
+    if(running&&!runStopRequested){runProgress=Math.max(runProgress,Math.min(100,100*actions.progress()));progress('minimal-run-progress',runProgress,runProgress===100?'Preparing results…':null);}
+    var runButton=el('minimal-run');runButton.hidden=false;
+    runButton.disabled=starting?runStopRequested:lock||state.saving||!sim;
+    runButton.textContent=tr(starting?(runStopRequested?'Stopping…':'Stop'):r?'Restart simulation':'Run simulation');
+    runButton.title=tr(starting?'Stop simulation':r?'Restart simulation':'Run simulation');
     syncRoundView(running?null:r,lock||state.saving);renderResults(r);
     var benchmark=el('minimal-ideal-benchmark');if(benchmark){benchmark.hidden=true;benchmark.disabled=true;}
     show('minimal-optimization',!!r&&!running);
     var readiness=sourceReadiness(sim,r);
     var canSearch=!!r&&!review&&readiness?.ready===true&&sim.dynamicConfig?.engineId!=='DES_SIMPY_EXPERIMENTAL';
-    el('minimal-search').hidden=false;
-    el('minimal-search').disabled=searching?stopRequested:!canSearch||lock||running||state.saving;
-    show('minimal-search-progress',searching);
-    if(searching)updateSearchProgress();
+    var searchButton=el('minimal-search'),saved=sim?.whatIf?.evaluations?.some(entry=>ownedZeroResult(entry,sim));
+    searchButton.hidden=false;
+    searchButton.disabled=searching?stopRequested:!canSearch||lock||running||state.saving;
+    searchButton.textContent=tr(searching?(stopRequested?'Stopping…':'Stop'):saved?'Restart search':'Find optimizations');
+    searchButton.title=tr(searching?'Stop search':saved?'Restart search':'Find optimizations');
+    show('minimal-search-progress',searching&&!stopRequested);
+    if(searching&&!stopRequested)updateSearchProgress();
     var message=searchMessage||(!canSearch&&r?'Optimization is unavailable for this configuration.'+(readiness?.reason?' ('+readiness.reason+(readiness.differencePath?' · '+readiness.differencePath:'')+')':''):'');
-    el('minimal-search-message').textContent=tr(message);show('minimal-search-message',!!message&&!searching);
+    el('minimal-search-message').textContent=tr(message);show('minimal-search-message',!!message&&!searching&&!runStopRequested);
     renderScenarios(sim,r);
     if(lock)monitor();
   }
@@ -260,15 +272,36 @@ window.STMinimalMode=(function(){
     var button=el(id)?.querySelector('[data-subsection-toggle]');
     if(button&&button.getAttribute('aria-expanded')==='false')window.STSubsection?.userToggle(button,true);
   }
+  function clearRunDisplay(){
+    runProgress=0;searchProgress=0;searchCompleted=0;searchMessage='';resultKey='';readinessCache=null;
+    resetRoundView();el('minimal-result-cards').replaceChildren();show('minimal-result-cards',false);
+    el('minimal-round-view').replaceChildren();show('minimal-round-view',false);
+    progress('minimal-run-progress',0);progress('minimal-search-progress',0);clearScenarios();
+    show('minimal-run-progress',false);show('minimal-search-progress',false);show('minimal-optimization',false);
+  }
+  function stopRun(){
+    if(!starting||runStopRequested)return runStopTask;
+    var sim=owner(),key=ownerKey();runStopRequested=true;clearRunDisplay();
+    // Assign the task before cancellation resolves the run's first-result promise.
+    runStopTask=Promise.resolve().then(async function(){
+      await actions.stopRun();
+      if(owner()!==sim||ownerKey()!==key)return;
+      discardZeroResults(sim);actions.markReset();await actions.save();
+    }).catch(function(error){actions.error(error);});
+    sync(state);return runStopTask;
+  }
   async function startRun(){
     if(busy()||!state.activeCase)return;
     var sim=owner();if(!sim)return;
     if(!applyDuration()||!applyRounds())return;
     // Let the canonical editor and physical engine validate corrected values.
     if((sim.equipment||[]).length<2){actions.error({message:tr('At least two equipment units are required for simulation.')});return;}
-    starting=true;runProgress=0;clearScenarios();searchMessage='';resultKey='';resetRoundView();
+    starting=true;runStopRequested=false;runStopTask=null;runProgress=0;clearScenarios();searchMessage='';resultKey='';resetRoundView();
     el('run-calculation-mode').value='FAST';expandForAction('minimal-simulation');sync(state);
-    try{await actions.run();}catch(error){actions.error(error);}finally{starting=false;sync(state);}
+    try{await actions.run();}catch(error){if(!runStopRequested)actions.error(error);}finally{
+      if(runStopTask)await runStopTask;
+      starting=false;runStopRequested=false;runStopTask=null;sync(state);
+    }
   }
   // A terminal evaluated outcome is different from a blocked, cancelled or
   // failed call. In particular, an early return must never fill the global bar.
@@ -277,7 +310,9 @@ window.STMinimalMode=(function(){
   }
   function stopSearch(){
     if(!searching||stopRequested)return;
-    stopRequested=true;searchCard?._cancelMinimalSearch?.();sync(state);
+    stopRequested=true;searchCard?._cancelMinimalSearch?.({discard:true});
+    discardZeroResults(owner());searchProgress=0;searchCompleted=0;searchMessage='';
+    progress('minimal-search-progress',0);clearScenarios();show('minimal-search-progress',false);sync(state);
   }
   async function startSearch(onlyCard){
     if(busy()||state.saving||!result()||!owner())return;
@@ -309,6 +344,7 @@ window.STMinimalMode=(function(){
         try{outcome=await card._runMinimalSearch();}
         catch(error){outcome={started:false,reason:error.message||'Evaluation failed'};}
         evaluated=evaluated||outcome?.started===true;
+        if(stopRequested)break; // Ignore even a late successful response after Stop.
         if(completedOutcome(outcome)){searchCompleted++;}
         else failures.push(label+': '+(outcome?.reason||outcome?.status||'Evaluation did not complete.'));
         searchCard=null;
@@ -317,11 +353,12 @@ window.STMinimalMode=(function(){
         sync(state);
         if(stopRequested)break;
       }
-      if(stopRequested)failures.push('Search stopped. Completed categories retained.');
-      if(failures.length)searchMessage=failures.join(' · ');
-    }catch(error){searchMessage=error.message||'Evaluation failed';actions.error(error);}
+      if(!stopRequested&&failures.length)searchMessage=failures.join(' · ');
+    }catch(error){if(!stopRequested){searchMessage=error.message||'Evaluation failed';actions.error(error);}}
     finally{
-      searchSaving=evaluated&&ownerKey()===key&&sourceSignature(sim)===signature;
+      var discarded=stopRequested,sameOwner=owner()===sim&&ownerKey()===key&&sourceSignature(sim)===signature;
+      if(discarded&&sameOwner){discardZeroResults(sim);searchProgress=0;searchCompleted=0;searchMessage='';clearScenarios();progress('minimal-search-progress',0);actions.markReset();}
+      searchSaving=(discarded||evaluated)&&sameOwner;
       searching=false;searchCard=null;stopRequested=false;sync(state);
     }
     // Let the real result cards paint before serializing evidence for Drive.
@@ -343,7 +380,7 @@ window.STMinimalMode=(function(){
   }
   function init(current,callbacks){
     state=current;actions=callbacks;if(initialized)return;initialized=true;
-    el('minimal-run').onclick=startRun;el('minimal-search').onclick=function(){return searching?stopSearch():startSearch();};
+    el('minimal-run').onclick=function(){return starting?stopRun():startRun();};el('minimal-search').onclick=function(){return searching?stopSearch():startSearch();};
     el('minimal-duration').onchange=applyDuration;el('minimal-duration-unit').onchange=applyDuration;
     el('minimal-rounds').onchange=applyRounds;
     el('minimal-round-view').onchange=function(){
@@ -366,6 +403,6 @@ window.STMinimalMode=(function(){
     };
     window.addEventListener('st-language-change',()=>{tableKey=resultKey='';sync(state);});
   }
-  return {init:init,sync:sync,isMinimal:isMinimal,busy:busy,isSearching:isSearching,openImport:openImport,searchTier:startSearch};
+  return {init:init,sync:sync,isMinimal:isMinimal,busy:busy,isSearching:isSearching,openImport:openImport,searchTier:startSearch,stopSearch:stopSearch};
 })();
 </script>

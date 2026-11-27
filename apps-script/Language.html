@@ -2281,6 +2281,7 @@ window.STLanguage=(function(){
     var picker=document.getElementById('settings-language');
     if(picker)picker.value=language;
   }
+  Object.assign(translations,{'Stopping…':'Deteniendo…','Stop simulation':'Detener simulación'});
   Object.assign(translations,{'Average of all rounds':'Promedio de todas las rondas','Representative round':'Ronda representativa','Enter a whole number of rounds from 1 to 100.':'Introduce un número entero de rondas entre 1 y 100.'});
   Object.assign(translations,{'Variable':'Variable','Original value':'Valor original','Scenario value':'Valor del escenario','Numerical difference':'Diferencia numérica','Percentage difference':'Diferencia porcentual','Derived original value':'Valor original calculado','No evaluated scenario available.':'No hay un escenario evaluado disponible.','No retained input changes.':'No se conservaron cambios de variables.','Matched comparison':'Comparación comparable','Preliminary comparison — improvement not confirmed.':'Comparación preliminar: mejora no confirmada.','Overflow':'Desbordamiento','No candidate value available.':'Sin valor disponible del escenario.'});
   Object.assign(translations,{'Statistical Report':'Reporte estadístico','Complete the numerical simulation before exporting the statistical report.':'Completa la simulación numérica antes de exportar el reporte estadístico.'});

@@ -43,7 +43,9 @@ export async function simulateBatch(input, options={}) {
       id:zone.id,ownerEquipmentId:zone.ownerEquipmentId,conveyorSpeedMmPerSecond:zone.conveyorSpeedMmPerSecond,
       ...(zone.dynamicLineBalancing?{dynamicLineBalancing:zone.dynamicLineBalancing}:{}),
       movingPitchMm:zone.movingPitchMm,accumulatedPitchMm:zone.accumulatedPitchMm,
-      averageInventoryUnits:zone.averageInventoryUnits,maximumInventoryUnits:zone.maximumInventoryUnits
+      averageInventoryUnits:zone.averageInventoryUnits,maximumInventoryUnits:zone.maximumInventoryUnits,
+      primeTriggerCount:zone.primeTriggerCount,primePassedUnits:zone.primePassedUnits,backupTriggerCount:zone.backupTriggerCount,backupPassedUnits:zone.backupPassedUnits,
+      backupSignalPulsingSeconds:zone.backupSignalPulsingSeconds,backupSignalBlockedSeconds:zone.backupSignalBlockedSeconds,overflowUnits:zone.overflowUnits
     }));
     if(index===0){representative=result;options.onFirstRound?.(result);}
     else if(!summaryOnly)replays[index-1]={round:index+1,seed:run.seed,samples:result.samples,zoneDefinitions:result.zoneDefinitions,accumulationZoneMetrics:result.accumulationZoneMetrics,detailCoverage:result.detailCoverage};

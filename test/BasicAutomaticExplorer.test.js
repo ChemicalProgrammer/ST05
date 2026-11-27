@@ -58,12 +58,12 @@ async function search(h,tier){
 
 function verifyAutomatic(entry,h){
   assert.equal(entry.searchSettings.automaticBasic,true);assert.equal(entry.searchSettings.speedProfile,'FAST');assert.equal(entry.depth,'MEDIUM');assert.equal(entry.method,'AUTOMATIC_PACKAGE_DOE');
-  const expanded=entry.tier==='ZERO'&&entry.explorationRun.scenarioFidelity==='FLUID_SCREEN_V1';
+  const expanded=entry.tier==='ZERO'&&entry.searchLimits.maxCandidates===32,control=entry.phaseAudit.motorRouting?.physicalControls===true;
   assert.equal(entry.searchLimits.maxCandidates,expanded?32:24);assert.equal(entry.searchLimits.passes,1);
-  assert(entry.phaseAudit.automaticSelection.selectedPackages<=(expanded?4:3));assert(entry.doe.observations.length<=(expanded?16:8));assert(entry.doe.analysis.complete);assert(entry.doe.anova.complete);
+  assert(entry.phaseAudit.automaticSelection.selectedPackages<=(expanded&&!control?4:3));assert(entry.doe.observations.length<=(expanded&&!control?16:8));assert(entry.doe.analysis.complete);assert(entry.doe.anova.complete);
   assert.equal(entry.conditionalFlowDOE,undefined);assert.equal(entry.phaseAudit.flowScreen,undefined);
   assert.deepEqual(JSON.parse(JSON.stringify(entry.reproducibility.categoryInclusions)),{});
-  assert(entry.phaseAudit.exploration.testedCandidates<=(expanded?32:7),'The bounded isolated screen and factorial remain within budget');
+  assert(entry.phaseAudit.exploration.testedCandidates<=(expanded||control?entry.searchLimits.maxCandidates:7),'The bounded isolated screen and factorial remain within budget');
   assert.equal(entry.infeasibleTrials,0,'Every expanded package combination must reach a valid experiment');
   assert(entry.phaseAudit.ranking.finalists<=1);assert(entry.independentCheck.rounds<=6);
   assert.equal(entry.independentCheck.durationSeconds,entry.rankingPlan.confirmationHorizon.seconds);assert.equal(entry.independentCheck.scenarioFidelity,'PHYSICAL_PRECISE_V1');
@@ -85,7 +85,12 @@ test('Basic selects its DOE and budgets despite retained manual preferences and 
     assert(entry.reliabilityTargetSearch.targetTests.every(t=>t.mechanism==='JOINT'));
     assert(!entry.reliabilityCounterfactual,'Basic skips the optional second full-horizon failure-free diagnosis');
     assert(entry.automaticPlan.packages.some(p=>p.mechanism==='RELIABILITY'),'Automatic downtime reduction remains represented with the flow controls');
-    assert(h.calls.length<=57,'Broader fluid screen, factorial, ranking and original verification remain bounded');
+    assert(h.calls.length<=65,'Physical controls, fluid reliability, factorial, ranking and original verification remain bounded');
+    assert(entry.phaseAudit.controlDiagnosis?.failureFree);assert.equal(entry.phaseAudit.controlDiagnosis.run.scenarioFidelity,'PHYSICAL_FAST_V1');
+    assert(entry.phaseAudit.controlDiagnosis.observations.length>0);assert(entry.phaseAudit.controlDiagnosis.observations.length<=14);
+    assert.equal(entry.phaseAudit.motorRouting.physicalControls,true);assert.equal(entry.doe.run.scenarioFidelity,'PHYSICAL_FAST_V1');assert.equal(entry.doe.fixedChanges.length,0);
+    const firstControl=h.calls.findIndex(call=>call.run.scenarioControlEvidenceVersion===1),firstFluid=h.calls.findIndex(call=>call.run.scenarioFidelity==='FLUID_SCREEN_V1');assert(firstControl>=0&&firstFluid>firstControl,'physical diagnosis precedes fluid reliability');
+    const controlCalls=h.calls.filter(call=>call.run.scenarioControlEvidenceVersion===1);assert(controlCalls.every(call=>call.run.durationSeconds===entry.phaseAudit.controlDiagnosis.run.durationSeconds&&call.run.seed===entry.phaseAudit.controlDiagnosis.run.seed&&call.run.rounds===3));
     assert.equal(h.record.metadata.includeDOE,false);assert.equal(h.record.metadata.scenarioSearch.speedProfile,'THOROUGH');assert.equal(h.sim.whatIf.searchDepth,'LIGHT');
   }finally{h.close();}
 });

@@ -180,9 +180,9 @@ window.STScenarioExplorer=(function(){
     if(cancelled?.())throw Error('BATCH_CANCELLED');
     var validity=SimulatorEngine.validateSimulationInput?.(input);if(validity&&!validity.ok)throw Error(validity.error?.message||'Invalid simulation input.');
     var outputUnit=sim.unitOfFlow||input.case.unitOfFlow,key=SimulatorEngine.inputSignature?.(input),rounds=input.run.rounds||1,cached=key&&(!changes.length&&baselineCache.get(key)||summaryCache.get(key)),cacheSource='MEMORY';
-    if(!validMetrics(cached,rounds,input.run.durationSeconds,outputUnit)||input.run.scenarioFidelity&&cached?.scenarioFidelity!==input.run.scenarioFidelity)cached=null;
+    if(!validMetrics(cached,rounds,input.run.durationSeconds,outputUnit)||input.run.scenarioFidelity&&cached?.scenarioFidelity!==input.run.scenarioFidelity||input.run.scenarioControlEvidenceVersion&&cached?.controlDiagnostics?.version!==input.run.scenarioControlEvidenceVersion)cached=null;
     var live=(caseProvider?.()?.simulations||[]).find(s=>s.id===sim.id)||sim;
-    if(key&&!cached){var stored=(live.whatIf?.measurements||[]).find(e=>e.key===key&&validMetrics(e.value,rounds,input.run.durationSeconds,outputUnit)&&(!input.run.scenarioFidelity||e.value.scenarioFidelity===input.run.scenarioFidelity));if(stored){cached=stored.value;cacheSource='SAVED_EVALUATION';}}
+    if(key&&!cached){var stored=(live.whatIf?.measurements||[]).find(e=>e.key===key&&validMetrics(e.value,rounds,input.run.durationSeconds,outputUnit)&&(!input.run.scenarioFidelity||e.value.scenarioFidelity===input.run.scenarioFidelity)&&(!input.run.scenarioControlEvidenceVersion||e.value.controlDiagnostics?.version===input.run.scenarioControlEvidenceVersion));if(stored){cached=stored.value;cacheSource='SAVED_EVALUATION';}}
     if(key&&!cached&&!input.run.scenarioFidelity){
       var records=[sim,...(caseProvider?.()?.simulations||[])];
       var matching=records.find(s=>s.results?.inputSignature===key&&s.results.replicationStatus?.state==='COMPLETE'&&s.results.summary&&s.results.durationSeconds===input.run.durationSeconds);
@@ -193,7 +193,7 @@ window.STScenarioExplorer=(function(){
     var response=await SimulatorEngine.simulateBatch(input,{cancelled:cancelled,summaryOnly:true,progress:onProgress});
     if(!response.ok)throw Error(response.error?.message||JSON.stringify(response.errors||response));
     if(cancelled?.())throw Error('BATCH_CANCELLED');
-    var value=metric(response.result);if(input.run.scenarioFidelity){if(response.result.scenarioFidelity!==input.run.scenarioFidelity)throw Error('SCENARIO_FIDELITY_RESULT_REQUIRED');value.scenarioFidelity=response.result.scenarioFidelity;}value.unitOfFlow=response.result.unitOfFlow||outputUnit||'units';
+    var value=metric(response.result);if(input.run.scenarioControlEvidenceVersion){value.controlDiagnostics=STScenarioSearch.controlDiagnostics(response.result,candidate.equipment);if(value.controlDiagnostics?.version!==input.run.scenarioControlEvidenceVersion)throw Error('SCENARIO_CONTROL_DIAGNOSTICS_REQUIRED');}if(input.run.scenarioFidelity){if(response.result.scenarioFidelity!==input.run.scenarioFidelity)throw Error('SCENARIO_FIDELITY_RESULT_REQUIRED');value.scenarioFidelity=response.result.scenarioFidelity;}value.unitOfFlow=response.result.unitOfFlow||outputUnit||'units';
     if(!validMetrics(value,rounds,input.run.durationSeconds,outputUnit))throw Error('Incomplete simulation metrics; evaluation cannot be reused.');
     if(key){rememberMetrics(key,value);rememberBaseline(value);saveMeasurement(sim,key,value,silent);}
     return Object.assign({},value,{...(inputUnitOverride?{inputSignature:key}:{}),cacheSource:'CALCULATED',warnings:evaluationWarnings(candidate,value)});
@@ -278,7 +278,7 @@ window.STScenarioExplorer=(function(){
       return configText('Provisional estimate — improvement not confirmed.')+(entry.baseline?.durationSeconds>0?' · '+Number((entry.baseline.durationSeconds/60).toFixed(2))+' min × '+(entry.baseline.roundMetrics?.length||1)+' '+configText('rounds'):'');
     }
     var depth=automaticBasic?'MEDIUM':restored?.depth||simulation.whatIf?.searchDepth||'MEDIUM';if(!STScenarioSearch.profiles[depth])depth='MEDIUM';
-    var previewRun=searchRun(),context=el('p','','scenario-preview-context');host.append(context);function contextText(){var profile=searchProfile();if(automaticBasic){var screening=searchRun(),confirmation=searchRun('validation');context.textContent='Automatic multi-fidelity · '+screening.scenarioFidelity+' · '+screening.durationSeconds/60+' min × 3 · physical confirmation '+confirmation.durationSeconds/60+' min × 3–6 · independent seeds · original-run verification';return;}context.textContent=searchSettings.speedProfile+' · '+depth+' · exploration '+profile.explorationSeconds/60+' min × 3 rounds · finalist ranking '+searchRun('validation').durationSeconds/60+' min (long runs first screen finalists for '+profile.confirmationSeconds/60+' min) · final confirmation '+searchRun('validation').durationSeconds/60+' min · confirmation rounds planned from pilot precision'+(depth==='LIGHT'?' · DOE omitted':'')+' · seed '+previewRun.seed;}contextText();
+    var previewRun=searchRun(),context=el('p','','scenario-preview-context');host.append(context);function contextText(){var profile=searchProfile();if(automaticBasic){var screening=searchRun(),confirmation=searchRun('validation');context.textContent='Automatic mechanism-aware · '+(primaryTier==='ZERO'?'physical control probes '+searchRun('control-screen').durationSeconds/60+' min × 3 · reliability '+searchRun('sensitivity').durationSeconds/60+' min × 3 · matched DOE':screening.scenarioFidelity+' · '+screening.durationSeconds/60+' min × 3')+' · physical confirmation '+confirmation.durationSeconds/60+' min × 3–6 · independent seeds · original-run verification';return;}context.textContent=searchSettings.speedProfile+' · '+depth+' · exploration '+profile.explorationSeconds/60+' min × 3 rounds · finalist ranking '+searchRun('validation').durationSeconds/60+' min (long runs first screen finalists for '+profile.confirmationSeconds/60+' min) · final confirmation '+searchRun('validation').durationSeconds/60+' min · confirmation rounds planned from pilot precision'+(depth==='LIGHT'?' · DOE omitted':'')+' · seed '+previewRun.seed;}contextText();
     var dialog=el('dialog','','scenario-config-dialog'),heading=el('div','','dialog-heading'),body=el('div','','dialog-body'),footer=el('div','','dialog-actions');
     dialog.setAttribute('aria-label','Scenario changes and DOE');dialog.dataset.scenarioScope=primaryTier;var close=iconButton('Close scenario configuration','x',function(){dialog.close();});close.className='ghost icon-button';var done=button('Done',function(){if(validateConfiguration(true,false))dialog.close();});done.className='';heading.append(el('h2','Scenario configuration · '+(primaryTier==='ALL'?'All CAPEX':primaryTier.charAt(0)+primaryTier.slice(1).toLowerCase()+' CAPEX')),close);footer.append(done);dialog.append(heading,body,footer);host.append(dialog);
     var configure=iconButton('Configure changes & DOE','settings',function(){if(!activeHost){refreshDOE();refreshFactors();if(!dialog.open)dialog.showModal();validateRows();}});configure.classList.add('scenario-configure');
@@ -807,6 +807,21 @@ window.STScenarioExplorer=(function(){
         });
       }
       if(!inputs.length&&!considered.size)resultsBody.append(el('p','No input changes retained.'));
+      if(entry?.phaseAudit?.controlDiagnosis){
+        var diagnostic=entry.phaseAudit.controlDiagnosis,observed=diagnostic.sourceDiagnostic,ff=diagnostic.failureRemovalGain,es=document.documentElement.lang==='es',tx=(a,b)=>es?b:a;
+        resultsBody.append(el('h3',tx('Physical loss diagnosis','Diagnóstico físico de pérdidas')));
+        if(ff)resultsBody.append(el('p',tx('Matched physical OEE','OEE físico comparable')+' '+diagnostic.baseline.oee.toFixed(2)+'% → '+diagnostic.failureFree.oee.toFixed(2)+'% '+tx('without MTBF/MTTR failures','sin fallas MTBF/MTTR')+' · Δ '+ff.throughput.toFixed(2)+' '+STFlowUnits.labels(entry.unitOfFlow).rate+' · '+diagnostic.run.durationSeconds/60+' min × '+diagnostic.run.rounds+' '+tx('rounds','réplicas'),'chart-note'));
+        if(observed?.zones?.length){
+          var dz=parameterTable(resultsBody,[tx('Conveyor','Transportador'),tx('Prime triggers / pass','Prime / paso'),tx('Backup triggers / pass','Backup / paso'),tx('Normal pulse / delay (s)','Pulso normal / retardo (s)')],'scenario-results-times',tx('Source sensor diagnostic','Diagnóstico de sensores en la simulación original'));
+          observed.zones.forEach(z=>{var row=el('tr');row.append(el('td',z.name),el('td',formatTarget(z.primeTriggersPerPass)),el('td',formatTarget(z.backupTriggersPerPass)),el('td',formatTarget(z.normalPulseSeconds)+' / '+formatTarget(z.blockedDelaySeconds)+(z.pulseConflict?' · REVIEW':'')));dz.append(row);});
+          resultsBody.append(el('p',tx('Sensor counters: ','Contadores de sensores: ')+[...new Set(observed.zones.map(z=>z.counterBasis))].join(', ')+'. '+tx('Indicators are not proven root causes.','Los indicadores no demuestran la causa raíz.'),'chart-note'));
+        }
+        if(diagnostic.persistence?.machines?.length){var mt=parameterTable(resultsBody,[tx('Equipment','Equipo'),tx('Ramps/output · base','Rampas/producción · base'),tx('Ramps/output · no failures','Rampas/producción · sin fallas'),tx('Prime wait · no failures (%)','Espera Prime · sin fallas (%)')],'scenario-results-times',tx('Persistence of restarts without modeled failures','Persistencia de arranques sin fallas modeladas'));diagnostic.persistence.machines.forEach(m=>{var row=el('tr');row.append(el('td',m.name),el('td',formatTarget(m.baselineRampsPerOutput)),el('td',formatTarget(m.failureFreeRampsPerOutput)),el('td',formatTarget(m.failureFreePrimeWaitPercent)));mt.append(row);});}
+        if(diagnostic.controlRanking?.length){
+          var ct=parameterTable(resultsBody,[tx('Control','Control'),tx('Level','Nivel'),tx('Δ throughput','Δ producción')],'scenario-results-changes',tx('Matched physical isolated control gains','Ganancias físicas de controles aislados'));
+          diagnostic.controlRanking.slice(0,8).forEach(item=>{var probe=diagnostic.observations.find(p=>p.packageId===item.packageId&&p.level===item.level),c=probe?.changes?.[0],info=c?STWhatIf.changeInfo(c,source.equipment):null,row=el('tr');row.append(el('td',info?info.equipment+' · '+info.parameter:item.packageId),el('td',item.level+(c?' · '+formatTarget(c.after)+' '+(c.unit||''):'')),el('td',formatTarget(item.gain)));ct.append(row);});
+        }
+      }
       if(entry?.independentCheck){var check=entry.independentCheck,ic=check.statisticalEvidence?.metrics?.throughput;resultsBody.append(el('h3','Independent short-window confirmation'),el('p',(check.durationSeconds/60)+' min × '+check.rounds+' · '+check.baseline.oee.toFixed(2)+'% → '+check.candidate.oee.toFixed(2)+'% OEE · '+check.delta.throughputPerMinute.toFixed(2)+' '+STFlowUnits.labels(entry.unitOfFlow).rate+(Number.isFinite(ic?.lower)?' · confidence interval ['+ic.lower.toFixed(2)+', '+ic.upper.toFixed(2)+']':''),'chart-note'));}
       if(entry?.originalVerification){var original=entry.originalVerification;resultsBody.append(el('h3','Original-run verification'),el('p',original.candidate&&original.baseline?original.durationSeconds/60+' min × '+original.rounds+' · '+original.baseline.oee.toFixed(2)+'% → '+original.candidate.oee.toFixed(2)+'% OEE · '+original.delta?.throughputPerMinute?.toFixed(2)+' '+STFlowUnits.labels(entry.unitOfFlow).rate+' · '+original.status:original.reason||original.status,'chart-note'));}
       if(entry?.independentCheck?.passed===false||entry?.originalVerificationRequired&&entry.originalVerification?.passed!==true)resultsBody.append(el('p','Targets require further validation.','chart-note'));
@@ -904,7 +919,8 @@ window.STScenarioExplorer=(function(){
         if(terminal){finishTraceStep(terminal,now);traceOutcome=terminal;return;}
         if(!traceStep||traceStep.name!==name){finishTraceStep('Completed',now);traceStarted=now;traceBase=completed;traceDetail='';traceStep={name:name,state:'Running',percent:null,elapsedMs:0,detail:'',work:{},candidateStart:Number.isFinite(done)?done:0,batchStarted:0,batchCompleted:0,roundsStarted:0,roundsCompleted:0,activeBatches:0,reusedBatches:0,calculatedCandidates:0,candidateMs:0};progressTrace.push(traceStep);}
         traceStep.elapsedMs=now-traceStarted;var total=null,amount=Math.max(0,completed-traceBase)+batchFraction,primary=traceStep.work.primary;
-        if(name==='Baseline'||name==='Matched failure-free diagnostic')total=1;
+        if(name==='Physical loss diagnosis'||name==='Physical sensor and flow sensitivity'){total=primary?.total||null;amount=(primary?.done||0)+Math.min(1,batchFraction);}
+        else if(name==='Baseline'||name==='Matched failure-free diagnostic')total=1;
         else if(name==='Independent confirmation'||name==='Full-horizon reliability diagnostic'){total=2;if(name==='Independent confirmation')setCounter('primary','Baseline and candidate',Math.max(0,completed-traceBase),2);}
         else if(name==='Comparing finalists'||name==='Screening finalists')total=rankingProgress?rankingProgress.total+1:null;
         else if(name==='Design of experiments (DOE)'){if(primary&&primary.total>0){total=primary.total;amount=primary.done+(activeFractions.size?Math.min(1,batchFraction):0);}}
@@ -951,7 +967,40 @@ window.STScenarioExplorer=(function(){
         var diagnosticPlan=automaticBasic&&sharedPlan?sharedPlan:STScenarios.plan(source);
         evidence={searchSettings:Object.assign({},searchSettings),searchSettingsSignature:searchSettingsSignature,phaseAudit:{},searchPolicyVersion:'MATCHED_CAPEX_V12',method:method,depth:depth,proposalNeeds:diagnosticPlan.proposalNeeds,lossDiagnosis:diagnosticPlan.diagnosis,capacityDiagnosis:diagnosticPlan.capacityDiagnosis,sensitivityScreening:sensitivityEvidence,reuseCounts:{},explorationRun:Object.assign({},previewRun),searchLimits:limits};
         setCounter('preparation','Input and search configuration',1,1);record('RUNNING',{method:method});
-        var reliabilityTargets=null;
+        var reliabilityTargets=null,controlStudy=null,controlRouting=false;
+        if(all&&automaticBasic&&primaryTier==='ZERO'){
+          var diagnosedPriorities=new Map();(diagnosticPlan.candidates||[]).filter(p=>p.canApply&&p.tier==='ZERO').forEach(p=>p.changes.forEach(c=>{var k=c.equipmentId+':'+c.path;diagnosedPriorities.set(k,Math.max(diagnosedPriorities.get(k)||0,p.priority||0));}));
+          var controlPlan=STScenarioSearch.controlProbes(source,selected().map(change=>({change,priority:diagnosedPriorities.get(change.equipmentId+':'+change.path)||0})),{limit:Math.min(14,Math.max(1,limits.maxCandidates-7))});
+          var physicalRun=searchRun('control-screen',3),hasReliability=config(source).reliabilityEnabled!==false&&source.equipment.some(e=>e.noiseProfile?.reliability?.mtbfMinutes>0||Object.values(e.processData?.equipment?.stopInputs||{}).some(r=>r?.mtbfMinutes>0&&r?.mttrMinutes>0));
+          controlRouting=controlPlan.probes.length>0;
+          if(controlRouting){previewRun=physicalRun;baseline=null;baselineRun=JSON.stringify(previewRun);limits.maxFactors=3;limits.finalists=3;contextText();}
+          controlStudy={policy:controlPlan.policy,run:physicalRun,sourceDiagnostic:controlPlan.diagnostic,plannedProbes:controlPlan.probes.length,eligibleProbes:controlPlan.eligibleProbes,omittedProbes:controlPlan.omittedProbes,observations:[],baseline:null,failureFree:null,interpretation:'Physical diagnostics preserve geometry and controls. A failure-free counterfactual removes modeled MTBF/MTTR events only, not sensor pulses, independent microstops, transport or startup.'};
+          evidence.phaseAudit.controlDiagnosis=controlStudy;evidence.explorationRun=Object.assign({},previewRun);
+          if(controlRouting||hasReliability){
+            checkBudget();searchCanFinish=false;setIcon(run,'Cancel physical diagnosis','stop');maximum=Math.max(maximum,completed+controlPlan.probes.length+(hasReliability?2:1)+limits.maxCandidates+18);
+            setStage('Physical loss diagnosis');setCounter('primary','Physical diagnosis batches',0,hasReliability?2:1);
+            controlStudy.baseline=await measured([],0,source,physicalRun);if(cancelled())return;setCounter('primary','Physical diagnosis batches',1,hasReliability?2:1);
+            if(hasReliability){
+              controlStudy.failureFree=await measured([],0,source,Object.assign({},physicalRun,{reliabilityEnabled:false}));if(cancelled())return;setCounter('primary','Physical diagnosis batches',2,2);
+              controlStudy.failureRemovalGain={throughput:controlStudy.failureFree.throughput-controlStudy.baseline.throughput,oeePp:controlStudy.failureFree.oee-controlStudy.baseline.oee,pairedEvidence:STScenarioSearch.pairedSummary(controlStudy.baseline,controlStudy.failureFree),interpretation:'Matched physical failure-removal counterfactual; residual losses include flow, sensors, startup and modeled microstops. Gains are not additive causal shares.'};
+              var beforeControl=controlStudy.baseline.controlDiagnostics,afterControl=controlStudy.failureFree.controlDiagnostics;
+              controlStudy.persistence={machines:(afterControl?.machines||[]).map(m=>{var b=beforeControl?.machines.find(x=>x.equipmentId===m.equipmentId);return {equipmentId:m.equipmentId,name:m.name,baselineRampCount:b?.startRampCount??null,failureFreeRampCount:m.startRampCount,baselineRampPercent:b?.rampPercent??null,failureFreeRampPercent:m.rampPercent,baselinePrimeWaitPercent:b?.primeWaitPercent??null,failureFreePrimeWaitPercent:m.primeWaitPercent,baselineRampsPerOutput:b?.rampsPerOutput??null,failureFreeRampsPerOutput:m.rampsPerOutput,repeatedStartsPersist:m.repeatedStarts};}),zones:(afterControl?.zones||[]).map(z=>{var b=beforeControl?.zones.find(x=>x.equipmentId===z.equipmentId);return {equipmentId:z.equipmentId,name:z.name,baselineBackupTriggersPerPass:b?.backupTriggersPerPass??null,failureFreeBackupTriggersPerPass:z.backupTriggersPerPass,baselinePrimeTriggersPerPass:b?.primeTriggersPerPass??null,failureFreePrimeTriggersPerPass:z.primeTriggersPerPass,counterBasis:z.counterBasis};}),interpretation:'Compare the control indicators after removing modeled MTBF/MTTR events; counts can change with output exposure. Persistence does not establish the physical cause.'};
+            }
+            if(controlRouting){
+              baseline=controlStudy.baseline;setStage('Physical sensor and flow sensitivity');setCounter('primary','Control hypotheses',0,controlPlan.probes.length);
+              for(var probe of controlPlan.probes){
+                checkBudget();var observed=null,probeError=null;
+                try{observed=await measured(probe.changes,0,source,physicalRun);}catch(error){if(cancelled()||budgetReached()||!String(error.message).startsWith('SCENARIO_'))throw error;probeError=error.message;}
+                if(cancelled())return;controlStudy.observations.push(Object.assign({},probe,{result:observed,error:probeError,gain:observed?observed.throughput-controlStudy.baseline.throughput:null}));
+                setCounter('primary','Control hypotheses',controlStudy.observations.length,controlPlan.probes.length);captureTrace();paintTrace(false);
+                await new Promise(resolve=>setTimeout(resolve,0));
+              }
+              var firstControlRanking=STScenarioSearch.rankPhysicalPackages(controlStudy.observations,controlStudy.baseline);controlStudy.controlRanking=firstControlRanking.ranked.map(row=>({packageId:row.packageId,kind:row.kind,level:row.level,gain:row.gain,positive:row.positive,warningCount:row.warningCount}));
+              evidence.phaseAudit.motorRouting={policy:'MECHANISM_AWARE_V1',physicalControls:true,controlRun:physicalRun,reliabilityRun:searchRun('sensitivity',3),doeRun:physicalRun,interpretation:'Control probes and any mixed Zero factorial use one matched physical engine; reliability sensitivity may use fluid, but its selected levels must be physically re-evaluated before the factorial.'};
+            }
+            searchCanFinish=true;setIcon(run,'Finish search and validate best found','stop');
+          }
+        }
         if(all&&depth!=='LIGHT'&&exploreReliability.checked&&STScenarioSearch.reliabilityTargets){
           maximum=Math.max(maximum,limits.maxCandidates+80+limits.finalists+16);setStage('Exploratory reliability targets');searchCanFinish=false;setIcon(run,'Cancel reliability exploration','stop');
           var discoveryRun=searchRun(automaticBasic?'sensitivity':false,3);
@@ -966,7 +1015,7 @@ window.STScenarioExplorer=(function(){
           if(!STScenarioSearch.basicPlan)throw Error('SCENARIO_BASIC_PLANNER_UNAVAILABLE');
           if(expandedBasic){var suppliedKeys=new Set(changes.map(c=>c.equipmentId+':'+c.path));for(var group of reliabilityTargets?.isolatedTargetChanges||[])for(var c of group){var field=c.equipmentId+':'+c.path;if(!suppliedKeys.has(field)){changes.push(c);suppliedKeys.add(field);}}}
           basicTargets=changes.map(c=>({change:c,priority:priorities.get(c.equipmentId+':'+c.path)||0}));
-          basicPlan=STScenarioSearch.basicPlan(basicTargets,{tier:primaryTier,maxFactors:expandedBasic?4:3,screeningLimit:expandedBasic?Math.min(16,Math.max(0,limits.maxCandidates-15)):0});
+          basicPlan=STScenarioSearch.basicPlan(basicTargets,{tier:primaryTier,maxFactors:expandedBasic&&!controlRouting?4:3,screeningLimit:controlRouting?16:expandedBasic?Math.min(16,Math.max(0,limits.maxCandidates-15)):0});
           changes=basicPlan.changes;factors=basicPlan.factors;design=basicPlan.design;
           evidence.automaticPlan=basicPlan;evidence.experimentConfiguration.automaticPlan=basicPlan;evidence.requestedChanges=changes;evidence.reproducibility.targets=changes;evidence.reproducibility.factors=factors;
           evidence.phaseAudit.automaticSelection={policy:basicPlan.policy,selectedPackages:basicPlan.packages.length,eligiblePackages:basicPlan.eligiblePackages,omittedPackages:basicPlan.omittedPackages,designPoints:basicPlan.maximumDesignPoints};
@@ -1040,7 +1089,30 @@ window.STScenarioExplorer=(function(){
           if(automaticBasic){
             // These are the nonempty points of the small package DOE. Its
             // later analysis reuses the exact same batches, including baseline.
-            if(expandedBasic&&basicPlan.screeningPackages.length){
+            if(controlRouting){
+              setStage('Matched physical package selection');
+              var physicalObservations=[];
+              // Register the calculated probes in the same trial pool.
+              for(var observedProbe of controlStudy.observations){
+                if(!observedProbe.result)continue;var v=await trial(observedProbe.changes,{value:observedProbe.result});if(cancelled())return;if(v)physicalObservations.push(Object.assign({},observedProbe,{result:v}));
+                if(finishRequested||searchPhaseDone)break;
+              }
+              var reliabilityPackages=basicPlan.screeningPackages.filter(p=>p.mechanism==='RELIABILITY').map(p=>Object.assign({},p,{kind:'RELIABILITY',level:'SELECTED_TARGET'}));
+              for(var group of reliabilityTargets?.isolatedTargetChanges||[]){if(group.length)reliabilityPackages.push({packageId:group[0].packageId||'RELIABILITY:'+group[0].equipmentId,changes:group,priority:0,kind:'RELIABILITY',level:'LOWER_EFFORT_TARGET'});}
+              var testedReliability=new Set(),reliabilityProbes=0;
+              for(var rel of reliabilityPackages){
+                if(finishRequested||searchPhaseDone||reliabilityProbes>=4||done>=limits.maxCandidates-7)break;
+                var rk=keyOf(rel.changes);if(testedReliability.has(rk))continue;testedReliability.add(rk);reliabilityProbes++;
+                var rv=await trial(rel.changes);if(cancelled())return;physicalObservations.push(Object.assign({},rel,{result:rv}));
+              }
+              var physicalRanking=STScenarioSearch.rankPhysicalPackages(physicalObservations,baseline),remainingBudget=Math.max(0,limits.maxCandidates-done),physicalFactorLimit=Math.min(3,Math.floor(Math.log2(remainingBudget+1)));
+              if(physicalRanking.targets.length&&!finishRequested&&physicalFactorLimit>0){
+                basicPlan=STScenarioSearch.basicPlan(physicalRanking.targets,{tier:primaryTier,maxFactors:physicalFactorLimit});changes=basicPlan.changes;factors=basicPlan.factors;design=basicPlan.design;
+                evidence.automaticPlan=basicPlan;evidence.experimentConfiguration.automaticPlan=basicPlan;evidence.requestedChanges=changes;evidence.reproducibility.targets=changes;evidence.reproducibility.factors=factors;
+                evidence.phaseAudit.automaticSelection={policy:'MATCHED_PHYSICAL_MECHANISM_FACTORIAL_V1',selectedPackages:basicPlan.packages.length,eligiblePackages:physicalRanking.ranked.length,omittedPackages:physicalRanking.ranked.length-basicPlan.packages.length,designPoints:basicPlan.maximumDesignPoints};
+              }else{design=null;evidence.doeSkippedReason=!physicalRanking.targets.length?'No compatible physical package observations.':'Physical candidate budget exhausted or search finished early.';}
+              evidence.phaseAudit.physicalPackageSelection={run:Object.assign({},previewRun),observations:physicalObservations.map(row=>({packageId:row.packageId,kind:row.kind,level:row.level,changes:row.changes,throughput:row.result?.throughput??null,oee:row.result?.oee??null,gain:row.result?row.result.throughput-baseline.throughput:null})),ranked:physicalRanking.ranked.map(row=>({packageId:row.packageId,kind:row.kind,level:row.level,gain:row.gain,positive:row.positive,warningCount:row.warningCount})),selectedPackages:basicPlan.packages.map(p=>p.packageId)};
+            }else if(expandedBasic&&basicPlan.screeningPackages.length){
               var isolated=[];for(var pack of basicPlan.screeningPackages){var observed=await trial(pack.changes);if(cancelled())return;if(finishRequested||searchPhaseDone)break;isolated.push({packageId:pack.packageId,changes:pack.changes,priority:pack.priority,throughput:observed?.throughput??null,oee:observed?.oee??null,gain:observed?observed.throughput-baseline.throughput:null});}
               // Rank measured complete packages by the matched isolated gain;
               // keep mechanism diversity in the factorial and all screened
@@ -1102,9 +1174,9 @@ window.STScenarioExplorer=(function(){
         if(design&&finishRequested)evidence.doeSkippedReason='DOE skipped because the search was finished early.';
         if(design&&!finishRequested){
           inDOE=true;doeStarted=Date.now();searchCanFinish=false;setIcon(run,'Cancel DOE','stop');
-          var factorKeys=new Set(design.factors.flatMap(f=>(f.packageChanges||(f.packageId?project.changes.filter(c=>c.packageId===f.packageId):[f])).map(c=>c.equipmentId+':'+c.path))),doeContext=bestChanges.length?bestChanges:reviewChanges,fixed=doeContext.filter(c=>!factorKeys.has(c.equipmentId+':'+c.path)),observations=[];
+          var factorKeys=new Set(design.factors.flatMap(f=>(f.packageChanges||(f.packageId?project.changes.filter(c=>c.packageId===f.packageId):[f])).map(c=>c.equipmentId+':'+c.path))),doeContext=bestChanges.length?bestChanges:reviewChanges,fixed=automaticBasic?[]:doeContext.filter(c=>!factorKeys.has(c.equipmentId+':'+c.path)),observations=[];
           if(automaticFlowDOE)fixed=fixed.filter(c=>!c.path.startsWith('noiseProfile.reliability.')).concat(evidence.conditionalFlowDOE.fixedReliabilityChanges);
-          evidence.doe={type:design.type,factors:design.factors,fixedChanges:fixed,combinations:design.designPoints.length,roundsPerCombination:previewRun.rounds,observations:observations};
+          evidence.doe={type:design.type,factors:design.factors,fixedChanges:fixed,combinations:design.designPoints.length,roundsPerCombination:previewRun.rounds,run:Object.assign({},previewRun),observations:observations};
           for(var point of design.designPoints){
             setStage('DOE · combination '+(observations.length+1)+' / '+design.designPoints.length);setCounter('primary','Combinations',observations.length,design.designPoints.length);
             var response=await trial(fixed.concat(point.changes));if(cancelled())return;
@@ -1112,7 +1184,7 @@ window.STScenarioExplorer=(function(){
             if(finishRequested||limits.wallClockBudget&&Date.now()-doeStarted>=limits.maxSearchMs){evidence.doe.stopReason=finishRequested?'Finished by user':'DOE time budget reached';break;}
             status.textContent='DOE '+observations.length+' / '+design.designPoints.length+' combinations · '+show(baseline,best);
           }
-          inDOE=false;setStage('Statistical analysis (ANOVA)');setCounter('factors','Factors',design.factors.length);setCounter('analyses','Analyses',0,2);var inferenceOptions={confidenceLevel:source.whatIf?.methodology?.replications?.confidenceLevel??.95};evidence.doe.analysis=STScenarioDOE.analyze(design,observations,inferenceOptions);setCounter('analyses','Analyses',1,2);evidence.doe.anova=STScenarioDOE.anova(design,observations,inferenceOptions);setCounter('analyses','Analyses',2,2);var metricResults=Object.values(evidence.doe.anova.metrics||{});setCounter('responses','Responses',metricResults.length,2);setCounter('contrasts','Contrasts',metricResults.reduce((sum,m)=>sum+(m.effects?.length||0),0),2*(design.designPoints.length-1));if(!evidence.doe.anova.complete)traceDetail=evidence.doe.anova.reason||'Incomplete ANOVA evidence';evidence.phaseAudit.doe={factors:design.factors.length,plannedCombinations:design.designPoints.length,evaluatedCombinations:observations.length,complete:evidence.doe.analysis.complete};
+          inDOE=false;setStage('Statistical analysis (ANOVA)');setCounter('factors','Factors',design.factors.length);setCounter('analyses','Analyses',0,2);var inferenceOptions={confidenceLevel:source.whatIf?.methodology?.replications?.confidenceLevel??.95};evidence.doe.analysis=STScenarioDOE.analyze(design,observations,inferenceOptions);setCounter('analyses','Analyses',1,2);evidence.doe.anova=STScenarioDOE.anova(design,observations,inferenceOptions);setCounter('analyses','Analyses',2,2);var metricResults=Object.values(evidence.doe.anova.metrics||{});setCounter('responses','Responses',metricResults.length,2);setCounter('contrasts','Contrasts',metricResults.reduce((sum,m)=>sum+(m.effects?.length||0),0),2*(design.designPoints.length-1));if(!evidence.doe.anova.complete)traceDetail=evidence.doe.anova.reason||'Incomplete ANOVA evidence';evidence.phaseAudit.doe={factors:design.factors.length,plannedCombinations:design.designPoints.length,evaluatedCombinations:observations.length,complete:evidence.doe.analysis.complete,run:Object.assign({},previewRun)};
 
         }
         if(cancelled())return;

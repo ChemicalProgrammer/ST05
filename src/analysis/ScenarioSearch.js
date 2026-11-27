@@ -17,7 +17,7 @@ export function scenarioSearchSettings(raw) {
 }
 export function scenarioSearchSettingsSignature(raw) {
   const settings=scenarioSearchSettings(raw);
-  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_MULTIFIDELITY_V4':'SCENARIO_SEARCH_SPEED_V1',settings]);
+  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_MECHANISM_V5':'SCENARIO_SEARCH_SPEED_V1',settings]);
 }
 export function scenarioSearchProfile(level,settings,context) {
   const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
@@ -153,8 +153,9 @@ export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings
     if(confirmation==='validation'||confirmation==='ranking'){
       copy.durationSeconds=horizon.seconds;copy.numericalResolution=confirmation==='validation'?'PRECISE':'FAST';
       copy.scenarioFidelity=confirmation==='validation'?'PHYSICAL_PRECISE_V1':'PHYSICAL_FAST_V1';
-    }else if(confirmation==='physical-screen'){
+    }else if(confirmation==='physical-screen'||confirmation==='control-screen'){
       copy.durationSeconds=Math.min(horizon.seconds,900);copy.numericalResolution='FAST';copy.scenarioFidelity='PHYSICAL_FAST_V1';
+      if(confirmation==='control-screen'){delete copy.scenarioWarmupSeconds;copy.scenarioControlEvidenceVersion=1;}
     }else{
       copy.durationSeconds=Math.min(horizon.seconds,eligible.supported?(confirmation==='sensitivity'?Math.max(300,profile.explorationSeconds):1800):profile.explorationSeconds);
       copy.scenarioFidelity=eligible.supported?'FLUID_SCREEN_V1':'PHYSICAL_FAST_V1';
@@ -206,7 +207,7 @@ export function selectScenarioFinalists(screened,baseline,limit) {
  // Promote measured gains or one precautionary alternative when a short prefix
  // cannot represent the full run. Never expand the full-horizon budget.
 export function selectProgressiveBasicFinalists(items,baseline,run,equipment=[],limit=1) {
-  const valid=(items||[]).filter(item=>item?.changes?.length&&Number.isFinite(item.result?.throughput)&&Number.isFinite(item.result?.oee));
+  const valid=(items||[]).filter(item=>item?.changes?.length&&Number.isFinite(item.result?.throughput)&&Number.isFinite(item.result?.oee)&&(!baseline?.scenarioFidelity||item.result.scenarioFidelity===baseline.scenarioFidelity)&&(!baseline?.durationSeconds||item.result.durationSeconds===baseline.durationSeconds));
   const horizon=Number(baseline?.durationSeconds)||0,full=Math.max(1800,Number(run?.durationSeconds)||0);
   const short=horizon>0&&horizon<full,threshold=Math.max(.001,Math.abs(baseline?.throughput||0)*.001);
   const categories=run?.reliabilityCategories||{};
@@ -238,14 +239,15 @@ export function selectProgressiveBasicFinalists(items,baseline,run,equipment=[],
   if(promising.length)chosen.push(promising[0]);
   // Do not spend all physical checks on near-duplicate fluid winners. Retain
   // a distinct sensor/control hypothesis even when fluid pulses are invisible.
-  if(approximate&&budget>1&&chosen.length){
+  if(budget>1&&chosen.length){
     const sensor=row=>row.item.changes.some(c=>/sensor|timedelay|lpPrimeMm/i.test(c.path));
-    const control=scored.find(row=>!chosen.includes(row)&&sensor(row)&&distance(row,chosen[0])>=.5);
+    const controlOnly=row=>sensor(row)&&!row.item.changes.some(c=>c.path.startsWith('noiseProfile.reliability.')||c.interventionType==='REPLACEMENT'||c.interventionType==='ACCUMULATION');
+    const control=scored.find(row=>!chosen.includes(row)&&controlOnly(row)&&(approximate||row.potential))|| (approximate?scored.find(row=>!chosen.includes(row)&&sensor(row)&&distance(row,chosen[0])>=.5):null);
     if(control)chosen.push(control);
   }
   while(chosen.length<budget&&promising.some(row=>!chosen.includes(row))){
     const pool=promising.filter(row=>!chosen.includes(row));
-    chosen.push((approximate?pool.find(row=>chosen.every(prior=>distance(row,prior)>=.5)):null)||pool[0]);
+    chosen.push(pool.find(row=>chosen.every(prior=>distance(row,prior)>=.5))||pool[0]);
   }
   const lateMechanism=item=>item.item.changes.some(change=>change.path.startsWith('noiseProfile.reliability.')||change.interventionType==='ACCUMULATION'||change.interventionType==='REPLACEMENT');
   if(!chosen.length&&reasons.length&&scored.length)chosen.push((rare&&short?scored.find(lateMechanism):null)||scored[0]);
@@ -360,6 +362,7 @@ function scenarioConfirmationPlanIssue(plan,methodology) {
 // Shared by browser confirmation and the saved-evidence server path. Aggregates
 // used in economics must describe the same complete observations as the tests.
 function scenarioComparisonEvidenceIssue(base,candidate,plan) {
+  if(base?.scenarioFidelity&&candidate?.scenarioFidelity&&base.scenarioFidelity!==candidate.scenarioFidelity&&base.scenarioFidelity!=='ORIGINAL_PHYSICAL_RUN')return 'INCOMPATIBLE_SCENARIO_FIDELITY';
   if(!base||!candidate||!Number.isFinite(base.durationSeconds)||base.durationSeconds<=0||candidate.durationSeconds!==base.durationSeconds)return 'INCOMPATIBLE_CALENDAR_HORIZONS';
   if(typeof base.unitOfFlow!=='string'||!base.unitOfFlow||candidate.unitOfFlow!==base.unitOfFlow)return 'INCOMPATIBLE_FLOW_UNITS';
   if(plan?.comparisonDurationSeconds!==undefined&&plan.comparisonDurationSeconds!==base.durationSeconds)return 'CONFIRMATION_HORIZON_CHANGED';
@@ -410,4 +413,121 @@ export function assessScenarioOriginalVerification(simulation,candidate,changes)
   const threshold=scenarioPracticalGain(baseline,simulation.whatIf?.methodology||{});
   const passed=delta.throughputPerMinute>threshold&&delta.oeePercentagePoints>=-1e-9;
   return {...common,passed,status:passed?'VERIFIED':'NO_ORIGINAL_HORIZON_IMPROVEMENT',reason:passed?null:'ORIGINAL_HORIZON_GAIN_NOT_ESTABLISHED',threshold,delta};
+}
+
+// Mechanism-oriented diagnostic. Never infer a PLC root cause from counts;
+// use them to allocate physical experiments. Replicated scalar metrics are
+// means; a legacy zone snapshot is explicitly a representative round only.
+export function scenarioControlDiagnostics(result,equipment=[]){
+  if(!result?.summary||!(result.durationSeconds>0))return null;
+  const duration=result.durationSeconds,minutes=duration/60,rows=result.batch?.rows||[],rounds=result.batch?.rounds||1;
+  const finite=v=>Number.isFinite(v)?v:null,ratio=(a,b)=>Number.isFinite(a)&&b>0?a/b:null;
+  const metric=(id,key)=>{
+    const mean=result.batch?.equipmentStatistics?.[id]?.[key]?.mean;
+    return finite(Number.isFinite(mean)?mean:rounds===1?result.equipmentMetrics?.[id]?.[key]:null);
+  };
+  const machines=equipment.filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR').map(e=>{
+    const output=metric(e.id,'outputCount'),ramps=metric(e.id,'startRampCount'),failures=metric(e.id,'failureCount');
+    const rampSeconds=metric(e.id,'startRampSeconds'),primeSeconds=metric(e.id,'waitingForPrimeSeconds');
+    return {equipmentId:e.id,name:e.name,outputCount:output,startRampCount:ramps,startRampSeconds:rampSeconds,
+      stopTransitionCount:metric(e.id,'stopTransitionCount'),repairRestartCount:metric(e.id,'repairRestartCount'),
+      failureCount:failures,failureSeconds:metric(e.id,'failureSeconds'),waitingForPrimeSeconds:primeSeconds,
+      backupStopSeconds:metric(e.id,'backupStopSeconds'),blockedSeconds:metric(e.id,'blockedSeconds'),
+      rampPercent:Number.isFinite(rampSeconds)?100*rampSeconds/duration:null,primeWaitPercent:Number.isFinite(primeSeconds)?100*primeSeconds/duration:null,
+      rampsPerOutput:ratio(ramps,output),rampsPerMinute:ratio(ramps,minutes),rampFailureRatio:ratio(ramps,failures),
+      repeatedStarts:Number.isFinite(ramps)&&ramps>=10&&((ratio(ramps,output)??0)>=.25||ramps>5*Math.max(1,failures??0))};
+  });
+  const zones=Object.values(result.accumulationZoneMetrics||{}).filter(z=>z.ownerEquipmentId).map(z=>{
+    const e=equipment.find(e=>e.id===z.ownerEquipmentId),native=e?.processData;
+    const observations=rows.map(row=>row.conveyorResults?.find(r=>r.id===z.id||r.ownerEquipmentId===z.ownerEquipmentId));
+    const meanAvailable=observations.length===rounds&&observations.every(r=>r&&Number.isFinite(r.backupTriggerCount)&&Number.isFinite(r.primeTriggerCount));
+    const read=key=>meanAvailable&&observations.every(r=>Number.isFinite(r[key]))?observations.reduce((sum,r)=>sum+r[key]/rounds,0):finite(z[key]);
+    const packageLength=z.productLengthMm??native?.upstream?.packageLengthMm,speed=z.conveyorSpeedMmPerSecond;
+    const pulse=ratio(packageLength,speed),delay=finite(native?.accumulation?.blockedTimeDelaySeconds??native?.speedAndSensors?.blockedTimeDelaySeconds);
+    const bt=read('backupTriggerCount'),bp=read('backupPassedUnits'),pt=read('primeTriggerCount'),pp=read('primePassedUnits');
+    return {equipmentId:z.ownerEquipmentId,name:e?.name||z.ownerEquipmentId,upstreamId:z.upstreamControlEquipmentId||null,downstreamId:z.downstreamControlEquipmentId||null,
+      counterBasis:meanAvailable?'REPLICATION_MEAN':rounds===1?'SINGLE_ROUND':'REPRESENTATIVE_ROUND',packageLengthMm:finite(packageLength),beltSpeedMmPerSecond:finite(speed),normalPulseSeconds:pulse,blockedDelaySeconds:delay,
+      pulseConflict:Number.isFinite(pulse)&&Number.isFinite(delay)&&pulse+1e-9>=delay,
+      primeTriggerCount:pt,primePassedUnits:pp,backupTriggerCount:bt,backupPassedUnits:bp,primeTriggersPerPass:ratio(pt,pp),backupTriggersPerPass:ratio(bt,bp),
+      backupSignalPulsingSeconds:read('backupSignalPulsingSeconds'),backupSignalBlockedSeconds:read('backupSignalBlockedSeconds'),overflowUnits:read('overflowUnits')};
+  });
+  return {version:1,durationSeconds:duration,rounds,machines,zones,interpretation:'Repeated starts, passage pulses and propagated blocking are diagnostic indicators, not established plant failure causes.'};
+}
+export function scenarioIsPhysicalControl(change){
+  return change?.originTier==='ZERO'&&!change.external&&!change.analysisOnly&&/\.(blockedTimeDelaySeconds|clearTimeDelaySeconds|backupSensorPositionMm|lpPrimeMm|conveyorSpeedMmPerSecond|conveyorSpeedFactorPercent|downstreamRampUpSeconds|startupTimeSeconds)$/.test(change.path||'');
+}
+// Build a bounded physical experiment set from validated Zero proposals.
+// Additional levels are exploratory within the installed geometry. No machine
+// ramp, sensor implementation or overflow logic is overridden in the engine.
+export function planScenarioControlProbes(simulation,targets,{limit=12}={}){
+  const diagnostic=scenarioControlDiagnostics(simulation?.results,simulation?.equipment||[]),equipment=simulation?.equipment||[];
+  const pool=[],seen=new Set(),groups=new Map();
+  for(const entry of targets||[]){
+    const c=entry?.change||entry;
+    if(!scenarioIsPhysicalControl(c)||c.disabledReason||!(c.before===null||Number.isFinite(c.before))||!Number.isFinite(c.after)||c.before===c.after)continue;
+    const id=c.packageId||c.equipmentId+':'+c.path,group=groups.get(id)||{packageId:id,changes:[],priority:0};
+    if(!group.changes.some(x=>x.equipmentId===c.equipmentId&&x.path===c.path))group.changes.push(c);
+    group.priority=Math.max(group.priority,Number(entry.priority)||0);groups.set(id,group);
+  }
+  function add(changes,priority,kind,level){
+    const key=JSON.stringify(changes.map(c=>[c.equipmentId,c.path,c.after]).sort());
+    if(seen.has(key)||changes.some(c=>c.before===c.after||!Number.isFinite(c.after)||c.after<0))return;
+    try{applyScenarioChanges(simulation,changes,{tier:'ZERO',previewOnly:true});}catch(_){return;}
+    seen.add(key);pool.push({packageId:changes[0].packageId||changes[0].equipmentId+':'+changes[0].path,changes:JSON.parse(JSON.stringify(changes)),priority,kind,level});
+  }
+  for(const group of groups.values()){
+    const c=group.changes[0],z=diagnostic?.zones.find(row=>row.equipmentId===c.equipmentId),down=diagnostic?.machines.find(row=>row.equipmentId===z?.downstreamId),up=diagnostic?.machines.find(row=>row.equipmentId===z?.upstreamId);
+    const path=c.path,delay=/TimeDelaySeconds$/.test(path),prime=/lpPrimeMm$/.test(path),backup=/backupSensorPositionMm$/.test(path),speed=/conveyorSpeed/.test(path);
+    const chatter=100*Math.min(1,Math.max(z?.primeTriggersPerPass??0,z?.backupTriggersPerPass??0)),repeated=down?.repeatedStarts?40:0;
+    const importance=group.priority+chatter+repeated+(z?.pulseConflict&&delay?200:0)+(Number.isFinite(up?.blockedSeconds)?20*up.blockedSeconds/(diagnostic?.durationSeconds||1):0);
+    const kind=delay?'SENSOR_TIMING':prime||backup?'SENSOR_POSITION':speed?'SPEED':'RESTART_CONTROL';
+    add(group.changes,importance,kind,'ENGINEERING_TARGET');
+    if(group.changes.length!==1||c.packagePaths?.length>1)continue;
+    const e=equipment.find(e=>e.id===c.equipmentId),length=e?.processData?.geometry?.lactMm;
+    const variant=(after,bonus,level)=>add([{...c,after:Number(after.toFixed(4))}],importance+bonus,kind,level);
+    if(path.endsWith('blockedTimeDelaySeconds')&&z?.pulseConflict&&z.normalPulseSeconds>0){
+      variant(Math.ceil((z.normalPulseSeconds+.05)*100)/100,15,'JUST_ABOVE_NORMAL_PULSE');
+      variant(Math.ceil((z.normalPulseSeconds+.30)*10)/10,10,'PULSE_MARGIN');
+    }
+    if(prime&&Number.isFinite(c.before)&&c.before>0&&Number.isFinite(length)){
+      variant(Math.min(length,c.before*1.5),repeated?8:-20,'LARGER_PRIME_RESERVE');
+      variant(Math.max(0,c.before*.25),repeated?6:-25,'SMALLER_PRIME_RESERVE');
+    }
+    if(backup&&Number.isFinite(c.before)&&c.before>=0)variant((c.before+c.after)/2,-5,'INTERMEDIATE_BACKUP_POSITION');
+    // Delays and speeds also interact with the normal passage time. Keep the
+    // existing engineering target plus a conservative intermediate speed.
+    if(speed&&Number.isFinite(c.before)&&c.before>0)variant((c.before+c.after)/2,-35,'INTERMEDIATE_SPEED');
+  }
+  pool.sort((a,b)=>b.priority-a.priority||a.packageId.localeCompare(b.packageId)||a.level.localeCompare(b.level));
+  const chosen=[],used=new Set(),budget=Math.max(0,Math.min(16,Math.floor(limit)));
+  // First test the engineering proposal at each implicated field; use the
+  // remaining budget for extra levels at the highest-risk controls.
+  for(const p of pool.filter(x=>x.level==='ENGINEERING_TARGET')){
+    if(chosen.length>=budget)break;chosen.push(p);used.add(p);
+  }
+  for(const p of pool){if(chosen.length>=budget)break;if(!used.has(p)){chosen.push(p);used.add(p);}}
+  chosen.sort((a,b)=>b.priority-a.priority||a.packageId.localeCompare(b.packageId));
+  return {policy:'PHYSICAL_CONTROL_PROBES_V1',diagnostic,probes:chosen,eligibleProbes:pool.length,omittedProbes:pool.length-chosen.length};
+}
+// Compare levels only within one matched physical experiment. Prefer fewer
+// warning conditions, then throughput and minimal movement for near ties.
+export function rankScenarioPhysicalPackages(observations,baseline){
+  const groups=new Map(),threshold=Math.max(.001,Math.abs(baseline?.throughput||0)*.001);
+  for(const row of observations||[]){
+    const value=row?.result;
+    if(!value||value.scenarioFidelity!==baseline?.scenarioFidelity||value.durationSeconds!==baseline.durationSeconds||scenarioComparisonEvidenceIssue(baseline,value))continue;
+    const bseeds=new Set(baseline.roundMetrics.map(r=>r.seed));
+    if(value.roundMetrics.length!==bseeds.size||value.roundMetrics.some(r=>!bseeds.has(r.seed)))continue;
+    const id=row.packageId||row.changes[0]?.packageId||row.changes[0]?.equipmentId+':'+row.changes[0]?.path;
+    const gain=value.throughput-baseline.throughput,warningCount=value.warnings?.length||0,positive=gain>threshold&&value.oee>=baseline.oee-1e-9;
+    const item={...row,packageId:id,gain,warningCount,positive};
+    const old=groups.get(id);
+    if(!old||Number(item.positive)>Number(old.positive)||item.positive===old.positive&&(item.warningCount<old.warningCount||item.warningCount===old.warningCount&&item.gain>old.gain+1e-9))groups.set(id,item);
+  }
+  const sorted=[...groups.values()].sort((a,b)=>Number(b.positive)-Number(a.positive)||a.warningCount-b.warningCount||b.gain-a.gain||b.priority-a.priority||a.packageId.localeCompare(b.packageId));
+  const positive=sorted.filter(r=>r.positive);
+  // No positive isolated result is not proof of no interaction. Preserve at
+  // most one precautionary package of each mechanism when necessary.
+  const chosen=positive.length?positive:sorted.slice(0,3);
+  return {ranked:sorted,targets:chosen.flatMap((r,i)=>r.changes.map(change=>({change,priority:100000-i*1000+Math.max(0,Math.min(999,r.gain||0))}))),threshold,interpretation:'Ranked matched physical isolated levels. Effects are conditional, not additive; factorial design tests interactions.'};
 }

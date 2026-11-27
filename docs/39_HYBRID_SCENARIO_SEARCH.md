@@ -1,5 +1,7 @@
 # Hybrid scenario search
 
+> Historical implementation and experiment notes. The current `MATCHED_CAPEX_V12` scopes, independent categories, Basic automatic DOE and fixed-sample confirmation are specified in [CAPEX scope and Basic search](CAPEX_SCOPE_AND_BASIC_SEARCH.md) and [background methodology](SCENARIO_BACKGROUND_METHODOLOGY.md). Earlier inclusion controls, High buffer classification and adaptive confirmation descriptions below do not describe the current workflow.
+
 What-If has its own processing depth, independent of playback duration and replication settings. The default is Medium. Choose depth in the scenario configuration dialog; the selection and evaluation evidence are saved with the simulation.
 
 | Depth | Exploration per round | Finalist ranking per round | Exploration candidates | DOE factors / combinations |

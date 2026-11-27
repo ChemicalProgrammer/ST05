@@ -5,15 +5,13 @@ import {JSDOM} from 'jsdom';
 import {scenarioSignature} from '../src/analysis/ScenarioPlanner.js';
 import {scenarioSearchSettingsSignature} from '../src/analysis/ScenarioSearch.js';
 import {completeSyntheticScenarioSource} from './helpers/CompletedScenarioFixture.js';
+import {scenarioEvidenceInput} from './helpers/ScenarioEvidenceFixture.js';
 
 const outcome='No tested configuration improved the matched baseline (50.00% OEE). Baseline retained; no better scenario is recommended.';
 
 function savedCase(){
-  const sim=completeSyntheticScenarioSource({id:'simulation-a',unitOfFlow:'bottles',
-    equipment:[{id:'inlet',name:'Virtual inlet',type:'FEEDER',initialMode:'AUTO',nominalRatePerSecond:8,
-      characteristics:{isVirtualBoundary:true},noiseProfile:{},
-      processData:{equipment:{maximumSpeedBpm:600,mtbfMinutes:null,mttrMinutes:null}}}],
-    dynamicConfig:{durationSeconds:3600,rounds:3,seed:7}});
+  const fixture=scenarioEvidenceInput();fixture.id='simulation-a';Object.assign(fixture.dynamicConfig,{durationSeconds:3600,rounds:3,seed:7});
+  const sim=completeSyntheticScenarioSource(fixture);
   const steps=[
     {name:'Baseline',state:'Completed',percent:100,elapsedMs:3000,work:{primary:{label:'Baseline batches',done:1,total:1}}},
     {name:'Comparing finalists',state:'Completed',percent:100,elapsedMs:7000,work:{primary:{label:'Finalists',done:2,total:2}}}
@@ -21,7 +19,7 @@ function savedCase(){
   sim.whatIf={evaluations:[{cardId:JSON.stringify([sim.id,'CAPEX','ZERO']),sourceSimulationId:sim.id,
     sourceSignature:scenarioSignature(sim),status:'NO_DEMONSTRATED_IMPROVEMENT',message:outcome,
     updatedAt:'2026-11-24T20:00:00.000Z',searchSettings:{speedProfile:'BALANCED'},
-    searchSettingsSignature:scenarioSearchSettingsSignature(),searchPolicyVersion:'MATCHED_CAPEX_V11',
+    searchSettingsSignature:scenarioSearchSettingsSignature(),searchPolicyVersion:'MATCHED_CAPEX_V12',searchScope:'ZERO',tier:'ZERO',uiMode:'basic',
     methodologySignature:'{}',baseline:{oee:50,throughput:120},candidate:null,evaluatedChanges:[],
     run:{...sim.dynamicConfig},depth:'MEDIUM',progress:'Finished · 3 / up to 3 simulation batches · Elapsed 10s',
     progressTrace:{steps,percent:100,outcome:'Completed',summary:{candidateBatches:2,candidateMs:7000}}
@@ -32,7 +30,7 @@ function savedCase(){
 function browser(record,compact=false){
   const dom=new JSDOM('<!doctype html><html data-ui-mode="basic"><body></body></html>',{runScripts:'outside-only'}),w=dom.window;
   w.__ST_TEXT__=key=>key;
-  w.STPreferences={read:()=>null,write:()=>true};w.STIcons={svg:()=>'<svg></svg>'};
+  w.STPreferences={read:()=>null,write:()=>true};w.STIcons={svg:()=>'<svg></svg>',button:el=>{if(!el.querySelector('svg'))el.insertAdjacentHTML('afterbegin','<svg></svg>');}};
   w.STErrors={register(){},capture(){}};w.STReports={bindWhatIf(){}};
   w.matchMedia=()=>({matches:true,addEventListener(){},removeEventListener(){}});
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
@@ -46,7 +44,7 @@ function browser(record,compact=false){
   w.SimulatorEngine.simulateBatch=async()=>{simulationCalls++;throw new Error('Restoring history must not simulate.');};
   w.STScenarioExplorer.connectCase(()=>record,()=>{});
   const sim=record.simulations[0],host=w.STWhatIf.card({compact,kind:'CUSTOM',tier:'ZERO',searchScope:'ZERO',explore:true,catalog:true,searchDerivedDOE:true,
-    changes:[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}]},()=>{creationCalls++;},sim.equipment,sim);
+    changes:[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',before:300,after:360,unit:'mm/s'}]},()=>{creationCalls++;},sim.equipment,sim);
   w.document.body.append(host);
   return {w,sim,host,header:host.querySelector(':scope > .scenario-card-header'),simulationCalls:()=>simulationCalls,creationCalls:()=>creationCalls,close:()=>w.close()};
 }
@@ -75,8 +73,8 @@ test('JSON save and reload preserves a completed negative outcome, steps, counte
     assert.equal(h.host.querySelector('.scenario-activity').getAttribute('aria-valuenow'),'100');
     const panel=openTrace(h);
     assert.equal(panel.querySelectorAll('.scenario-trace-row').length,2);
-    assert.match(panel.textContent,/100\.0% · 0m 03s/);
-    assert.match(panel.textContent,/100\.0% · 0m 07s/);
+    assert.match(panel.textContent,/100\.00% · 0m 03s/);
+    assert.match(panel.textContent,/100\.00% · 0m 07s/);
     assert.match(panel.textContent,/Finalists2 \/ 2/);
     assert.match(panel.textContent,/Elapsed 10s/);
     assert.match(panel.textContent,/Finished · 3 \/ up to 3 simulation batches/);
@@ -141,7 +139,7 @@ test('a newly completed baseline enables search but keeps the old scenario resul
 test('a terminal no-improvement result never revives an older winning candidate',()=>{
   const record=savedCase(),sim=record.simulations[0],latest=sim.whatIf.evaluations[0];
   sim.whatIf.evaluations.unshift({...structuredClone(latest),updatedAt:'2026-11-23T20:00:00.000Z',status:'IMPROVEMENT_REPRODUCED',
-    candidate:{oee:55,throughput:130},evaluatedChanges:[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9}]});
+    candidate:{oee:55,throughput:130},evaluatedChanges:[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',before:300,after:360}]});
   const before=JSON.stringify(sim.whatIf),h=browser(record);
   try{
     assert.equal(h.host.querySelector('.scenario-preview-status').textContent,outcome);
@@ -156,7 +154,7 @@ test('a terminal no-improvement result never revives an older winning candidate'
 test('an old winning scenario remains inspectable but cannot be created after a new baseline',()=>{
   const record=savedCase(),sim=record.simulations[0],entry=sim.whatIf.evaluations[0];
   entry.status='IMPROVEMENT_REPRODUCED';entry.message='';entry.candidate={oee:55,throughput:130};
-  entry.evaluatedChanges=[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9}];
+  entry.evaluatedChanges=[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',before:300,after:360}];
   entry.independentCheck={passed:true,baseline:entry.baseline,candidate:entry.candidate};
   sim.equipment[0].nominalRatePerSecond+=.1;completeSyntheticScenarioSource(sim);
   const before=JSON.stringify(sim.whatIf),h=browser(record);
@@ -194,24 +192,24 @@ test('interrupted historical steps stay inspectable without claiming completion'
   }finally{h.close();}
 });
 
-function savedTargetCase(target=7,limit=''){
+function savedTargetCase(target=270,limit=''){
   const record=savedCase(),entry=record.simulations[0].whatIf.evaluations[0];
-  entry.proposedChanges=[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:7,unit:'units/s'}];
-  entry.controls=[{equipmentId:'inlet',path:'nominalRatePerSecond',target,limit,checked:true,
-    doe:{selected:true,low:'420',high:'480'}}];
-  entry.searchVariables=[{equipmentId:'inlet',path:'nominalRatePerSecond',low:7,high:8}];
+  entry.proposedChanges=[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',before:300,after:270,unit:'mm/s'}];
+  entry.controls=[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',target,limit,checked:true,
+    doe:{selected:true,low:'16.2',high:'18'}}];
+  entry.searchVariables=[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',low:270,high:300}];
   return record;
 }
 
 test('a corrected planner default replaces only an untouched saved target with no explicit limit',()=>{
   const record=savedTargetCase(),before=JSON.stringify(record.simulations[0].whatIf),h=browser(record);
   try{
-    assert.equal(h.host.querySelector('.scenario-target').value,'540','Use the new 9 units/s default, instead of the old 7 units/s default.');
+    assert.equal(h.host.querySelector('.scenario-target').value,'21.6','Use the new 360 mm/s default instead of the old 270 mm/s default.');
     const row=h.host.querySelector('.scenario-change'),limit=row.querySelector('.scenario-limit input');
     assert.equal(limit.value,'');assert.equal(limit.parentElement.firstChild.textContent,'Max');assert.match(limit.getAttribute('aria-label'),/ · Max \(/);
     assert.equal(row.querySelector('td input[type="checkbox"]').checked,true);
     assert.equal(row.querySelector('.scenario-doe-select').checked,true);
-    assert.deepEqual([...row.querySelectorAll('.scenario-doe-level')].map(input=>input.value),['420','480'],'Saved DOE levels are not assumed to be automatic.');
+    assert.deepEqual([...row.querySelectorAll('.scenario-doe-level')].map(input=>input.value),['16.2','18'],'Saved DOE levels are not assumed to be automatic.');
     assert.equal(h.host.querySelector('.scenario-preview-status').textContent,outcome);
     assert.equal(h.host.querySelector('.scenario-preview-status').dataset.state,'stale');
     assert.match(h.host.querySelector('.scenario-result-notice').textContent,/Search targets updated/);
@@ -222,18 +220,18 @@ test('a corrected planner default replaces only an untouched saved target with n
   }finally{h.close();}
 });
 
-for(const [label,target,limit] of [['manual target',7.5,''],['explicit physical limit',7,'450']]){
+for(const [label,target,limit] of [['manual target',285,''],['explicit physical limit',270,'17.1']]){
   test('planner changes preserve a saved '+label,()=>{
     const record=savedTargetCase(target,limit),before=JSON.stringify(record.simulations[0].whatIf),h=browser(record);
     try{
       const row=h.host.querySelector('.scenario-change'),input=row.querySelector('.scenario-limit input');
-      assert.equal(row.querySelector('.scenario-target').value,String(target*60));
+      assert.equal(row.querySelector('.scenario-target').value,String(Number((target*.06).toPrecision(8))));
       assert.equal(input.value,limit);
       assert.equal(input.parentElement.firstChild.textContent,'Min','The restored direction replaces the new default direction.');
       assert.match(input.getAttribute('aria-label'),/ · Min \(/);
       assert.equal(row.querySelector('td input[type="checkbox"]').checked,true);
       assert.equal(row.querySelector('.scenario-doe-select').checked,true);
-      assert.deepEqual([...row.querySelectorAll('.scenario-doe-level')].map(input=>input.value),['420','480']);
+      assert.deepEqual([...row.querySelectorAll('.scenario-doe-level')].map(input=>input.value),['16.2','18']);
       assert.equal(h.host.querySelector('.scenario-result-notice').hidden,true);
       assert.equal(h.host.querySelector('.scenario-preview-status').textContent,outcome);
       assert.equal(JSON.stringify(h.sim.whatIf),before);
@@ -247,10 +245,10 @@ test('refreshing a planner default preserves an explicit deselection',()=>{
   const before=JSON.stringify(record.simulations[0].whatIf),h=browser(record);
   try{
     const row=h.host.querySelector('.scenario-change');
-    assert.equal(row.querySelector('.scenario-target').value,'540');
+    assert.equal(row.querySelector('.scenario-target').value,'21.6');
     assert.equal(row.querySelector('td input[type="checkbox"]').checked,false);
     assert.equal(row.querySelector('.scenario-doe-select').checked,false);
-    assert.deepEqual([...row.querySelectorAll('.scenario-doe-level')].map(input=>input.value),['420','480']);
+    assert.deepEqual([...row.querySelectorAll('.scenario-doe-level')].map(input=>input.value),['16.2','18']);
     assert.equal(JSON.stringify(h.sim.whatIf),before);
   }finally{h.close();}
 });
@@ -259,7 +257,7 @@ test('adding a machine and conveyor preserves the old CAPEX result with a visibl
   const record=savedCase(),sim=record.simulations[0],entry=sim.whatIf.evaluations[0];
   entry.status='IMPROVEMENT_REPRODUCED';entry.message='';entry.candidate={oee:55,throughput:130};
   entry.independentCheck={passed:true,baseline:entry.baseline,candidate:entry.candidate};
-  entry.evaluatedChanges=[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}];
+  entry.evaluatedChanges=[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',before:300,after:360,unit:'mm/s'}];
   sim.equipment.push({id:'added-belt',name:'Added conveyor',type:'CONVEYOR',nominalRatePerSecond:8,initialMode:'AUTO',characteristics:{},noiseProfile:{},processData:{}},
     {id:'added-machine',name:'Added equipment',type:'CUSTOM',nominalRatePerSecond:8,initialMode:'AUTO',characteristics:{},noiseProfile:{},processData:{equipment:{maximumSpeedBpm:600}}});
   sim.results=null;
@@ -290,7 +288,7 @@ test('current settings cannot relabel a nested previous-source result as current
   const record=savedCase(),sim=record.simulations[0],old=structuredClone(sim.whatIf.evaluations[0]);
   old.status='IMPROVEMENT_REPRODUCED';old.message='Old outcome';old.candidate={oee:55,throughput:130};
   old.independentCheck={passed:true,baseline:old.baseline,candidate:old.candidate};
-  old.evaluatedChanges=[{equipmentId:'inlet',path:'nominalRatePerSecond',before:8,after:9,unit:'units/s'}];
+  old.evaluatedChanges=[{equipmentId:'belt',path:'processData.accumulation.conveyorSpeedMmPerSecond',before:300,after:360,unit:'mm/s'}];
   sim.equipment[0].nominalRatePerSecond+=.1;completeSyntheticScenarioSource(sim);
   sim.whatIf.evaluations=[{...sim.whatIf.evaluations[0],sourceSignature:scenarioSignature(sim),status:'NOT_EVALUATED',baseline:null,candidate:null,evaluatedChanges:undefined,lastResult:old,progressTrace:undefined}];
   const before=JSON.stringify(sim.whatIf),h=browser(record);
@@ -328,5 +326,37 @@ test('a fresh source-compatible result has no source-change warning',()=>{
   const blocked=await h.host._runMinimalSearch();
   assert.equal(blocked.started,false);assert.match(blocked.reason,/NO_RESULTS/);
   assert.equal(h.simulationCalls(),0);
+ }finally{h.close();}
+});
+
+
+test('legacy mixed-category policy and old machine-speed targets remain historical, without restoring forbidden controls',()=>{
+ const record=savedTargetCase(),sim=record.simulations[0],entry=sim.whatIf.evaluations[0];
+ entry.searchPolicyVersion='MATCHED_CAPEX_V11';entry.categoryInclusions={ZERO:true,MEDIUM:true};
+ entry.status='IMPROVEMENT_REPRODUCED';entry.message='';entry.candidate={oee:55,throughput:130};entry.independentCheck={passed:true,baseline:entry.baseline,candidate:entry.candidate};
+ entry.evaluatedChanges=[{equipmentId:'upstream',path:'nominalRatePerSecond',before:2,after:2.2,originTier:'ZERO'}];
+ entry.controls.push({equipmentId:'upstream',path:'nominalRatePerSecond',target:2.2,checked:true});
+ const before=JSON.stringify(sim.whatIf),h=browser(record);
+ try{
+  assert.equal(h.host.querySelector('.scenario-create').disabled,true);
+  assert.equal(h.host.querySelector('.scenario-preview-status').dataset.state,'stale');
+  assert.match(h.host.querySelector('.scenario-result-notice').textContent,/current full-horizon comparison policy/);
+  assert.equal(h.host.querySelector('.scenario-include-category'),null);
+  assert.equal(h.host.querySelectorAll('.scenario-target').length,1);
+  assert.equal(h.host.querySelector('.scenario-target').value,'21.6','The current category supplies a fresh valid conveyor target.');
+  assert(h.host.querySelector('.scenario-basic-metric'),'Historical metrics remain inspectable.');
+  assert.equal(openTrace(h).querySelectorAll('.scenario-trace-row').length,2);
+  assert.equal(h.simulationCalls(),0);assert.equal(JSON.stringify(sim.whatIf),before);
+ }finally{h.close();}
+});
+
+test('Basic ignores saved manual factor and target controls without rewriting Standard history',()=>{
+ const record=savedTargetCase(285,'17.1'),sim=record.simulations[0],before=JSON.stringify(sim.whatIf),h=browser(record,true);
+ try{
+  assert.equal(h.host.querySelector('.scenario-target').value,'21.6');
+  assert.equal(h.host.querySelector('.scenario-limit input').value,'');
+  assert.equal(h.host.querySelector('.scenario-doe-select').checked,false);
+  assert.equal(h.host.querySelector('.scenario-create').disabled,true);
+  assert.equal(h.simulationCalls(),0);assert.equal(JSON.stringify(sim.whatIf),before);
  }finally{h.close();}
 });

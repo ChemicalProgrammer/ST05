@@ -7,16 +7,16 @@ import { applyProductProfile, productUnitFactor } from '../simulation/ProductPro
 import { scenarioSourceReadiness } from './ScenarioReadiness.js';
 
 // Scenario policy is separate from the unchanged simulation mathematics.
-export const SCENARIO_POLICY = Object.freeze({microstopLimitMinutes:4,maxChanges:64});
+export const SCENARIO_POLICY = Object.freeze({microstopLimitMinutes:4,maxChanges:64,maxAccumulationSites:3,maxReplacementTargets:3});
 export const SCENARIO_DEFINITIONS = Object.freeze({
-  ZERO:{scope:'Optimize installed assets and work practices without capital investment.',reliability:'Supported operational improvements; additional maintenance is OPEX, not capital.',costBasis:'Intervention scope; no assumed monetary threshold or required efficiency gain.'},
-  MEDIUM:{scope:'Local component rehabilitation, monitoring or equipment retrofit.',reliability:'Documented retrofit MTBF/MTTR targets, with installation scope and target source.',costBasis:'Intervention type and physical scope only; no budget amount or monetary threshold is required.'},
-  HIGH:{scope:'Complete equipment replacement or major line/transport redesign.',reliability:'Replacement can improve reliability without changing speed; use supplier or measured targets.',costBasis:'Complete replacement or major redesign defines this category; no budget amount or minimum efficiency gain is required.'}
+  ZERO:{scope:'Optimize existing sensors, conveyor speeds and downtime without capital investment.',reliability:'Operational or maintenance improvements; exploratory downtime targets require feasibility review.',costBasis:'Independent intervention scope; no changes from other CAPEX categories are included.'},
+  MEDIUM:{scope:'Optimize or add accumulation capacity at up to three conveyor sites before or after critical machines.',reliability:'Buffers absorb the propagation of stops; installed machine MTBF/MTTR and operating speeds remain unchanged.',costBasis:'Accumulation capacity and its coupled geometry only; no changes from other CAPEX categories are included.'},
+  HIGH:{scope:'Replace complete machines where the line diagnosis identifies a potential constraint.',reliability:'Evaluate complete replacement performance packages; hypothetical engineering specifications are not supplier guarantees.',costBasis:'Complete equipment replacement only; no changes from other CAPEX categories are included.'}
 });
 export const SCENARIO_INTERVENTIONS = Object.freeze({
   OPERATIONAL:{tier:'ZERO',costClass:'NONE',label:'Existing resources / work practices'},
   MAINTENANCE:{tier:'ZERO',costClass:'OPEX',label:'Additional maintenance / repair resources'},
-  RETROFIT:{tier:'MEDIUM',costClass:'CAPEX',label:'Local retrofit / rehabilitation'},
+  ACCUMULATION:{tier:'MEDIUM',costClass:'CAPEX',label:'Accumulation capacity / buffer section'},
   REPLACEMENT:{tier:'HIGH',costClass:'CAPEX',label:'Complete equipment replacement'}
 });
 // Input classes are declarations, not causes inferred from mean stop duration.
@@ -37,14 +37,21 @@ export function scenarioStopDataCoverage(simulation,equipment){
     causeClassification:'NOT_ESTABLISHED',classesInferred:false,
     interpretation:'MINOR and MAJOR use supplied stop classes; GENERAL remains unclassified. MICRO_STOP is a separate modeled process. Duration alone does not establish a failure cause, maintenance action or replacement.'};
 }
-export function scenarioCategoryAllows(change,tier){
-  if(change.analysisOnly)return false;
-  if(change.replacementMaximumBpm!==undefined)return tier==='HIGH'&&change.path==='nominalRatePerSecond'&&change.interventionType==='REPLACEMENT'&&change.external===true;
+export function scenarioCategoryAllows(change,tier,{allowAnalysisOnly=false}={}){
+  if(!change||typeof change.path!=='string'||!Object.hasOwn(SCENARIO_FIELDS,change.path)||!['ZERO','MEDIUM','HIGH'].includes(tier)||change.originTier&&change.originTier!==tier)return false;
+  if(change.analysisOnly){
+    if(!allowAnalysisOnly)return false;
+    if(change.interventionType==='SENSITIVITY')return tier==='ZERO'&&change.external===true&&change.path.startsWith('noiseProfile.reliability.');
+    if(change.interventionType!=='REPLACEMENT'||tier!=='HIGH'||!change.packageId||!change.targetId)return false;
+  }
+  if(change.replacementMaximumBpm!==undefined||change.path==='nominalRatePerSecond')return tier==='HIGH'&&change.path==='nominalRatePerSecond'&&change.interventionType==='REPLACEMENT'&&change.external===true;
   if(change.path.startsWith('noiseProfile.reliability.')){
     const intervention=SCENARIO_INTERVENTIONS[change.interventionType];
-    return !!intervention&&intervention.tier===tier;
+    return !!intervention&&intervention.tier===tier&&tier!=='MEDIUM';
   }
-  return tier==='HIGH'||tier==='MEDIUM'&&change.path!=='processData.geometry.lactMm'||tier==='ZERO'&&!change.external&&change.path!=='processData.geometry.lactMm';
+  if(change.path==='processData.geometry.lactMm')return tier==='MEDIUM'&&(!change.interventionType||change.interventionType==='ACCUMULATION');
+  if(change.interventionType==='ACCUMULATION')return tier==='MEDIUM'&&['processData.geometry.lpPrimeMm','processData.accumulation.backupSensorPositionMm'].includes(change.path);
+  return tier==='ZERO'&&!change.external&&(!change.interventionType||['OPERATIONAL','MAINTENANCE'].includes(change.interventionType));
 }
 // Explicit exploratory levels are diagnostics, never implementation targets.
 export function reliabilitySensitivityCandidates(simulation,{mtbfMultiplier=2,mttrMultiplier=.5}={}){
@@ -283,8 +290,61 @@ export function scenarioVariableCatalog(simulation){
     return {equipmentId:e.id,path,before,after:before,unit:SCENARIO_FIELDS[path][2],external,disabledReason,catalogOnly:true};
   }));
 }
-export function applyScenarioChanges(simulation,changes){
+function scenarioPackage(changes,metadata){
+  const changed=changes.filter(c=>c.before!==c.after),packagePaths=changed.map(c=>c.path);
+  return changed.map(c=>({...c,...metadata,packagePaths:packagePaths.slice()}));
+}
+// Numeric DOE levels may vary buffer capacity, but its sensor geometry follows
+// the same physical section. Replacement specifications are indivisible binary
+// options; interpolating one supplier field does not define another machine.
+export function expandScenarioPackages(simulation,changes,availableChanges=[]){
+  const expanded=[],groups=new Map();
+  for(const change of changes||[]){
+    if(!change?.packageId){if(change?.before!==change?.after)expanded.push({...change});continue;}
+    const key=change.equipmentId+':'+change.packageId;
+    if(!groups.has(key))groups.set(key,[]);groups.get(key).push(change);
+  }
+  for(const chosen of groups.values()){
+    if(chosen.every(c=>c.before===c.after))continue;
+    const first=chosen[0],templates=(availableChanges||[]).filter(c=>c.equipmentId===first.equipmentId&&c.packageId===first.packageId);
+    // Callers may append the canonical package after the selected coordinate.
+    // Keep one template per input; repeated geometry must not become duplicate
+    // mutations, and the final canonical value defines the coupling slope.
+    const packageChanges=[...new Map((templates.length?templates:chosen).map(c=>[c.path,c])).values()];
+    if(first.interventionType==='ACCUMULATION'){
+      const path='processData.geometry.lactMm',length=chosen.find(c=>c.path===path),template=packageChanges.find(c=>c.path===path);
+      if(!length||!template||length.after===length.before||template.after===template.before)throw Error('SCENARIO_ACCUMULATION_GEOMETRY_REQUIRED');
+      const fraction=(length.after-length.before)/(template.after-template.before);
+      const values=packageChanges.map(c=>({...c,after:c.path===path?length.after:c.before===null?c.after:c.before+(c.after-c.before)*fraction}));
+      expanded.push(...scenarioPackage(values,{}));
+    }else if(first.interventionType==='REPLACEMENT'){
+      if(chosen.some(c=>{const target=packageChanges.find(t=>t.path===c.path);return !target||c.after!==c.before&&c.after!==target.after;}))throw Error('SCENARIO_REPLACEMENT_PACKAGE_REQUIRED');
+      expanded.push(...packageChanges.map(c=>({...c})));
+    }else expanded.push(...chosen.filter(c=>c.before!==c.after).map(c=>({...c})));
+  }
+  return expanded;
+}
+export function applyScenarioChanges(simulation,changes,{tier}={}){
   if(!Array.isArray(changes)||!changes.length||changes.length>SCENARIO_POLICY.maxChanges)throw new Error('SCENARIO_INVALID_CHANGES');
+  const declaredTiers=new Set(changes.map(c=>c?.originTier).filter(Boolean));
+  if(tier)declaredTiers.add(tier);
+  if(declaredTiers.size>1)throw new Error('SCENARIO_CATEGORY_MISMATCH');
+  const declaredTier=[...declaredTiers][0];
+  if(declaredTier&&changes.some(c=>!scenarioCategoryAllows(c,declaredTier,{allowAnalysisOnly:true})))throw new Error('SCENARIO_CATEGORY_MISMATCH');
+  const accumulationSites=new Set(changes.filter(c=>c?.path==='processData.geometry.lactMm'&&c.after!==c.before).map(c=>c.equipmentId));
+  if(accumulationSites.size>SCENARIO_POLICY.maxAccumulationSites)throw new Error('SCENARIO_ACCUMULATION_SITE_LIMIT');
+  // A buffer's relocated sensor belongs to the same new physical section. It
+  // cannot be used to import unrelated Zero controls into a Medium proposal.
+  if(changes.some(c=>c?.interventionType==='ACCUMULATION'&&!accumulationSites.has(c.equipmentId)))throw new Error('SCENARIO_ACCUMULATION_GEOMETRY_REQUIRED');
+  if(accumulationSites.size&&changes.some(c=>!accumulationSites.has(c.equipmentId)||!['processData.geometry.lactMm','processData.geometry.lpPrimeMm','processData.accumulation.backupSensorPositionMm'].includes(c.path)))throw new Error('SCENARIO_CATEGORY_MISMATCH');
+  for(const id of new Set(changes.filter(c=>c?.interventionType==='REPLACEMENT').map(c=>c.equipmentId))){
+    const packages=new Set(changes.filter(c=>c.equipmentId===id&&c.interventionType==='REPLACEMENT').map(c=>c.targetId||c.packageId).filter(Boolean));
+    if(packages.size>1)throw new Error('SCENARIO_REPLACEMENT_PACKAGE_CONFLICT');
+  }
+  for(const change of changes){
+    if(change?.packagePaths===undefined)continue;
+    if(!change.packageId||!Array.isArray(change.packagePaths)||!change.packagePaths.length||change.packagePaths.length>12||!change.packagePaths.includes(change.path)||change.packagePaths.some(path=>!Object.hasOwn(SCENARIO_FIELDS,path)||!changes.some(c=>c.equipmentId===change.equipmentId&&c.packageId===change.packageId&&c.path===path)))throw new Error('SCENARIO_PACKAGE_INCOMPLETE');
+  }
   const copy=scenarioCopy(simulation),seen=new Set();
   changes.forEach(change=>{
     const rule=Object.hasOwn(SCENARIO_FIELDS,change.path)?SCENARIO_FIELDS[change.path]:null;
@@ -293,13 +353,14 @@ export function applyScenarioChanges(simulation,changes){
     if(!Object.hasOwn(change,'before')||(scenarioGet(unit,change.path)??null)!==change.before)throw new Error('SCENARIO_STALE');
     if((change.path.includes('accumulation')||change.path.includes('geometry'))&&unit.type!=='CONVEYOR')throw new Error('SCENARIO_INVALID_FIELD');
     if(change.path==='nominalRatePerSecond'){
-      if(copy.dynamicConfig?.machineMaximumSpeedEnabled===false)throw new Error('SCENARIO_INSTALLED_SPEED_LIMIT');
+      const replacement=change.external===true&&change.interventionType==='REPLACEMENT';
+      if(copy.dynamicConfig?.machineMaximumSpeedEnabled===false&&!replacement)throw new Error('SCENARIO_INSTALLED_SPEED_LIMIT');
       let maximum=Number(unit.processData?.equipment?.maximumSpeedBpm)/60;
       if(change.replacementMaximumBpm!==undefined){
-        if(!(maximum>0)||change.external!==true||change.interventionType!=='REPLACEMENT'||typeof change.justification!=='string'||!change.justification.trim()||!Number.isFinite(change.replacementMaximumBpm)||change.replacementMaximumBpm<=maximum*60||change.replacementMaximumBpm>SCENARIO_FIELDS.nominalRatePerSecond[1]*60||change.after<change.before)throw Error('SCENARIO_REPLACEMENT_EVIDENCE_REQUIRED');
+        if(!replacement||typeof change.justification!=='string'||!change.justification.trim()||!Number.isFinite(change.replacementMaximumBpm)||change.replacementMaximumBpm<=0||change.replacementMaximumBpm>SCENARIO_FIELDS.nominalRatePerSecond[1]*60||change.after<change.before)throw Error('SCENARIO_REPLACEMENT_EVIDENCE_REQUIRED');
         maximum=change.replacementMaximumBpm/60;
       }
-      if(unit.type==='CONVEYOR'||unit.id===analyzeLinePerformance(simulation.equipment,simulation.results).referenceId||!(maximum>0)||change.after>maximum)throw new Error('SCENARIO_INSTALLED_SPEED_LIMIT');
+      if(unit.type==='CONVEYOR'||!replacement&&unit.id===analyzeLinePerformance(simulation.equipment,simulation.results).referenceId||!(maximum>0)||change.after>maximum)throw new Error('SCENARIO_INSTALLED_SPEED_LIMIT');
     }
     if(change.path.startsWith('noiseProfile.reliability.')){
       if(unit.type==='CONVEYOR'||!(change.before>0)||change.external!==true||typeof change.justification!=='string'||!change.justification.trim()||(!SCENARIO_INTERVENTIONS[change.interventionType]&&!(change.analysisOnly===true&&change.interventionType==='SENSITIVITY')))throw new Error('SCENARIO_EXTERNAL_EVIDENCE_REQUIRED');
@@ -328,14 +389,14 @@ export function applyScenarioChanges(simulation,changes){
 }
 function scenarioChange(e,path,after){return {equipmentId:e.id,path,before:scenarioGet(e,path)??null,after,unit:SCENARIO_FIELDS[path][2]};}
 function scenarioGoal(engineering,id){return engineering?.audit?.goals?.find(g=>g.id===id)?.status;}
-function scenarioRecoveryPlan(engineering,requiredSeconds=0){
+function scenarioRecoveryPlan(engineering,requiredSeconds=0,requiredFreeSeconds=0){
   const input=engineering?.input;if(!input||!(input.installedLengthMm>0))return null;
   function evaluate(length){
     const first=calculateConveyorEngineering({...input,installedLengthMm:length}),backup=Math.ceil(first.calculated.recommendedBackupSensorPositionMm);
     if(!Number.isFinite(backup))return null;
     const check=calculateConveyorEngineering({...input,installedLengthMm:length,backupSensorPositionMm:backup});
     const passes=['INSTALLED_LENGTH','SMOOTH_RECOVERY','BACKUP_POSITION'].every(id=>scenarioGoal(check,id)==='PASS');
-    return {length,backup,check,passes:passes&&(!requiredSeconds||check.calculated.antiStarveSeconds>=requiredSeconds)};
+    return {length,backup,check,passes:passes&&(!requiredSeconds||check.calculated.antiStarveSeconds>=requiredSeconds)&&(!requiredFreeSeconds||check.calculated.antiBlockSeconds>=requiredFreeSeconds)};
   }
   let low=Math.ceil(input.installedLengthMm),high=low,plan=evaluate(high),limit=Math.min(1000000,Math.max(high+50000,high*5));
   while(plan&&!plan.passes&&high<limit){low=high;high=Math.min(limit,high+Math.max(100,Math.ceil(high*.2)));plan=evaluate(high);}
@@ -453,21 +514,62 @@ export function scenarioProposalNeeds(simulation){
   }
   return needs.sort((a,b)=>(a.availabilityOnlyBpm??a.configuredBpm)-(b.availabilityOnlyBpm??b.configuredBpm));
 }
+function automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,documentedIds){
+  if(!scenarioSourceReadiness(simulation).ready)return [];
+  const equipment=scenarioEngineeringEquipment(simulation),product=scenarioActiveProduct(simulation),line=analyzeLinePerformance(equipment,null);
+  const reference=line.points.find(p=>p.isPacemaker),referenceUnit=equipment.find(e=>e.id===reference?.id);
+  if(!reference||!referenceUnit)return [];
+  const factor=e=>product?productUnitFactor(e,product):1;
+  const flow=e=>String(e?.processData?.flowUnits?.output??simulation.unitOfFlow??'units').toUpperCase();
+  const referenceRate=reference.configuredBpm*factor(referenceUnit),limitingIds=new Set((capacityDiagnosis.limitingEquipment||[]).map(e=>e.id));
+  const possibilities=(simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR'&&e.processData?.productApplies!==false&&!documentedIds.has(e.id)).map(e=>{
+    const model=equipment.find(x=>x.id===e.id),point=line.points.find(x=>x.id===e.id),observed=diagnosis.equipment.find(x=>x.equipmentId===e.id);
+    const comparable=model&&point&&(product||flow(model)===flow(referenceUnit));
+    const equivalent=comparable?point.configuredBpm*factor(model):null;
+    const deficit=equivalent>0&&referenceRate>equivalent?1-equivalent/referenceRate:0;
+    const failureFraction=diagnosis.durationSeconds>0&&observed?.failureSeconds>0?observed.failureSeconds/diagnosis.durationSeconds:0;
+    const r=e.noiseProfile?.reliability,validReliability=simulation.dynamicConfig?.reliabilityEnabled!==false&&r?.mtbfMinutes>0&&r?.mttrMinutes>0;
+    const reliabilityWarranted=validReliability&&failureFraction>=.01;
+    const capacityWarranted=deficit>.001;
+    return {equipment:e,model,deficit,failureFraction,reliabilityWarranted,capacityWarranted,
+      priority:100*deficit+100*failureFraction+(limitingIds.has(e.id)?20:0)+(e.id===reference.id?5:0)};
+  }).filter(p=>p.capacityWarranted||p.reliabilityWarranted).sort((a,b)=>b.priority-a.priority||a.equipment.id.localeCompare(b.equipment.id)).slice(0,SCENARIO_POLICY.maxReplacementTargets);
+  return possibilities.flatMap(p=>{
+    const e=p.equipment,changes=[],targetId='REPLACEMENT:'+e.id+':AUTO';
+    // Engineering hypotheses are finite, modest changes, not invented supplier
+    // capabilities. The complete package is tested before it can be recommended.
+    if(p.capacityWarranted&&!(product?.equipment?.[e.id]?.ratePerMinute>0)){
+      const required=referenceRate/factor(p.model)/60*1.1;
+      const target=Math.min(SCENARIO_FIELDS.nominalRatePerSecond[1],e.nominalRatePerSecond*1.25,Math.max(e.nominalRatePerSecond,required));
+      if(target>e.nominalRatePerSecond)changes.push({...scenarioChange(e,'nominalRatePerSecond',target),replacementMaximumBpm:Math.max(target*60,Number(e.processData?.equipment?.maximumSpeedBpm)||0)});
+    }
+    if(p.reliabilityWarranted){
+      changes.push(scenarioChange(e,'noiseProfile.reliability.mtbfMinutes',Math.min(SCENARIO_FIELDS['noiseProfile.reliability.mtbfMinutes'][1],e.noiseProfile.reliability.mtbfMinutes*1.25)));
+      changes.push(scenarioChange(e,'noiseProfile.reliability.mttrMinutes',Math.max(SCENARIO_FIELDS['noiseProfile.reliability.mttrMinutes'][0],e.noiseProfile.reliability.mttrMinutes*.8)));
+    }
+    if(!changes.some(c=>c.before!==c.after))return [];
+    return [{equipment:e,changes:scenarioPackage(changes,{interventionType:'REPLACEMENT',originTier:'HIGH',external:true,analysisOnly:true,packageId:targetId,targetId,
+      justification:'Hypothetical complete machine replacement: bounded engineering performance specification derived from the current line constraint and observed downtime. Other modeled machine attributes are retained. Supplier capability, layout and cost require review.'}),
+      priority:p.priority,evidence:{targetSource:'AUTOMATIC_ENGINEERING_HYPOTHESIS',replacementScope:'COMPLETE_MACHINE',capacityDeficit:p.deficit,observedFailureFraction:p.failureFraction,
+        targetFeasibility:'NOT_ESTABLISHED',supplierTarget:false,engineeringReviewRequired:true}}];
+  });
+}
 export function planScenarios(simulation){
   if(simulation.dynamicConfig?.machineDesignEnabled===false||simulation.dynamicConfig?.machineMaximumSpeedEnabled===false)simulation={...simulation,equipment:projectMachineDesign(simulation.equipment,simulation.dynamicConfig)};
   const audit=scenarioAudit(simulation),engineeringEquipment=scenarioEngineeringEquipment(simulation),diagnosis=diagnoseScenarioLosses(simulation);
   const capacityDiagnosis=diagnoseLineEfficiency(simulation.equipment,diagnosis.status==='OBSERVED'?simulation.results:null);
   const result=diagnosis.status==='OBSERVED'?simulation.results:null;
   const candidates=[],checks=[];
+  const criticalIds=new Set([diagnosis.referenceId,capacityDiagnosis.referenceId,...(capacityDiagnosis.limitingEquipment||[]).map(e=>e.id)].filter(Boolean));
   const equipmentReliability=(simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR'&&e.processData?.role!=='CONVEYOR').map(e=>equipmentReliabilityAssessment(e,simulation.dynamicConfig));
   equipmentReliability.forEach(r=>checks.push({equipmentId:r.equipmentId,rule:'EQUIPMENT_RELIABILITY',status:r.status==='NOT EVALUATED'?'NOT_EVALUATED':r.status,assessment:r,interpretation:'Engineering screening thresholds; not a replacement mandate.'}));
   function add(kind,tier,equipment,changes,evidence,priority,basis){
-    changes=changes.filter(c=>c.before!==c.after);if(!changes.length)return;
-    let disabledReason=null;try{applyScenarioChanges(simulation,changes);}catch(error){disabledReason=error.message;}
+    changes=changes.filter(c=>c.before!==c.after).map(c=>({...c,originTier:tier}));if(!changes.length)return;
+    let disabledReason=null;try{applyScenarioChanges(simulation,changes,{tier});}catch(error){disabledReason=error.message;}
     const losses=scenarioLossEvidence(simulation,diagnosis,equipment,kind);evidence={...evidence,...losses,
       reliabilityParametersChanged:changes.some(change=>change.path.startsWith('noiseProfile.reliability.')),
       classificationBasis:'INTERVENTION_SCOPE',budgetUsed:false};priority+=losses.priorityBonus;if(diagnosis.status==='OBSERVED')basis='HYBRID';
-    candidates.push({id:kind+':'+equipment.id,kind,tier,titleKey:'scenario.'+kind.toLowerCase(),equipmentId:equipment.id,equipmentName:equipment.name,changes,evidence,priority,basis,canApply:!disabledReason,disabledReason,sourceSimulationId:simulation.id,sourceSignature:scenarioSignature(simulation)});
+    candidates.push({id:kind+':'+equipment.id+(changes[0].targetId?':'+changes[0].targetId:''),kind,tier,titleKey:'scenario.'+kind.toLowerCase(),equipmentId:equipment.id,equipmentName:equipment.name,changes,evidence,priority,basis,analysisOnly:changes.some(c=>c.analysisOnly),canApply:!disabledReason,disabledReason,sourceSimulationId:simulation.id,sourceSignature:scenarioSignature(simulation)});
   }
   audit.forEach(item=>{
     const e=simulation.equipment.find(x=>x.id===item.equipmentId),engineering=item.engineering;
@@ -532,15 +634,33 @@ export function planScenarios(simulation){
       stopClass:minorMttr>0?'MINOR':null,mttrMinutes:minorMttr,basis:minorMttr>0?'DECLARED_MINOR_STOP_MTTR':'MINOR_STOP_INPUT_REQUIRED',
       interpretation:'Buffer coverage uses the declared minor-stop MTTR. Aggregate MTTR is not classified as a microstop by a duration cutoff.'});
     const recoveryFailed=['INSTALLED_LENGTH','SMOOTH_RECOVERY','BACKUP_POSITION'].some(id=>['FAIL','WARNING'].includes(scenarioGoal(engineering,id)));
-    const observedDownstream=diagnosis.equipment.find(r=>r.equipmentId===item.downstreamId);
+    const observedDownstream=diagnosis.equipment.find(r=>r.equipmentId===item.downstreamId),observedUpstream=diagnosis.equipment.find(r=>r.equipmentId===item.upstreamId);
     const observedStarvation=diagnosis.status==='OBSERVED'&&(observedDownstream?.starvedSeconds||0)>diagnosis.durationSeconds*.01;
-    if(recoveryFailed||(coverage!==null&&coverage<1)||observedStarvation){
-      const plan=scenarioRecoveryPlan(engineering,minorMttr>0?minorMttr*60:0);
+    const observedBlocking=diagnosis.status==='OBSERVED'&&(observedUpstream?.blockedSeconds||0)>diagnosis.durationSeconds*.01;
+    const criticalBefore=criticalIds.has(item.downstreamId),criticalAfter=criticalIds.has(item.upstreamId);
+    if(recoveryFailed||(coverage!==null&&coverage<1)||observedStarvation||observedBlocking){
+      const downstream=simulation.equipment.find(x=>x.id===item.downstreamId),downstreamStopData=scenarioStopDataCoverage(simulation,downstream);
+      const repairSeconds=(machine,coverage)=>coverage.enabledClasses.includes('MINOR')?machine.processData.equipment.stopInputs.minor.mttrMinutes*60:
+        coverage.enabledClasses.includes('GENERAL')?machine.noiseProfile.reliability.mttrMinutes*60:0;
+      const supplySeconds=criticalBefore&&observedStarvation?repairSeconds(upstream,stopData):minorMttr>0?minorMttr*60:0;
+      const freeSeconds=criticalAfter&&observedBlocking?repairSeconds(downstream,downstreamStopData):0;
+      let plan=scenarioRecoveryPlan(engineering,supplySeconds,freeSeconds);
+      if(plan&&plan.length<=input.installedLengthMm&&(observedStarvation||observedBlocking)){
+        // Installed worksheet goals can pass while the line still propagates
+        // stops. Test a bounded new section as a hypothesis, not a promised gain.
+        const length=Math.min(SCENARIO_FIELDS['processData.geometry.lactMm'][1],Math.ceil(input.installedLengthMm*1.25));
+        const sized=calculateConveyorEngineering({...input,installedLengthMm:length});
+        const backup=Math.ceil(sized.calculated.recommendedBackupSensorPositionMm);
+        if(length>input.installedLengthMm&&Number.isFinite(backup))plan={length,backup};
+      }
       if(plan){
         const losses=result?.accumulationZoneMetrics&&Object.values(result.accumulationZoneMetrics).find(x=>x.ownerEquipmentId===e.id);
         if(plan.length>input.installedLengthMm){
-          add('BUFFER_RECOVERY','HIGH',e,[scenarioChange(e,'processData.accumulation.backupSensorPositionMm',plan.backup),scenarioChange(e,'processData.geometry.lactMm',plan.length)],{recoveryLengthMm:c.recoveryLengthMm,requiredOverflowMm:c.overflowLengthMm,addedLengthMm:plan.length-input.installedLengthMm,coverage,
-            bufferStopTarget:minorMttr>0?{stopClass:'MINOR',mttrMinutes:minorMttr,basis:'DECLARED_INPUT'}:null,overflowUnits:losses?.overflowUnits??null},96+(losses?.overflowUnits>0?5:0),losses?'HYBRID':'STATIC');
+          add('BUFFER_RECOVERY','MEDIUM',e,scenarioPackage([scenarioChange(e,'processData.geometry.lactMm',plan.length),scenarioChange(e,'processData.accumulation.backupSensorPositionMm',plan.backup)],{interventionType:'ACCUMULATION',originTier:'MEDIUM',packageId:'ACCUMULATION:'+e.id}),{recoveryLengthMm:c.recoveryLengthMm,requiredOverflowMm:c.overflowLengthMm,addedLengthMm:plan.length-input.installedLengthMm,coverage,
+            accumulationScope:'NEW_SECTION_AT_EXISTING_CONVEYOR_SITE',accumulationSiteId:e.id,criticalEquipmentIds:[item.upstreamId,item.downstreamId].filter(id=>criticalIds.has(id)),
+            placement:criticalBefore&&criticalAfter?'BETWEEN_CRITICAL_MACHINES':criticalBefore?'BEFORE_CRITICAL_MACHINE':criticalAfter?'AFTER_CRITICAL_MACHINE':'PROPAGATED_FLOW_LOSS',
+            requiredSupplySeconds:supplySeconds,requiredFreeSeconds:freeSeconds,
+            bufferStopTarget:minorMttr>0?{stopClass:'MINOR',mttrMinutes:minorMttr,basis:'DECLARED_INPUT'}:null,overflowUnits:losses?.overflowUnits??null},96+(criticalBefore?30:0)+(criticalAfter?30:0)+(losses?.overflowUnits>0?5:0),losses?'HYBRID':'STATIC');
         }else{
           // Existing length plus a sensor adjustment is an operational change,
           // not a capital project merely because recovery sizing found it.
@@ -563,18 +683,28 @@ export function planScenarios(simulation){
     if(stopData.enabledClasses.includes('MINOR')&&e.processData.equipment.stopInputs.minor.mttrMinutes>SCENARIO_POLICY.microstopLimitMinutes)checks.push({equipmentId:e.id,
       rule:'LONG_DECLARED_MINOR_STOP_BUFFER_TARGET',status:'REVIEW',stopClass:'MINOR',interpretation:'Review the long declared minor-stop buffer target; the input is not reclassified by duration.'});
   });
-  analyzeLinePerformance(simulation.equipment,result).points.forEach(point=>{
-    if(point.isPacemaker||!(point.maximumBpm>0)||!(point.recommendedBpm>0))return;
-    const equipment=simulation.equipment.find(e=>e.id===point.id),target=Math.min(point.maximumBpm,point.recommendedBpm)/60;
-    add('V_CURVE','ZERO',equipment,[scenarioChange(equipment,'nominalRatePerSecond',target)],{maximumBpm:point.maximumBpm,recommendedBpm:point.recommendedBpm},70,'STATIC');
-  });
   checks.push({rule:'PACEMAKER_DESIRED_STATE_AND_V_GRAPH',status:'NOT_EVALUATED'});
-  (simulation.whatIf?.externalOptions||[]).forEach(option=>{
+  const documentedReplacementIds=new Set();
+  (simulation.whatIf?.externalOptions||[]).forEach((option,optionIndex)=>{
     if(simulation.dynamicConfig?.reliabilityEnabled===false&&option.changes?.some(c=>c.path.startsWith('noiseProfile.reliability.')))return;
     if(!['ZERO','MEDIUM','HIGH'].includes(option.tier)||!option.changes?.length||!option.changes.every(c=>scenarioCategoryAllows(c,option.tier)))return;
-    const equipment=simulation.equipment.find(e=>e.id===option.changes[0].equipmentId);if(!equipment)return;
-    add(option.changes.some(c=>c.replacementMaximumBpm!==undefined)?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION',option.tier,equipment,option.changes,{targetSource:'USER_DOCUMENTED',interventionType:option.changes[0].interventionType,costClass:SCENARIO_INTERVENTIONS[option.changes[0].interventionType]?.costClass,interpretation:'Supported intervention hypothesis; dynamic benefit and shifted constraints require evaluation.'},option.changes.some(c=>c.replacementMaximumBpm!==undefined)&&capacityDiagnosis.limitingEquipment.some(e=>e.id===equipment.id)?120:90,'STATIC');
+    for(const equipmentId of new Set(option.changes.map(c=>c.equipmentId))){
+      const equipment=simulation.equipment.find(e=>e.id===equipmentId);if(!equipment)continue;
+      let changes=option.changes.filter(c=>c.equipmentId===equipmentId);
+      if(option.tier==='HIGH'){
+        const targetId=changes[0].targetId||'REPLACEMENT:'+equipmentId+':DOCUMENTED:'+(option.id||optionIndex);
+        changes=scenarioPackage(changes,{packageId:changes[0].packageId||targetId,targetId});
+        try{applyScenarioChanges(simulation,changes,{tier:'HIGH'});documentedReplacementIds.add(equipmentId);}catch(_){}
+      }
+      add(changes.some(c=>c.replacementMaximumBpm!==undefined)?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION',option.tier,equipment,changes,{targetSource:'USER_DOCUMENTED',interventionType:changes[0]?.interventionType,costClass:SCENARIO_INTERVENTIONS[changes[0]?.interventionType]?.costClass,interpretation:'Supported intervention hypothesis; dynamic benefit and shifted constraints require evaluation.'},changes.some(c=>c.replacementMaximumBpm!==undefined)&&capacityDiagnosis.limitingEquipment.some(e=>e.id===equipment.id)?120:90,'STATIC');
+    }
   });
+  for(const replacement of automaticReplacementPackages(simulation,diagnosis,capacityDiagnosis,documentedReplacementIds))add(replacement.changes.some(c=>c.path==='nominalRatePerSecond')?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION','HIGH',replacement.equipment,replacement.changes,replacement.evidence,100+replacement.priority,'HYBRID');
+  // Rank the limited installation sites before combinatorial search. Every
+  // subset of these sites (one, two or three) is then a separate hypothesis.
+  const medium=candidates.filter(c=>c.tier==='MEDIUM').sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority||a.equipmentId.localeCompare(b.equipmentId));
+  const retainedSites=new Set(medium.slice(0,SCENARIO_POLICY.maxAccumulationSites).map(c=>c.equipmentId));
+  for(let i=candidates.length-1;i>=0;i--)if(candidates[i].tier==='MEDIUM'&&!retainedSites.has(candidates[i].equipmentId))candidates.splice(i,1);
   const projects=['ZERO','MEDIUM','HIGH'].map(tier=>{
     const choices=candidates.filter(p=>p.tier===tier).sort((a,b)=>Number(b.canApply)-Number(a.canApply)||b.priority-a.priority);
     return choices[0]||{tier,canApply:false,titleKey:'scenario.no_proposal',basis:'STATIC',changes:[],evidence:{},disabledReason:'SCENARIO_INSUFFICIENT_EVIDENCE'};

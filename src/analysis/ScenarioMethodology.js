@@ -99,7 +99,9 @@ function scenarioStudyPackageIdentity(evaluation) {
     before: scenarioStudyNumber(change?.before), after: scenarioStudyNumber(change?.after),
     unit: scenarioStudyText(change?.unit), interventionType: scenarioStudyText(change?.interventionType),
     external: change?.external === true, analysisOnly: change?.analysisOnly === true,
-    replacementMaximumBpm: scenarioStudyNumber(change?.replacementMaximumBpm)
+    replacementMaximumBpm: scenarioStudyNumber(change?.replacementMaximumBpm),
+    originTier:scenarioStudyText(change?.originTier),packageId:scenarioStudyText(change?.packageId),targetId:scenarioStudyText(change?.targetId),
+    packagePaths:Array.isArray(change?.packagePaths)?change.packagePaths.slice().sort():null
   })).sort((a, b) => {
     const left = JSON.stringify([a.equipmentId, a.path]), right = JSON.stringify([b.equipmentId, b.path]);
     return left < right ? -1 : left > right ? 1 : 0;
@@ -272,17 +274,17 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
     const record = reported.find(item => item?.equipmentId === change.equipmentId && (!Array.isArray(item.paths) || item.paths.includes(change.path)));
     const exploratory = change.analysisOnly === true || change.interventionType === 'SENSITIVITY';
     const explicitType = scenarioStudyText(record?.type || change.interventionType);
-    const classification = exploratory ? 'EXPLORATORY_SENSITIVITY' : explicitType ||
+    const classification = exploratory ? change.interventionType==='REPLACEMENT'?'EXPLORATORY_REPLACEMENT':'EXPLORATORY_SENSITIVITY' : explicitType ||
       (change.path?.startsWith('noiseProfile.reliability.') ? 'INTERVENTION_UNSPECIFIED' :
-        change.path==='processData.geometry.lactMm' ? 'LINE_REDESIGN' : 'OPERATING_PARAMETER_ADJUSTMENT');
+        change.path==='processData.geometry.lactMm' ? 'ACCUMULATION' : 'OPERATING_PARAMETER_ADJUSTMENT');
     const key = change.equipmentId + ':' + classification + ':' + (record?.id || '');
     if (!groups.has(key)) {
       const equipment = (Array.isArray(simulation?.equipment) ? simulation.equipment : []).find(item => item?.id === change.equipmentId);
       groups.set(key, {
         id: key, equipmentId: change.equipmentId, equipmentName: scenarioStudyText(equipment?.name), classification,
         classificationBasis: exploratory ? 'EXPLORATORY_TARGET' : explicitType ? 'REPORTED_INTERVENTION' : 'PARAMETER_TYPE_ONLY',
-        costClass: ({ OPERATIONAL: 'NONE', MAINTENANCE: 'OPEX', RETROFIT: 'CAPEX', REPLACEMENT: 'CAPEX' })[classification] || 'UNASSIGNED',
-        capexClassification: {tier:({OPERATIONAL:'ZERO',MAINTENANCE:'ZERO',RETROFIT:'MEDIUM',REPLACEMENT:'HIGH',LINE_REDESIGN:'HIGH',OPERATING_PARAMETER_ADJUSTMENT:'ZERO'})[classification]||'UNASSIGNED',
+        costClass: ({ OPERATIONAL: 'NONE', MAINTENANCE: 'OPEX', ACCUMULATION: 'CAPEX', REPLACEMENT: 'CAPEX', EXPLORATORY_REPLACEMENT:'CAPEX' })[classification] || 'UNASSIGNED',
+        capexClassification: {tier:({OPERATIONAL:'ZERO',MAINTENANCE:'ZERO',EXPLORATORY_SENSITIVITY:'ZERO',ACCUMULATION:'MEDIUM',REPLACEMENT:'HIGH',EXPLORATORY_REPLACEMENT:'HIGH',OPERATING_PARAMETER_ADJUSTMENT:'ZERO'})[classification]||'UNASSIGNED',
           basis:'INTERVENTION_SCOPE',budgetUsed:false},
         stopDataCoverage:scenarioStopDataCoverage(simulation,equipment),
         modeledStopEffect:{reliabilityParametersChanged:false,microStopParametersChanged:false,flowEffectsRequireSimulation:true},
@@ -307,7 +309,7 @@ function scenarioStudyHypotheses(simulation, evaluation, metadata) {
     }else if(!hypothesis.modeledStopEffect.reliabilityParametersChanged){
       hypothesis.modeledStopEffect.interpretation='Operating or geometry changes affect line flow and recovery; they do not directly reduce the frequency or duration of configured reliability or MICRO_STOP events.';
     }
-    hypothesis.changes.push(scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'replacementMaximumBpm']));
+    hypothesis.changes.push(scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'interventionType', 'replacementMaximumBpm', 'originTier', 'packageId', 'targetId', 'packagePaths']));
   });
   return [...groups.values()];
 }
@@ -331,7 +333,7 @@ export function buildScenarioStudy(simulation, evaluation) {
   const rankingPlan=evaluation?.rankingPlan,finalistScreen=evaluation?.phaseAudit?.finalistScreening,ranking=evaluation?.phaseAudit?.ranking;
   const doe = evaluation?.doe;
   const fixedChanges = (Array.isArray(doe?.fixedChanges) ? doe.fixedChanges : []).slice(0, 64).map(change =>
-    scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'interventionType', 'replacementMaximumBpm']));
+    scenarioStudyPick(change, ['equipmentId', 'path', 'before', 'after', 'unit', 'external', 'analysisOnly', 'interventionType', 'replacementMaximumBpm', 'originTier', 'packageId', 'targetId', 'packagePaths']));
   const objective = scenarioStudyRecord(metadata.objective) ? scenarioStudyPick(metadata.objective, ['metric', 'target', 'unit', 'minimumPracticalGain', 'description']) : null;
   const objectiveMetric = objective?.metric === 'throughput' ? 'throughput' : objective?.metric === 'oee' ? 'oee' : null;
   const flowUnit = scenarioStudyFlowUnit(evaluation?.unitOfFlow || simulation?.unitOfFlow);
@@ -418,7 +420,7 @@ export function buildScenarioStudy(simulation, evaluation) {
         interpretation: 'Independent simulation evidence; descriptive reproduction is distinct from statistical inference and plant validation.' }
     },
     feasibility: { status: 'REQUIRES_ENGINEERING_REVIEW', verified: false,
-      exploratoryTargets: hypotheses.some(item => item.classification === 'EXPLORATORY_SENSITIVITY'),
+      exploratoryTargets: hypotheses.some(item => ['EXPLORATORY_SENSITIVITY','EXPLORATORY_REPLACEMENT'].includes(item.classification)),
       warnings: scenarioStudyCopy(evaluation?.warnings || []),
       reportedAcknowledgement: evaluation?.engineeringReviewAcknowledged === true,
       interpretation: 'Parameter checks or reported acknowledgement do not establish engineering feasibility, installation scope or target achievability.' },

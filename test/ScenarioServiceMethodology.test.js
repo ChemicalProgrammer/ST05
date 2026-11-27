@@ -58,7 +58,7 @@ function setup() {
     const roundMetrics=[-.1,0,.1].map((noise,i)=>({seed:10+i,throughput:100+(2+noise)*point.levels[0],oee:50+(.5+noise)*point.levels[0]}));
     return {index:point.index,levels:point.levels,feasible:true,throughput:roundMetrics.reduce((sum,row)=>sum+row.throughput,0)/3,oee:roundMetrics.reduce((sum,row)=>sum+row.oee,0)/3,roundMetrics};
   });
-  const evaluation={recordKey:'saved-v11-experiment',sourceSimulationId:source.id,sourceSignature,searchPolicyVersion:'MATCHED_CAPEX_V11',searchSettingsSignature:scenarioSearchSettingsSignature(),
+  const evaluation={recordKey:'saved-v12-experiment',sourceSimulationId:source.id,sourceSignature,searchPolicyVersion:'MATCHED_CAPEX_V12',searchScope:'ZERO',searchSettingsSignature:scenarioSearchSettingsSignature(),
     methodologySignature:JSON.stringify(canonical(source.whatIf.methodology)),evaluatedChanges:plain(normalized.changes),unitOfFlow:'bottles',status:'IMPROVEMENT_REPRODUCED',updatedAt:'2026-11-24T12:00:00Z',
     baseline:pilot.base,candidate:pilot.candidate,confirmationPlan,
     independentCheck:{passed:true,durationSeconds:1800,rounds:6,seed:100,unitOfFlow:'bottles',baseline:confirmation.base,candidate:confirmation.candidate,
@@ -73,7 +73,7 @@ function setup() {
     create:()=>context.createScenario_(request,{email:'owner@test'}).case.simulations[1]};
 }
 
-test('server clone rebuilds study from the exact saved V11 evaluation and ignores client-authored certification',()=>{
+test('server clone rebuilds study from the exact saved V12 evaluation and ignores client-authored certification',()=>{
   const h=setup(),baseline=JSON.stringify(h.source),created=h.create(),study=created.scenario.study;
   assert.equal(h.writes(),1);assert.equal(h.record().revision,2);assert.equal(JSON.stringify(h.record().simulations[0]),baseline);
   assert.equal(created.results,null);assert.equal(created.whatIf,undefined);
@@ -116,6 +116,8 @@ test('cloning removes What-If state while retaining DOE factors, fixed context, 
 
 test('old policy, stale source, changed methodology or another change package cannot transfer a saved success',()=>{
   for(const invalidate of [
+    h=>{h.evaluation.searchPolicyVersion='MATCHED_CAPEX_V11';},
+    h=>{h.evaluation.searchScope='HIGH';},
     h=>{h.evaluation.searchPolicyVersion='MATCHED_CAPEX_V9';},
     h=>{h.evaluation.sourceSignature='stale-source';},
     h=>{h.evaluation.sourceSimulationId='another-simulation';},
@@ -199,4 +201,16 @@ test('a stale clone request cannot save any scenario even when the record contai
   const h=setup();h.request.sourceSignature='stale-client-source';
   assert.throws(()=>h.create(),error=>error.code==='SCENARIO_STALE');
   assert.equal(h.writes(),0);assert.equal(h.record().simulations.length,1);assert.equal(h.record().revision,1);
+});
+
+
+test('Basic confirmation uses automatic search settings without changing saved Standard preferences',()=>{
+ const h=setup();
+ h.record().metadata={scenarioSearch:{speedProfile:'THOROUGH'}};
+ h.evaluation.uiMode='minimal';h.evaluation.searchSettingsSignature=scenarioSearchSettingsSignature({speedProfile:'FAST',automaticBasic:true});
+ const study=h.create().scenario.study;
+ assert.equal(study.evidence.confirmation.status,'MODEL_REPRODUCED');
+ assert.equal(h.record().metadata.scenarioSearch.speedProfile,'THOROUGH');
+ const stale=setup();stale.evaluation.uiMode='minimal';
+ assert.equal(stale.create().scenario.study.evidence.confirmation.status,'NOT_EVALUATED');
 });

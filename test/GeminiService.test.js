@@ -309,7 +309,7 @@ test('Product-support role survives restrictive saved prompts and earlier assist
 
 test('Gemini context includes compatible replication loss diagnosis and intervention definitions',async()=>{
  const h=setup(),s=await simulatedEvidence();s.id='a';h.record.simulations=[s];h.record.unitOfFlow=s.unitOfFlow;
- const context=JSON.parse(h.ctx.buildGeminiContext_(h.record,'a').json);assert.equal(context.lossDiagnosis.status,'OBSERVED');assert.equal(context.lossDiagnosis.equipment[0].failureSeconds,s.results.batch.equipmentStatistics[s.equipment[0].id].failureSeconds.mean);assert(context.scenarioDefinitions.HIGH.reliability.includes('Replacement'));assert(context.reliabilityOpportunities.length>0);
+ const context=JSON.parse(h.ctx.buildGeminiContext_(h.record,'a').json);assert.equal(context.lossDiagnosis.status,'OBSERVED');assert.equal(context.lossDiagnosis.equipment[0].failureSeconds,s.results.batch.equipmentStatistics[s.equipment[0].id].failureSeconds.mean);assert.match(context.scenarioDefinitions.HIGH.reliability,/complete replacement performance packages/i);assert(context.reliabilityOpportunities.length>0);
  s.dynamicConfig.seed++;assert.equal(JSON.parse(h.ctx.buildGeminiContext_(h.record,'a').json).lossDiagnosis.status,'NO_COMPATIBLE_RESULTS');
 });
 test('Gemini cannot label a replacement reliability target as Medium or submit exploratory levels',()=>{

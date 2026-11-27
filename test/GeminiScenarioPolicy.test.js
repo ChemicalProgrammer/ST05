@@ -25,8 +25,8 @@ test('Gemini scenario guidance requires complete current results and keeps finan
 
 test('Gemini and application guidance describe the same existing DOE settings and primary inference',()=>{
  const context=policies(),policy=context.ST_GEMINI_SEARCH_POLICY,guide=context.flowPilotApplicationGuide_();
- assert.match(policy,/up to 3 factors in Medium and up to 4 in High/);
- assert.match(policy,/Medium and High calculate ANOVA from the same DOE observations/);
+ assert.match(policy,/up to 3 factors at Medium search depth and up to 4 at High search depth/);
+ assert.match(policy,/Medium and High search depths calculate ANOVA from the same DOE observations/);
  assert.match(policy,/Holm-adjusted p-values across all effects and both OEE and throughput as one family/);
  assert.match(policy,/configured confidence level \(0\.95 by default\)/);
  assert.match(policy,/Fix the confirmation replication count.*before seeing confirmation outcomes/);
@@ -40,4 +40,17 @@ test('expanded default guidance still fits the existing editable prompt limits',
  const definitions=policies().geminiPromptDefinitions_();
  assert(definitions.every(def=>def.defaultText.length<=8000));
  assert(definitions.reduce((sum,def)=>sum+def.defaultText.length,0)<=40000);
+});
+
+
+test('all mode guidance uses independent CAPEX scopes and Basic automatic DOE',()=>{
+ const context=policies(),guide=context.flowPilotApplicationGuide_();
+ assert.match(context.ST_GEMINI_ZERO_CAPEX_POLICY,/sensor positions and timing, conveyor speeds/);
+ assert.match(context.ST_GEMINI_ZERO_CAPEX_POLICY,/reduce downtime/);
+ assert.match(context.ST_GEMINI_MEDIUM_CAPEX_POLICY,/accumulation and buffer capacity only/);
+ assert.match(context.ST_GEMINI_MEDIUM_CAPEX_POLICY,/one, two or three/);
+ assert.match(context.ST_GEMINI_HIGH_CAPEX_POLICY,/complete equipment replacement only/);
+ assert.match(guide,/up to three factors and eight combinations/);
+ assert.match(guide,/old saved inclusions are ignored/);
+ assert.doesNotMatch(guide,/Medium includes Zero by default|High offers independent Include Zero/);
 });

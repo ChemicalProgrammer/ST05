@@ -16,7 +16,7 @@ function setup() {
     return {throughput:roundMetrics.reduce((s,r)=>s+r.throughput,0)/6,oee:roundMetrics.reduce((s,r)=>s+r.oee,0)/6,durationSeconds:1800,unitOfFlow:'bottles',roundMetrics};
   };
   const baseline=metrics(),candidate=metrics(5),confirmationPlan={rounds:6,pilotSeeds:[1,2,3],baselineMeanThroughput:100,confidenceLevel:.95,minimumPracticalGain:.1,targetHalfWidth:.5,requiredRounds:6,capped:false,comparisonDurationSeconds:1800,comparisonUnitOfFlow:'bottles',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
-  const evaluation={title:'Supported model comparison',sourceSimulationId:simulation.id,sourceSignature:ctx.STScenarioEngine_.signature(simulation),unitOfFlow:'bottles',searchPolicyVersion:'MATCHED_CAPEX_V11',methodologySignature:JSON.stringify(ctx.STScenarioEngine_.methodologyInputs(simulation.whatIf.methodology)),status:'IMPROVEMENT_REPRODUCED',evaluatedChanges:proposal.changes,confirmationPlan,independentCheck:{passed:true,seed:1000004,rounds:6,durationSeconds:1800,unitOfFlow:'bottles',baseline,candidate},study:{plantValidation:{verified:true},economics:{status:'ESTIMATED',npv:1e12}}};
+  const evaluation={title:'Supported model comparison',sourceSimulationId:simulation.id,sourceSignature:ctx.STScenarioEngine_.signature(simulation),unitOfFlow:'bottles',searchPolicyVersion:'MATCHED_CAPEX_V12',searchScope:'ZERO',methodologySignature:JSON.stringify(ctx.STScenarioEngine_.methodologyInputs(simulation.whatIf.methodology)),status:'IMPROVEMENT_REPRODUCED',evaluatedChanges:proposal.changes,confirmationPlan,independentCheck:{passed:true,seed:1000004,rounds:6,durationSeconds:1800,unitOfFlow:'bottles',baseline,candidate},study:{plantValidation:{verified:true},economics:{status:'ESTIMATED',npv:1e12}}};
   simulation.whatIf.evaluations=[evaluation];
   return {ctx,simulation,evaluation};
 }
@@ -51,7 +51,7 @@ test('Gemini rechecks raw confirmation instead of trusting a saved passed flag',
 });
 
 test('Gemini retains historical advice but never carries confirmation across a policy or methodology change',()=>{
-  for(const mutate of [e=>{e.searchPolicyVersion='MATCHED_CAPEX_V9';},e=>{e.methodologySignature='old';},e=>{e.status='RUNNING';}]){
+  for(const mutate of [e=>{e.searchPolicyVersion='MATCHED_CAPEX_V11';},e=>{e.searchScope='HIGH';},e=>{e.searchPolicyVersion='MATCHED_CAPEX_V9';},e=>{e.methodologySignature='old';},e=>{e.status='RUNNING';}]){
     const {ctx,simulation,evaluation}=setup();mutate(evaluation);
     const entry=ctx.compactSearchEvidence_(simulation).evaluations[0];
     assert.equal(entry.independentCheck.passed,false);

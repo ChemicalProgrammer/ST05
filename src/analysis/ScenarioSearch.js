@@ -7,6 +7,9 @@ export const SCENARIO_SEARCH_PROFILES = Object.freeze({
   HIGH: {explorationSeconds:900,confirmationSeconds:1800,maxCandidates:256,maxSearchMs:600000,maxWithoutImprovement:48,maxFactors:4,passes:3,finalists:6,fullHorizonFinalists:3}
 });
 export function scenarioSearchSettings(raw) {
+  // Basic owns its experiment settings. Hidden Standard/Advance preferences
+  // must not silently turn an automatic search into an exhaustive one.
+  if(raw?.automaticBasic===true)return {speedProfile:'FAST',automaticBasic:true};
   return {speedProfile:['FAST','BALANCED','THOROUGH'].includes(raw?.speedProfile)?raw.speedProfile:'BALANCED'};
 }
 export function scenarioSearchSettingsSignature(raw) {
@@ -21,6 +24,7 @@ export function scenarioSearchProfile(level,settings,context) {
     case 'THOROUGH':selected={...profile,explorationSeconds:Math.min(1800,profile.explorationSeconds*2),confirmationSeconds:3600,maxCandidates:profile.maxCandidates*2,passes:profile.passes+1,fullHorizonFinalists:Math.min(4,profile.fullHorizonFinalists+1)};break;
     default:selected=profile;
   }
+  if(settings?.automaticBasic===true)selected={...selected,maxCandidates:24,maxWithoutImprovement:12,passes:1,maxFactors:3,finalists:3,fullHorizonFinalists:2,hardCandidateLimit:true,automaticBasic:true};
   const run=context?.run,equipment=context?.equipment;
   if(!run||run.reliabilityEnabled===false||!Array.isArray(equipment))return selected;
   const categories=run.reliabilityCategories||{};
@@ -39,6 +43,64 @@ export function scenarioSearchProfile(level,settings,context) {
   return {...selected,explorationSeconds:exploration,confirmationSeconds:confirmation,
     fullHorizonFinalists:Math.max(2,selected.fullHorizonFinalists),
     horizonBasis:'RELIABILITY_AWARE_SCREENING',medianMtbfMinutes:median};
+}
+
+// A package is one intervention: every coupled field is either installed or
+// absent. Binary factors never interpolate a supplier target, split a machine
+// replacement or install a buffer without its corresponding sensor geometry.
+export function designScenarioPackages(packages) {
+  if(!Array.isArray(packages)||packages.length<1||packages.length>4)throw Error('DOE_SELECT_ONE_TO_FOUR_FACTORS');
+  const ids=new Set(),fields=new Set();
+  const factors=packages.map((item,index)=>{
+    const packageId=String(item?.packageId||item?.id||'package-'+(index+1));
+    if(ids.has(packageId)||!Array.isArray(item?.changes)||!item.changes.length)throw Error('DOE_INVALID_PACKAGE');
+    ids.add(packageId);
+    const packageChanges=item.changes.map(change=>{
+      if(!change?.equipmentId||typeof change.path!=='string'||!(change.before===null||Number.isFinite(change.before))||!Number.isFinite(change.after)||change.before===change.after)throw Error('DOE_INVALID_PACKAGE');
+      const key=change.equipmentId+':'+change.path;
+      if(fields.has(key))throw Error('DOE_CONFLICTING_PACKAGES');
+      fields.add(key);return JSON.parse(JSON.stringify(change));
+    });
+    if(packageChanges.some(change=>Array.isArray(change.packagePaths)&&change.packagePaths.some(path=>!packageChanges.some(companion=>companion.equipmentId===change.equipmentId&&companion.path===path))))throw Error('DOE_INCOMPLETE_PACKAGE');
+    return {equipmentId:packageChanges[0].equipmentId,path:'scenarioPackage.'+packageId,before:0,low:0,high:1,unit:'package',packageId,label:item.label||item.name||packageId,packageChanges};
+  });
+  if(new Set(factors.flatMap(factor=>factor.packageChanges.map(change=>change.originTier).filter(Boolean))).size>1)throw Error('SCENARIO_CATEGORY_MISMATCH');
+  return {type:'FULL_FACTORIAL_TWO_LEVEL',policy:'ATOMIC_INTERVENTION_PACKAGES_V1',factors,
+    designPoints:Array.from({length:2**factors.length},(_,index)=>({index,levels:factors.map((_,i)=>(index>>i)&1?1:-1),changes:factors.flatMap((factor,i)=>(index>>i)&1?JSON.parse(JSON.stringify(factor.packageChanges)):[])})),
+    interpretation:'Each factor toggles a complete intervention package. Effects belong to the package and do not identify separate effects of its coupled parameters.'};
+}
+
+// Diagnosis provides priorities; this step only allocates the bounded search.
+// There is no second simulation-based screening before the small factorial.
+export function planBasicScenarioSearch(targets,{tier='ZERO',maxFactors=3}={}) {
+  if(!['ZERO','MEDIUM','HIGH'].includes(tier)||!Number.isInteger(maxFactors)||maxFactors<1||maxFactors>3)throw Error('SCENARIO_INVALID_BASIC_FACTOR_LIMIT');
+  const key=change=>change.equipmentId+':'+change.path;
+  const source=(Array.isArray(targets)?targets:[]).filter(item=>item?.change?.equipmentId&&typeof item.change.path==='string'&&(item.change.before===null||Number.isFinite(item.change.before))&&Number.isFinite(item.change.after)&&item.change.before!==item.change.after&&(!item.change.originTier||item.change.originTier===tier));
+  const ordered=source.slice().sort((a,b)=>(Number(b.priority)||0)-(Number(a.priority)||0)||key(a.change).localeCompare(key(b.change))||String(a.change.packageId||'').localeCompare(String(b.change.packageId||'')));
+  const groups=new Map();
+  function mechanism(change){return change.path.startsWith('noiseProfile.reliability.')?'RELIABILITY':/conveyorSpeed|nominalRate/.test(change.path)?'SPEED':/lactMm/.test(change.path)?'ACCUMULATION':/Sensor|sensor|TimeDelay|lpPrimeMm/.test(change.path)?'SENSOR':change.path;}
+  for(const item of ordered){
+    const change=item.change;
+    const packageId=String(change.packageId||change.targetId||item.packageId||(tier==='ZERO'?(mechanism(change)==='RELIABILITY'?'RELIABILITY:'+change.equipmentId:key(change)):tier+':'+change.equipmentId));
+    let group=groups.get(packageId);
+    if(!group){group={packageId,label:item.label||change.packageLabel||packageId,changes:[],priority:Number(item.priority)||0,mechanism:tier==='MEDIUM'?'ACCUMULATION':tier==='HIGH'?'REPLACEMENT':mechanism(change),equipmentId:change.equipmentId};groups.set(packageId,group);}
+    if(!group.changes.some(c=>key(c)===key(change)))group.changes.push(JSON.parse(JSON.stringify(change)));
+  }
+  const ranked=[...groups.values()].sort((a,b)=>b.priority-a.priority||a.packageId.localeCompare(b.packageId)),packages=[],usedFields=new Set();
+  function add(group){if(!group||packages.includes(group)||packages.length>=maxFactors||group.changes.some(c=>usedFields.has(key(c))))return false;packages.push(group);group.changes.forEach(c=>usedFields.add(key(c)));return true;}
+  add(ranked[0]);
+  if(tier==='ZERO'){
+    // Different mechanisms can interact even when one isolated local loss is
+    // small. Keep reliability as one paired factor rather than two of three.
+    for(const group of ranked)if(!packages.some(p=>p.mechanism===group.mechanism))add(group);
+  }
+  for(const group of ranked)if(!packages.some(p=>p.equipmentId===group.equipmentId))add(group);
+  for(const group of ranked)add(group);
+  const design=packages.length?designScenarioPackages(packages):null;
+  const changes=packages.flatMap(p=>p.changes),candidatePackages=design?design.designPoints.filter(point=>point.changes.length).map(point=>({packageIds:packages.filter((_,i)=>point.levels[i]===1).map(p=>p.packageId),changes:point.changes,siteCount:new Set(point.changes.map(c=>c.equipmentId)).size})):[];
+  return {policy:'BASIC_AUTOMATIC_PACKAGES_V1',tier,maxFactors,packages,changes,factors:design?.factors||[],design,candidatePackages,maximumDesignPoints:design?.designPoints.length||0,
+    eligible:source.length,eligiblePackages:ranked.length,omitted:Math.max(0,source.length-changes.length),omittedPackages:ranked.length-packages.length,
+    interpretation:'A deterministic diagnosis-prioritized shortlist evaluates up to three complete interventions and every selected combination. It can omit lower-priority interventions; independent full-horizon confirmation remains required.'};
 }
 export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings,equipment) {
   const profile=scenarioSearchProfile(level,settings,{run,equipment});

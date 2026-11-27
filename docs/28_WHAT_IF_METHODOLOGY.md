@@ -1,5 +1,7 @@
 # Metodología What-If: hipótesis, búsqueda y validación
 
+> Historical implementation and experiment notes. The current `MATCHED_CAPEX_V12` scopes, independent categories, Basic automatic DOE and fixed-sample confirmation are specified in [CAPEX scope and Basic search](CAPEX_SCOPE_AND_BASIC_SEARCH.md) and [background methodology](SCENARIO_BACKGROUND_METHODOLOGY.md). Earlier inclusion controls, High buffer classification and adaptive confirmation descriptions below do not describe the current workflow.
+
 ## Objetivo
 
 Encontrar cambios factibles que aumenten el throughput sin reducir el OEE de la

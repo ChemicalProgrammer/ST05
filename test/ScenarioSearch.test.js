@@ -49,12 +49,12 @@ test('F upper-tail probabilities match tabulated values',()=>{
  assert.equal(scenarioFSurvival(0,1,10),1);
 });
 
-function harness(doe,depth='MEDIUM',uncertain=false,tier='HIGH',durationSeconds=99,factorCount=2,speedProfile='BALANCED'){
+function harness(doe,depth='MEDIUM',uncertain=false,tier='ZERO',durationSeconds=99,factorCount=2,speedProfile='BALANCED'){
  const dom=new JSDOM('<article class="analysis-recommendation"></article>',{runScripts:'outside-only'}),w=dom.window,calls=[];
  const paths=factorCount===3?['speed','sensor','buffer']:['speed','sensor'];
  w.HTMLDialogElement.prototype.close=function(){};w.HTMLDialogElement.prototype.showModal=function(){};
  w.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
- w.STPreferences={read(){return '';},write(){return true;}};w.STIcons={svg(){return '<svg></svg>';}};w.STErrors={register(){},capture(){}};w.STScenarioText={HIGH:'High'};
+ w.STPreferences={read(){return '';},write(){return true;}};w.STIcons={svg(){return '<svg></svg>';},button(){}};w.STErrors={register(){},capture(){}};w.STScenarioText={HIGH:'High'};
  w.eval(fs.readFileSync('apps-script/ClientUtils.html','utf8'));
  w.eval(fs.readFileSync('apps-script/Subsection.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1]);
  w.STScenarioSearch={settings:scenarioSearchSettings,settingsSignature:scenarioSearchSettingsSignature,screenFlow:screenFlowFactors,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,practicalGain:scenarioPracticalGain};w.STScenarioDOE={design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
@@ -215,19 +215,19 @@ test('long-horizon ranking after DOE 8/8 shows advancing batch progress and only
   h.w.SimulatorEngine.simulateBatch=async(input,options)=>{if(input.run.seed>=100003&&input.run.seed<1000003&&held.length<2)await new Promise(resolve=>held.push({input,options,resolve}));return original(input,options);};
   h.host.querySelector('.scenario-search').click();await awaitRankingCondition(()=>held.length===1);
   assert.equal(held[0].input.run.durationSeconds,86400);assert.equal(held[0].input.run.rounds,3);
-  assert.equal(h.host.querySelector('.scenario-progress-label > span:first-child').textContent,'Comparing finalists');
+  h.host.querySelector('.scenario-activity').click();assert.equal([...h.host.querySelectorAll('.scenario-trace-step-name')].at(-1).textContent,'Comparing finalists');
   const counts=h.host.querySelector('.scenario-search-progress').textContent.match(/(\d+) \/ up to (\d+)/).slice(1).map(Number),percentages=[];
   for(const fraction of [0,.25,.5,.75]){
    held[0].options.progress(fraction);
-   const status=h.host.querySelector('.scenario-preview-status').textContent,percent=h.host.querySelector('.scenario-progress-label > span:last-child').textContent;
-   assert.match(status,/Baseline · 1440 min × 3 Rounds/);assert(status.includes('Current batch: '+(fraction*100).toFixed(1)+'%'));assert.doesNotMatch(status,/DOE/);
-   assert.match(percent,/^\d+\.\d%$/);percentages.push(parseFloat(percent));
+   const status=h.host.querySelector('.scenario-preview-status').textContent,percent=h.host.querySelector('.scenario-activity').getAttribute('aria-valuenow');
+   assert.match(status,/Baseline · 1440 min × 3 Rounds/);assert(status.includes('Current batch: '+(fraction*100).toFixed(2)+'%'));assert.doesNotMatch(status,/DOE/);
+   assert(Number.isFinite(Number(percent)));percentages.push(parseFloat(percent));
   }
   assert(percentages.every((value,index)=>index===0||value>percentages[index-1]),'A working ranking batch must visibly advance');
   held[0].resolve();await awaitRankingCondition(()=>held.length===2);
   held[1].options.progress(.25);
   const candidateStatus=h.host.querySelector('.scenario-preview-status').textContent,finalists=Number(candidateStatus.match(/Candidate 1 \/ (\d+)/)[1]);
-  assert.match(candidateStatus,/1440 min × 3 Rounds · Current batch: 25\.0%/);
+  assert.match(candidateStatus,/1440 min × 3 Rounds · Current batch: 25\.00%/);
   assert.equal(counts[1],counts[0]+1+finalists+2,'Unused exploration allowance must leave the ranking denominator');
   held[1].resolve();await awaitRankingCondition(()=>!h.host.hasAttribute('aria-busy'));
   const result=h.sim.whatIf.evaluations[0];assert.equal(result.status,'IMPROVEMENT_REPRODUCED');assert.equal(result.doe.observations.length,8);assert.equal(result.independentCheck.durationSeconds,86400);
@@ -245,8 +245,8 @@ test('cancel during long finalist ranking clears busy state and allows a complet
    return original(input,options);
   };
   const button=h.host.querySelector('.scenario-search');button.click();await awaitRankingCondition(()=>rankingStarted);
-  assert.match(h.host.querySelector('.scenario-preview-status').textContent,/Caso base · 1440 min × 3 Rondas · Lote actual: 40\.0%/);
-  assert.equal(h.host.querySelector('.scenario-progress-label > span:first-child').textContent,'Comparando candidatos finalistas');
+  assert.match(h.host.querySelector('.scenario-preview-status').textContent,/Caso base · 1440 min × 3 Rondas · Lote actual: 40\.00%/);
+  h.host.querySelector('.scenario-activity').click();assert.equal([...h.host.querySelectorAll('.scenario-trace-step-name')].at(-1).textContent,'Comparando candidatos finalistas');
   button.click();await awaitRankingCondition(()=>!h.host.hasAttribute('aria-busy'));
   assert.equal(h.sim.whatIf.evaluations[0].status,'CANCELLED');assert.equal(button.title,'Find best scenario');assert.equal(button.disabled,false);assert.equal(h.host.querySelector('.scenario-create').disabled,true);
   assert.equal((await search(h)).status,'IMPROVEMENT_REPRODUCED');assert.equal(h.host.hasAttribute('aria-busy'),false);
@@ -298,35 +298,32 @@ function categoryHarness(tier){
  const h=harness(false,'HIGH');h.sim.equipment[0].extra=10;completeSyntheticScenarioSource(h.sim);h.w.STScenarios.fields.extra=[1,100,'s'];
  const c=(path,after)=>({equipmentId:'e',path,before:10,after,unit:'u/s'});
  h.project={kind:'CUSTOM',tier,searchScope:tier,explore:true,changes:[],categoryChanges:{ZERO:[c('sensor',20)],MEDIUM:[c('extra',30)],HIGH:[c('speed',20)]}};
- if(tier==='ZERO')h.project.changes=h.project.categoryChanges.ZERO;
+ h.project.changes=h.project.categoryChanges[tier].map(change=>({...change,originTier:tier}));
  h.host.remove();h.host=h.w.document.createElement('article');h.host.className='analysis-recommendation';h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);return h;
 }
-test('High includes Zero and Medium independently, persists scope and excludes deselected fields from search',async()=>{
+test('High ignores legacy inclusions and searches only its own targets before and after reopening',async()=>{
  const h=categoryHarness('HIGH');try{
-  const boxes=h.host.querySelectorAll('.scenario-include-category');assert.equal(boxes.length,2);assert([...boxes].every(b=>!b.checked));
-  boxes.forEach(b=>{b.checked=true;b.onchange();});const result=await search(h);
-  assert.deepEqual(JSON.parse(JSON.stringify(result.categoryInclusions)),{ZERO:true,MEDIUM:true});assert.deepEqual(JSON.parse(JSON.stringify(result.requestedChanges.map(c=>c.path).sort())),['extra','sensor','speed']);
-  h.host.remove();h.host=h.w.document.createElement('article');h.host.className='analysis-recommendation';h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);
-  assert([...h.host.querySelectorAll('.scenario-include-category')].every(b=>b.checked));
-  const zero=h.host.querySelector('.scenario-include-category[data-tier="ZERO"]');zero.checked=false;zero.onchange();assert(h.host.querySelector('.scenario-create').disabled);
-  const again=await search(h);assert(again.requestedChanges.every(c=>c.path!=='sensor'));assert.equal(again.categoryInclusions.MEDIUM,true);
+  h.sim.whatIf.capexInclusions={HIGH:{ZERO:true,MEDIUM:true}};
+  assert.equal(h.host.querySelectorAll('.scenario-include-category').length,0);
+  const result=await search(h);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.categoryInclusions)),{});
+  assert.deepEqual(Array.from(result.requestedChanges,c=>c.path),['speed']);
+  h.host.remove();h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);
+  assert.equal(h.host.querySelector('.scenario-include-category'),null);
+  const again=await search(h);assert.deepEqual(Array.from(again.requestedChanges,c=>c.path),['speed']);
  }finally{h.dom.window.close();}
 });
-test('Medium offers only the Zero inclusion and current-tier targets win duplicate fields',()=>{
+test('Medium exposes its own targets and no cross-category inclusion control',()=>{
  const h=categoryHarness('MEDIUM');try{
-  assert.equal(h.host.querySelectorAll('.scenario-include-category').length,1);assert.equal(h.host.querySelector('.scenario-include-category').dataset.tier,'ZERO');
-  const zero=h.host.querySelector('.scenario-include-category');zero.checked=true;zero.onchange();assert.equal([...h.host.querySelectorAll('.scenario-change')].filter(r=>!r.hidden).length,2);
+  assert.equal(h.host.querySelector('.scenario-include-category'),null);
+  const rows=[...h.host.querySelectorAll('.scenario-change')];assert.equal(rows.length,1);assert.match(rows[0].textContent,/extra/);assert.doesNotMatch(rows[0].textContent,/sensor/);
  }finally{h.dom.window.close();}
 });
-test('duplicate category parameters retain the current target and excluded scope removes DOE factors',()=>{
+test('foreign origin targets are excluded even if manually present in a project',()=>{
  const h=categoryHarness('HIGH');try{
-  h.project.categoryChanges.ZERO=[{equipmentId:'e',path:'speed',before:10,after:12,unit:'u/s'},{equipmentId:'e',path:'sensor',before:10,after:20,unit:'u/s'}];
-  h.host.remove();h.host=h.w.document.createElement('article');h.host.className='analysis-recommendation';h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);
-  const zero=h.host.querySelector('.scenario-include-category[data-tier="ZERO"]');zero.checked=true;zero.onchange();
-  const speedRows=[...h.host.querySelectorAll('.scenario-change')].filter(r=>r.textContent.includes('speed'));assert.equal(speedRows.length,1);assert.match(speedRows[0].textContent,/20/);
-  h.w.STScenarioExplorer.setDOE(true);
-  const sensorRow=[...h.host.querySelectorAll('.scenario-change')].find(r=>r.textContent.includes('sensor')),factor=sensorRow.querySelector('.scenario-doe-select');factor.checked=true;factor.onchange();assert(factor.checked);
-  zero.checked=false;zero.onchange();assert.equal(factor.checked,false);assert(sensorRow.hidden);
+  h.project.changes.push({equipmentId:'e',path:'sensor',before:10,after:20,originTier:'ZERO'});
+  h.host.remove();h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);
+  const rows=[...h.host.querySelectorAll('.scenario-change')];assert.equal(rows.length,1);assert.match(rows[0].textContent,/speed/);assert.equal(h.host.querySelector('.scenario-include-category'),null);
  }finally{h.dom.window.close();}
 });
 
@@ -345,7 +342,7 @@ test('overflow appearing only in independent confirmation requires review instea
  }finally{h.dom.window.close();}
 });
 
-test('High runs automatic reliability discovery before flow search and retains exploratory labeling and matched comparison',async()=>{
+test('Zero runs automatic reliability discovery before flow search and retains exploratory labeling and matched comparison',async()=>{
  const h=harness(false,'HIGH');try{
   const original=h.w.SimulatorEngine.simulateBatch;h.w.SimulatorEngine.simulateBatch=async input=>{const response=await original(input),gain=(10-(input.case.equipment[0]['noiseProfile.reliability.mttrMinutes']??10))*3;for(const row of response.result.batch.rows){row.summary.lineOeePercent+=gain/10;row.summary.outputCount+=gain*input.run.durationSeconds/60;}response.result.batch.statistics.lineOeePercent.mean+=gain/10;response.result.batch.statistics.throughputPerMinute.mean+=gain;return response;};
   let discoveryCalls=0;h.w.STScenarioSearch.reliabilityTargets=async(source,options)=>{discoveryCalls++;const baseline=await options.measure(source,[],options.run),c={equipmentId:'e',path:'noiseProfile.reliability.mttrMinutes',before:10,after:5,unit:'min',external:true,analysisOnly:true,interventionType:'SENSITIVITY',justification:'Model target'};return {calculations:1,coverage:{screened:1},selectedChanges:[c],candidateSets:[{changes:[c]}],baseline,status:'EXPLORATORY_TARGETS_FOUND'};};
@@ -388,9 +385,9 @@ test('button suggestions and automatic search reuse the same conditional screen 
 test('engineering speed targets are refreshed in the retained reliability context and stay within supplied category scope',async()=>{
  const h=harness(true,'HIGH');try{
   h.host.remove();h.sim.equipment[0].nominalRatePerSecond=10;h.sim.equipment[0].processData={equipment:{maximumSpeedBpm:1200}};completeSyntheticScenarioSource(h.sim);h.w.STScenarios.fields.nominalRatePerSecond=[.001,1000000,'units/s'];
-  h.w.STScenarios.plan=source=>({candidates:[{canApply:true,tier:'HIGH',priority:70,changes:[{equipmentId:'e',path:'nominalRatePerSecond',before:10,after:source.equipment[0]['noiseProfile.reliability.mttrMinutes']===5?15:20,unit:'units/s'}]}]});
+  h.w.STScenarios.plan=source=>({candidates:[{canApply:true,tier:'ZERO',priority:70,changes:[{equipmentId:'e',path:'nominalRatePerSecond',before:10,after:source.equipment[0]['noiseProfile.reliability.mttrMinutes']===5?15:20,unit:'units/s'}]}]});
   h.w.STScenarioSearch.reliabilityTargets=async()=>({selectedChanges:[{equipmentId:'e',path:'noiseProfile.reliability.mttrMinutes',before:10,after:5,unit:'min',analysisOnly:true}],candidateSets:[],calculations:0});
-  const project={kind:'CUSTOM',tier:'HIGH',explore:true,changes:[{equipmentId:'e',path:'nominalRatePerSecond',before:10,after:20,unit:'units/s'}]};h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,project,()=>{},h.sim);h.w.STScenarioExplorer.connectCase(()=>({metadata:{includeDOE:true},simulations:[h.sim]}),()=>{});
+  const project={kind:'CUSTOM',tier:'ZERO',explore:true,changes:[{equipmentId:'e',path:'nominalRatePerSecond',before:10,after:20,unit:'units/s'}]};h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,project,()=>{},h.sim);h.w.STScenarioExplorer.connectCase(()=>({metadata:{includeDOE:true},simulations:[h.sim]}),()=>{});
   await suggest(h);const report=h.sim.whatIf.evaluations[0].sensitivityScreening;assert.equal(report.observations[0].after,15);assert(report.fixedReliabilityChanges.some(c=>c.after===5));assert.equal(h.host.querySelector('.scenario-speed-screen'),null);assert.equal(h.host.querySelector('.scenario-suggestion-percent').textContent,'100%');
  }finally{h.dom.window.close();}
 });
@@ -403,23 +400,23 @@ test('manual four-factor DOE remains complete and bypasses automatic shortlist r
  }finally{h.dom.window.close();}
 });
 
-test('scenario configuration has three sections and results only expose changed inputs',async()=>{
+test('scenario configuration hides unavailable sections and results only expose changed inputs',async()=>{
  const h=harness(false,'HIGH');try{
-  assert.deepEqual([...h.host.querySelectorAll('.scenario-config-tabs button')].map(n=>n.textContent),['Search','Equipment','Conveyors']);assert.equal(h.host.querySelectorAll('.scenario-config-section > h3').length,0);await search(h);h.host.querySelector('.scenario-results').click();const body=h.host.querySelector('.scenario-results-dialog .dialog-body');assert.match(body.textContent,/Changed inputs/);assert.doesNotMatch(body.textContent,/Replace this equipment|maintenance|Purpose|Evaluation reuse|seed|Conditional equipment reliability ranking/);
+  assert.deepEqual([...h.host.querySelectorAll('.scenario-config-tabs button')].filter(n=>!n.hidden).map(n=>n.textContent),['Search','Equipment']);assert.equal(h.host.querySelectorAll('.scenario-config-section > h3').length,0);await search(h);h.host.querySelector('.scenario-results').click();const body=h.host.querySelector('.scenario-results-dialog .dialog-body');assert.match(body.textContent,/Changed inputs/);assert.doesNotMatch(body.textContent,/Replace this equipment|maintenance|Purpose|Evaluation reuse|seed|Conditional equipment reliability ranking/);
  }finally{h.dom.window.close();}
 });
 
 test('configuration tabs show one panel at a time and support keyboard navigation',()=>{
  const h=harness(false,'HIGH');try{
-  const tabs=h.host.querySelectorAll('.scenario-config-tabs [role=tab]'),panels=h.host.querySelectorAll('[role=tabpanel]');assert.equal(tabs.length,3);assert.equal([...panels].filter(p=>!p.hidden).length,1);assert.equal(panels[0].hidden,false);tabs[1].click();assert.equal(panels[1].hidden,false);assert.equal(panels[0].hidden,true);assert.equal(tabs[1].getAttribute('aria-selected'),'true');tabs[1].dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));assert.equal(panels[2].hidden,false);assert.equal(tabs[2].tabIndex,0);
+  const tabs=h.host.querySelectorAll('.scenario-config-tabs [role=tab]'),panels=h.host.querySelectorAll('[role=tabpanel]');assert.equal(tabs.length,4);assert.equal(tabs[2].hidden,true);assert.equal(tabs[3].hidden,true);assert.equal([...panels].filter(p=>!p.hidden).length,1);assert.equal(panels[0].hidden,false);tabs[1].click();assert.equal(panels[1].hidden,false);assert.equal(panels[0].hidden,true);assert.equal(tabs[1].getAttribute('aria-selected'),'true');tabs[1].dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));assert.equal(panels[0].hidden,false);assert.equal(tabs[0].tabIndex,0);
  }finally{h.dom.window.close();}
 });
 
 test('saved scenario results include optimized machine speed, sensor position and conveyor geometry',()=>{
- const h=harness(false,'HIGH');try{
+ const h=harness(false,'HIGH',false,'HIGH');try{
   const changes=[{equipmentId:'e',path:'nominalRatePerSecond',before:10,after:12,unit:'units/s'},{equipmentId:'e',path:'processData.accumulation.backupSensorPositionMm',before:100,after:150,unit:'mm'},{equipmentId:'e',path:'processData.geometry.lactMm',before:1000,after:1200,unit:'mm'}];
   h.host.remove();h.sim.whatIf.evaluations=[{cardId:JSON.stringify(['sim','CAPEX','HIGH']),sourceSignature:'same',sourceSimulationId:'sim',status:'IMPROVEMENT_REPRODUCED',searchPolicyVersion:'MATCHED_CAPEX_V9',baseline:{oee:50,throughput:100},candidate:{oee:60,throughput:120},independentCheck:{passed:true,baseline:{oee:50,throughput:100},candidate:{oee:60,throughput:120}},evaluatedChanges:changes}];
-  h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);h.host.querySelector('.scenario-results').click();const rows=[...h.host.querySelectorAll('.scenario-results-changes tbody tr')];assert.equal(rows.length,3);assert.match(rows[0].textContent,/600 units\/min720 units\/min/);assert.match(rows[1].textContent,/100 mm150 mm/);assert.match(rows[2].textContent,/1000 mm1200 mm/);assert.equal(h.host.querySelectorAll('.scenario-audit-warnings input').length,0);
+  h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);h.host.querySelector('.scenario-results').click();const rows=[...h.host.querySelectorAll('.scenario-results-changes tbody tr')];assert.equal(rows.length,3);assert.match(rows[0].textContent,/600\.00 units\/min720\.00 units\/min/);assert.match(rows[1].textContent,/100\.00 mm150\.00 mm/);assert.match(rows[2].textContent,/1000\.00 mm1200\.00 mm/);assert.equal(h.host.querySelectorAll('.scenario-audit-warnings input').length,0);
  }finally{h.dom.window.close();}
 });
 
@@ -437,13 +434,13 @@ test('configuration separates conveyor inputs while preserving controls and DOE 
   const project={...h.project,changes:[h.project.changes[0],{equipmentId:'belt',path:'sensor',before:10,after:20,unit:'m'}]};
   h.w.STScenarioExplorer.attach(h.host,project,()=>{},h.sim);
   const panels=h.host.querySelectorAll('[role=tabpanel]');
-  assert(panels[0].querySelector('.scenario-search-depth'));assert(panels[0].querySelector('.scenario-doe-enabled'));
-  assert.equal(panels[1].querySelectorAll('.scenario-changes tbody tr').length,0);assert.equal(h.host.querySelector('.scenario-advanced-store').hidden,true);assert.equal(panels[2].querySelectorAll('.scenario-changes tbody tr').length,1);
-  assert.match(h.host.querySelector('.scenario-advanced-store .scenario-changes tbody').textContent,/speed/);assert.match(panels[2].querySelector('.scenario-changes tbody').textContent,/sensor/);
+  assert(panels[0].querySelector('.scenario-search-depth'));assert(panels[2].querySelector('.scenario-doe-enabled'));
+  assert.equal(panels[1].querySelectorAll('.scenario-changes tbody tr').length,1);assert.equal(h.host.querySelector('.scenario-advanced-store'),null);assert.equal(panels[2].querySelectorAll('.scenario-changes tbody tr').length,1);
+  assert.match(panels[1].querySelector('.scenario-changes tbody').textContent,/speed/);assert.match(panels[2].querySelector('.scenario-changes tbody').textContent,/sensor/);
   assert.equal(panels[0].querySelector('.scenario-use-all'),null);h.host.querySelectorAll('.scenario-changes tbody input[type=checkbox]').forEach(c=>c.checked=false);
-  const beltUse=panels[2].querySelector('.scenario-conveyor-use-all');beltUse.checked=true;beltUse.onchange();assert.equal(h.host.querySelector('.scenario-advanced-store tbody input[type=checkbox]').checked,false);assert.equal(panels[2].querySelector('tbody input[type=checkbox]').checked,true);
+  const beltUse=panels[2].querySelector('.scenario-conveyor-use-all');beltUse.checked=true;beltUse.onchange();assert.equal(panels[1].querySelector('tbody input[type=checkbox]').checked,false);assert.equal(panels[2].querySelector('tbody input[type=checkbox]').checked,true);
   const beltDOE=panels[2].querySelector('.scenario-conveyor-doe-all');beltDOE.checked=true;beltDOE.onchange();assert.equal(panels[2].querySelector('.scenario-doe-select').checked,true);beltDOE.checked=false;beltDOE.onchange();assert.equal(panels[2].querySelector('.scenario-doe-select').checked,false);
-  const toggle=panels[0].querySelector('.scenario-doe-enabled');toggle.checked=false;toggle.onchange();assert.equal(panels[2].querySelector('.scenario-factor-count').hidden,true);toggle.checked=true;toggle.onchange();assert.equal(panels[2].querySelector('.scenario-factor-count').hidden,false);
+  const toggle=panels[2].querySelector('.scenario-doe-enabled');toggle.checked=false;toggle.onchange();assert.equal(panels[2].querySelector('.scenario-config-doe-content').hidden,true);toggle.checked=true;toggle.onchange();assert.equal(panels[2].querySelector('.scenario-factor-count').hidden,false);
   assert.equal(panels[2].querySelector('.scenario-doe-suggest').nextElementSibling.className,'scenario-factor-count');assert.equal(panels[2].querySelector('.scenario-factor-count').nextElementSibling.className,'scenario-suggestion-percent');
   assert.equal(h.host.querySelector('.scenario-reliability-source'),null);assert.doesNotMatch(panels[1].textContent,/Source \/ basis/);
 
@@ -452,25 +449,24 @@ test('configuration separates conveyor inputs while preserving controls and DOE 
 
 test('completed searches keep cards concise and disclose actual DOE execution in results',async()=>{
  const h=harness(true,'HIGH');try{
-  await search(h);assert.equal(h.host.querySelector('.scenario-preview-status').textContent,'');assert.equal(h.host.querySelector('.scenario-search-progress').textContent,'');assert.equal(h.host.querySelector('.scenario-progress-label').hidden,true);assert.equal(h.host.querySelector('.scenario-audit-warnings'),null);
+  await search(h);assert.equal(h.host.querySelector('.scenario-preview-status').textContent,'');assert.match(h.host.querySelector('.scenario-search-progress').textContent,/Finished/);assert.equal(h.host.querySelector('.scenario-progress-label'),null);assert.equal(h.host.querySelector('.scenario-audit-warnings'),null);
   h.host.querySelector('.scenario-results').click();assert.match(h.host.querySelector('.scenario-flow-summary').textContent,/DOE: 4 \/ 4 combinations completed. ANOVA completed./);
-  assert.equal(h.host.querySelector('.scenario-doe').tagName,'SECTION');assert.equal(h.host.querySelector('.scenario-suggestion-report').hidden,true);
-  assert.doesNotMatch(h.host.querySelectorAll('[role=tabpanel]')[2].textContent,/Conveyor variables|select and enter/);
+  assert(h.host.querySelector('.scenario-config-doe-content'));assert.equal(h.host.querySelector('.scenario-suggestion-report').hidden,true);
+  assert.equal(h.host.querySelectorAll('[role=tabpanel]')[2].hidden,true);
  }finally{h.dom.window.close();}
 });
 
-test('compact configuration places DOE actions in conveyors and keeps search choices in two groups',()=>{
+test('configuration keeps DOE tools with live variables and omits category inclusion groups',()=>{
  const h=harness(true,'HIGH');try{
   const panels=h.host.querySelectorAll('[role=tabpanel]');
-  assert(panels[0].querySelector('.scenario-search-primary .scenario-search-depth'));
-  assert(panels[0].querySelector('.scenario-search-choices .scenario-doe-enabled'));
-  assert.equal(panels[0].querySelector('.scenario-search-choices .scenario-use-all'),null);
-  assert.equal(panels[0].querySelector('.scenario-doe-suggest'),null);assert(panels[2].querySelector('.scenario-doe-suggest'));
+  assert(panels[0].querySelector('.scenario-search-depth'));
+  assert(panels[0].querySelector('.scenario-doe-enabled'));
+  assert(panels[0].querySelector('.scenario-doe-suggest'));
+  assert.equal(h.host.querySelector('.scenario-include-category'),null);
   assert(![...h.host.querySelectorAll('button')].some(b=>b.textContent==='Clear factor selection'));
   assert.equal(h.host.querySelector('.scenario-preview-context'),null);
-  assert(panels[1].querySelector('.scenario-reliability-intro .scenario-explore-reliability'));assert(panels[1].querySelector('.scenario-reliability-heading .scenario-reliability-count'));
-  assert.equal(panels[1].querySelector('.scenario-edit-details'),null);
-  h.host.querySelector('.scenario-configure').click();assert.equal(panels[1].querySelector('.scenario-edit-details'),null);
+  assert.equal(panels[1].querySelectorAll('.scenario-change').length,2);
+  h.host.querySelector('.scenario-configure').click();assert.equal(panels[1].querySelectorAll('.scenario-change').length,2);
  }finally{h.dom.window.close();}
 });
 
@@ -534,7 +530,7 @@ for(const [tier,depth] of [['ZERO','LIGHT'],['MEDIUM','MEDIUM']]){
   const h=harness(false,depth,false,tier);try{
    h.w.SimulatorEngine.simulateBatch=async input=>{const changed=input.case.equipment[0].speed>10||input.case.equipment[0].sensor>10;return responseAt(input,input.run.seed>1000000?(changed?37:35):(changed?40:39));};
    const result=await search(h);assert.equal(result.status,'IMPROVEMENT_REPRODUCED');
-   assert.equal(h.host.querySelector('.scenario-basic-metric strong').textContent,'37.0%');
+   assert.equal(h.host.querySelector('.scenario-basic-metric strong').textContent,'37.00%');
    assert.match(h.host.querySelector('.scenario-basic-change').textContent,/\+2.00 pp/);
    assert.match(h.host.querySelector('.scenario-baseline-note').textContent,/Confirmed.*35.00.*matching seeds/);
   }finally{h.dom.window.close();}
@@ -552,23 +548,19 @@ test('older CAPEX results require recalculation before creation with the full-ho
  }finally{h.dom.window.close();}
 });
 
-test('Medium defaults to including Low inputs and discovers the same stable factor on the same baseline and run',async()=>{
+test('Zero and Medium screen independent targets against the same unchanged baseline',async()=>{
  const low=categoryHarness('ZERO'),medium=categoryHarness('MEDIUM');try{
   for(const h of [low,medium]){h.w.STScenarioExplorer.setDOE(true);await suggest(h);}
-  assert(medium.host.querySelector('.scenario-include-category[data-tier="ZERO"]').checked);
   const a=low.sim.whatIf.evaluations[0].sensitivityScreening,b=medium.sim.whatIf.evaluations[0].sensitivityScreening;
-  assert.equal(a.selectedFactors.length,1);assert(b.selectedFactors.some(f=>f.path==='sensor'));assert.equal(a.selectedFactors[0].path,'sensor');assert.equal(a.observations[0].paired.lower,b.observations.find(o=>o.path==='sensor').paired.lower);
-  assert.equal(a.baseline.oee,b.baseline.oee);assert.equal(a.run.durationSeconds,b.run.durationSeconds);assert.equal(a.run.seed,b.run.seed);
-  assert.equal(b.scope.includedCategories.ZERO,true);
+  assert.equal(a.selectedFactors[0].path,'sensor');assert(b.observations.every(o=>o.path==='extra'));assert(!b.selectedFactors.some(f=>f.path==='sensor'));
+  assert.equal(a.baseline.oee,b.baseline.oee);assert.equal(a.run.durationSeconds,b.run.durationSeconds);assert.equal(a.run.seed,b.run.seed);assert.deepEqual(Object.keys(b.scope.includedCategories),[]);
  }finally{low.dom.window.close();medium.dom.window.close();}
 });
-test('explicit Low exclusion in Medium is preserved on reopening and screening explains the narrower scope',async()=>{
+test('saved Medium inclusion flags cannot reinstate Zero targets during screening',async()=>{
  const h=categoryHarness('MEDIUM');try{
-  h.w.STScenarioExplorer.setDOE(true);const include=h.host.querySelector('.scenario-include-category[data-tier="ZERO"]');include.checked=false;include.onchange();
-  h.host.remove();h.host=h.w.document.createElement('article');h.host.className='analysis-recommendation';h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);
-  assert.equal(h.host.querySelector('.scenario-include-category').checked,false);await suggest(h);
-  const report=h.sim.whatIf.evaluations[0].sensitivityScreening;assert.equal(report.selectedFactors.length,0);assert.equal(report.scope.excludedLowTargets,1);
-  assert.match(h.host.querySelector('.scenario-factor-count').textContent,/Low CAPEX inputs excluded.*Include Low CAPEX optimizations/);
+  h.sim.whatIf.capexInclusions={MEDIUM:{ZERO:true}};
+  h.host.remove();h.host=h.w.document.createElement('article');h.w.document.body.append(h.host);h.w.STScenarioExplorer.attach(h.host,h.project,()=>{},h.sim);h.w.STScenarioExplorer.setDOE(true);await suggest(h);
+  const report=h.sim.whatIf.evaluations[0].sensitivityScreening;assert.equal(h.host.querySelector('.scenario-include-category'),null);assert(report.observations.every(o=>o.path==='extra'));assert.equal(report.scope.excludedLowTargets,0);assert.doesNotMatch(h.host.textContent,/Include Low CAPEX optimizations/);
  }finally{h.dom.window.close();}
 });
 test('screening with no eligible target skips simulation and explains that nothing was screened',async()=>{

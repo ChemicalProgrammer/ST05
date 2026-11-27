@@ -5,7 +5,7 @@ import { scenarioPairedSummary } from './ScenarioStatistics.js';
 
 // Exploratory inverse design: target values are model hypotheses, not evidence
 // that a maintenance action or replacement can achieve them.
-export async function searchReliabilityTargets(simulation,{measure,run,cancelled=()=>false,progress=()=>{},maximumMachines=12,maximumTargets=3,recoveryFraction=.9,scope='AUTO',equipmentIds=[],equipmentLimits={}}={}){
+export async function searchReliabilityTargets(simulation,{measure,run,cancelled=()=>false,progress=()=>{},maximumMachines=12,maximumTargets=3,recoveryFraction=.9,scope='AUTO',equipmentIds=[],equipmentLimits={},automaticBasic=false}={}){
   if(simulation.dynamicConfig?.reliabilityEnabled===false)return {status:'FAILURES_DISABLED',analysisOnly:true,candidateSets:[]};
   const lossDiagnosis=diagnoseScenarioLosses(simulation);
   const line=analyzeLinePerformance(simulation.equipment,lossDiagnosis.status==='OBSERVED'?simulation.results:null);
@@ -14,6 +14,9 @@ export async function searchReliabilityTargets(simulation,{measure,run,cancelled
   simulation=copy({id:simulation.id,unitOfFlow:simulation.unitOfFlow,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,results:simulation.results?{summary:simulation.results.summary,durationSeconds:simulation.results.durationSeconds}:undefined});
   const machines=(simulation.equipment||[]).filter(e=>e.type!=='CONVEYOR'&&e.noiseProfile?.reliability?.mtbfMinutes>0&&e.noiseProfile?.reliability?.mttrMinutes>0);
   if(!machines.length)return {status:'NO_ELIGIBLE_RELIABILITY',analysisOnly:true,candidateSets:[],selectedChanges:[],coverage:{screened:0,total:0},calculations:0};
+  // Basic chooses its own scope; retained manual/ALL settings from a larger
+  // workspace must not expand this preliminary diagnosis without a bound.
+  if(automaticBasic){scope='AUTO';maximumMachines=Math.min(maximumMachines,3);maximumTargets=1;}
   if(!['AUTO','MANUAL','ALL'].includes(scope))throw Error('SCENARIO_RELIABILITY_SCOPE');
   if(!Number.isInteger(maximumMachines)||maximumMachines<1||!Number.isInteger(maximumTargets)||maximumTargets<1)throw Error('SCENARIO_RELIABILITY_BUDGET');
   if(scope==='MANUAL'&&(!equipmentIds.length||equipmentIds.some(id=>!machines.some(e=>e.id===id))))throw Error('SCENARIO_RELIABILITY_SELECTION');
@@ -60,15 +63,20 @@ export async function searchReliabilityTargets(simulation,{measure,run,cancelled
   const threshold=Math.max(.001,Math.abs(baseline.throughput)*.001),ranking=observations.slice().sort((a,b)=>b.deltaThroughput-a.deltaThroughput||(a.equipmentId<b.equipmentId?-1:1));
   let relevant=scope==='AUTO'?ranking.filter(o=>o.deltaThroughput>threshold&&o.candidate.oee>=baseline.oee-1e-9).slice(0,maximumTargets):ranking;
   if(scope==='AUTO'&&!relevant.length&&failureFree.throughput>baseline.throughput+threshold)relevant=ranking.slice(0,maximumTargets);
-  // Four bounded grades per mechanism; no zero repair time or infinite MTBF.
+  // Basic tests four joint improvement grades on one diagnosed machine. It
+  // avoids the separate MTBF and MTTR grids while retaining bounded targets,
+  // matching seeds/horizon and the later independent confirmation.
   const grades=[{mtbf:1.25,mttr:.8},{mtbf:1.5,mttr:2/3},{mtbf:2,mttr:.5},{mtbf:4,mttr:.25}];
+  const mechanisms=automaticBasic?['JOINT']:['MTBF','MTTR','JOINT'];
   const choices=[];
   for(const row of relevant){const equipment=machines.find(e=>e.id===row.equipmentId),r=equipment.noiseProfile.reliability,tests=[];
-    for(const mechanism of ['MTBF','MTTR','JOINT'])for(const grade of grades){
+    const tested=new Set();
+    for(const mechanism of mechanisms)for(const grade of grades){
       const values=bounded(equipment.id,r,grade);
       const fields=mechanism==='MTBF'?['mtbfMinutes']:mechanism==='MTTR'?['mttrMinutes']:['mtbfMinutes','mttrMinutes'];
-      const changes=fields.map(field=>({equipmentId:equipment.id,path:'noiseProfile.reliability.'+field,before:r[field],after:values[field],unit:'min',external:true,analysisOnly:true,interventionType:'SENSITIVITY',justification:'Automatically explored model target; achievable intervention and CAPEX classification have not been established.'})).filter(c=>c.before!==c.after);
+      const changes=fields.map(field=>({equipmentId:equipment.id,path:'noiseProfile.reliability.'+field,before:r[field],after:values[field],unit:'min',external:true,analysisOnly:true,interventionType:'SENSITIVITY',originTier:'ZERO',packageId:'RELIABILITY:'+equipment.id,justification:'Automatically explored downtime-reduction target; an achievable operational or maintenance action has not been established.'})).filter(c=>c.before!==c.after);
       if(!changes.length)continue;
+      const experiment=JSON.stringify(changes.map(c=>[c.equipmentId,c.path,c.after]));if(tested.has(experiment))continue;tested.add(experiment);
       const candidate=await evaluate(simulation,changes,equipment.name+' · '+mechanism+' · '+grade.mtbf+' / '+grade.mttr);
       const item={equipmentId:equipment.id,name:equipment.name,mechanism,grade,changes,candidate,...gainEvidence(candidate),
         stopDataCoverage:row.stopDataCoverage,targetScope:row.targetScope,
@@ -84,14 +92,15 @@ export async function searchReliabilityTargets(simulation,{measure,run,cancelled
   // non-additive. Later ordinary search/DOE refine flow around these targets.
   for(let count=2;count<=choices.length;count++){const changes=choices.slice(0,count).flatMap(c=>c.changes),candidate=await evaluate(simulation,changes,'Joint reliability targets · '+count+' machines');candidateSets.push({kind:'JOINT_TARGETS',changes,candidate,...gainEvidence(candidate)});}
   if(relevant.length>1)for(const grade of [grades[2],grades[3]]){
-    const changes=relevant.flatMap(row=>{const r=machines.find(e=>e.id===row.equipmentId).noiseProfile.reliability;return ['mtbfMinutes','mttrMinutes'].map(field=>({equipmentId:row.equipmentId,path:'noiseProfile.reliability.'+field,before:r[field],after:bounded(row.equipmentId,r,grade)[field],unit:'min',external:true,analysisOnly:true,interventionType:'SENSITIVITY',justification:'Joint exploratory model target; attainable intervention and investment classification remain unknown.'}));});
+    const changes=relevant.flatMap(row=>{const r=machines.find(e=>e.id===row.equipmentId).noiseProfile.reliability;return ['mtbfMinutes','mttrMinutes'].map(field=>({equipmentId:row.equipmentId,path:'noiseProfile.reliability.'+field,before:r[field],after:bounded(row.equipmentId,r,grade)[field],unit:'min',external:true,analysisOnly:true,interventionType:'SENSITIVITY',originTier:'ZERO',packageId:'RELIABILITY:'+row.equipmentId,justification:'Joint downtime-reduction target; an achievable operational or maintenance action has not been established.'}));});
     const candidate=await evaluate(simulation,changes,'Joint mechanism exploration · '+relevant.length+' machines · grade '+grade.mtbf);
     candidateSets.push({kind:'JOINT_MECHANISM_TARGETS',changes,candidate,...gainEvidence(candidate)});
   }
   const admissible=candidateSets.filter(c=>c.candidate.throughput>baseline.throughput+threshold&&c.candidate.oee>=baseline.oee-1e-9).sort((a,b)=>Number(!!a.candidate.warnings?.length)-Number(!!b.candidate.warnings?.length)||b.candidate.throughput-a.candidate.throughput);
-  return {status:admissible.length?(admissible[0].candidate.warnings?.length?'TARGETS_REQUIRE_ENGINEERING_REVIEW':'EXPLORATORY_TARGETS_FOUND'):'NO_TARGET_GAIN',analysisOnly:true,classification:'UNASSIGNED',scope,equipmentIds:selected.map(e=>e.id),equipmentLimits,maximumTargets:scope==='AUTO'?maximumTargets:selected.length,run,baseline,failureFree,
+  return {status:admissible.length?(admissible[0].candidate.warnings?.length?'TARGETS_REQUIRE_ENGINEERING_REVIEW':'EXPLORATORY_TARGETS_FOUND'):'NO_TARGET_GAIN',analysisOnly:true,classification:'ZERO',scope,equipmentIds:selected.map(e=>e.id),equipmentLimits,maximumTargets:scope==='AUTO'?maximumTargets:selected.length,run,baseline,failureFree,
     conditionalReliabilityGain:{throughput:failureFree.throughput-baseline.throughput,oeePp:failureFree.oee-baseline.oee,pairedEvidence:scenarioPairedSummary(baseline,failureFree),additive:false},
     coverage,ranking,targetTests,candidateSets,selectedChanges:admissible[0]?.changes||[],recoveryFraction,calculations,
+    searchPolicy:automaticBasic?'BASIC_JOINT_RELIABILITY_V1':'BOUNDED_RELIABILITY_MECHANISMS_V1',testedMechanisms:mechanisms,
     uncertainty:{method:'PAIRED_SEED_DIFFERENCES',multipleComparisonAdjusted:false,selectionIsExploratory:true,confirmationRequired:true},
-    interpretation:'Conditional failure-removal gains overlap and are not additive causal OEE shares. Aggregate MTBF/MTTR targets change all configured stop classes proportionally and leave the separate MICRO_STOP process unchanged; general inputs do not support minor/major attribution. Paired intervals describe replication uncertainty within the model, not plant uncertainty. Bounded model targets use the least parameter change recovering the configured fraction of the best isolated tested gain, then test joint packages. Screening is preliminary; full-horizon independent confirmation is required. Intervention feasibility and CAPEX classification remain unassigned; budget amounts are outside this analysis.'};
+    interpretation:'Conditional failure-removal gains overlap and are not additive causal OEE shares. Aggregate MTBF/MTTR targets change all configured stop classes proportionally and leave the separate MICRO_STOP process unchanged; general inputs do not support minor/major attribution. Paired intervals describe replication uncertainty within the model, not plant uncertainty. Bounded model targets use the least parameter change recovering the configured fraction of the best isolated tested gain, then test joint packages. Screening is preliminary; full-horizon independent confirmation is required. The intervention scope is operational or maintenance downtime reduction in Zero CAPEX. Achievable actions and feasibility require review; budget amounts are outside this analysis.'};
 }

@@ -1,5 +1,7 @@
 # Interactive scenario evaluation
 
+> Historical implementation and experiment notes. The current `MATCHED_CAPEX_V12` scopes, independent categories, Basic automatic DOE and fixed-sample confirmation are specified in [CAPEX scope and Basic search](CAPEX_SCOPE_AND_BASIC_SEARCH.md) and [background methodology](SCENARIO_BACKGROUND_METHODOLOGY.md). Earlier inclusion controls, High buffer classification and adaptive confirmation descriptions below do not describe the current workflow.
+
 The methodology and supported-variable matrix are documented in
 [28_WHAT_IF_METHODOLOGY.md](28_WHAT_IF_METHODOLOGY.md).
 

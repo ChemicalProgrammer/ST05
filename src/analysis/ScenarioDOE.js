@@ -28,7 +28,11 @@ export function createScenarioDOE(factors) {
   }
   return {type:'FULL_FACTORIAL_TWO_LEVEL',factors:JSON.parse(JSON.stringify(factors)),designPoints:Array.from({length:2**factors.length},(_,index)=>{
     const levels=factors.map((_,i)=>(index>>i)&1?1:-1);
-    return {index,levels,changes:factors.map((f,i)=>({equipmentId:f.equipmentId,path:f.path,before:f.before,after:levels[i]===1?f.high:f.low,unit:f.unit,...(f.external?{external:true,justification:f.justification,interventionType:f.interventionType,originTier:f.originTier,...(f.replacementMaximumBpm!==undefined?{replacementMaximumBpm:f.replacementMaximumBpm}:{})}:{})})).filter(c=>c.before!==c.after)};
+    return {index,levels,changes:factors.map((f,i)=>{
+      const metadata={};
+      for(const key of ['external','analysisOnly','justification','interventionType','originTier','replacementMaximumBpm','packageId','targetId','packagePaths'])if(f[key]!==undefined)metadata[key]=Array.isArray(f[key])?f[key].slice():f[key];
+      return {equipmentId:f.equipmentId,path:f.path,before:f.before,after:levels[i]===1?f.high:f.low,unit:f.unit,...metadata};
+    }).filter(c=>c.before!==c.after)};
   })};
 }
 function scenarioDOEOrderedObservations(design,observations) {

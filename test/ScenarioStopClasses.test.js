@@ -65,7 +65,7 @@ test('real replicated diagnosis keeps minor/major reliability events distinct fr
 test('major and general own-stop time cannot inflate flow-adjustment priority',async()=>{
   const sim=await simulatedEvidence();
   for(const id of ['upstream','reference'])setObserved(sim,id,{failureSeconds:0,minorFailureSeconds:0,majorFailureSeconds:0,generalFailureSeconds:0,microStopSeconds:0,starvedSeconds:0,blockedSeconds:0});
-  const candidate=()=>planScenarios(sim).candidates.find(item=>item.kind==='V_CURVE'&&item.equipmentId==='upstream');
+  const candidate=()=>planScenarios(sim).candidates.find(item=>item.kind==='SENSOR_DEBOUNCE'&&item.equipmentId==='belt');
   assert(candidate());const baselinePriority=candidate().priority;
   setObserved(sim,'upstream',{failureSeconds:90,generalFailureSeconds:90});
   assert.equal(candidate().priority,baselinePriority);
@@ -87,9 +87,9 @@ test('sensor adjustments retain the exact supplied minor and major failure profi
   assert.equal(candidate.evidence.classificationBasis,'INTERVENTION_SCOPE');assert.equal(candidate.evidence.budgetUsed,false);
 });
 
-test('recovery within the installed conveyor length does not create a High CAPEX sensor-only project',()=>{
+test('recovery within the installed conveyor length does not create a Medium CAPEX sensor-only project',()=>{
   const sim=engineeringFixture(),plan=planScenarios(sim);
-  for(const candidate of plan.candidates.filter(item=>item.kind==='BUFFER_RECOVERY'&&item.tier==='HIGH')){
+  for(const candidate of plan.candidates.filter(item=>item.kind==='BUFFER_RECOVERY'&&item.tier==='MEDIUM')){
     assert(candidate.changes.some(change=>change.path==='processData.geometry.lactMm'&&change.after>change.before));
   }
   const recovered=plan.checks.filter(item=>item.rule==='RECOVERY_WITHIN_INSTALLED_LENGTH');

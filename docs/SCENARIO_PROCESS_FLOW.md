@@ -1,5 +1,7 @@
 # Scenario process: current flow and review points
 
+> Historical implementation and experiment notes. The current `MATCHED_CAPEX_V12` scopes, independent categories, Basic automatic DOE and fixed-sample confirmation are specified in [CAPEX scope and Basic search](CAPEX_SCOPE_AND_BASIC_SEARCH.md) and [background methodology](SCENARIO_BACKGROUND_METHODOLOGY.md). Earlier inclusion controls, High buffer classification and adaptive confirmation descriptions below do not describe the current workflow.
+
 CAPEX category, optional lower categories, search depth and DOE are independent choices. Medium may include Zero; High may include Zero and Medium independently. The default is unchecked. Proposals are evaluated together against the original source, not added as percentages or efficiencies from separate category cards. A repeated equipment/parameter uses the current category target, then the highest included lower category; search never writes two conflicting targets to one parameter.
 
 ## Intervention definitions shared by code and Gemini

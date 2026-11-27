@@ -22,9 +22,9 @@ test('unsafe, stale and unrelated mutations cannot become scenario buttons',()=>
  for(const replacement of [{path:'__proto__.polluted'},{equipmentId:'other'},{after:-10},{after:Infinity},{before:123456}])assert.throws(()=>applyScenarioChanges(sim,[{...change,...replacement}]));
  const signature=scenarioSignature(sim);sim.dynamicConfig.seed++;assert.notEqual(scenarioSignature(sim),signature);
 });
-test('high CAPEX recovery uses recalculated geometry rather than a fixed length multiplier',()=>{
+test('Medium CAPEX recovery uses recalculated geometry rather than a fixed length multiplier',()=>{
  const sim=fixture(),e=sim.equipment[1];e.processData.geometry.lactMm=1000;e.processData.geometry.lpPrimeMm=200;e.processData.accumulation.backupSensorPositionMm=100;
- const plan=planScenarios(sim),p=plan.candidates.find(p=>p.kind==='BUFFER_RECOVERY'&&p.equipmentId===e.id);assert(p);assert(p.canApply,p.disabledReason);
+ const plan=planScenarios(sim),p=plan.candidates.find(p=>p.kind==='BUFFER_RECOVERY'&&p.equipmentId===e.id);assert(p);assert.equal(p.tier,'MEDIUM');assert(p.canApply,p.disabledReason);
  const copy=applyScenarioChanges(sim,p.changes),after=scenarioAudit(copy).find(a=>a.equipmentId===e.id).engineering;
  assert(after.calculated.recoveryLengthMm>0);assert(after.input.backupSensorPositionMm>=after.calculated.recommendedBackupSensorPositionMm);assert.equal(sim.equipment[1].processData.geometry.lactMm,1000);
 });

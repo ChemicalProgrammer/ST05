@@ -421,6 +421,18 @@ window.STReports=(function(){
     if(e.doe?.anova){var a=e.doe.anova;html+='<h3>ANOVA</h3><p>'+escape(a.interpretation||a.reason||'Incomplete analysis')+'</p>';if(a.complete){html+='<p>Primary evidence: paired contrasts across seed blocks, with Holm adjustment across all effects and both metrics. F is exploratory. Missing paired evidence and zero observed contrast variance do not establish significance.</p>';Object.entries(a.metrics||{}).forEach(([metric,m])=>{html+='<h4>'+escape(human(metric))+'</h4>'+table(['Factors','Effect','F (exploratory)','p (Holm)','Significant (Holm)'],(m.effects||[]).map(function(t){var adjusted=t.paired?.inferenceAvailable===true?t.paired.pAdjusted:null,valid=Number.isFinite(adjusted)&&adjusted>=0&&adjusted<=1,significant=valid&&Number.isFinite(a.alpha)&&a.alpha>0&&a.alpha<1?adjusted<a.alpha:null;return [(t.factors||[]).map(i=>i+1).join(' × '),value(t.effect),value(t.f),!valid?'—':adjusted<.0001?'<0.0001':value(adjusted),significant===null?'—':significant?'Yes':'No'];}));});}}
     return html;
   }
+  function scenarioDOEFactorsHtml(doe,simulation){
+    var factors=doe.factors||[],packages=factors.filter(f=>Array.isArray(f.packageChanges)&&f.packageChanges.length);
+    var html=table(['Factor','Low','High'],factors.map(function(f){
+      if(Array.isArray(f.packageChanges)&&f.packageChanges.length)return [f.label||f.packageId||'Intervention package','Original baseline','Complete intervention package'];
+      var i=STWhatIf.changeInfo(f,simulation.equipment);return [i.equipment+' · '+i.parameter,value(f.low)+' '+(f.unit||''),value(f.high)+' '+(f.unit||'')];
+    }));
+    if(packages.length){
+      html+='<p>Package factors switch all listed changes together. Their effects describe the complete intervention, not separate effects of its parameters.</p>';
+      html+=table(['Package','Equipment','Parameter','Baseline','Package target'],packages.flatMap(function(f){return f.packageChanges.map(function(c){var i=STWhatIf.changeInfo(c,simulation.equipment);return [f.label||f.packageId||'Intervention package',i.equipment,i.parameter,i.before,i.after];});}));
+    }
+    return html;
+  }
   function evaluationsHtml(simulation){
     var evaluations=window.STScenarioExplorer?.evaluations(simulation)||[];
     var html='<section><h2>Calculated hypothesis evaluations</h2><p>Saved case evaluations; matching source inputs only. Independent checks are simulation evidence, not plant validation.</p>';
@@ -436,7 +448,7 @@ window.STReports=(function(){
       if(e.independentCheck)html+='<p>Independent seed: '+escape(e.independentCheck.seed)+' · Rounds: '+escape(e.independentCheck.rounds)+' · Passed: '+escape(e.independentCheck.passed)+'</p>';
       html+=table(['Equipment','Parameter','Before','Evaluated target'],(e.evaluatedChanges||[]).map(function(c){var i=STWhatIf.changeInfo(c,simulation.equipment);return [i.equipment,i.parameter,i.before,i.after];}));
       html+=table(['Equipment','Parameter','Selected','Limit','Direction'],(e.selections||[]).map(function(c){var i=STWhatIf.changeInfo(c,simulation.equipment);return [i.equipment,i.parameter,c.selected,c.limit==null?'No limit':value(c.limit)+' '+(c.unit||''),c.limitDirection];}));
-      if(e.doe){html+='<h4>DOE · '+escape(e.doe.type)+'</h4>'+table(['Factor','Low','High'],(e.doe.factors||[]).map(function(f){var i=STWhatIf.changeInfo(f,simulation.equipment);return [i.equipment+' · '+i.parameter,value(f.low)+' '+f.unit,value(f.high)+' '+f.unit];}));html+=table(['Combination','Levels','Feasible','OEE (%)','Throughput'],(e.doe.observations||[]).map(o=>[o.index+1,JSON.stringify(o.levels),o.feasible,value(o.oee),value(o.throughput)]));html+='<p>'+escape(e.doe.analysis?.interpretation||e.doe.analysis?.reason||'Incomplete design')+'</p>';html+=table(['Effect (factor numbers)','Type','OEE contrast (pp)','Throughput contrast'],(e.doe.analysis?.effects||[]).map(x=>[x.factors.map(i=>i+1).join(' × '),x.type,value(x.oee),value(x.throughput)]));html+='<p>Rounds per combination: '+escape(e.doe.roundsPerCombination)+'</p>';html+=table(['Fixed equipment','Parameter','Target'],(e.doe.fixedChanges||[]).map(c=>{var i=STWhatIf.changeInfo(c,simulation.equipment);return [i.equipment,i.parameter,i.after];}));}
+      if(e.doe){html+='<h4>DOE · '+escape(e.doe.type)+'</h4>'+scenarioDOEFactorsHtml(e.doe,simulation);html+=table(['Combination','Levels','Feasible','OEE (%)','Throughput'],(e.doe.observations||[]).map(o=>[o.index+1,JSON.stringify(o.levels),o.feasible,value(o.oee),value(o.throughput)]));html+='<p>'+escape(e.doe.analysis?.interpretation||e.doe.analysis?.reason||'Incomplete design')+'</p>';html+=table(['Effect (factor numbers)','Type','OEE contrast (pp)','Throughput contrast'],(e.doe.analysis?.effects||[]).map(x=>[x.factors.map(i=>i+1).join(' × '),x.type,value(x.oee),value(x.throughput)]));html+='<p>Rounds per combination: '+escape(e.doe.roundsPerCombination)+'</p>';html+=table(['Fixed equipment','Parameter','Target'],(e.doe.fixedChanges||[]).map(c=>{var i=STWhatIf.changeInfo(c,simulation.equipment);return [i.equipment,i.parameter,i.after];}));}
       html+=searchContextHtml(e,simulation);
       if(e.warnings?.length)html+=table(['Equipment','Engineering check','Before','After'],e.warnings.map(w=>[w.equipmentId,w.rule,w.before,w.after]));
       html+='</section>';

@@ -1,5 +1,7 @@
 # CAPEX finalist selection and confirmation
 
+> Historical implementation and experiment notes. The current `MATCHED_CAPEX_V12` scopes, independent categories, Basic automatic DOE and fixed-sample confirmation are specified in [CAPEX scope and Basic search](CAPEX_SCOPE_AND_BASIC_SEARCH.md) and [background methodology](SCENARIO_BACKGROUND_METHODOLOGY.md). Earlier inclusion controls, High buffer classification and adaptive confirmation descriptions below do not describe the current workflow.
+
 Policy: `MATCHED_CAPEX_V9`. Applies to Low (internal tier ZERO), Medium and High CAPEX at every search depth.
 
 - Exploration uses short horizons and produces explicitly provisional card metrics.

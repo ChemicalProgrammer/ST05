@@ -400,3 +400,15 @@ test('reports use the selected language and preserve user-defined case names',()
   w.STLanguage.setLanguage('en');const en=w.STReports.resultsHtml(h.result,h.c,h.sim);assert.match(en,/lang="en"/);assert.match(en,/Loss diagnosis/);assert.match(en,/MTTR ends when repair finishes/);
  }finally{h.dom.window.close();}
 });
+
+
+test('package DOE reports retain the coupled physical changes instead of exposing synthetic parameter paths',()=>{
+ const h=setup();try{
+  const machine=h.sim.equipment.find(e=>e.type!=='CONVEYOR'),factor={equipmentId:machine.id,path:'scenarioPackage.REPLACEMENT:test',before:0,low:0,high:1,unit:'package',packageId:'REPLACEMENT:test',label:'Complete replacement <test>',packageChanges:[{equipmentId:machine.id,path:'noiseProfile.reliability.mtbfMinutes',before:10,after:20,unit:'min'},{equipmentId:machine.id,path:'noiseProfile.reliability.mttrMinutes',before:2,after:1,unit:'min'}]};
+  h.w.STScenarioExplorer={evaluations:()=>[{title:'Replacement DOE',tier:'HIGH',status:'IMPROVEMENT_REPRODUCED',doe:{type:'FULL_FACTORIAL_TWO_LEVEL',factors:[factor],fixedChanges:[],observations:[],roundsPerCombination:3}}]};
+  const plan=h.w.STScenarios.plan(h.sim),html=h.w.STReports.whatIfHtml(h.sim,plan);
+  assert.match(html,/Complete replacement &lt;test&gt;/);assert.match(html,/Complete intervention package/);assert.match(html,/10 min/);assert.match(html,/20 min/);assert.match(html,/2 min/);assert.match(html,/1 min/);
+  assert.doesNotMatch(html,/scenarioPackage\.REPLACEMENT|0 package|1 package/);
+  assert.equal(h.w.STReports.whatIfData(h.sim,plan).evaluations[0].doe.factors[0].packageChanges.length,2);
+ }finally{h.dom.window.close();}
+});

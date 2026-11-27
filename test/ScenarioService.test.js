@@ -83,7 +83,7 @@ test('scenario RPC errors identify the responding version without exposing input
 
 test('reviewed external interventions retain evidence and reject stale source signatures',()=>{
  const h=setup(),source=h.record().simulations[0],e=source.equipment[0],before=e.noiseProfile.reliability.mttrMinutes;
- const proposal={...h.request.proposal,tier:'MEDIUM',changes:[{equipmentId:e.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true,interventionType:'RETROFIT',justification:'Local retrofit with crew access and repair trial target'}]};
+ const proposal={...h.request.proposal,tier:'ZERO',changes:[{equipmentId:e.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true,interventionType:'MAINTENANCE',justification:'Maintenance with crew access and repair trial target'}]};
  assert.throws(()=>h.ctx.createScenario_({...h.request,origin:'REVIEWED',sourceSignature:'stale',proposal},{email:'owner@test'}),e=>e.code==='SCENARIO_STALE');
  const result=h.ctx.createScenario_({...h.request,origin:'REVIEWED',proposal},{email:'owner@test'});
  assert.equal(result.case.simulations[1].scenario.changes[0].external,true);assert.match(result.case.simulations[1].scenario.changes[0].justification,/crew/);assert.equal(result.case.simulations[0].equipment[0].noiseProfile.reliability.mttrMinutes,before);
@@ -109,7 +109,7 @@ test('reviewed validation drafts retain failed independent confirmation without 
 
 test('reviewed reliability targets require an intervention and its documented target',()=>{
  const h=setup(),source=h.record().simulations[0],e=source.equipment[0],before=e.noiseProfile.reliability.mttrMinutes;
- const proposal={...h.request.proposal,tier:'MEDIUM',changes:[{equipmentId:e.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true}]};
+ const proposal={...h.request.proposal,tier:'ZERO',changes:[{equipmentId:e.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true}]};
  assert.throws(()=>h.ctx.createScenario_({...h.request,origin:'REVIEWED',proposal},{email:'owner@test'}),error=>error.code==='INVALID_SCENARIO'&&error.details.includes('SCENARIO_EXTERNAL_EVIDENCE_REQUIRED'));
  assert.equal(h.writes(),0);assert.equal(h.record().simulations.length,1);
  assert.equal(h.record().simulations[0].equipment[0].noiseProfile.reliability.mttrMinutes,before);
@@ -149,4 +149,47 @@ test('Gemini rebinding preserves target bounds and requires provenance before ch
  assert.throws(()=>h.ctx.createScenario_({...h.request,proposal},{email:'owner@test'}),e=>e.code==='INVALID_SCENARIO');assert.equal(h.writes(),0);
  const unsigned={...proposal,changes:h.request.proposal.changes.map(c=>({...c,before:Number(c.before)+.0000001}))};delete unsigned.sourceSignature;
  assert.throws(()=>h.ctx.createScenario_({...h.request,proposal:unsigned},{email:'owner@test'}),e=>e.code==='SCENARIO_STALE');assert.equal(h.writes(),0);
+});
+
+
+test('server rejects legacy lower-category inclusions even when originTier and saved flags request them',()=>{
+ for(const tier of ['MEDIUM','HIGH']){
+  const h=setup(),proposal={...h.request.proposal,tier,categoryInclusions:{ZERO:true,MEDIUM:true},changes:h.request.proposal.changes.map(change=>({...change,originTier:'ZERO'}))};
+  assert.throws(()=>h.ctx.createScenario_({...h.request,origin:'REVIEWED',proposal},{email:'owner@test'}),error=>error.code==='INVALID_SCENARIO');
+  assert.equal(h.writes(),0);assert.equal(h.record().simulations.length,1);
+ }
+});
+
+test('server permits only Zero sensitivity and preserves its exploratory qualification',()=>{
+ for(const tier of ['ZERO','MEDIUM','HIGH']){
+  const h=setup(),source=h.record().simulations[0],machine=source.equipment.find(e=>e.type!=='CONVEYOR'),before=machine.noiseProfile.reliability.mttrMinutes;
+  const change={equipmentId:machine.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true,analysisOnly:true,interventionType:'SENSITIVITY',justification:'Bounded downtime sensitivity; no implementation evidence.'};
+  const proposal={...h.request.proposal,tier,analysisOnly:true,changes:[change]};
+  if(tier==='ZERO'){
+   const normalized=h.ctx.normalizeScenarioProposal_(proposal,source);assert.equal(normalized.analysisOnly,true);assert.equal(normalized.changes[0].analysisOnly,true);
+   assert.throws(()=>h.ctx.normalizeScenarioProposal_({...proposal,analysisOnly:false},source),error=>error.code==='INVALID_SCENARIO');
+  }else assert.throws(()=>h.ctx.normalizeScenarioProposal_(proposal,source),error=>error.code==='INVALID_SCENARIO');
+  assert.equal(h.writes(),0);
+ }
+});
+
+test('Medium accumulation normalization retains coupled intervention and package identity',()=>{
+ const h=setup(),source=h.record().simulations[0],conveyor=source.equipment.find(e=>e.type==='CONVEYOR'),before=conveyor.processData.geometry.lactMm,packageId='ACCUMULATION:'+conveyor.id;
+ const proposal={...h.request.proposal,tier:'MEDIUM',changes:[{equipmentId:conveyor.id,path:'processData.geometry.lactMm',before,after:before+1000,interventionType:'ACCUMULATION',originTier:'MEDIUM',packageId,targetId:packageId,packagePaths:['processData.geometry.lactMm'],justification:'Additional accumulation on the existing conveyor.'}]};
+ const normalized=h.ctx.normalizeScenarioProposal_(proposal,source);
+ assert.equal(normalized.changes[0].interventionType,'ACCUMULATION');assert.equal(normalized.changes[0].packageId,packageId);assert.equal(normalized.changes[0].targetId,packageId);assert.deepEqual(Array.from(normalized.changes[0].packagePaths),['processData.geometry.lactMm']);
+ assert.equal(normalized.changes[0].external,undefined);
+});
+
+
+test('saved Zero downtime sensitivity retains its category without claiming implementation or plant validation',()=>{
+ const h=setup(),source=h.record().simulations[0],machine=source.equipment.find(e=>e.type!=='CONVEYOR'),before=machine.noiseProfile.reliability.mttrMinutes;
+ const change={equipmentId:machine.id,path:'noiseProfile.reliability.mttrMinutes',before,after:before*.8,external:true,analysisOnly:true,interventionType:'SENSITIVITY',justification:'Bounded downtime sensitivity; maintenance feasibility remains unverified.'};
+ const proposal={...h.request.proposal,tier:'ZERO',analysisOnly:true,changes:[change]};
+ const saved=h.ctx.createScenario_({...h.request,origin:'REVIEWED',proposal},{email:'owner@test'}).case.simulations[1];
+ assert.equal(saved.scenario.capex,'ZERO');assert.equal(saved.scenario.classification,'INTERVENTION_SCOPE');
+ assert.equal(saved.scenario.analysisOnly,true);assert.equal(saved.scenario.plantValidated,false);
+ assert.equal(saved.scenario.validation,'EXPLORATORY_TARGETS_REQUIRE_FEASIBILITY_REVIEW');
+ assert.equal(saved.scenario.changes[0].analysisOnly,true);assert.equal(saved.scenario.study.feasibility.verified,false);
+ assert.equal(source.equipment.find(e=>e.id===machine.id).noiseProfile.reliability.mttrMinutes,before);
 });

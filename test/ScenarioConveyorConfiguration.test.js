@@ -34,8 +34,8 @@ function browser({doe=false,depth='MEDIUM',lang='en'}={}){
     {equipmentId:'belt',path:'processData.accumulation.backupSensorPositionMm',before:300,after:250,unit:'mm'}
   ];
   const host=w.document.querySelector('article');
-  w.STScenarioExplorer.attach(host,{kind:'CUSTOM',tier:'MEDIUM',searchScope:'MEDIUM',explore:true,catalog:true,searchDerivedDOE:true,
-    changes:[machine],categoryChanges:{MEDIUM:[machine],ZERO:conveyors}},()=>{},sim);
+  w.STScenarioExplorer.attach(host,{kind:'CUSTOM',tier:'ZERO',searchScope:'ZERO',explore:true,catalog:true,searchDerivedDOE:true,
+    changes:conveyors,categoryChanges:{MEDIUM:[machine],ZERO:conveyors}},()=>{},sim);
   host.querySelector('.scenario-configure').click();
   const dialog=host.querySelector('.scenario-config-dialog'),pages=[...dialog.querySelectorAll('[role="tabpanel"]')],tabs=[...dialog.querySelectorAll('[role="tab"]')];
   return {w,sim,record,host,dialog,pages,tabs,table:dialog.querySelector('.scenario-conveyor-parameters'),close:()=>w.close()};
@@ -133,42 +133,24 @@ test('conveyor selections and level values survive depth changes without replaci
   }finally{h.close();}
 });
 
-test('DOE tools follow the active conveyor scope and keep the same live nodes in Search',()=>{
+test('independent conveyor scope keeps one live set of DOE controls and offers no category inclusion',()=>{
   const h=browser({doe:true});
   try{
     const toggle=h.dialog.querySelector('.scenario-doe-enabled'),content=h.dialog.querySelector('.scenario-config-doe-content');
-    const suggest=h.dialog.querySelector('.scenario-doe-suggest'),count=h.dialog.querySelector('.scenario-factor-count'),percent=h.dialog.querySelector('.scenario-suggestion-percent');
-    const scope=h.dialog.querySelector('.scenario-include-category[data-tier="ZERO"]'),table=h.table;
-    assert.equal(scope.checked,true);
-    function assertTools(page){
-      for(const [selector,node] of [['.scenario-doe-enabled',toggle],['.scenario-config-doe-content',content],['.scenario-doe-suggest',suggest],['.scenario-factor-count',count],['.scenario-suggestion-percent',percent]]){
-        assert.equal(page.querySelector(selector),node);
-        assert.equal(h.dialog.querySelectorAll(selector).length,1,'Moving a control must not clone it.');
-      }
-      assert.equal(toggle.closest('.st-subsection-header').parentElement,content.closest('.scenario-config-group'));
-      assert.equal(suggest.nextElementSibling,count);
-      assert.equal(count.nextElementSibling,percent);
+    const suggest=h.dialog.querySelector('.scenario-doe-suggest'),count=h.dialog.querySelector('.scenario-factor-count'),percent=h.dialog.querySelector('.scenario-suggestion-percent'),table=h.table;
+    assert.equal(h.dialog.querySelector('.scenario-include-category'),null);
+    for(const [selector,node] of [['.scenario-doe-enabled',toggle],['.scenario-config-doe-content',content],['.scenario-doe-suggest',suggest],['.scenario-factor-count',count],['.scenario-suggestion-percent',percent]]){
+      assert.equal(h.pages[2].querySelector(selector),node);assert.equal(h.dialog.querySelectorAll(selector).length,1);
     }
-    assertTools(h.pages[2]);
-    h.tabs[0].click();scope.click();
-    assert.equal(h.tabs[2].hidden,true,'A scope without conveyor variables does not retain an empty tab.');
-    assert.equal(h.pages[0].hidden,false);
-    assertTools(h.pages[0]);
-    assert.equal(content.closest('[hidden]'),null,'DOE remains reachable for the machine-only scope.');
-    toggle.click();
-    assert.equal(h.record.metadata.includeDOE,false,'The moved toggle retains its original change handler.');
-    assert.equal(suggest.disabled,true);
-    toggle.click();
-    assert.equal(h.record.metadata.includeDOE,true);
-    assert.equal(suggest.disabled,false);
-    scope.click();
-    assert.equal(h.tabs[2].hidden,false);
-    assertTools(h.pages[2]);
-    assert.equal(h.dialog.querySelector('.scenario-conveyor-parameters'),table);
+    assert.equal(toggle.closest('.st-subsection-header').parentElement,content.closest('.scenario-config-group'));
+    assert.equal(suggest.nextElementSibling,count);assert.equal(count.nextElementSibling,percent);
+    for(const tab of [h.tabs[0],h.tabs[2]]){tab.click();assert.equal(h.dialog.querySelector('.scenario-conveyor-parameters'),table);}
+    toggle.click();assert.equal(h.record.metadata.includeDOE,false);assert.equal(suggest.disabled,true);
+    toggle.click();assert.equal(h.record.metadata.includeDOE,true);assert.equal(suggest.disabled,false);
     assertCompleteTable(h);
     const factor=conveyorRow(h).querySelector('.scenario-doe-select');factor.click();
-    assert.equal(factor.checked,true);
-    assert.match(count.textContent,/1 \/ \d+ factors selected/,'The moved status still reflects the live factor selection.');
+    assert.equal(factor.checked,true);assert.match(count.textContent,/1 \/ \d+ factors selected/);
+    assert.equal(h.dialog.querySelector('.scenario-include-category'),null,'DOE changes never reintroduce legacy category mixing.');
   }finally{h.close();}
 });
 
@@ -181,12 +163,12 @@ test('Spanish conveyor DOE levels use Bajo/Alto while search depth and guidance 
     assert.deepEqual(headings.map(cell=>cell.textContent.trim()),['DOE','Bajo','Alto']);
     assert.equal(depth.querySelector('option[value="HIGH"]').textContent,'Alta');
     assert.equal(depth.querySelector('option[value="LIGHT"]').textContent,'Ligera');
-    assert.match(count.textContent,/0 \/ \d+ factores seleccionados · 3 variables elegibles/);
+    assert.match(count.textContent,/0 \/ \d+ factores seleccionados · 2 variables elegibles/);
     assert.equal(note.hidden,true);
     assert(headings.every(cell=>cell.hidden),'Inactive DOE columns are hidden.');
     h.dialog.querySelector('.scenario-doe-enabled').click();
     conveyorRow(h).querySelector('.scenario-doe-select').click();
-    assert.match(count.textContent,/1 \/ \d+ factores seleccionados · 3 variables elegibles/);
+    assert.match(count.textContent,/1 \/ \d+ factores seleccionados · 2 variables elegibles/);
     change(h,depth,'HIGH');
     assert.equal(depth.selectedOptions[0].textContent,'Alta');
     assert.deepEqual(headings.map(cell=>cell.textContent.trim()),['DOE','Bajo','Alto']);

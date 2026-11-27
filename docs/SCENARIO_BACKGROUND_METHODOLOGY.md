@@ -2,7 +2,7 @@
 
 ## Propósito y alcance
 
-La política `MATCHED_CAPEX_V11` incorpora una cadena de evidencia para los escenarios existentes: resultado numérico completo, diagnóstico compatible, hipótesis de intervención, experimentos, selección escalonada, confirmación independiente y revisión pendiente en planta. La lógica trabaja detrás de las tarjetas y los controles actuales. No cambia la organización de la interfaz. En esta etapa, los presupuestos, montos de inversión y cálculos financieros quedan fuera del estudio normal; CAPEX clasifica el tipo de intervención.
+La política `MATCHED_CAPEX_V12` incorpora una cadena de evidencia para los escenarios existentes: resultado numérico completo, diagnóstico compatible, hipótesis de intervención, experimentos, selección escalonada, confirmación independiente y revisión pendiente en planta. La lógica trabaja detrás de las tarjetas actuales. Se eliminan las inclusiones de otras categorías y la búsqueda combinada. [Alcance CAPEX y búsqueda Basic](CAPEX_SCOPE_AND_BASIC_SEARCH.md) resume la política vigente. En esta etapa, los presupuestos, montos de inversión y cálculos financieros quedan fuera del estudio normal; CAPEX clasifica el tipo de intervención.
 
 El resultado es un estudio trazable del paquete de cambios evaluado. Una mejora reproducida en el modelo no demuestra por sí misma la causa física de una falla, la posibilidad de alcanzar un MTBF propuesto, la conveniencia de comprar una máquina o el resultado futuro en planta.
 
@@ -26,12 +26,12 @@ Las implementaciones de referencia son:
 |---|---|---|
 | Requisito de entrada | Corrida numérica al 100%, con las réplicas solicitadas, semillas únicas, duración y firma actuales | Habilita búsqueda y creación; resultados incompletos, históricos o desactualizados se rechazan. |
 | Diagnóstico | Resultados completos compatibles con el equipo, configuración, motor y procedencia actuales | Tiempos, frecuencias registradas, rankings y oportunidades; las causas permanecen como hipótesis. |
-| Intervención | Cambios seleccionados, límites y fuentes reportadas | Diferencia entre ajuste operativo, mantenimiento, retrofit, reemplazo y sensibilidad exploratoria. |
+| Intervención | Cambios seleccionados, límites y fuentes reportadas | Diferencia entre ajuste operativo, mantenimiento, acumulación, reemplazo y sensibilidad exploratoria. |
 | Exploración y DOE | Factores acotados, cambios fijos y réplicas con semillas pareadas | Comparaciones dentro del dominio ensayado; identifica efectos e interacciones. |
 | Selección escalonada | Finalistas de exploración comparados a 30 minutos, si el programa temporal permite el filtro | Reduce los finalistas enviados al horizonte completo; no certifica una mejora. |
 | Plan de confirmación | Diferencias entre réplicas del piloto de selección de finalistas | Número de réplicas fijado antes de observar la confirmación, con objetivo de precisión y tope. |
 | Confirmación independiente | Base y candidato con iguales condiciones y semillas nuevas respecto del piloto | Evidencia de mejora práctica dentro del modelo, con precisión observada y protección frente a regresión media de OEE. |
-| Clasificación CAPEX | Tipo de intervención y alcance físico | Cero: recursos existentes/mantenimiento; medio: retrofit; alto: reemplazo o rediseño mayor. No utiliza presupuesto. |
+| Clasificación CAPEX | Tipo de intervención y alcance físico | Cero: sensores, velocidades de conveyors y reducción de downtime; medio: acumulaciones en hasta tres ubicaciones; alto: reemplazo completo de equipos. No utiliza presupuesto. |
 | Validación en planta | Fuentes de ingeniería, cotizaciones, pruebas piloto y seguimiento | Se conserva lo reportado; el programa no certifica automáticamente esos documentos ni resultados. |
 
 El estudio permite conservar una etapa como `NOT_EVALUATED` sin sustituir información faltante por cero, certeza o supuestos de factibilidad.
@@ -84,13 +84,14 @@ El estudio relaciona los cambios de cada equipo con sus observaciones de pérdid
 |---|---|---|---|
 | `OPERATIONAL` | `ZERO` | `NONE` | Recursos existentes o prácticas de operación. |
 | `MAINTENANCE` | `ZERO` | `OPEX` | Actividades de mantenimiento sin nueva inversión de capital. |
-| `RETROFIT` | `MEDIUM` | `CAPEX` | Rehabilitación o modificación localizada. |
+| `ACCUMULATION` | `MEDIUM` | `CAPEX` | Ampliar o añadir capacidad de acumulación en hasta tres conveyors, alrededor de máquinas críticas. |
 | `REPLACEMENT` | `HIGH` | `CAPEX` | Reemplazo completo del equipo, cualquiera que sea su costo. |
-| `SENSITIVITY` o cambio `analysisOnly` | `UNASSIGNED` | `UNASSIGNED` | Objetivo exploratorio del modelo; falta establecer la intervención realizable. |
+| `SENSITIVITY` de downtime | `ZERO` | `UNASSIGNED` | Alcance operativo de exploración; faltan la acción realizable y su evidencia. |
+| `REPLACEMENT` con `analysisOnly` | `HIGH` | `CAPEX` | Paquete de sustitución completo con niveles hipotéticos; no demuestra disponibilidad ni factibilidad. |
 
-Los alcances de las categorías de escenario siguen siendo `ZERO`, `MEDIUM` y `HIGH`. No se clasifican por un porcentaje obligatorio de mejora o por una cantidad monetaria inventada. Una sustitución puede aportar una mejora pequeña; esa mejora no establece que la sustitución sea rentable.
+Los alcances independientes son `ZERO`, `MEDIUM` y `HIGH`; cada uno compara contra la misma base original. Ninguno incorpora el ganador o los ajustes de otra categoría. Los antiguos campos de inclusión no habilitan mezclas y los resultados previos requieren reevaluación. No se clasifican por un porcentaje obligatorio de mejora o por una cantidad monetaria inventada. Una sustitución puede aportar una mejora pequeña; esa mejora no establece que la sustitución sea rentable.
 
-Si falta una intervención documentada, el estudio conserva clasificaciones como `INTERVENTION_UNSPECIFIED` u `OPERATING_PARAMETER_ADJUSTMENT`; la ampliación geométrica se registra como `LINE_REDESIGN`. Una descripción o cotización reportada no cambia `rootCauseVerified` ni `targetAchievabilityVerified` a verdadero. Los objetivos exploratorios conservan su condición aun cuando exista una descripción de reemplazo.
+Si falta una intervención documentada, el estudio conserva clasificaciones como `INTERVENTION_UNSPECIFIED` u `OPERATING_PARAMETER_ADJUSTMENT`; la ampliación de capacidad de buffer se registra como `ACCUMULATION` en `MEDIUM`. Los reemplazos automáticos completos conservan `REPLACEMENT`, su identidad de paquete y la condición `analysisOnly`; sus niveles son hipótesis del modelo, no especificaciones garantizadas de proveedor. Una descripción o cotización reportada no cambia `rootCauseVerified` ni `targetAchievabilityVerified` a verdadero. Los objetivos exploratorios conservan su condición aun cuando exista una descripción de reemplazo.
 
 ## 4. DOE factorial, semillas pareadas y multiplicidad
 
@@ -112,13 +113,13 @@ Si la variación observada del contraste es cero, se conserva el efecto descript
 
 Los efectos se interpretan **condicionados a `doe.fixedChanges`, a la base y al rango de factores ensayado**. Por ejemplo, una mejora de sensor ensayada junto con una hipótesis fija de MTBF no demuestra el mismo efecto sin esa mejora de confiabilidad. Tampoco demuestra un óptimo global.
 
-Los controles existentes conservan su alcance: `metadata.includeDOE` habilita DOE en el caso; profundidad, selección de variables, casilla DOE, límites bajo/alto y límite factible se guardan en la configuración del escenario. `LIGHT` omite DOE, `MEDIUM` admite hasta tres factores y `HIGH` hasta cuatro, también en la selección automática. Se evalúan las `2^k` combinaciones con tres réplicas pareadas por combinación. El ANOVA se calcula sobre esas mismas observaciones en `MEDIUM` y `HIGH`, sin añadir corridas.
+En Standard y Advance, `metadata.includeDOE` habilita DOE en el caso; profundidad, selección de variables, casilla DOE, límites bajo/alto y límite factible se guardan en la configuración del escenario. `LIGHT` omite DOE, `MEDIUM` admite hasta tres factores y `HIGH` hasta cuatro, también en la selección automática. Se evalúan las `2^k` combinaciones con tres réplicas pareadas por combinación. El ANOVA se calcula sobre esas mismas observaciones en las profundidades `MEDIUM` y `HIGH`, sin añadir corridas. En Basic, el algoritmo selecciona por sí mismo variables, niveles y hasta tres factores (ocho combinaciones); ignora la selección manual y los controles ocultos del modo anterior. La búsqueda Basic tiene un presupuesto acotado y conserva la confirmación independiente al horizonte completo.
 
 `methodology.replications.confidenceLevel` se utiliza ahora en el screening, DOE/ANOVA y confirmación, con 0.95 por defecto. Las APIs aceptan `options.confidenceLevel`, `options.alpha` o el alias `options.confidence`; parámetros contradictorios se rechazan y `alpha = 1 - confidenceLevel`. No se añade un formulario nuevo. La ampliación exploratoria de tres a seis semillas sigue siendo selección preliminar; no se confunde con la confirmación independiente de tamaño fijado por anticipado.
 
 ## 5. Horizontes comparables y plan fijo de confirmación
 
-La exploración utiliza los perfiles existentes:
+Standard y Advance utilizan los perfiles siguientes; Basic usa su perfil automático acotado:
 
 | Perfil | Horizonte de exploración | Factores máximos del perfil |
 |---|---:|---:|
@@ -207,11 +208,11 @@ simulation.whatIf.methodology = {
     // absolutePrecision: 0.5          // Si existe, prevalece sobre relativePrecision.
   },
   interventions: [{
-    id: "retrofit-filler-01",
+    id: "replacement-filler-01",
     equipmentId: "filler",
     paths: ["noiseProfile.reliability.mtbfMinutes"],
-    type: "RETROFIT",
-    description: "Intervención propuesta sobre el componente identificado",
+    type: "REPLACEMENT",
+    description: "Reemplazo completo propuesto del equipo identificado",
     targetSource: "Fuente técnica reportada",
     sourceReference: "Identificador del documento de soporte",
     feasibility: { description: "Revisión de ingeniería reportada" },
@@ -236,9 +237,9 @@ La función separada `evaluateScenarioEconomics(simulation, evaluation, config?)
 
 ## 9. Guardado y trazabilidad
 
-Una evaluación conserva `searchPolicyVersion: "MATCHED_CAPEX_V11"`, `sourceSimulationId`, `sourceSignature`, metadatos técnicos canónicos y `methodologySignature`. Al guardarse, incluye su `study`; `lastResult` conserva el estudio del resultado anterior cuando se necesita mostrarlo junto a una configuración posterior todavía no evaluada.
+Una evaluación conserva `searchPolicyVersion: "MATCHED_CAPEX_V12"`, `sourceSimulationId`, `sourceSignature`, metadatos técnicos canónicos y `methodologySignature`. Al guardarse, incluye su `study`; `lastResult` conserva el estudio del resultado anterior cuando se necesita mostrarlo junto a una configuración posterior todavía no evaluada.
 
-Al crear un clon, el servidor busca una evaluación guardada del paquete exacto, la misma fuente, la política actual y los mismos metadatos. La fuente debe seguir teniendo una corrida numérica completa y vigente. No acepta un estudio redactado por el cliente o por un agente como evidencia autoritativa. Recalcula la confirmación usando las réplicas conservadas y reconstruye el estudio. Sin evaluación actual coincidente, conserva el escenario como propuesta pendiente de evaluación.
+Al crear un clon, el servidor busca una evaluación guardada del paquete exacto, la misma fuente, la política actual, la misma categoría (`searchScope`) y los mismos metadatos de intervención, incluido `packageId`/`targetId`. Un `originTier` distinto de la categoría se rechaza. La fuente debe seguir teniendo una corrida numérica completa y vigente. No acepta un estudio redactado por el cliente o por un agente como evidencia autoritativa. Recalcula la confirmación usando las réplicas conservadas y reconstruye el estudio. Sin evaluación actual coincidente, conserva el escenario como propuesta pendiente de evaluación.
 
 El clon guarda la instantánea en `scenario.study`. Sus resultados de simulación se reinician y su `whatIf` no hereda el historial de búsqueda de la fuente. El estudio conserva el contexto de la decisión aunque luego se sustituya o elimine la evaluación fuente; no convierte la corrida de la base en una nueva corrida del clon.
 

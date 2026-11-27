@@ -374,7 +374,7 @@
           throw new Error(__ST_TEXT__('scenario.stale'));
         }
         // Validate the current draft on Apps Script without saving or rereading Drive.
-        var sourceSignature=STScenarios.signature(source),payload={caseId:caseId,simulationId:simulationId,expectedRevision:state.activeCase.revision,sourceSignature:sourceSignature,origin:origin,proposal:Object.assign({},proposal,{title:proposal.title||STScenarioText[proposal.titleKey]}),caseSnapshot:STCaseContext.snapshot(Object.assign({},state.activeCase,{activeSimulationId:simulationId}))};
+        var sourceSignature=STScenarios.signature(source),payload={caseId:caseId,simulationId:simulationId,expectedRevision:state.activeCase.revision,sourceSignature:sourceSignature,origin:origin,proposal:Object.assign({},proposal,{title:proposal.title||STScenarioText[proposal.titleKey]}),caseSnapshot:await packCasePayload(STCaseContext.snapshot(Object.assign({},state.activeCase,{activeSimulationId:simulationId})))};
         document.getElementById('application').inert=true;
         await new Promise(function(resolve,reject){callServer('prepareScenarioDraft',[payload],function(response){
           if(!response.ok){reject(Object.assign(new Error(response.error.message+(response.error.details?.length?' '+response.error.details.join('; '):'')),{code:response.error.code}));return;}

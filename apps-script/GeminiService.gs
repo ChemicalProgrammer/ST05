@@ -138,8 +138,8 @@ function normalizeGeminiSettings_(request) {
 
 // Explicit browser-provided data. It is never treated as proof of cloud ownership.
 function browserCaseSnapshot_(request,user) {
-  var value=request.caseSnapshot;
-  if(!value||typeof value!=='object'||Array.isArray(value)||value.id!==request.caseId||value.ownerEmail!==user.email||!Array.isArray(value.simulations)||JSON.stringify(value).length>3*1024*1024)throw createSimulatorError_('INVALID_LOCAL_CONTEXT','The browser case snapshot is invalid or exceeds 3 MB.');
+  var value=decodeCasePayload_(request.caseSnapshot,user);
+  if(!value||typeof value!=='object'||Array.isArray(value)||value.id!==request.caseId||value.ownerEmail!==user.email||!Array.isArray(value.simulations))throw createSimulatorError_('INVALID_LOCAL_CONTEXT','The browser case snapshot is invalid.');
   var copy=JSON.parse(JSON.stringify(value)),source=copy.simulations.find(function(s){return s.id===request.simulationId;});
   if(!source||!Array.isArray(source.equipment)||source.equipment.length>1000)throw createSimulatorError_('INVALID_LOCAL_CONTEXT','Select a valid local simulation.');
   if(typeof normalizeEquipmentList_==='function')normalizeEquipmentList_(source.equipment); // Validate without altering the browser signature.

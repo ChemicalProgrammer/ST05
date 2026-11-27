@@ -6,8 +6,45 @@ window.STCaseContext=(function(){
     data.simulations=data.simulations.filter(s=>s.id===selected).concat(data.simulations.filter(s=>s.id!==selected).slice(0,30).map(s=>({id:s.id,name:s.name,equipmentCount:s.equipment?.length||s.equipmentCount||0,results:s.results?.summary?{seed:s.results.seed,summary:s.results.summary}:null})));
     data.totalSimulationCount=record.simulations.length;
     var simulation=record.simulations.find(s=>s.id===selected);if(simulation?.results?.summary&&window.STReports?.lossBreakdown)data.contextLossBreakdown=STReports.lossBreakdown(simulation.results,simulation);
-    if(JSON.stringify(data).length>3*1024*1024)throw Error('The selected context is too large. Reduce retained scenario evidence before sending.');return data;
+    return data;
   }
   return {snapshot:snapshot};
+})();
+// Size limits apply to transport, not to the sum of all saved simulations.
+// Compress large JSON losslessly; stage only oversized encoded messages in
+// short-lived, user-scoped server cache. Small requests keep their old shape.
+window.STCaseTransport=(function(){
+  const MAX_BYTES=32*1024*1024,DIRECT_BYTES=2*1024*1024,PART=64*1024,BATCH=8;
+  function base64(bytes){
+    let result='';for(let offset=0;offset<bytes.length;offset+=32768)result+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
+    return btoa(result);
+  }
+  async function pack(value,request){
+    const blob=new Blob([JSON.stringify(value)],{type:'application/json'});
+    if(blob.size>MAX_BYTES)throw Object.assign(Error('The case exceeds the 32 MB transfer limit. Export your complete case; the draft has not been discarded.'),{code:'CASE_TRANSFER_SIZE'});
+    if(blob.size<=DIRECT_BYTES)return value;
+    let bytes,format='json-base64';
+    if(typeof CompressionStream==='function'){
+      try{bytes=new Uint8Array(await new Response(blob.stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());format='gzip-base64';}catch(_){}
+    }
+    if(!bytes)bytes=new Uint8Array(await blob.arrayBuffer());
+    const encoded=base64(bytes),envelope={__stCaseTransfer:1,format,bytes:blob.size};
+    if(encoded.length<=DIRECT_BYTES)return {...envelope,data:encoded};
+    // Random tokens are never shared across accounts or reused across requests.
+    const token=Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
+    const count=Math.ceil(encoded.length/PART);
+    try{
+      for(let start=0;start<count;start+=BATCH){
+        const parts=Array.from({length:Math.min(BATCH,count-start)},(_,i)=>encoded.slice((start+i)*PART,(start+i+1)*PART));
+        await request('stageCaseTransfer',[{token,count,start,format,bytes:blob.size,parts}]);
+      }
+      return {...envelope,token,count};
+    }catch(error){
+      // Best effort; the cache also expires automatically.
+      try{await request('discardCaseTransfer',[token,count]);}catch(_){}
+      throw error;
+    }
+  }
+  return {pack,MAX_BYTES};
 })();
 </script>

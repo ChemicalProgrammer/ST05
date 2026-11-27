@@ -301,14 +301,15 @@ function persistCaseRecord_(record,owned) {
       var json=JSON.stringify(simulation),digest=simulationContentDigest_(json),old=previousById.get(simulation.id);
       var oldFile=old&&old.fileName?storedFile(old.fileName):null;
       if(oldFile&&old.digest&&digest&&old.digest===digest){refs.push({id:old.id,fileName:old.fileName,digest:digest});return;}
-      if(oldFile){
+      var large=json.length>Math.floor(8*1024*1024/3)&&Utilities.newBlob(json).getBytes().length>8*1024*1024;
+      if(oldFile&&!large){
         var original=oldFile.getBlob().getDataAsString();
         if(original!==json){updated.push({file:oldFile,content:original});oldFile.setContent(json);}
         refs.push({id:simulation.id,fileName:old.fileName,digest:digest});return;
       }
       var name;
       do{name=Utilities.getUuid().replace(/-/g,'').slice(0,12)+'-simulation-'+String(index+1).padStart(2,'0')+'.json';}while(usedNames.has(name));
-      usedNames.add(name);staged.push(folder.createFile(name,json,MimeType.PLAIN_TEXT));refs.push({id:simulation.id,fileName:name,digest:digest});
+      usedNames.add(name);staged.push(large?folder.createFile(Utilities.newBlob(json,MimeType.PLAIN_TEXT,name)):folder.createFile(name,json,MimeType.PLAIN_TEXT));refs.push({id:simulation.id,fileName:name,digest:digest});
     });
     var unchanged=manifest&&owned&&owned.folder&&caseStorageComparable_(record,refs)===caseStorageComparable_(owned.caseData,previous);
     if(unchanged){record.revision=owned.caseData.revision;record.updatedAt=owned.caseData.updatedAt;owned.unchanged=true;}

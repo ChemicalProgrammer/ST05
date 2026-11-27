@@ -1,4 +1,15 @@
-    window.ST_CASE_SAVE_LIMITS={maxBytes:3*1024*1024};
+    window.ST_CASE_SAVE_LIMITS={maxBytes:32*1024*1024};
+    function caseTransferRequest(name,args){
+      var epoch=state.requestEpoch;
+      return new Promise(function(resolve,reject){
+        callServer(name,args,function(response){if(response?.ok)resolve(response.data);else reject(Object.assign(Error(response?.error?.message||'Case transfer failed.'),{code:response?.error?.code||'CASE_TRANSFER_FAILED'}));},function(){if(epoch!==state.requestEpoch)reject(Error('Case transfer cancelled.'));});
+      });
+    }
+    function packCasePayload(payload){return window.STCaseTransport.pack(payload,caseTransferRequest);}
+    function sendCaseSave(payload,done){
+      var epoch=state.requestEpoch;
+      packCasePayload(payload).then(function(wire){if(epoch===state.requestEpoch)callServer('saveCase',[wire],done);}).catch(function(error){if(epoch===state.requestEpoch)done({ok:false,error:{code:error.code||'CASE_TRANSFER_FAILED',message:error.message}});});
+    }
     var localCalculations=0;
     function activity(){
       var running=Boolean(state.run?.playing||roundSession&&(roundSession.pending||roundSession.firstUpdating||roundSession.dirty)||window.STSimulation2D?.isRunning?.());
@@ -7,7 +18,7 @@
     window.addEventListener('st-dialog-activity',activity);
     window.addEventListener('st-calculation-activity',function(event){localCalculations=Math.max(0,localCalculations+(event.detail.active?1:-1));activity();});
     var whatIfOnlySave=false;
-    var autosave = STAutosave({enabled:false,capture:captureForSave,send:function(payload,done){callServer('saveCase',[payload],done);},accept:function(saved,payload){
+    var autosave = STAutosave({enabled:false,capture:captureForSave,send:sendCaseSave,accept:function(saved,payload){
       if (!state.activeCase || state.activeCase.id !== saved.id) return;
       state.activeCase.revision=saved.revision;state.activeCase.updatedAt=saved.updatedAt;if(typeof saved.archived==='boolean')state.activeCase.archived=saved.archived;
       // Only acknowledge the captured color pair; a newer UI draft may exist.
@@ -52,7 +63,7 @@
       }return Promise.resolve();}
     function flushCase(force){return prepareCaseDraft().then(function(){return force===true||automaticSaving()?autosave.flush():undefined;});}
     // Gemini uses the current draft, independently of local/cloud save latency.
-    function flushForServer(){return prepareCaseDraft().then(function(){return window.STCaseContext.snapshot(Object.assign({},state.activeCase,{activeSimulationId:state.activeSimulationId}));});}
+    function flushForServer(){return prepareCaseDraft().then(function(){return packCasePayload(window.STCaseContext.snapshot(Object.assign({},state.activeCase,{activeSimulationId:state.activeSimulationId})));});}
     async function leaveCase(){
       window.STSimulation2D?.pause();
       if(window.STMinimalMode?.busy())return false;
@@ -526,7 +537,7 @@ async function openCase(caseId, initialView) {
           var history=sim.results?.view?.speedHistory;
           if(history?.rows?.length>2){history.rows=retainedReplaySamples(history.rows,Math.max(2,Math.floor(history.rows.length/2)));history.sampled=true;changed=true;}
         });
-        if(!changed)throw Object.assign(new Error('The case exceeds the save size budget even after compacting replay. Export the full results and remove unneeded simulations before saving. Your draft remains open.'),{code:'CASE_SAVE_SIZE'});
+        if(!changed)throw Object.assign(new Error('The case exceeds the 32 MB save budget even after compacting replay. Export your full results; your draft remains open.'),{code:'CASE_SAVE_SIZE'});
       }
       return draft;
     }

@@ -14,7 +14,14 @@ window.STMinimalMode=(function(){
   function busy(){return isMinimal()&&(importing||starting||searching||searchSaving||!!actions?.locked?.());}
   function isSearching(){return isMinimal()&&searching;}
   function number(value,digits){return Number.isFinite(value)?value.toLocaleString(document.documentElement.lang==='es'?'es-MX':'en-US',{maximumFractionDigits:digits??2}):'—';}
-  function show(id,visible){el(id).hidden=!visible;}
+  function show(id,visible){var element=el(id);if(['minimal-run-progress','minimal-search-progress','minimal-result-cards','minimal-optimization','minimal-scenario-cards'].includes(id)&&window.STMotion?.visibility)STMotion.visibility(element,visible);else element.hidden=!visible;}
+  function headerProgress(){
+    if(!initialized||!isMinimal()||!state.activeCase)return null;
+    if(starting)return {fraction:runStopRequested||runProgress>=100?null:runProgress/100};
+    if(searching)return {fraction:stopRequested?null:Math.min(.999,searchProgress/100)};
+    if(searchSaving)return {fraction:null};
+    return null;
+  }
   function progress(id,value,stage){
     var holder=el(id),p=Math.max(0,Math.min(100,Number(value)||0));
     holder.querySelector('progress').value=p;
@@ -174,7 +181,7 @@ window.STMinimalMode=(function(){
     if(Array.isArray(entries))sim.whatIf.evaluations=entries.filter(entry=>!ownedZeroResult(entry,sim));
   }
   function clearScenarios(){
-    var grid=el('minimal-scenario-cards');grid.replaceChildren();grid.hidden=true;scenarioOwner=scenarioResult=null;
+    var grid=el('minimal-scenario-cards');grid.replaceChildren();show('minimal-scenario-cards',false);scenarioOwner=scenarioResult=null;
   }
   function scenarioCards(sim,r,build){
     var grid=el('minimal-scenario-cards');
@@ -240,7 +247,7 @@ window.STMinimalMode=(function(){
     var lock=busy();
     syncSimulationManagement(active,lock||state.saving||!!window.STSimulation2D?.isRunning?.());
     document.querySelectorAll('#basic-case-actions button').forEach(function(b){if(lock&&!b.disabled){b.disabled=true;b.dataset.minimalLock='true';}else if(!lock&&b.dataset.minimalLock==='true'){b.disabled=false;delete b.dataset.minimalLock;}});
-    if(!active){if(!busy()){stopMonitor();if(scenarioOwner)clearScenarios();}return;}
+    if(!active){if(!busy()){stopMonitor();if(scenarioOwner)clearScenarios();}actions.activity?.();return;}
     syncTable(lock||state.saving);syncDuration(lock||state.saving);syncRounds(lock||state.saving);
     var sheetExport=el('minimal-export-equipment-sheet');if(sheetExport)sheetExport.disabled=lock||state.saving||sheetExport.dataset.busy==='true';
     var running=starting||actions.locked(),r=runStopRequested?null:result(),review=reviewRequired(sim);
@@ -249,7 +256,8 @@ window.STMinimalMode=(function(){
     if(running&&!runStopRequested){runProgress=Math.max(runProgress,Math.min(100,100*actions.progress()));progress('minimal-run-progress',runProgress,runProgress===100?'Preparing results…':null);}
     var runButton=el('minimal-run');runButton.hidden=false;
     runButton.disabled=starting?runStopRequested:lock||state.saving||!sim;
-    runButton.textContent=tr(starting?(runStopRequested?'Stopping…':'Stop'):r?'Restart simulation':'Run simulation');
+    var priorRunLabel=runButton.textContent;runButton.textContent=tr(starting?(runStopRequested?'Stopping…':'Stop'):r?'Restart simulation':'Run simulation');
+    if(priorRunLabel!==runButton.textContent)window.STMotion?.reveal(runButton);
     runButton.title=tr(starting?'Stop simulation':r?'Restart simulation':'Run simulation');
     syncRoundView(running?null:r,lock||state.saving);renderResults(r);
     var benchmark=el('minimal-ideal-benchmark');if(benchmark){benchmark.hidden=true;benchmark.disabled=true;}
@@ -259,14 +267,15 @@ window.STMinimalMode=(function(){
     var searchButton=el('minimal-search'),saved=sim?.whatIf?.evaluations?.some(entry=>ownedZeroResult(entry,sim));
     searchButton.hidden=false;
     searchButton.disabled=searching?stopRequested:!canSearch||lock||running||state.saving;
-    searchButton.textContent=tr(searching?(stopRequested?'Stopping…':'Stop'):saved?'Restart search':'Find optimizations');
+    var priorSearchLabel=searchButton.textContent;searchButton.textContent=tr(searching?(stopRequested?'Stopping…':'Stop'):saved?'Restart search':'Find optimizations');
+    if(priorSearchLabel!==searchButton.textContent)window.STMotion?.reveal(searchButton);
     searchButton.title=tr(searching?'Stop search':saved?'Restart search':'Find optimizations');
     show('minimal-search-progress',searching&&!stopRequested);
     if(searching&&!stopRequested)updateSearchProgress();
     var message=searchMessage||(!canSearch&&r?'Optimization is unavailable for this configuration.'+(readiness?.reason?' ('+readiness.reason+(readiness.differencePath?' · '+readiness.differencePath:'')+')':''):'');
     el('minimal-search-message').textContent=tr(message);show('minimal-search-message',!!message&&!searching&&!runStopRequested);
     renderScenarios(sim,r);
-    if(lock)monitor();
+    if(lock)monitor();actions.activity?.();
   }
   function expandForAction(id){
     var button=el(id)?.querySelector('[data-subsection-toggle]');
@@ -403,6 +412,6 @@ window.STMinimalMode=(function(){
     };
     window.addEventListener('st-language-change',()=>{tableKey=resultKey='';sync(state);});
   }
-  return {init:init,sync:sync,isMinimal:isMinimal,busy:busy,isSearching:isSearching,openImport:openImport,searchTier:startSearch,stopSearch:stopSearch};
+  return {init:init,sync:sync,isMinimal:isMinimal,busy:busy,headerProgress:headerProgress,isSearching:isSearching,openImport:openImport,searchTier:startSearch,stopSearch:stopSearch};
 })();
 </script>

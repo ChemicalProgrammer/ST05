@@ -1,7 +1,7 @@
 <script>
 window.STMotion=(function(){
   var active=new WeakMap();
-  var cardObservers=new WeakMap();
+  var cardObservers=new WeakMap(),visibilityTargets=new WeakMap();
   function reduced(){return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true;}
   function token(name,fallback){return getComputedStyle(document.documentElement).getPropertyValue('--motion-'+name).trim()||fallback;}
   function duration(name,fallback){var value=token(name,''),number=parseFloat(value);return Number.isFinite(number)?Math.max(0,number*(value.endsWith('ms')?1:value.endsWith('s')?1000:1)):fallback;}
@@ -15,6 +15,25 @@ window.STMotion=(function(){
     return animation;
   }
   function reveal(element){return play(element,[{opacity:.65,transform:'translateY(4px)'},{opacity:1,transform:'translateY(0)'}],{duration:duration('reveal',160),easing:'ease-out'});}
+  // Do not restart an animation on polling. A newer desired state
+  // supersedes an in-flight exit.
+  function visibility(element,visible){
+    if(!element)return;
+    visible=!!visible;
+    if(visibilityTargets.get(element)===visible)return;
+    visibilityTargets.set(element,visible);cancel(element);
+    if(visible){
+      var entering=element.hidden||element.inert;
+      element.hidden=false;element.inert=false;element.removeAttribute('aria-hidden');
+      if(entering)reveal(element);
+      return;
+    }
+    if(element.hidden)return;
+    element.inert=true;element.setAttribute('aria-hidden','true');
+    var animation=play(element,[{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(-4px)'}],{duration:duration('reveal',160),easing:'ease-in',fill:'both'});
+    function finish(){if(visibilityTargets.get(element)!==false)return;element.hidden=true;element.inert=false;element.removeAttribute('aria-hidden');if(animation)animation.cancel();}
+    if(animation)animation.finished.then(finish,finish);else finish();
+  }
   function enter(element,preset){
     var workspace=preset==='workspace';
     var animation=play(element,[{opacity:0,transform:'translateY('+(workspace?22:8)+'px)'},{opacity:1,transform:'translateY(0)'}],{
@@ -94,6 +113,6 @@ window.STMotion=(function(){
     observer.observe(container,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','class','style','aria-busy']});
     cardObservers.set(container,observer);
   }
-  return {reduced:reduced,duration:duration,cancel:cancel,play:play,reveal:reveal,enter:enter,exit:exit,panel:panel,reflow:reflow,watchCards:watchCards};
+  return {reduced:reduced,duration:duration,cancel:cancel,play:play,reveal:reveal,visibility:visibility,enter:enter,exit:exit,panel:panel,reflow:reflow,watchCards:watchCards};
 })();
 </script>

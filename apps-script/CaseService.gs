@@ -302,7 +302,7 @@ function persistCaseRecord_(record,owned) {
       var oldFile=old&&old.fileName?storedFile(old.fileName):null;
       if(oldFile&&old.digest&&digest&&old.digest===digest){refs.push({id:old.id,fileName:old.fileName,digest:digest});return;}
       var large=json.length>Math.floor(8*1024*1024/3)&&Utilities.newBlob(json).getBytes().length>8*1024*1024;
-      if(oldFile&&!large){
+      if(oldFile&&!large&&!(oldFile.getSize?.()>8*1024*1024)){
         var original=oldFile.getBlob().getDataAsString();
         if(original!==json){updated.push({file:oldFile,content:original});oldFile.setContent(json);}
         refs.push({id:simulation.id,fileName:old.fileName,digest:digest});return;

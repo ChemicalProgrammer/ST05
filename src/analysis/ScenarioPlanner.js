@@ -641,8 +641,12 @@ export function planScenarios(simulation,{zeroOnly=false,mediumOnly=false}={}){
       interpretation:'Buffer coverage uses the declared minor-stop MTTR. Aggregate MTTR is not classified as a microstop by a duration cutoff.'});
     const recoveryFailed=['INSTALLED_LENGTH','SMOOTH_RECOVERY','BACKUP_POSITION'].some(id=>['FAIL','WARNING'].includes(scenarioGoal(engineering,id)));
     const observedDownstream=diagnosis.equipment.find(r=>r.equipmentId===item.downstreamId),observedUpstream=diagnosis.equipment.find(r=>r.equipmentId===item.upstreamId);
-    const observedStarvation=diagnosis.status==='OBSERVED'&&(observedDownstream?.starvedSeconds||0)>diagnosis.durationSeconds*.01;
-    const observedBlocking=diagnosis.status==='OBSERVED'&&(observedUpstream?.blockedSeconds||0)>diagnosis.durationSeconds*.01;
+    // A sustained Prime or Back-up wait warrants testing a buffer. Its benefit
+    // is established separately by the matched physical comparison.
+    const primeWait=mediumOnly?(observedDownstream?.waitingForPrimeSeconds||0):0;
+    const backupStop=mediumOnly?(observedUpstream?.backupStopSeconds||0):0;
+    const observedStarvation=diagnosis.status==='OBSERVED'&&Math.max(observedDownstream?.starvedSeconds||0,primeWait)>diagnosis.durationSeconds*.01;
+    const observedBlocking=diagnosis.status==='OBSERVED'&&Math.max(observedUpstream?.blockedSeconds||0,backupStop)>diagnosis.durationSeconds*.01;
     const criticalBefore=criticalIds.has(item.downstreamId),criticalAfter=criticalIds.has(item.upstreamId);
     if(!zeroOnly&&(recoveryFailed||(coverage!==null&&coverage<1)||observedStarvation||observedBlocking)){
       const downstream=simulation.equipment.find(x=>x.id===item.downstreamId),downstreamStopData=scenarioStopDataCoverage(simulation,downstream);

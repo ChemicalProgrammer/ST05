@@ -3,6 +3,7 @@ window.STMinimalMode=(function(){
   'use strict';
   var state,actions,initialized=false,importing=false,starting=false,searching=false,searchSaving=false,buildingCards=false,timer=null,stopRequested=false;
   var runStopRequested=false,runStopTask=null;
+  var runStartedAt=null;
   var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=1,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
   var tiers=['ZERO'];
   var executionPolicy='ZERO_ONLY_PHYSICAL_V6';
@@ -22,10 +23,17 @@ window.STMinimalMode=(function(){
     if(searchSaving)return {fraction:null};
     return null;
   }
+  function elapsedCalculationLabel(milliseconds){
+    var seconds=Math.floor(Math.max(0,Number(milliseconds)||0)/1000);
+    return [Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':');
+  }
   function progress(id,value,stage){
     var holder=el(id),p=Math.max(0,Math.min(100,Number(value)||0));
     holder.querySelector('progress').value=p;
-    holder.querySelector('output').textContent=p.toFixed(1).replace(/\.0$/,'')+'%'+(stage?' · '+tr(stage):'');
+    var percentage=p.toFixed(1).replace(/\.0$/,'')+'%';
+    holder.querySelector('output').textContent=id==='minimal-run-progress'
+      ?percentage+' · '+elapsedCalculationLabel(runStartedAt===null?0:performance.now()-runStartedAt)
+      :percentage+(stage?' · '+tr(stage):'');
   }
   function owner(){return actions.simulation();}
   function ownerKey(){return state.activeCase&&owner()?state.activeCase.id+'|'+owner().id:null;}
@@ -253,7 +261,7 @@ window.STMinimalMode=(function(){
     var running=starting||actions.locked(),r=runStopRequested?null:result(),review=reviewRequired(sim);
     show('minimal-input-review',review||!!sim?.sourceImport?.simpleImportIssues?.length&&!r);
     show('minimal-run-progress',running&&!runStopRequested);
-    if(running&&!runStopRequested){runProgress=Math.max(runProgress,Math.min(100,100*actions.progress()));progress('minimal-run-progress',runProgress,runProgress===100?'Preparing results…':null);}
+    if(running&&!runStopRequested){runProgress=Math.max(runProgress,Math.min(100,100*actions.progress()));progress('minimal-run-progress',runProgress);}
     var runButton=el('minimal-run');runButton.hidden=false;
     runButton.disabled=starting?runStopRequested:lock||state.saving||!sim;
     var priorRunLabel=runButton.textContent;runButton.textContent=tr(starting?(runStopRequested?'Stopping…':'Stop'):r?'Restart simulation':'Run simulation');
@@ -282,7 +290,7 @@ window.STMinimalMode=(function(){
     if(button&&button.getAttribute('aria-expanded')==='false')window.STSubsection?.userToggle(button,true);
   }
   function clearRunDisplay(){
-    runProgress=0;searchProgress=0;searchCompleted=0;searchMessage='';resultKey='';readinessCache=null;
+    runStartedAt=null;runProgress=0;searchProgress=0;searchCompleted=0;searchMessage='';resultKey='';readinessCache=null;
     resetRoundView();el('minimal-result-cards').replaceChildren();show('minimal-result-cards',false);
     el('minimal-round-view').replaceChildren();show('minimal-round-view',false);
     progress('minimal-run-progress',0);progress('minimal-search-progress',0);clearScenarios();
@@ -305,11 +313,11 @@ window.STMinimalMode=(function(){
     if(!applyDuration()||!applyRounds())return;
     // Let the canonical editor and physical engine validate corrected values.
     if((sim.equipment||[]).length<2){actions.error({message:tr('At least two equipment units are required for simulation.')});return;}
-    starting=true;runStopRequested=false;runStopTask=null;runProgress=0;clearScenarios();searchMessage='';resultKey='';resetRoundView();
+    starting=true;runStopRequested=false;runStopTask=null;runStartedAt=performance.now();runProgress=0;clearScenarios();searchMessage='';resultKey='';resetRoundView();
     el('run-calculation-mode').value='FAST';expandForAction('minimal-simulation');sync(state);
     try{await actions.run();}catch(error){if(!runStopRequested)actions.error(error);}finally{
       if(runStopTask)await runStopTask;
-      starting=false;runStopRequested=false;runStopTask=null;sync(state);
+      starting=false;runStopRequested=false;runStopTask=null;runStartedAt=null;sync(state);
     }
   }
   // A terminal evaluated outcome is different from a blocked, cancelled or

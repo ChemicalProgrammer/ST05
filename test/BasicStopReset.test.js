@@ -7,7 +7,7 @@ test('Basic run switches to Stop, keeps it enabled, then discards and saves befo
  let resolveRun,resolveStop,sim={id:'a',equipment:[{},{}],results:{summary:{}},whatIf:{evaluations:[{tier:'ZERO'},{tier:'HIGH'}]}},calls=[];
  const nodes=new Map(),el=id=>{if(!nodes.has(id))nodes.set(id,{value:'',hidden:false,replaceChildren(){calls.push('clear:'+id);}});return nodes.get(id);};
  const api=new Function('owner','ownerKey','state','actions','el','busy','applyDuration','applyRounds','expandForAction','sync','clearScenarios','resetRoundView','show','progress',
-   'var starting=false,runStopRequested=false,runStopTask=null,runProgress=0,searchProgress=0,searchCompleted=0,searchMessage="",resultKey="",readinessCache=null;'+
+   'var starting=false,runStopRequested=false,runStopTask=null,runStartedAt=null,runProgress=0,searchProgress=0,searchCompleted=0,searchMessage="",resultKey="",readinessCache=null;'+
    block(mode,'  function ownedZeroResult(','  function clearScenarios(')+block(mode,'  function clearRunDisplay(','  // A terminal evaluated outcome')+
    '\nreturn {startRun,stopRun,starting:()=>starting,stopping:()=>runStopRequested};')(
    ()=>sim,()=>sim.id,{activeCase:{}},{run:()=>new Promise(resolve=>{resolveRun=resolve;}),stopRun:()=>{sim.results=null;resolveRun(false);return new Promise(resolve=>{resolveStop=resolve;});},markReset:()=>calls.push('dirty'),save:async()=>calls.push('save'),error:e=>{throw e;}},el,()=>false,()=>true,()=>true,()=>{},()=>{},()=>{},()=>{},()=>{},()=>{});

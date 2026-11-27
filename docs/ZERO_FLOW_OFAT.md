@@ -19,3 +19,6 @@ The V6 settings signature invalidates old evaluations as current confirmation. P
 
 ## Deployment and execution guard
 Basic dispatches exactly one current Zero card, keyed to the source simulation and `ZERO_ONLY_PHYSICAL_V6`. Both card restart and evaluation check the engine signature `SCENARIO_SEARCH_ZERO_OFAT_V6`; incompatible or paused categories cannot enter the active queue. During Basic search the progress label shows `Zero CAPEX · V6 (OFAT/DOE)`. Previous saved V5 results remain historical and are not current V6 evidence; the original numerical baseline is retained. After updating the Apps Script deployment, close/reload any open tabs (a previously loaded browser can continue executing its old client-side JavaScript until stopped/reloaded).
+
+## Development checkpoint (2026-11-27)
+Zero CAPEX V6 is the frozen functional reference for subsequent Medium CAPEX development. Do not change its factor selection, confirmation policy, physics, or evidence signatures to enable a different tier. This checkpoint is not plant validation or a claim of global optimality. Medium/High dispatch and creation remain disabled until a separately verified implementation exists. The Basic numerical progress label is presentation only: percentage and elapsed calculation time.

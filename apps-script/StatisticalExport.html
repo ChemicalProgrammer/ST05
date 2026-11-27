@@ -43,7 +43,7 @@ window.STStatExport=(function(){
     return !!r?.summary&&!r.provisional&&(!r.replicationStatus?.state||r.replicationStatus.state==='COMPLETE');
   }
   function buildTables(simulation,activeCase={}){
-    if(!canExport(simulation))throw Error('Complete the numerical simulation before exporting to Minitab.');
+    if(!canExport(simulation))throw Error('Complete the numerical simulation before exporting the statistical report.');
     const result=simulation.results, tables=new Map();
     const create=(name,observation,notes,columns=[])=>{
       const table={name,observation,notes,columns:[...columns],keys:new Set(columns),rows:[]};tables.set(name,table);return table;
@@ -174,7 +174,7 @@ window.STStatExport=(function(){
     const changes=create('24_CAPEX_changes.csv','One changed parameter per candidate','Link via comparison ID. Includes tested values, units and hypothetical/analysis-only flags.');
     const factorMap=create('25_DOE_factors.csv','One factor per saved design','A/B/C etc. are coded factor columns. For a package, -1 is unchanged and +1 applies all package changes.');
     const factorChanges=create('26_DOE_factor_changes.csv','One parameter in a DOE factor package','Shows actual values of coupled inputs; use DOE factor column as identifier.');
-    const anova=create('27_DOE_effects.csv','One saved factorial effect per response','Existing ST statistics, including Holm-adjusted p-values when saved; not a fresh Minitab fit.');
+    const anova=create('27_DOE_effects.csv','One saved factorial effect per response','Existing ST statistics, including Holm-adjusted p-values when saved; not a new statistical fit.');
     const warnings=create('28_CAPEX_warnings.csv','One recorded engineering warning','Scenario review and experiment-specific warnings.');
     const timing=create('29_CAPEX_progress.csv','One recorded analysis stage','Elapsed real milliseconds and stage work counts, not virtual process observations.');
     const ofatCsv=create('31_Zero_OFAT.csv','One individual parameter level per matched seed','One field at a time; original reliability and installed geometry frozen. Use matching seed blocks; baseline appears once per study.');
@@ -276,19 +276,19 @@ window.STStatExport=(function(){
     return {tables:[...tables.values()],raw,version};
   }
   const readme=[
-    'ST05 | Minitab statistical data package | '+version,
-    'Extract this ZIP first. Open individual CSV files with File > Open in Minitab.',
+    'ST05 | Statistical report (CSV + JSON)',
+    'Extract this ZIP first. Import individual CSV files into your preferred statistical analysis software.',
     'UTF-8, comma-separated, dot decimals, quoted text, first row contains column names. Blank = unavailable, not zero. Boolean 1/0. Text that could be interpreted as a spreadsheet formula is prefixed with an apostrophe.',
     'Use 00_index.csv to see the unit of observation, row counts and coverage. Column paths retain the simulator field names. *_s / *Seconds = seconds; *_min / *Minutes = minutes; *_pct / *Percent = percent; *_pp = percentage points; *_mm / *Mm = millimeters. Rate columns state their time basis. Flow units are native unless the recorded summary uses bottle equivalents.',
     '04_line_rounds.csv: actual independent rounds only. 05/06: equipment and exclusive-state analysis; do not sum overlapping machine downtime as line downtime.',
     '07_failure_episodes.csv: only recorded failure episodes. Configured MTTR is not a fitted repair distribution. Review history completeness and endReason.',
     '13/14/15: time-series observations within a round are serially correlated. Interval length may vary. Do not use samples as independent Monte Carlo replications. No interpolation.',
     '12_recording_coverage.csv: summary-only, truncated and compact saved recordings may lack events or samples. A missing history is not proof that no failure occurred.',
-    'DOE_*.csv: each file is one saved design. Use coded A/B/C etc. and Seed_Block as a block. 25/26 map factor names and real parameter levels. An imported CSV is not a native Minitab design object; define the custom factorial design before analyzing. Incomplete designs may require different analysis. ST effects and pooled-error ANOVA can differ; common random numbers create correlated responses across treatments.',
+    'DOE_*.csv: each file is one saved design. Use coded A/B/C etc. and Seed_Block as a block. 25/26 map factor names and real parameter levels. An imported CSV does not automatically define a factorial design in statistical software; define the custom factorial design before analyzing. Incomplete designs may require different analysis. ST effects and pooled-error ANOVA can differ; common random numbers create correlated responses across treatments.',
     '31_Zero_OFAT.csv: one recorded level and matched seed; compare one parameter at a time. 32_Zero_refinement.csv: coordinated refinements on the DOE window. Keep phases and horizons separate.','30_DOE_seed_contrasts.csv: complete two-level factorial blocks only. Each contrast is one observation per independent seed; use a one-sample test across seeds if appropriate.','20-29: CAPEX stages and paired evidence. Compare only matching engine, fidelity, duration, units and seeds. Some audit rows refer to the same reused computation. Fluid screening is approximate. Original verification is descriptive, not another independent replication study.',
     'raw_simulation.json preserves the available numerical result, equipment, settings and scenario evidence, including nested arrays omitted from the rectangular CSVs. No assistant chat or original import source is included.',
     '',
-    'ES: Extrae el ZIP. Abre cada CSV en Minitab con Archivo > Abrir. Primera fila = nombres; separador coma; decimal punto; vacío = no disponible. Los nombres técnicos se conservan en inglés.',
+    'ES: Extrae el ZIP. Importa cada CSV en el software de análisis estadístico que prefieras. Primera fila = nombres; separador coma; decimal punto; vacío = no disponible. Los nombres técnicos se conservan en inglés.',
     'Usa 04 para estadísticas por réplica; 06 para Pareto por estado/equipo; 07 para confiabilidad; 13-15 para tendencias. Las muestras temporales no son réplicas independientes.',
     'Cada DOE_* corresponde a un diseño; Seed_Block identifica la semilla común. No combines motores ni horizontes. Las filas omitidas no se inventan. Los resultados son del modelo, no mediciones reales de planta.'
   ].join('\r\n')+'\r\n';
@@ -330,7 +330,7 @@ window.STStatExport=(function(){
     const data=buildTables(selected.simulation,selected.activeCase||{});
     const blob=new Blob(archiveParts(entries(data)),{type:'application/zip'}),url=URL.createObjectURL(blob),link=document.createElement('a');
     const title=[selected.activeCase?.name,selected.simulation?.name].filter(Boolean).join('-').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').slice(0,120)||'simulation';
-    link.href=url;link.download=title+'-Minitab.zip';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    link.href=url;link.download=title+'-Statistical-Report.zip';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   return {version,canExport,buildTables,entries,archiveParts,csv,download,connect:fn=>{capture=fn;}};
 })();

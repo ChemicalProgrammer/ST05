@@ -17,7 +17,7 @@ function fixture(){
   return {id:'s',name:'Simulación',equipment,dynamicConfig:{durationSeconds:180},results:{seed:1,durationSeconds:120,unitOfFlow:'bottles',replicationStatus:{state:'COMPLETE',rounds:2},summary,equipmentMetrics,inputSignature:JSON.stringify({run:{durationSeconds:120},equipment}),batch:{rounds:2,rows:[{round:1,seed:1,summary,equipmentMetrics},{round:2,seed:2,summary:{...summary,outputCount:150},equipmentMetrics}]},replay:{seed:1,samples,stateTransitions:[[0,0,'READY']],events:[],detailCoverage:{savedReplaySampled:true,omittedEvents:10}}},whatIf:{evaluations:[{tier:'ZERO',status:'IMPROVEMENT_REPRODUCED',independentCheck:{baseline:metric(100),candidate:metric(104)},doe:{factors:[{label:'MTBF',path:'noiseProfile.reliability.mtbfMinutes',low:10,high:20}],run:{durationSeconds:120,scenarioFidelity:'PHYSICAL_FAST_V1'},observations:[{index:0,levels:[-1],roundMetrics:[rr(1,100),rr(2,110)]},{index:1,levels:[1],roundMetrics:[rr(1,110),rr(2,125)]}]}}]}};
 }
 const table=(d,n)=>d.tables.find(t=>t.name===n);
-test('Minitab export preserves actual rounds, executed inputs, failure records and irregular retained time intervals',()=>{
+test('Statistical export preserves actual rounds, executed inputs, failure records and irregular retained time intervals',()=>{
   const sim=fixture(),before=JSON.stringify(sim),d=api.buildTables(sim);
   assert.equal(JSON.stringify(sim),before);
   assert.equal(table(d,'01_metadata.csv').rows[0].Input_basis,'EXECUTED_INPUT_SIGNATURE');
@@ -75,4 +75,21 @@ test('ZIP directory, UTF-8 names and CRC are valid for stored files',()=>{
     central+=46+nameLen;
   }
   assert.equal(central,end);
+});
+
+
+test('statistical report is software-neutral in all workspaces and exported instructions',()=>{
+  for(const [path,count] of [['MinimalWorkspace.html',1],['WebApp.html',2]]){
+    const html=fs.readFileSync('apps-script/'+path,'utf8');
+    const buttons=[...html.matchAll(/<button\b[^>]*id="(?:minimal-export-minitab|export-minitab-results|export-minitab-whatif)"[^>]*>[^<]*<\/button>/g)].map(m=>m[0]);
+    assert.equal(buttons.length,count);
+    for(const button of buttons){assert.match(button,/>Statistical Report<\/button>/);assert.match(button,/title="Export statistical report"/);assert.match(button,/aria-label="Export statistical report"/);assert.doesNotMatch(button.replace(/id="[^"]*"/g,''),/minitab/i);}
+  }
+  const language=fs.readFileSync('apps-script/Language.html','utf8');
+  assert(language.includes("'Statistical Report':'Reporte estadístico'"));
+  assert(language.includes("'Export statistical report':'Exportar reporte estadístico'"));
+  const files=api.entries(api.buildTables(fixture()));
+  assert.doesNotMatch(files.find(f=>f.name==='00_README.txt').text,/minitab/i);
+  assert.doesNotMatch(files.find(f=>f.name==='00_index.csv').text,/minitab/i);
+  assert(source.includes("title+'-Statistical-Report.zip'"));
 });

@@ -122,6 +122,7 @@
           captureCaseNumerical(snapshot);
           return {simulation:snapshot.simulations[0],activeCase:snapshot};
         });
+        window.STIdealBenchmark?.connect({simulation:activePersistentSimulation,activeCase:()=>state.activeCase,locked:()=>runControlsLocked()||window.STMinimalMode?.busy?.()||window.STSimulation2D?.isRunning?.(),error:showError});
         STMinimalMode.init(state,{run:runSimulation,locked:runControlsLocked,progress:function(){return roundSession?.pending?roundSession.batchProgress?.value||0:0;},prepareSearch:function(target){renderSimulationAnalysis({prepareBasic:true,target:target});},simulation:activePersistentSimulation,setDuration:function(value,unit){
           document.getElementById('duration-mode').value='FIXED';state.run.durationMode='FIXED';
           var input=document.getElementById('run-duration');input.value=String(value);document.getElementById('run-duration-unit').value=unit;

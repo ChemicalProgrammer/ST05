@@ -398,7 +398,7 @@
       var status=state.run.result?.replicationStatus?.state;
       return Boolean(state.run.result&&(state.run.playbackAction==='reset'||status==='CANCELLED'||state.run.result.provisional&&!roundSession?.pending));
     }
-    function runControlsLocked(){return Boolean(state.run.active||state.run.playing||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty);}
+    function runControlsLocked(){return Boolean(state.run.active||state.run.playing||roundSession?.pending||roundSession?.firstUpdating||roundSession?.dirty||window.STIdealBenchmark?.busy?.());}
     var last2DLockState=null;
     function syncBatchProgress(){
       var session=roundSession;

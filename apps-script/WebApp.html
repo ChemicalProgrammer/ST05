@@ -351,7 +351,7 @@
               <div class="subsection-heading-copy"><h3 id="results-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="results-overview-content">Performance summary</button></h3><p class="subsection-description">Review the main performance indicators for the selected simulation.</p></div>
               <div class="fold-tools button-row">
                 <div id="results-round-view" hidden></div>
-                <details class="export-menu"><summary class="secondary icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-ai" class="ghost" disabled>JSON</button><button id="export-results-html" class="ghost" disabled><?= __ST_TEXT__('exports.html') ?></button><button id="export-results-pdf" class="ghost" disabled><?= __ST_TEXT__('exports.pdf') ?></button><button id="export-minitab-results" class="ghost" type="button" disabled>Minitab (CSV ZIP)</button></div></details>
+                <details class="export-menu"><summary class="secondary icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-ai" class="ghost" disabled>JSON</button><button id="export-results-html" class="ghost" disabled><?= __ST_TEXT__('exports.html') ?></button><button id="export-results-pdf" class="ghost" disabled><?= __ST_TEXT__('exports.pdf') ?></button></div></details><button id="export-minitab-results" class="secondary" type="button" data-icon="upload" title="Export to Minitab" aria-label="Export to Minitab" disabled>Minitab</button><button id="results-ideal-benchmark" class="secondary" type="button" disabled>Ideal Line Benchmark</button>
               </div>
             </div>
             <div id="results-overview-content" class="fold-content">
@@ -446,7 +446,7 @@
             <div class="subsection-heading-copy"><h3 id="whatif-subsection-title" class="subsection-heading-title"><button type="button" class="fold-toggle" data-subsection-toggle aria-expanded="true" aria-controls="whatif-subsection-content">Scenario options</button></h3><p class="subsection-description">Evaluate improvements and CAPEX scenarios against the simulation baseline.</p></div>
             <!-- Las herramientas de la Subsección permanecen en una sola barra. -->
             <div class="fold-tools button-row">
-              <details class="export-menu"><summary class="secondary icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-whatif-json" class="ghost" disabled><?= __ST_TEXT__('exports.data_json') ?></button><button id="export-whatif-html" class="ghost" disabled><?= __ST_TEXT__('exports.html') ?></button><button id="export-whatif-pdf" class="ghost" disabled><?= __ST_TEXT__('exports.pdf') ?></button><button id="export-minitab-whatif" class="ghost" type="button" disabled>Minitab (CSV ZIP)</button></div></details>
+              <details class="export-menu"><summary class="secondary icon-button" data-icon="upload" aria-label="Export" title="Export"></summary><div><button id="export-whatif-json" class="ghost" disabled><?= __ST_TEXT__('exports.data_json') ?></button><button id="export-whatif-html" class="ghost" disabled><?= __ST_TEXT__('exports.html') ?></button><button id="export-whatif-pdf" class="ghost" disabled><?= __ST_TEXT__('exports.pdf') ?></button></div></details><button id="export-minitab-whatif" class="secondary" type="button" data-icon="upload" title="Export to Minitab" aria-label="Export to Minitab" disabled>Minitab</button><button id="whatif-ideal-benchmark" class="secondary" type="button" disabled>Ideal Line Benchmark</button>
             </div>
           </div>
           <div id="whatif-subsection-content" class="fold-content">
@@ -633,6 +633,7 @@
     <?!= include_('ReportConfigurationTemplate'); ?>
     <?!= include_('ReportComparisonTemplate'); ?>
     <?!= include_('StatisticalExport'); ?>
+    <?!= include_('IdealBenchmark'); ?>
     <?!= include_('Reports'); ?>
     <?!= include_('LocalDrive'); ?>
     <?!= include_('Results'); ?>

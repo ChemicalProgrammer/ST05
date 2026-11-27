@@ -2282,6 +2282,7 @@ window.STLanguage=(function(){
     if(picker)picker.value=language;
   }
   Object.assign(translations,{'Minitab (CSV ZIP)':'Minitab (ZIP de CSV)','Complete the numerical simulation before exporting to Minitab.':'Completa la simulación numérica antes de exportar a Minitab.'});
+  Object.assign(translations,{'Ideal Line Benchmark':'Benchmark de línea ideal','Export to Minitab':'Exportar a Minitab','Run benchmark':'Ejecutar benchmark','Verify original horizon':'Verificar horizonte original','Target':'Objetivo'});
   function setLanguage(value){
     var next=value==='es'?'es':'en';
     if(language!==next){language=next;window.STPreferences?.write('language',next);}

@@ -1,0 +1,351 @@
+<dialog id="ideal-benchmark-dialog" aria-labelledby="ideal-benchmark-title">
+  <header class="dialog-heading"><h2 id="ideal-benchmark-title">Ideal Line Benchmark</h2><button id="ideal-benchmark-close" type="button" class="ghost icon-button" data-icon="x" aria-label="Close"></button></header>
+  <div class="dialog-body">
+    <p id="ideal-benchmark-description" class="chart-note"></p>
+    <div class="button-row">
+      <label>Duration <select id="ideal-benchmark-duration"><option value="900">15 min</option><option value="1800" selected>30 min</option><option value="3600">60 min</option></select></label>
+      <label>Target <select id="ideal-benchmark-target"><option value="90">90%</option><option value="95">95%</option><option value="99" selected>99%</option></select></label>
+      <label class="check-label"><input id="ideal-benchmark-original-horizon" type="checkbox">Verify original horizon</label>
+    </div>
+    <p id="ideal-benchmark-status" role="status" aria-live="polite"></p>
+    <progress id="ideal-benchmark-progress" max="100" value="0" hidden></progress>
+    <div id="ideal-benchmark-results"></div>
+  </div>
+  <footer class="dialog-actions"><button id="ideal-benchmark-json" type="button" class="secondary" disabled>JSON</button><button id="ideal-benchmark-csv" type="button" class="secondary" disabled>CSV</button><button id="ideal-benchmark-run" type="button">Run benchmark</button></footer>
+</dialog>
+<script>
+window.STIdealBenchmark=(function(){
+  'use strict';
+  const POLICY='IDEAL_LINE_BENCHMARK_V1';
+  const clone=x=>JSON.parse(JSON.stringify(x));
+  const finite=x=>typeof x==='number'&&Number.isFinite(x);
+  const positive=x=>finite(x)&&x>0;
+  const belt=e=>e.type==='CONVEYOR'||e.processData?.role==='CONVEYOR';
+  const defaults={inlet:1,pacemaker:1,otherMachines:1,length:1,beltSpeed:1,ramp:1,control:0,mtbf:1,mttr:1};
+  const targets=[90,95,99],fields=Object.keys(defaults);
+  const key=p=>JSON.stringify(fields.map(k=>p[k]));
+  const normalize=p=>({...defaults,...p});
+  const text=(en,es)=>document.documentElement.lang==='es'?es:en;
+  let callbacks=null,active=false,cancelled=false,report=null,opened=null;
+  function context(simulation,activeCase,engine=window.SimulatorEngine){
+    const ready=window.STScenarios?.readiness?.(simulation);
+    if(ready&&!ready.ready)throw Error('Benchmark requires a completed, current simulation: '+ready.reason);
+    const result=simulation?.results;
+    if(!result?.summary||result.replicationStatus?.state!=='COMPLETE'||result.provisional)throw Error('Complete the numerical simulation before running the benchmark.');
+    let p;try{p=JSON.parse(result.inputSignature);}catch(_){throw Error('Missing executed input provenance.');}
+    if(!Array.isArray(p.equipment)||!p.run||(p.run.engineId||'ST_CURRENT')!=='ST_CURRENT')throw Error('Benchmark requires ST_CURRENT and executed equipment inputs.');
+    const rows=result.batch?.rows||[result],refs=rows.map(r=>r.summary?.lineOeePacemakerRatePerSecond);
+    const ref=refs[0]*60;
+    if(!positive(ref)||refs.some(r=>!positive(r)||Math.abs(r*60-ref)>1e-5*Math.max(1,ref)))throw Error('A constant original production reference is required. Analyze one format at a time.');
+    const equipment=clone(p.equipment),sourceRun=clone(p.run);
+    const product=sourceRun.productCatalog?.find(x=>x.id===(sourceRun.initialFormatId??sourceRun.initialProductId));
+    // Technical benchmark uses one format and excludes scheduled interruptions.
+    // Complex format changes and dynamic belts need a separate study.
+    if(sourceRun.eventsEnabled!==false&&sourceRun.plannedStops?.some(e=>e.targetFormatId||e.targetProductId))throw Error('Benchmark requires a single operating format (no scheduled format changes).');
+    if(equipment.some(e=>e.processData?.accumulation?.speedMode==='DYNAMIC'||sourceRun.dynamicLineBalancingEnabled===true&&e.processData?.dynamicLineBalancing?.enabled===true))throw Error('Dynamic conveyor balancing requires a separate benchmark.');
+    if(equipment.some(e=>e.initialMode&&e.initialMode!=='AUTO'))throw Error('Benchmark requires all equipment initially in AUTO.');
+    const reference=equipment.find(e=>!belt(e)&&(e.characteristics?.isPacemaker||e.processData?.role==='PACEMAKER'))||equipment.find(e=>!belt(e)&&e.characteristics?.criticalMachine)||equipment.find(e=>e.type==='FILLER')||equipment.find(e=>!belt(e));
+    if(!reference)throw Error('No reference machine.');
+    const zoneMetrics=Object.values(result.accumulationZoneMetrics||result.replay?.accumulationZoneMetrics||{});
+    const geometry={};
+    equipment.forEach((e,i)=>{
+      if(!belt(e))return;
+      const z=zoneMetrics.find(z=>z.ownerEquipmentId===e.id);
+      const d=engine.resolveProductConveyor?.(equipment,i)||{};
+      const a=e.processData?.accumulation||{},g=e.processData?.geometry||{},profile=product?.equipment?.[e.id]||{};
+      const speed=z?.conveyorSpeedMmPerSecond??profile.speedMmPerSecond??d.conveyorSpeedMmPerSecond??a.conveyorSpeedMmPerSecond;
+      const length=d.usableLengthMm??g.lactMm??a.usableLengthMm;
+      const pack=product?(e.processData?.flowUnits?.output==='CASES'?(product.presentations?.case?.lengthMm??product.caseLengthMm):(product.presentations?.bottle?.lengthMm??product.bottleLengthMm)):undefined;
+      const packageLength=pack??d.productLengthMm??e.processData?.upstream?.packageLengthMm;
+      if(!positive(speed)||!positive(length)||!positive(packageLength))throw Error('Missing effective conveyor geometry: '+e.name);
+      geometry[e.id]={speed,length,packageLength,primeReserve:g.lpPrimeMm??(positive(d.usableLengthMm)&&finite(d.primeSensorPositionMm)?d.usableLengthMm-d.primeSensorPositionMm:null),backupPosition:d.backupSensorPositionMm,pitch:z?.movingPitchMm??d.productPitchMm,capacity:z?.capacityUnits??d.capacityUnits};
+    });
+    const originalOutput=rows.reduce((sum,r)=>sum+r.summary.outputCount,0)/rows.length;
+    const originalQ=rows.reduce((sum,r)=>sum+r.summary.outputCount/(r.durationSeconds??result.durationSeconds)*60,0)/rows.length;
+    return {policy:POLICY,simulationId:simulation.id,caseId:activeCase?.id||simulation.id,simulationName:simulation.name,unitOfFlow:p.unitOfFlow||simulation.unitOfFlow||'units',outputUnit:result.unitOfFlow||'units',equipment,sourceRun,referenceMachine:reference.id,referenceRate:ref,geometry,sourceSignature:result.inputSignature,original:{durationSeconds:result.durationSeconds,rounds:rows.length,throughput:originalQ,output:originalOutput,oee:rows.reduce((s,r)=>s+r.summary.lineOeePercent,0)/rows.length,attainment:originalQ/ref*100}};
+  }
+  function makeInput(ctx,parameters,{durationSeconds=1800,resolution='FAST',reliabilityEnabled=false,seed=ctx.sourceRun.seed,rounds=1,continuous=false,originalSchedule=false}={}){
+    const p=normalize(parameters),equipment=clone(ctx.equipment),run=clone(ctx.sourceRun),changes=[];
+    const activeProduct=run.productCatalog?.find(x=>x.id===(run.initialFormatId??run.initialProductId));
+    const set=(obj,k,v,path,e,unit)=>{
+      if(v===undefined||obj[k]===v)return;
+      const before=obj[k]??null;obj[k]=v;
+      changes.push({equipmentId:e?.id||'RUN',equipment:e?.name||'Run',parameter:path,before,after:v,unit:unit||''});
+    };
+    const del=(obj,k,path,e)=>{
+      if(!(k in obj))return;
+      changes.push({equipmentId:e?.id||'RUN',equipment:e?.name||'Run',parameter:path,before:obj[k],after:null,unit:''});delete obj[k];
+    };
+    for(let i=0;i<equipment.length;i++){
+      const e=equipment[i],d=e.processData||{},profile=activeProduct?.equipment?.[e.id];
+      if(!belt(e)){
+        const factor=e.id===ctx.referenceMachine?p.pacemaker:i===0?p.inlet:p.otherMachines;
+        if(factor!==1){
+          const old=profile?.ratePerMinute??e.nominalRatePerSecond*60,next=old*factor;
+          set(e,'nominalRatePerSecond',next/60,'nominalRatePerSecond',e,'native units/s');
+          if(profile?.ratePerMinute!==undefined)set(profile,'ratePerMinute',next,'activeFormat.ratePerMinute',e,'native units/min');
+          if(d.equipment&&positive(d.equipment.maximumSpeedBpm))set(d.equipment,'maximumSpeedBpm',Math.max(next,d.equipment.maximumSpeedBpm*factor),'processData.equipment.maximumSpeedBpm',e,'native units/min');
+        }
+        if(p.ramp!==1){
+          for(const [obj,k,path] of [[e,'startupDelaySeconds','startupDelaySeconds'],[e,'restartRampUpSeconds','restartRampUpSeconds'],[d.upstream,'startupTimeSeconds','processData.upstream.startupTimeSeconds'],[d.downstream,'rampUpTimeSeconds','processData.downstream.rampUpTimeSeconds'],[profile,'startupSeconds','activeFormat.startupSeconds'],[profile,'rampSeconds','activeFormat.rampSeconds']])if(obj&&finite(obj[k]))set(obj,k,obj[k]*p.ramp,path,e,'s');
+        }
+        for(const [obj,path] of [[e.noiseProfile?.reliability,'noiseProfile.reliability'],[d.equipment,'processData.equipment'],...Object.entries(d.equipment?.stopInputs||{}).map(([k,o])=>[o,'processData.equipment.stopInputs.'+k])]){
+          if(!obj)continue;
+          if(p.mtbf!==1&&positive(obj.mtbfMinutes))set(obj,'mtbfMinutes',obj.mtbfMinutes*p.mtbf,path+'.mtbfMinutes',e,'min');
+          if(p.mttr!==1&&positive(obj.mttrMinutes))set(obj,'mttrMinutes',obj.mttrMinutes*p.mttr,path+'.mttrMinutes',e,'min');
+        }
+        continue;
+      }
+      const a=d.accumulation||(d.accumulation={}),g=d.geometry||(d.geometry={}),z=ctx.geometry[e.id],newLength=z.length*p.length,newSpeed=z.speed*p.beltSpeed;
+      if(p.length!==1){
+        if(finite(g.lactMm)||!finite(a.usableLengthMm))set(g,'lactMm',newLength,'processData.geometry.lactMm',e,'mm');
+        if(finite(a.usableLengthMm))set(a,'usableLengthMm',newLength,'processData.accumulation.usableLengthMm',e,'mm');
+        // Retain the downstream Prime reserve, not an obsolete absolute position.
+        if(finite(a.primeSensorPositionMm))set(a,'primeSensorPositionMm',newLength-(z.length-a.primeSensorPositionMm),'processData.accumulation.primeSensorPositionMm',e,'mm');
+      }
+      if(p.beltSpeed!==1){
+        set(a,'speedMode','MANUAL','processData.accumulation.speedMode',e);
+        set(a,'conveyorSpeedMmPerSecond',newSpeed,'processData.accumulation.conveyorSpeedMmPerSecond',e,'mm/s');
+        if(a.inputValues)set(a.inputValues,'beltSpeedMmPerSecond',newSpeed,'processData.accumulation.inputValues.beltSpeedMmPerSecond',e,'mm/s');
+        for(const k of ['targetPopulationPercent','targetOverspeedPercent'])del(a,k,'processData.accumulation.'+k,e);
+        if(profile?.speedMmPerSecond!==undefined)set(profile,'speedMmPerSecond',newSpeed,'activeFormat.speedMmPerSecond',e,'mm/s');
+      }
+      if(p.ramp!==1){
+        for(const [obj,k,path] of [[a,'downstreamRampUpSeconds','processData.accumulation.downstreamRampUpSeconds'],[d.downstream,'rampUpTimeSeconds','processData.downstream.rampUpTimeSeconds'],[d.upstream,'startupTimeSeconds','processData.upstream.startupTimeSeconds']])if(obj&&finite(obj[k]))set(obj,k,obj[k]*p.ramp,path,e,'s');
+      }
+      if(p.control){
+        // Photoeye debounce above a free-passage pulse, not an override of
+        // physical sensors. Never turn off overflow accounting.
+        const delay=Math.max(a.blockedTimeDelaySeconds??d.speedAndSensors?.blockedTimeDelaySeconds??0,Math.ceil((z.packageLength/newSpeed+.15)*100)/100,.8);
+        set(a,'blockedTimeDelaySeconds',delay,'processData.accumulation.blockedTimeDelaySeconds',e,'s');
+        if(d.speedAndSensors)set(d.speedAndSensors,'blockedTimeDelaySeconds',delay,'processData.speedAndSensors.blockedTimeDelaySeconds',e,'s');
+        if(p.control===2&&finite(z.primeReserve)){
+          const prime=Math.min(newLength*.25,Math.max(z.packageLength,z.primeReserve*2));
+          set(g,'lpPrimeMm',prime,'processData.geometry.lpPrimeMm',e,'mm');
+          if(finite(a.primeSensorPositionMm))set(a,'primeSensorPositionMm',newLength-prime,'processData.accumulation.primeSensorPositionMm',e,'mm');
+          if(!positive(a.manualLbaMm)&&positive(z.backupPosition)){const backup=Math.min(newLength-prime-z.packageLength,z.backupPosition*1.25);if(backup>z.backupPosition){set(a,'backupSensorPositionMm',backup,'processData.accumulation.backupSensorPositionMm',e,'mm');if(finite(a.backupRestartPositionMm)&&a.backupRestartPositionMm<backup)set(a,'backupRestartPositionMm',backup,'processData.accumulation.backupRestartPositionMm',e,'mm');}}
+        }
+      }
+    }
+    const runChanges={durationSeconds,rounds,seed,numericalResolution:resolution,calculationMode:'FAST',durationMode:'FIXED',reliabilityEnabled};
+    if(!originalSchedule)Object.assign(runChanges,{eventsEnabled:false,includePlantCalendar:false,plantCalendar:{enabled:false},plannedStops:[],commands:[]});
+    Object.assign(run,runChanges);delete run.effectiveRuntimeTargetSeconds;delete run.scenarioFidelity;delete run.scenarioWarmupSeconds;delete run.scenarioControlEvidenceVersion;
+    if(continuous){run.machineResidenceEnabled=false;run.discretePackages=false;run.tickSeconds=Math.min(run.tickSeconds||.25,.05);}
+    changes.push({equipmentId:'RUN',equipment:'Run',parameter:'reliabilityEnabled',before:ctx.sourceRun.reliabilityEnabled!==false,after:reliabilityEnabled,unit:''});
+    if(continuous)changes.push({equipmentId:'RUN',equipment:'Run',parameter:'machineResidenceEnabled / discretePackages',before:true,after:false,unit:''});
+    return {input:{case:{id:ctx.caseId,unitOfFlow:ctx.unitOfFlow,equipment},run},changes,parameters:p};
+  }
+  function metrics(result,ctx,run){
+    const rows=result.batch?.rows||[result],roundMetrics=rows.map((r,i)=>{
+      const duration=r.durationSeconds??run.durationSeconds,s=r.summary||{},q=s.outputCount/duration*60;
+      if(!finite(q)||!finite(s.lineOeePercent)||!finite(s.totalOverflowUnits)||!(duration>0)||Math.abs(duration-run.durationSeconds)>1e-6||!Number.isInteger(r.seed??(run.seed+i)>>>0))throw Error('Incomplete benchmark metrics.');
+      return {seed:r.seed??(run.seed+i)>>>0,durationSeconds:duration,output:s.outputCount,throughput:q,oee:s.lineOeePercent,attainment:q/ctx.referenceRate*100,overflow:s.totalOverflowUnits};
+    });
+    if(roundMetrics.length!==run.rounds||new Set(roundMetrics.map(r=>r.seed)).size!==run.rounds||roundMetrics.some((r,i)=>r.seed!==((run.seed+i)>>>0)))throw Error('Unmatched benchmark seed block.');
+    const mean=k=>roundMetrics.reduce((sum,r)=>sum+r[k]/roundMetrics.length,0);
+    const em={};
+    for(const e of ctx.equipment.filter(e=>!belt(e))){
+      const out={};for(const k of ['outputCount','blockedSeconds','starvedSeconds','waitingForPrimeSeconds','startRampCount','startRampSeconds','failureSeconds','failureCount','internalCapacityBottles']){
+        const vals=rows.map(r=>r.equipmentMetrics?.[e.id]?.[k]);
+        if(vals.every(finite))out[k]=vals.reduce((s,n)=>s+n/vals.length,0);
+      }em[e.id]={name:e.name,...out};
+    }
+    const zones=Object.values(result.accumulationZoneMetrics||{}).filter(z=>positive(z.conveyorSpeedMmPerSecond)).map(z=>({id:z.ownerEquipmentId,pitch:z.movingPitchMm,speed:z.conveyorSpeedMmPerSecond,transferCapacityPerSecond:z.transferCapacityPerSecond,maximumInventoryUnits:z.maximumInventoryUnits,capacityUnits:z.capacityUnits,overflow:z.overflowUnits,primeTriggerCount:z.primeTriggerCount,backupTriggerCount:z.backupTriggerCount}));
+    return {throughput:mean('throughput'),oee:mean('oee'),attainment:mean('attainment'),output:mean('output'),overflow:mean('overflow'),zeroOverflow:roundMetrics.every(r=>r.overflow===0),minAttainment:Math.min(...roundMetrics.map(r=>r.attainment)),roundMetrics,equipment:em,zones};
+  }
+  const effort=p=>fields.reduce((sum,k)=>sum+(k==='control'?p[k]*.2:k==='ramp'?1-p[k]:Math.abs(Math.log(p[k]))),0);
+  const valid=r=>r?.status==='OK'&&r.metrics.zeroOverflow;
+  const best=(rows,target)=>rows.filter(valid).sort((a,b)=>{const aa=a.metrics.attainment>=target,bb=b.metrics.attainment>=target;return Number(bb)-Number(aa)||(aa?effort(a.parameters)-effort(b.parameters):b.metrics.attainment-a.metrics.attainment)||b.metrics.attainment-a.metrics.attainment;})[0];
+  function design(){
+    // Full 2^3 factorial: machine capacity, buffer length, belt speed.
+    // All eight points use the same no-failure/control background.
+    const rows=[];
+    for(const a of [1,1.5])for(const b of [1,2])for(const c of [1,1.5])rows.push({label:'Factorial '+rows.length,stage:'FACTORIAL',p:normalize({inlet:a,pacemaker:a,otherMachines:a,length:b,beltSpeed:c,control:1}),coded:[a===1?-1:1,b===1?-1:1,c===1?-1:1]});
+    return rows;
+  }
+  async function runStudy(ctx,{durationSeconds=1800,target=99,simulate,progress=()=>{},stop=()=>false,maxTrials=30,verifyOriginal=false}={}){
+    if(![900,1800,3600].includes(durationSeconds)||!targets.includes(target))throw Error('Invalid benchmark settings.');
+    const study={policy:POLICY,status:'RUNNING',simulationId:ctx.simulationId,simulationName:ctx.simulationName,referenceRate:ctx.referenceRate,referenceMachine:ctx.referenceMachine,referenceUnit:ctx.outputUnit,sourceSignature:ctx.sourceSignature,original:ctx.original,target,durationSeconds,experiments:[],thresholds:[],audit:{method:'PHYSICAL_FAST_EXPLORATION_PRECISE_CHECK',comparison:'FIXED_ORIGINAL_REFERENCE',notes:['Cold starts are included. All technical probes exclude scheduled stops; reliability is explicit per experiment.','Target attainment is not the OEE of the redesigned line. Zero overflow is required to call a target attained.','Finite search, not a certified global optimum, engineering approval, or plant validation.','Continuous sensitivity is a different model, not a confirmed physical result.']},final:null};
+    const cache=new Map(),trialLimit=Math.min(36,Math.max(20,maxTrials)),baseSeed=ctx.sourceRun.seed>>>0;
+    let count=0;
+    async function measure(label,stage,p,options={},coded){
+      if(stop())throw Error('BENCHMARK_CANCELLED');
+      const params=normalize(p),settings={durationSeconds,resolution:'FAST',seed:baseSeed,rounds:1,reliabilityEnabled:false,...options};
+      const ck=key(params)+JSON.stringify(settings),old=cache.get(ck);
+      if(old){const row={...old,label,stage,coded,reused:true};study.experiments.push(row);progress(study,0,label,count,trialLimit);return row;}
+      const built=makeInput(ctx,params,settings),row={label,stage,parameters:params,run:built.input.run,changes:built.changes,coded,status:'RUNNING'};
+      study.experiments.push(row);count++;progress(study,0,label,count,trialLimit);
+      try{
+        const response=await simulate(built.input,{summaryOnly:true,representativeReplay:false,cancelled:stop,progress:f=>progress(study,f,label,count,trialLimit)});
+        if(stop())throw Error('BENCHMARK_CANCELLED');
+        if(!response?.ok){row.status='INVALID';row.error=response?.error?.message||'Invalid configuration';row.details=response?.error?.details||[];}
+        else{row.metrics=metrics(response.result,ctx,built.input.run);row.status='OK';}
+      }catch(error){if(stop()||error.message==='BENCHMARK_CANCELLED')throw Error('BENCHMARK_CANCELLED');row.status='ERROR';row.error=error.message;}
+      cache.set(ck,row);progress(study,1,label,count,trialLimit);await new Promise(resolve=>setTimeout(resolve,0));return row;
+    }
+    try{
+      const base=await measure('Current line','BASELINE',{}, {reliabilityEnabled:ctx.sourceRun.reliabilityEnabled!==false});
+      const noFailures=await measure('Current line without modeled failures','FAILURE_FREE',{});
+      // Isolate the assumptions rather than change production engine behavior.
+      const continuous=await measure('Continuous / no residence diagnostic','MODEL_AUDIT',{}, {continuous:true});
+      study.audit.failureFree= noFailures.metrics||null;study.audit.continuous=continuous.metrics||null;
+      const preciseAudit=await measure('Physical numerical convergence','MODEL_AUDIT',{}, {resolution:'PRECISE'});
+      study.audit.precise=preciseAudit.metrics||null;
+      study.audit.discreteResolutionDifference=valid(noFailures)&&valid(preciseAudit)?preciseAudit.metrics.throughput-noFailures.metrics.throughput:(noFailures.metrics&&preciseAudit.metrics?preciseAudit.metrics.throughput-noFailures.metrics.throughput:null);
+      const pool=[noFailures];
+      // Preserve the pacemaker's original nominal capacity as a separate
+      // scientific objective, even when an oversized line meets the old target.
+      for(const d of design())pool.push(await measure(d.label,d.stage,d.p,{},d.coded));
+      // The matched factorial is exploratory deterministic physics. Effects
+      // are descriptive: no residual error or fictitious replication.
+      const factorial=study.experiments.filter(r=>r.stage==='FACTORIAL');
+      if(factorial.length===8&&factorial.every(r=>r.status==='OK')){
+        study.factorial={factors:['Machine capacity','Buffer length','Belt speed'],response:'attainment_pct',effects:[]};
+        for(let mask=1;mask<8;mask++){const indexes=[0,1,2].filter(i=>mask&(1<<i));study.factorial.effects.push({effect:indexes.map(i=>'ABC'[i]).join('*'),value:factorial.reduce((s,r)=>s+r.metrics.attainment*indexes.reduce((sign,i)=>sign*r.coded[i],1),0)/4});}
+      }
+      for(const [label,p] of [
+        ['Flow controls only',{control:2,ramp:0}],
+        ['Large buffer',{length:4,control:1}],
+        ['Very large buffer',{length:8,control:1}],
+        ['Oversized line',{inlet:1.77,pacemaker:1.5,otherMachines:1.75,beltSpeed:1.5,control:1}],
+        ['Capacity stress test',{inlet:2,pacemaker:2,otherMachines:2,beltSpeed:2,control:1,ramp:.5}],
+        ['Fixed pacemaker capacity',{inlet:2,otherMachines:2,beltSpeed:1.5,control:2,ramp:0}],
+        ['Fixed pacemaker, faster transport',{inlet:1.5,otherMachines:1.5,beltSpeed:2,control:1,ramp:.5}],
+        ['Slower belts, balanced controls',{inlet:1.5,pacemaker:1,otherMachines:1.5,beltSpeed:.5,control:2,ramp:0}]
+      ])if(count<trialLimit-8)pool.push(await measure(label,'EXTREME',p));
+      // Reverse one group at a time. Start with a zero-overflow configuration
+      // satisfying the selected target, or the best observed feasible result.
+      let incumbent=best(pool,target),reverseStart=incumbent;
+      if(incumbent){
+        for(const group of ['length','ramp','control','otherMachines','inlet','beltSpeed','pacemaker']){
+          if(count>=trialLimit-4||stop())break;
+          if(incumbent.parameters[group]===defaults[group])continue;
+          const q={...incumbent.parameters,[group]:defaults[group]};
+          const row=await measure('Restore '+group,'REVERSE',q);pool.push(row);
+          const better=best([incumbent,row],target);if(better)incumbent=better;
+          if(incumbent!==row&&count<trialLimit-4&&group!=='control'){
+            const mid=(incumbent.parameters[group]+defaults[group])/2;
+            const step=await measure('Intermediate '+group,'REVERSE',{...incumbent.parameters,[group]:mid});pool.push(step);incumbent=best([incumbent,step],target)||incumbent;
+          }
+        }
+      }
+      const fixedPool=pool.filter(r=>r.parameters.pacemaker===1),fixedBest=best(fixedPool,target);
+      const ownBest=pool.filter(valid).sort((a,b)=>b.metrics.oee-a.metrics.oee||effort(a.parameters)-effort(b.parameters))[0];
+      study.fixedPacemaker={screening:fixedBest||null,ownOeeBest:ownBest||null,status:fixedBest?.metrics.attainment>=target?'FAST_TARGET_FOUND':'NOT_DEMONSTRATED'};
+      study.reverse={start:reverseStart?.label||null,selected:incumbent?.label||null,effortMetric:'Sum of absolute log ratios plus dimensionless control/ramp penalties; not monetary cost.'};
+      study.thresholds=targets.map(t=>{const r=best(pool,t);return {target:t,screening:r?.metrics.attainment>=t?r.label:null,screeningAttainment:r?.metrics.attainment??null,status:r?.metrics.attainment>=t?'FAST_TARGET_FOUND':'NOT_DEMONSTRATED'};});
+      if(incumbent){
+        // Confirm the selected design at a fixed, longer or equal horizon.
+        const verifyDuration=Math.max(1800,durationSeconds);
+        const verified=await measure('Selected design · PRECISE','PRECISE_IDEAL',incumbent.parameters,{durationSeconds:verifyDuration,resolution:'PRECISE'});
+        const matchedBase=await measure('Original · matched PRECISE','PRECISE_BASELINE',{}, {durationSeconds:verifyDuration,resolution:'PRECISE',reliabilityEnabled:false});
+        study.final={ideal:verified,matchedFailureFreeBase:matchedBase,status:valid(verified)&&verified.metrics.attainment>=target?'IDEAL_TARGET_REPRODUCED':'IDEAL_TARGET_NOT_DEMONSTRATED'};
+        if(fixedBest){const fixed=await measure('Original pacemaker capacity · PRECISE','PRECISE_FIXED_PACEMAKER',fixedBest.parameters,{durationSeconds:verifyDuration,resolution:'PRECISE'});study.fixedPacemaker.confirmation=fixed;study.fixedPacemaker.status=valid(fixed)&&fixed.metrics.attainment>=target?'PRECISE_TARGET_REPRODUCED':'PRECISE_TARGET_NOT_DEMONSTRATED';}
+        // Reintroduce original reliability before a bounded improved-reliability
+        // case. All comparisons here have independent seed blocks, 3 rounds.
+        const restored=await measure('Restore original reliability','RESTORE_RELIABILITY',incumbent.parameters,{durationSeconds:verifyDuration,resolution:'FAST',seed:(baseSeed+100003)>>>0,rounds:3,reliabilityEnabled:ctx.sourceRun.reliabilityEnabled!==false});
+        const reliabilityBase=await measure('Original · matched reliability','RELIABILITY_BASELINE',{}, {durationSeconds:verifyDuration,resolution:'FAST',seed:(baseSeed+100003)>>>0,rounds:3,reliabilityEnabled:ctx.sourceRun.reliabilityEnabled!==false});
+        study.final.restoredReliability=restored;study.final.matchedReliabilityBase=reliabilityBase;
+        let reliableCandidate=restored;
+        if(valid(restored)&&restored.metrics.minAttainment>=target)study.final.reliabilityStatus='FAST_TARGET_ALL_SEEDS';
+        else if(count<trialLimit+4){
+          const improved=await measure('Reliability target ×4 / ×0.25','RELIABILITY_TARGET',{...incumbent.parameters,mtbf:4,mttr:.25},{durationSeconds:verifyDuration,resolution:'FAST',seed:(baseSeed+100003)>>>0,rounds:3,reliabilityEnabled:true});
+          study.final.improvedReliability=improved;reliableCandidate=valid(improved)&&(!valid(restored)||improved.metrics.minAttainment>restored.metrics.minAttainment)?improved:restored;study.final.reliabilityStatus=valid(reliableCandidate)&&reliableCandidate.metrics.minAttainment>=target?'FAST_TARGET_ALL_SEEDS':'NOT_DEMONSTRATED';
+        }
+        if(valid(reliableCandidate)&&reliableCandidate.metrics.minAttainment>=target){
+          const preciseReliable=await measure('Reliability design · independent PRECISE','PRECISE_RELIABILITY',reliableCandidate.parameters,{durationSeconds:verifyDuration,resolution:'PRECISE',seed:(baseSeed+1000003)>>>0,rounds:3,reliabilityEnabled:reliableCandidate.run.reliabilityEnabled});
+          const preciseBase=await measure('Original · independent PRECISE','PRECISE_RELIABILITY_BASELINE',{}, {durationSeconds:verifyDuration,resolution:'PRECISE',seed:(baseSeed+1000003)>>>0,rounds:3,reliabilityEnabled:ctx.sourceRun.reliabilityEnabled!==false});
+          study.final.preciseReliability=preciseReliable;study.final.preciseReliabilityBase=preciseBase;
+          study.final.reliabilityStatus=valid(preciseReliable)&&preciseReliable.metrics.minAttainment>=target?'PRECISE_TARGET_ALL_TESTED_SEEDS':'PRECISE_TARGET_NOT_DEMONSTRATED';
+        }
+        if(verifyOriginal){
+          if(ctx.sourceRun.effectiveRuntimeTargetSeconds!==undefined||!positive(ctx.sourceRun.durationSeconds)||ctx.original.rounds>6)study.final.originalHorizon={status:'NOT_EVALUATED',reason:'Variable horizon or more than six source replications; original verification is bounded.'};
+          else{
+            const chosen=study.final.preciseReliability?.status==='OK'?study.final.preciseReliability:reliableCandidate;
+            const exact=await measure('Selected configuration · original horizon','ORIGINAL_HORIZON',chosen.parameters,{durationSeconds:ctx.sourceRun.durationSeconds,resolution:ctx.sourceRun.numericalResolution||'PRECISE',seed:baseSeed,rounds:ctx.original.rounds,reliabilityEnabled:chosen.run.reliabilityEnabled,originalSchedule:true});
+            study.final.originalHorizon={status:valid(exact)&&exact.metrics.attainment>=target?'TARGET_ATTAINED_ON_SOURCE_HORIZON':'NOT_DEMONSTRATED',candidate:exact,baseline:ctx.original,interpretation:'Descriptive comparison with saved original seed block and original scheduled conditions; reliability may be a hypothetical target.'};
+          }
+        }
+      }
+      study.status='COMPLETE';
+    }catch(error){study.status=stop()||error.message==='BENCHMARK_CANCELLED'?'CANCELLED':'ERROR';study.error=error.message;}
+    study.calculations=count;progress(study,1,study.status,count,trialLimit);return study;
+  }
+  const el=id=>document.getElementById(id);
+  function cell(tag,value){const n=document.createElement(tag);n.textContent=value==null?'—':String(value);return n;}
+  const fmt=n=>finite(n)?n.toFixed(2):'—';
+  function table(host,headers,rows){
+    const wrap=document.createElement('div');wrap.className='table-scroll';const t=document.createElement('table'),head=document.createElement('thead'),hr=document.createElement('tr'),body=document.createElement('tbody');
+    headers.forEach(h=>hr.append(cell('th',h)));head.append(hr);
+    rows.forEach(r=>{const tr=document.createElement('tr');r.forEach(v=>tr.append(cell('td',v)));body.append(tr);});t.append(head,body);wrap.append(t);host.append(wrap);
+  }
+  function render(study){
+    if(!study)return;const host=el('ideal-benchmark-results');host.replaceChildren();
+    host.append(cell('h3',text('Reference and results','Referencia y resultados')));
+    host.append(cell('p',text('Original saved result: ','Resultado original guardado: ')+fmt(study.original.throughput)+' '+study.referenceUnit+'/min · '+fmt(study.original.oee)+'% OEE · '+study.original.durationSeconds/60+' min'));
+    if(study.final?.ideal){
+      const r=study.final.ideal;
+      host.append(cell('h3',text('Selected ideal configuration','Configuración ideal seleccionada')));
+      host.append(cell('p',fmt(r.metrics?.attainment)+'% '+text('of original capacity; ','de capacidad original; ')+fmt(r.metrics?.oee)+'% '+text('of redesigned capacity (OEE). ','de capacidad rediseñada (OEE). ')+study.final.status));
+      table(host,[text('Equipment','Equipo'),text('Parameter','Parámetro'),text('Original','Original'),text('Experimental','Experimental'),text('Unit','Unidad')],r.changes.filter(c=>typeof c.before!=='object'&&typeof c.after!=='object').map(c=>[c.equipment,c.parameter,finite(c.before)?fmt(c.before):c.before,finite(c.after)?fmt(c.after):c.after,c.unit]));
+    }
+    if(study.fixedPacemaker?.confirmation){const f=study.fixedPacemaker.confirmation;host.append(cell('p',text('Best tested design preserving the pacemaker nominal capacity: ','Mejor configuración probada conservando la capacidad nominal de la máquina crítica: ')+fmt(f.metrics?.attainment)+'% · '+fmt(f.metrics?.oee)+'% OEE · '+study.fixedPacemaker.status));}
+    if(study.final?.reliabilityStatus)host.append(cell('p',text('Reliability validation: ','Validación de confiabilidad: ')+study.final.reliabilityStatus));
+    if(study.final?.originalHorizon)host.append(cell('p',text('Original horizon: ','Horizonte original: ')+study.final.originalHorizon.status));
+    if(study.thresholds.length)table(host,[text('Target','Objetivo'),text('Best screened configuration','Configuración explorada'),text('Attainment (%)','Cumplimiento (%)'),text('Status','Estado')],study.thresholds.map(t=>[t.target+'%',t.screening,fmt(t.screeningAttainment),t.status]));
+    host.append(cell('h3',text('Experiments','Experimentos')));
+    table(host,[text('Experiment','Experimento'),text('Stage','Etapa'),text('Resolution','Resolución'),text('Minutes','Minutos'),text('Rounds','Réplicas'),text('Throughput','Producción/min'),text('Original capacity (%)','Capacidad original (%)'),'OEE (%)','Overflow',text('Status','Estado')],study.experiments.map(r=>[r.label,r.stage,r.run?.numericalResolution,r.run?.durationSeconds/60,r.run?.rounds,fmt(r.metrics?.throughput),fmt(r.metrics?.attainment),fmt(r.metrics?.oee),fmt(r.metrics?.overflow),r.status==='OK'?r.metrics.zeroOverflow?'OK':'OVERFLOW':r.error||r.status]));
+    if(study.factorial)table(host,[text('Factorial effect','Efecto factorial'),text('Effect (pp)','Efecto (pp)')],study.factorial.effects.map(e=>[e.effect,fmt(e.value)]));
+    host.append(cell('p',text('Exploratory model experiments, not approved CAPEX or PLC settings. No claim of global optimality.','Experimentos exploratorios del modelo, no CAPEX aprobado ni ajustes autorizados del PLC. No demuestran un óptimo global.')));
+  }
+  function download(name,content,type){
+    const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function csvStudy(study){
+    const columns=['Experiment','Stage','Resolution','Model','Reliability','Duration_s','Seed','Throughput_per_min','OEE_pct','Original_capacity_pct','Overflow',...fields,'A','B','C'];
+    const rows=study.experiments.filter(e=>!e.reused||e.stage==='FACTORIAL').flatMap(e=>(e.metrics?.roundMetrics||[]).map(r=>({Experiment:e.label,Stage:e.stage,Resolution:e.run.numericalResolution,Model:e.run.machineResidenceEnabled===false&&e.run.discretePackages===false?'CONTINUOUS_NO_RESIDENCE':'SOURCE_PHYSICAL_MODEL',Reliability:e.run.reliabilityEnabled,Duration_s:r.durationSeconds,Seed:r.seed,Throughput_per_min:r.throughput,OEE_pct:r.oee,Original_capacity_pct:r.attainment,Overflow:r.overflow,...e.parameters,A:e.coded?.[0],B:e.coded?.[1],C:e.coded?.[2]})));
+    return window.STStatExport.csv({columns,rows});
+  }
+  function open(){
+    if(active||callbacks?.locked?.())return;
+    try{
+      const sim=callbacks?.simulation?.(),record=callbacks?.activeCase?.();
+      opened=context(sim,record);report=null;el('ideal-benchmark-results').replaceChildren();el('ideal-benchmark-status').textContent='';el('ideal-benchmark-progress').hidden=true;
+      el('ideal-benchmark-description').textContent=text('Technical benchmark against the original capacity: ','Benchmark técnico respecto a la capacidad original: ')+fmt(opened.referenceRate)+' '+opened.outputUnit+'/min. '+text('Cold starts; scheduled stops excluded. No changes to the original simulation.','Arranque en vacío; paradas programadas excluidas. Sin cambios a la simulación original.');
+      el('ideal-benchmark-json').disabled=el('ideal-benchmark-csv').disabled=true;el('ideal-benchmark-dialog').showModal();
+    }catch(error){callbacks?.error?.(error);}
+  }
+  function connect(config){
+    callbacks=config;
+    const close=el('ideal-benchmark-close'),dialog=el('ideal-benchmark-dialog'),runButton=el('ideal-benchmark-run');
+    if(!dialog||!runButton)return;
+    close.onclick=()=>{if(active){cancelled=true;return;}dialog.close();};
+    dialog.addEventListener('cancel',event=>{if(active){event.preventDefault();cancelled=true;}});
+    for(const id of ['minimal-ideal-benchmark','results-ideal-benchmark','whatif-ideal-benchmark']){const b=el(id);if(b)b.onclick=open;}
+    el('ideal-benchmark-json').onclick=()=>{if(report)download('ideal-line-benchmark.json',JSON.stringify(report,null,2),'application/json');};
+    el('ideal-benchmark-csv').onclick=()=>{if(report)download('ideal-line-benchmark.csv',csvStudy(report),'text/csv;charset=utf-8');};
+    runButton.onclick=async()=>{
+      if(active){cancelled=true;runButton.disabled=true;return;}
+      if(!opened||callbacks?.locked?.())return;
+      const current=callbacks?.simulation?.();
+      if(current?.id!==opened.simulationId||current?.results?.inputSignature!==opened.sourceSignature){callbacks?.error?.(Error('Source simulation changed. Reopen the benchmark.'));return;}
+      active=true;cancelled=false;report=null;el('ideal-benchmark-results').replaceChildren();
+      el('ideal-benchmark-json').disabled=el('ideal-benchmark-csv').disabled=true;
+      el('ideal-benchmark-duration').disabled=el('ideal-benchmark-target').disabled=el('ideal-benchmark-original-horizon').disabled=true;
+      runButton.textContent=text('Cancel','Cancelar');const bar=el('ideal-benchmark-progress');bar.hidden=false;bar.value=0;
+      let lastPaint=0,lastLabel='';
+      try{
+        report=await runStudy(opened,{durationSeconds:Number(el('ideal-benchmark-duration').value),target:Number(el('ideal-benchmark-target').value),verifyOriginal:el('ideal-benchmark-original-horizon').checked,simulate:(input,options)=>window.SimulatorEngine.simulateBatch(input,options),stop:()=>cancelled,progress:(study,f,label,n,max)=>{
+          const now=Date.now();
+          el('ideal-benchmark-status').textContent=label+' · '+n+' '+text('calculations','cálculos')+' · '+Math.round(f*100)+'%';
+          bar.value=study.status==='COMPLETE'?100:Math.min(99,100*(n-1+f)/(max+5));
+          if(now-lastPaint>600&&(label!==lastLabel||f===1)){lastPaint=now;lastLabel=label;render(study);}
+        }});
+        render(report);el('ideal-benchmark-status').textContent=report.status+(report.error?' · '+report.error:'');el('ideal-benchmark-json').disabled=el('ideal-benchmark-csv').disabled=false;
+      }catch(error){callbacks?.error?.(error);}
+      finally{active=false;runButton.disabled=false;runButton.textContent=text('Run benchmark','Ejecutar benchmark');el('ideal-benchmark-duration').disabled=el('ideal-benchmark-target').disabled=el('ideal-benchmark-original-horizon').disabled=false;}
+    };
+  }
+  return {policy:POLICY,context,makeInput,metrics,design,runStudy,connect,open,busy:()=>active,csvStudy};
+})();
+</script>

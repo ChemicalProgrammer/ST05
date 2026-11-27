@@ -4,6 +4,8 @@ window.STMinimalMode=(function(){
   var state,actions,initialized=false,importing=false,starting=false,searching=false,searchSaving=false,buildingCards=false,timer=null,stopRequested=false;
   var runProgress=0,searchProgress=0,searchCard=null,searchCompleted=0,searchTotal=1,tableKey='',resultKey='',scenarioOwner=null,scenarioResult=null,readinessCache=null,searchMessage='',lastOwner=null;
   var tiers=['ZERO'];
+  var executionPolicy='ZERO_ONLY_PHYSICAL_V6';
+  function zeroCard(card,simulationId){return !!card&&card.dataset?.motionKey===JSON.stringify([simulationId,'CAPEX','ZERO'])&&card.dataset?.capexExecutionPolicy===executionPolicy&&typeof card._runMinimalSearch==='function';}
   function el(id){return document.getElementById(id);}
   function node(tag,text,cls){var n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;}
   function tr(value){return window.STLanguage?.translate(value)||value;}
@@ -88,7 +90,7 @@ window.STMinimalMode=(function(){
   function scenarioCards(sim,r,build){
     var grid=el('minimal-scenario-cards');
     if(scenarioOwner!==sim||scenarioResult!==r){clearScenarios();scenarioOwner=sim;scenarioResult=r;}
-    function mounted(){return Array.from(grid.querySelectorAll('.analysis-recommendation')).filter(c=>typeof c._runMinimalSearch==='function');}
+    function mounted(){return Array.from(grid.querySelectorAll('.analysis-recommendation')).filter(c=>zeroCard(c,sim.id));}
     var cards=mounted();
     if(build&&!buildingCards&&cards.length!==tiers.length){
       buildingCards=true;
@@ -124,7 +126,7 @@ window.STMinimalMode=(function(){
     if(!searching)return;
     var current=Number(searchCard?._minimalSearchProgress?.())||0;
     searchProgress=Math.max(searchProgress,Math.min(99.9,(searchCompleted+Math.min(current,99.9)/100)/searchTotal*100));
-    var label=searchCard?.querySelector('.analysis-capex')?.textContent,stage=searchCard?._minimalSearchLabel?.();
+    var label=searchCard?'Zero CAPEX · V6 (OFAT/DOE)':null,stage=searchCard?._minimalSearchLabel?.();
     progress('minimal-search-progress',searchProgress,[label,stage].filter(Boolean).join(' · '));
   }
   function sync(current){
@@ -190,9 +192,9 @@ window.STMinimalMode=(function(){
     if(!readiness?.ready){searchMessage='Optimization is unavailable for this configuration.'+(readiness?.reason?' ('+readiness.reason+')':'');sync(state);return;}
     var cards;
     try{cards=scenarioCards(sim,r,true);}catch(error){searchMessage=error.message||'Evaluation failed';actions.error(error);sync(state);return;}
-    var requested=onlyCard?[onlyCard.dataset.motionKey]:tiers.map(t=>JSON.stringify([sim.id,'CAPEX',t]));
-    var work=requested.map(id=>cards.find(card=>card.dataset.motionKey===id));
-    if(work.some(card=>!card)){searchMessage='CAPEX search cards could not be initialized.';sync(state);return;}
+    // Fail closed on stale cards and mixed-version Apps Script deployments.
+    if(window.STScenarioExplorer?.executionPolicy!==executionPolicy||cards.length!==1||!zeroCard(cards[0],sim.id)||(onlyCard&&onlyCard!==cards[0])){searchMessage=document.documentElement.lang==='es'?'Zero CAPEX V6 no está sincronizado. Actualiza la aplicación y recarga la página.':'Zero CAPEX V6 is not synchronized. Update the application and reload.';sync(state);return;}
+    var work=[cards[0]];
     searching=true;stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
     var failures=[],evaluated=false;
     try{
@@ -206,6 +208,7 @@ window.STMinimalMode=(function(){
       sync(state);
       for(var card of work){
         if(stopRequested)break;
+        if(!zeroCard(card,sim.id))throw Error('SCENARIO_CAPEX_DISABLED');
         if(!isMinimal()||ownerKey()!==key||sourceSignature(sim)!==signature){failures.push('Source inputs changed.');break;}
         searchCard=card;
         var label=card.querySelector('.analysis-capex')?.textContent||'CAPEX';

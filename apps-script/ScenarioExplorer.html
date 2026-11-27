@@ -101,6 +101,9 @@
 // Optional exploration budget overrides; confirmation uses a separate matched run.
 window.ST_SCENARIO_SEARCH_LIMITS={parallelCandidates:0,wallClockBudget:false,reusePreviousWinner:false};
 window.STScenarioExplorer=(function(){
+  var executionPolicy='ZERO_ONLY_PHYSICAL_V6';
+  function zeroEngineReady(){return typeof window.STScenarioSearch?.settingsSignature==='function'&&typeof window.STScenarioSearch?.zeroAllowed==='function'&&typeof window.STScenarioSearch?.zeroOFAT==='function'&&JSON.parse(STScenarioSearch.settingsSignature({automaticBasic:true}))[0]==='SCENARIO_SEARCH_ZERO_OFAT_V6';}
+  function zeroProject(project){return project?.tier==='ZERO'&&(project.searchScope||project.tier)==='ZERO';}
   function unitLabel(unit){return window.STBasicMode?.unitLabel(unit)||unit||'units';}
   function quantity(value,unit){var strong=el('strong',value,'metric-value');if(unit)strong.append(el('span',unit,'metric-unit'));return strong;}
   // Evidence belongs to the simulation and is saved through the case autosave.
@@ -173,6 +176,7 @@ window.STScenarioExplorer=(function(){
   function config(sim){var r=Object.assign({durationSeconds:300,tickSeconds:.25,sampleEverySeconds:5,seed:1,commands:[],rounds:1},sim.dynamicConfig||{});if(r.durationMode==='SHIFTS')r.durationSeconds=(r.shiftHours||8)*(r.shiftCount||1)*3600;return r;}
   function evaluationWarnings(candidate,value){var warnings=(candidate.scenarioWarnings||[]).slice();if(value.overflowUnits>1e-6)warnings.push({equipmentId:'LINE',rule:'SIMULATED_OVERFLOW',before:'No spill accepted as an approved recommendation',after:value.overflowUnits});return warnings;}
   async function evaluate(sim,changes,cancelled,seedOffset,runConfig,onProgress,silent,inputUnitOverride){
+    if(!zeroEngineReady())throw Error('SCENARIO_ZERO_VERSION_MISMATCH');
     if(!changes.every(c=>STScenarioSearch.zeroAllowed(c,sim.equipment)))throw Error('SCENARIO_ZERO_FLOW_ONLY');
     if(runConfig?.scenarioFidelity==='FLUID_SCREEN_V1')throw Error('SCENARIO_ZERO_PHYSICAL_ONLY');
     if((runConfig||config(sim)).engineId==='DES_SIMPY_EXPERIMENTAL')throw Error('What-If is not validated for the experimental SimPy engine.');
@@ -214,7 +218,7 @@ window.STScenarioExplorer=(function(){
     return {after:up?Math.min(change.after,bound):Math.max(change.after,bound)};
   }
   function attach(host,project,create,simulation,sharedPlan){
-    if((project.searchScope||project.tier)!=='ZERO'){host.hidden=true;return;}
+    if(!zeroProject(project)){host.hidden=true;return;}
     var source=JSON.parse(JSON.stringify({id:simulation.id,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,unitOfFlow:simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||simulation.unitOfFlow})),rows=[],generation=0,timer,baseline,baselineRun,last=null,searchCanFinish=false,finishRequested=false;
     var automaticBasic=true,compactCheckpoint=null; // Single automatic physical policy in every mode.
     function searchDOEEnabled(){return automaticBasic||doeEnabled();}
@@ -229,7 +233,7 @@ window.STScenarioExplorer=(function(){
     project=Object.assign({},project,{changes:(project.changes||[]).filter(scopeAllowed)});
     var viewMode=project.compact?'minimal':document.documentElement.dataset.uiMode==='basic'?'basic':'advance',sourceSignature=STScenarios.signature(simulation),baseRecordKey=JSON.stringify([source.id,sourceSignature,project.id||project.kind,project.tier,project.searchScope||project.tier,!!project.explore,project.changes]),recordKey=JSON.stringify([baseRecordKey,viewMode,project.searchDerivedDOE?'INDEPENDENT_CAPEX_V12':'PROPOSAL']);
     var cardId=JSON.stringify([source.id,project.explore?'CAPEX':project.id||project.kind,project.searchScope||project.tier]);
-    host.dataset.motionKey=cardId;
+    host.dataset.motionKey=cardId;host.dataset.capexExecutionPolicy=executionPolicy;
     if(project.compact)host.dataset.compactCapex='true';
     function sourceReadiness(){var live=(caseProvider?.()?.simulations||[]).find(s=>s.id===simulation.id)||simulation;if(STScenarios.signature(live)!==sourceSignature)return {ready:false,reason:'SOURCE_INPUTS_CHANGED'};return STScenarios.readiness?.(live)||{ready:false,reason:'SOURCE_VALIDATION_UNAVAILABLE'};}
     function preserveSavedOutcome(notice){
@@ -750,7 +754,7 @@ window.STScenarioExplorer=(function(){
     // record prevents a stopped or remounted search from displaying stale
     // results. Do not clear the physical baseline, exact cache, or settings.
     host._prepareMinimalRestart=function({notify=true}={}){
-      if(activeHost)return false;
+      if(activeHost||!zeroProject(project)||!zeroEngineReady())return false;
       generation++;clearTimeout(timer);
       latest=null;last=null;lastMetricEntry=null;compactCheckpoint=null;baseline=null;baselineRun=null;searchVariables=[];pendingMetricsReveal=false;
       progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;lastTracePaint=0;
@@ -761,7 +765,7 @@ window.STScenarioExplorer=(function(){
       clearNotice.replaceChildren();save.disabled=true;setIcon(save,'Create selected scenario','copy');
       status.textContent=document.documentElement.lang==='es'?'En espera del nuevo análisis…':'Waiting for new analysis…';status.dataset.state='pending';
       previewRun=searchRun();
-      record('NOT_EVALUATED',{restartPending:true,lastResult:null},{notify});
+      record('NOT_EVALUATED',{restartPending:true,lastResult:null,capexExecutionPolicy:executionPolicy},{notify});
       clearResultButton.disabled=true;syncSavedWarning();
       return true;
     };
@@ -917,7 +921,8 @@ window.STScenarioExplorer=(function(){
     }
     function improves(base,next){return Number.isFinite(next.throughput)&&Number.isFinite(next.oee)&&next.throughput>base.throughput+Math.max(.001,Math.abs(base.throughput)*.001)&&next.oee>=base.oee-1e-9;}
     async function preview(all){
-      if(primaryTier!=='ZERO')return {started:false,reason:'Medium and High CAPEX are paused.'};
+      if(!zeroProject(project))return {started:false,reason:'Medium and High CAPEX are paused.'};
+      if(!zeroEngineReady())return {started:false,reason:document.documentElement.lang==='es'?'Motor Zero CAPEX V6 desactualizado. Actualiza y recarga la aplicación.':'Zero CAPEX V6 engine mismatch. Update and reload the application.'};
       all=true;
       if(activeHost)return {started:false,reason:'Another scenario evaluation is active.'};
       if(!requireCompletedSource())return {started:false,reason:run.title||status.textContent};
@@ -994,8 +999,8 @@ window.STScenarioExplorer=(function(){
         var expandedBasic=automaticBasic&&primaryTier==='ZERO'&&previewRun.scenarioFidelity==='FLUID_SCREEN_V1';
         if(expandedBasic){limits.maxFactors=4;limits.maxCandidates=window.ST_SCENARIO_SEARCH_LIMITS.maxCandidates===undefined?32:Math.min(32,limits.maxCandidates);limits.finalists=3;}
         var diagnosticPlan=sharedPlan||STScenarios.plan(source);
-        evidence={searchSettings:Object.assign({},searchSettings),searchSettingsSignature:searchSettingsSignature,phaseAudit:{},searchPolicyVersion:'MATCHED_CAPEX_V12',method:method,depth:depth,proposalNeeds:diagnosticPlan.proposalNeeds,lossDiagnosis:diagnosticPlan.diagnosis,capacityDiagnosis:diagnosticPlan.capacityDiagnosis,sensitivityScreening:sensitivityEvidence,reuseCounts:{},explorationRun:Object.assign({},previewRun),searchLimits:limits};
-        setCounter('preparation','Input and search configuration',1,1);record('RUNNING',{method:method});
+        evidence={capexExecutionPolicy:executionPolicy,searchSettings:Object.assign({},searchSettings),searchSettingsSignature:searchSettingsSignature,phaseAudit:{},searchPolicyVersion:'MATCHED_CAPEX_V12',method:method,depth:depth,proposalNeeds:diagnosticPlan.proposalNeeds,lossDiagnosis:diagnosticPlan.diagnosis,capacityDiagnosis:diagnosticPlan.capacityDiagnosis,sensitivityScreening:sensitivityEvidence,reuseCounts:{},explorationRun:Object.assign({},previewRun),searchLimits:limits};
+        setCounter('preparation','Input and search configuration',1,1);record('RUNNING',{method:method,capexExecutionPolicy:executionPolicy});
         // Dedicated Zero flow study. No reliability optimization, fluid screen,
         // replacement or buffer-length package enters any candidate evaluation.
         var reliabilityTargets=null,done=0,invalid=0,best=null,bestChanges=[],reviewBest=null,reviewChanges=[],finalistPool=new Map(),changes=[],design=null,factors=[],trialHistory=[],coverageComplete=false;
@@ -1355,7 +1360,7 @@ window.STScenarioExplorer=(function(){
     }
     rebuild();
   }
-  return {doeEnabled:doeEnabled,setDOE:setDOE,connectCase:function(provider,changed){caseProvider=provider;caseChanged=changed;},attach:attach,tools:tools,evaluate:evaluate,evaluations:evaluations};
+  return {executionPolicy:executionPolicy,doeEnabled:doeEnabled,setDOE:setDOE,connectCase:function(provider,changed){caseProvider=provider;caseChanged=changed;},attach:attach,tools:tools,evaluate:evaluate,evaluations:evaluations};
 })();
 </script>
 

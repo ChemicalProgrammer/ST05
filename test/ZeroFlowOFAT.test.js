@@ -44,3 +44,13 @@ test('Active UI and server block legacy categories',()=>{
  assert.match(explorer,/SCENARIO_ZERO_FLOW_ONLY/);assert.match(explorer,/SCENARIO_ZERO_PHYSICAL_ONLY/);
  assert.match(service,/proposal\.tier!=='ZERO'/);assert.match(service,/STScenarioEngine_\.zeroAllowed/);
 });
+
+test('Zero-only queue rejects old, mixed-scope and mismatched cards before dispatch',()=>{
+ const basic=fs.readFileSync('apps-script/MinimalMode.html','utf8'),explorer=fs.readFileSync('apps-script/ScenarioExplorer.html','utf8');
+ const check=basic.match(/function zeroCard\(card,simulationId\)\{[^\n]+\}/)[0];
+ const accepts=new Function('executionPolicy',check+';return zeroCard;')('ZERO_ONLY_PHYSICAL_V6');
+ const card=(tier,policy='ZERO_ONLY_PHYSICAL_V6',id='a')=>({dataset:{motionKey:JSON.stringify([id,'CAPEX',tier]),capexExecutionPolicy:policy},_runMinimalSearch:()=>{throw Error('not executed');}});
+ assert(accepts(card('ZERO'),'a'));assert(!accepts(card('MEDIUM'),'a'));assert(!accepts(card('HIGH'),'a'));assert(!accepts(card('ZERO','old'),'a'));assert(!accepts(card('ZERO',undefined,'other'),'a'));
+ assert.match(basic,/var work=\[cards\[0\]\]/);assert.match(basic,/onlyCard&&onlyCard!==cards\[0\]/);assert.match(basic,/if\(!zeroCard\(card,sim.id\)\)throw Error\('SCENARIO_CAPEX_DISABLED'\)/);
+ assert.match(explorer,/SCENARIO_SEARCH_ZERO_OFAT_V6/);assert.match(explorer,/if\(!zeroEngineReady\(\)\)throw Error\('SCENARIO_ZERO_VERSION_MISMATCH'\)/);
+});

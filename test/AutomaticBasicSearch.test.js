@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {scenarioSearchSettings,scenarioSearchProfile,scenarioSearchRun,planScenarioFinalistRanking,planBasicScenarioSearch,designScenarioPackages,planScenarioConfirmation} from '../src/analysis/ScenarioSearch.js';
+import {scenarioSearchSettings,scenarioSearchProfile,scenarioSearchRun,planScenarioFinalistRanking,planBasicScenarioSearch,designScenarioPackages,planScenarioConfirmation,selectProgressiveBasicFinalists} from '../src/analysis/ScenarioSearch.js';
 import {applyScenarioChanges} from '../src/analysis/ScenarioPlanner.js';
 import {analyzeScenarioDOE,analyzeScenarioANOVA} from '../src/analysis/ScenarioDOE.js';
 import {searchReliabilityTargets} from '../src/analysis/ReliabilityTargetSearch.js';
@@ -15,10 +15,10 @@ test('Basic owns a bounded automatic profile while preserving failure exposure a
   const equipment=[{type:'MACHINE',noiseProfile:{reliability:{mtbfMinutes:15,mttrMinutes:1}}}],run={durationSeconds:86400,seed:17,rounds:30,reliabilityEnabled:true};
   for(const depth of ['LIGHT','MEDIUM','HIGH']){
     const profile=scenarioSearchProfile(depth,settings,{run,equipment});
-    assert.equal(profile.maxCandidates,24);assert.equal(profile.passes,1);assert.equal(profile.maxFactors,3);assert.equal(profile.finalists,3);assert.equal(profile.fullHorizonFinalists,2);assert.equal(profile.hardCandidateLimit,true);
-    assert.equal(profile.explorationSeconds,1800);assert.equal(profile.confirmationSeconds,3600);
+    assert.equal(profile.maxCandidates,24);assert.equal(profile.passes,1);assert.equal(profile.maxFactors,3);assert.equal(profile.finalists,2);assert.equal(profile.fullHorizonFinalists,1);assert.equal(profile.basicTimeLimitMs,300000);assert.equal(profile.hardCandidateLimit,true);
+    assert.equal(profile.explorationSeconds,900);assert.equal(profile.confirmationSeconds,1800);
     const full=scenarioSearchRun(run,depth,'validation',23,settings,equipment);assert.equal(full.durationSeconds,86400);assert.equal(full.rounds,23);assert.equal(full.seed,17);
-    const ranking=planScenarioFinalistRanking(run,depth,3,{searchSettings:settings,equipment});assert.equal(ranking.fullHorizonFinalists,2);assert.equal(ranking.fullRun.durationSeconds,86400);
+    const ranking=planScenarioFinalistRanking(run,depth,3,{searchSettings:settings,equipment});assert.equal(ranking.fullHorizonFinalists,1);assert.equal(ranking.fullRun.durationSeconds,86400);
   }
   const result=(delta,seed)=>({throughput:100+delta,oee:70+delta,durationSeconds:86400,unitOfFlow:'bottles',roundMetrics:[0,1,2].map(i=>({seed:seed+i,durationSeconds:86400,throughput:100+delta,oee:70+delta}))});
   assert.equal(planScenarioConfirmation(result(0,21),result(5,21)).rounds,6,'automatic search keeps the existing independent sample-size rule');
@@ -109,4 +109,24 @@ test('engineering bounds deduplicate repeated Basic reliability grades before me
   const source=fixture(),limits=Object.fromEntries(source.equipment.filter(e=>e.type!=='CONVEYOR').map(e=>[e.id,{mtbfMaximum:e.noiseProfile.reliability.mtbfMinutes*1.1,mttrMinimum:e.noiseProfile.reliability.mttrMinutes*.9}]));
   const report=await searchReliabilityTargets(source,{automaticBasic:true,equipmentLimits:limits,run:{seed:7},measure:async(model,changes)=>({throughput:changes.length?110:model.dynamicConfig.reliabilityEnabled===false?120:100,oee:60,warnings:[]})});
   assert.equal(report.targetTests.length,1);assert.equal(report.calculations,6);
+});
+
+test('progressive Basic avoids full-horizon work after a clear negative screen, but protects late effects',()=>{
+  const base={durationSeconds:900,throughput:100,oee:60,roundMetrics:[0,1,2].map(seed=>({seed,throughput:100,oee:60}))};
+  const item=(delta,path='speed')=>({changes:[{equipmentId:'e',path}],result:{...base,throughput:100+delta,roundMetrics:base.roundMetrics.map(r=>({...r,throughput:r.throughput+delta}))}});
+  const run={durationSeconds:86400,reliabilityEnabled:false,commands:[]};
+  const no=selectProgressiveBasicFinalists([item(-1),item(0)],base,run,[],2);
+  assert.equal(no.outcome,'NO_PROMISING_CANDIDATE');assert.equal(no.selected.length,0);
+  const promising=selectProgressiveBasicFinalists([item(1),item(2),item(3)],base,run,[],1);
+  assert.equal(promising.selected.length,1);assert.equal(promising.selected[0].result.throughput,103);
+  const rare=selectProgressiveBasicFinalists([item(-1,'noiseProfile.reliability.mtbfMinutes'),item(0)],base,{...run,reliabilityEnabled:true},[{type:'MACHINE',noiseProfile:{reliability:{mtbfMinutes:120,mttrMinutes:2}}}],1);
+  assert.equal(rare.selected.length,1);assert.equal(rare.precautionary,true);assert(rare.reasons.includes('RARE_FAILURE_EXPOSURE'));
+  const scheduled=selectProgressiveBasicFinalists([item(0)],base,{...run,commands:[{atVirtualSecond:1000}]},[],1);
+  assert.equal(scheduled.selected.length,1);assert(scheduled.reasons.includes('SCHEDULED_CONDITIONS'));
+});
+test('Basic caps noisy confirmation at six without changing the configured horizon or Standard statistical policy',()=>{
+  const value=(gains,seed)=>({throughput:100+gains.reduce((a,b)=>a+b,0)/gains.length,oee:60,durationSeconds:86400,unitOfFlow:'bottles',roundMetrics:gains.map((gain,i)=>({seed:seed+i,durationSeconds:86400,throughput:100+gain,oee:60}))});
+  const base=value([0,0,0],21),candidate=value([1,20,50],21),metadata={replications:{relativePrecision:.005,maximum:30}};
+  const basic=planScenarioConfirmation(base,candidate,metadata,{automaticBasic:true}),standard=planScenarioConfirmation(base,candidate,metadata);
+  assert.equal(basic.rounds,6);assert.equal(basic.capped,true);assert.equal(basic.comparisonDurationSeconds,86400);assert.equal(standard.rounds,30);
 });

@@ -6198,7 +6198,8 @@ function scenarioSearchSettings(raw) {
   return {speedProfile:['FAST','BALANCED','THOROUGH'].includes(raw?.speedProfile)?raw.speedProfile:'BALANCED'};
 }
 function scenarioSearchSettingsSignature(raw) {
-  return JSON.stringify(['SCENARIO_SEARCH_SPEED_V1',scenarioSearchSettings(raw)]);
+  const settings=scenarioSearchSettings(raw);
+  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_PROGRESSIVE_V2':'SCENARIO_SEARCH_SPEED_V1',settings]);
 }
 function scenarioSearchProfile(level,settings,context) {
   const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
@@ -6209,7 +6210,7 @@ function scenarioSearchProfile(level,settings,context) {
     case 'THOROUGH':selected={...profile,explorationSeconds:Math.min(1800,profile.explorationSeconds*2),confirmationSeconds:3600,maxCandidates:profile.maxCandidates*2,passes:profile.passes+1,fullHorizonFinalists:Math.min(4,profile.fullHorizonFinalists+1)};break;
     default:selected=profile;
   }
-  if(settings?.automaticBasic===true)selected={...selected,maxCandidates:24,maxWithoutImprovement:12,passes:1,maxFactors:3,finalists:3,fullHorizonFinalists:2,hardCandidateLimit:true,automaticBasic:true};
+  if(settings?.automaticBasic===true)selected={...selected,maxCandidates:24,maxWithoutImprovement:12,passes:1,maxFactors:3,finalists:2,fullHorizonFinalists:1,hardCandidateLimit:true,automaticBasic:true,basicTimeLimitMs:300000};
   const run=context?.run,equipment=context?.equipment;
   if(!run||run.reliabilityEnabled===false||!Array.isArray(equipment))return selected;
   const categories=run.reliabilityCategories||{};
@@ -6222,11 +6223,11 @@ function scenarioSearchProfile(level,settings,context) {
   const median=mtbf.length%2?mtbf[(mtbf.length-1)/2]:(mtbf[mtbf.length/2-1]+mtbf[mtbf.length/2])/2;
   const full=Number(run.durationSeconds);
   if(!(full>selected.explorationSeconds))return selected;
-  const floor=Math.min(1800,Math.max(900,Math.ceil(2*median*60/300)*300));
+  const floor=selected.automaticBasic?Math.min(900,Math.max(300,Math.ceil(2*median*60/300)*300)):Math.min(1800,Math.max(900,Math.ceil(2*median*60/300)*300));
   const exploration=Math.min(full,Math.max(selected.explorationSeconds,floor));
-  const confirmation=Math.min(full,Math.max(selected.confirmationSeconds,Math.min(3600,2*exploration)));
+  const confirmation=Math.min(full,Math.max(selected.confirmationSeconds,Math.min(selected.automaticBasic?1800:3600,2*exploration)));
   return {...selected,explorationSeconds:exploration,confirmationSeconds:confirmation,
-    fullHorizonFinalists:Math.max(2,selected.fullHorizonFinalists),
+    fullHorizonFinalists:selected.automaticBasic?1:Math.max(2,selected.fullHorizonFinalists),
     horizonBasis:'RELIABILITY_AWARE_SCREENING',medianMtbfMinutes:median};
 }
 
@@ -6330,6 +6331,46 @@ function selectScenarioFinalists(screened,baseline,limit) {
   for(const item of valid)if(chosen.length<limit)add(item);
   return chosen;
 }
+// Progressive Basic gate: a negative short screen is not proof of no benefit.
+ // Promote measured gains or one precautionary alternative when a short prefix
+ // cannot represent the full run. Never expand the full-horizon budget.
+function selectProgressiveBasicFinalists(items,baseline,run,equipment=[],limit=1) {
+  const valid=(items||[]).filter(item=>item?.changes?.length&&Number.isFinite(item.result?.throughput)&&Number.isFinite(item.result?.oee));
+  const horizon=Number(baseline?.durationSeconds)||0,full=Math.max(1800,Number(run?.durationSeconds)||0);
+  const short=horizon>0&&horizon<full,threshold=Math.max(.001,Math.abs(baseline?.throughput||0)*.001);
+  const categories=run?.reliabilityCategories||{};
+  const rare=run?.reliabilityEnabled!==false&&equipment.some(e=>{
+    if(e.type==='CONVEYOR')return false;
+    const split=e.processData?.equipment?.stopInputs,r=e.noiseProfile?.reliability;
+    const pairs=split?['minor','major'].filter(k=>categories[k]!==false).map(k=>split[k]):categories.general!==false?[r]:[];
+    return pairs.some(pair=>pair?.mttrMinutes>0&&pair.mtbfMinutes*60>horizon/2);
+  });
+  const scheduled=short&&!!(run?.commands?.length||resolvePlannedStops({...run,tickSeconds:run?.tickSeconds??.25}).events.length);
+  const slowFill=short&&equipment.some(e=>{
+    const length=e.processData?.geometry?.lactMm,speed=e.processData?.accumulation?.conveyorSpeedMmPerSecond;
+    return e.type==='CONVEYOR'&&length>0&&speed>0&&length/speed>horizon/4;
+  });
+  const reasons=[...(short&&rare?['RARE_FAILURE_EXPOSURE']:[]),...(scheduled?['SCHEDULED_CONDITIONS']:[]),...(slowFill?['LONG_TRANSPORT_TRANSIT']:[]),...(short&&!(baseline?.throughput>0)?['STARTUP_OR_NO_OUTPUT']:[])];
+  const baseRounds=new Map((baseline?.roundMetrics||[]).map(row=>[row.seed,row]));
+  const scored=valid.map(item=>{
+    const value=item.result,delta=value.throughput-baseline.throughput;
+    const paired=(value.roundMetrics||[]).map(row=>row.throughput-(baseRounds.get(row.seed)?.throughput??NaN));
+    const matched=paired.length>=3&&paired.length===baseRounds.size&&paired.every(Number.isFinite);
+    return {item,delta,meanOee:value.oee-baseline.oee,potential:delta>threshold||(matched&&paired.some(d=>d>threshold)),uncertain:!matched};
+  }).sort((a,b)=>Number(!a.potential)-Number(!b.potential)||Number(!!a.item.result.warnings?.length)-Number(!!b.item.result.warnings?.length)||Number(a.meanOee<0)-Number(b.meanOee<0)||b.delta-a.delta);
+  if(scored.some(item=>item.uncertain))reasons.push('INCOMPLETE_PAIRED_SCREEN');
+  const promising=scored.filter(item=>item.potential),chosen=promising.slice(0,Math.max(1,Math.min(2,limit)));
+  const lateMechanism=item=>item.item.changes.some(change=>change.path.startsWith('noiseProfile.reliability.')||change.interventionType==='ACCUMULATION'||change.interventionType==='REPLACEMENT');
+  if(!chosen.length&&reasons.length&&scored.length)chosen.push((rare&&short?scored.find(lateMechanism):null)||scored[0]);
+  if(chosen.length===1&&limit>1&&reasons.length){
+    const late=scored.find(item=>!chosen.includes(item)&&lateMechanism(item));
+    if(late)chosen.push(late);
+  }
+  return {selected:chosen.map(row=>row.item),evaluated:valid.length,promising:promising.length,omitted:valid.length-chosen.length,precautionary:chosen.some(row=>!row.potential),reasons,threshold,
+    outcome:chosen.length?'PROMOTE':valid.length?'NO_PROMISING_CANDIDATE':'NO_FEASIBLE_CANDIDATE',
+    interpretation:'Bounded preliminary selection only. Omitted candidates may improve over a longer horizon or outside the tested levels; a promoted candidate still requires full-horizon independent confirmation.'};
+}
+
 function scenarioConfirmationNeedsMore(base,candidate) {
   const a=base?.roundMetrics,b=candidate?.roundMetrics;
   if(!a||!b||a.length!==3||b.length!==3)return false;
@@ -6356,19 +6397,19 @@ function scenarioPairedEvidence(base,candidate) {
 
 // Decide the confirmation sample size from the finalist-ranking pilot before
 // looking at the independent confirmation. No optional stopping on its p-value.
-function planScenarioConfirmation(base,candidate,methodology={}) {
+function planScenarioConfirmation(base,candidate,methodology={},options={}) {
   const issue=scenarioComparisonEvidenceIssue(base,candidate);
   if(issue)return {rounds:null,status:issue,policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   const baseSeeds=base.roundMetrics.map(row=>row.seed),candidateSeeds=candidate.roundMetrics.map(row=>row.seed);
   if(!scenarioValidConfirmationPilotSeeds(baseSeeds)||!scenarioValidConfirmationPilotSeeds(candidateSeeds)||baseSeeds.length!==candidateSeeds.length||baseSeeds.some(seed=>!candidateSeeds.includes(seed)))return {rounds:null,status:'INVALID_PILOT_REPLICATIONS',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};
   const settings=methodology?.replications||{};
-  const options={minRounds:settings.minimum??3,maxRounds:settings.maximum??30,
+  const replicationOptions={minRounds:options.automaticBasic?3:settings.minimum??3,maxRounds:options.automaticBasic?6:settings.maximum??30,
     confidenceLevel:settings.confidenceLevel??.95,relativePrecision:settings.relativePrecision??.005};
-  if(settings.absolutePrecision!==undefined)options.absolutePrecision=settings.absolutePrecision;
-  const plan=planScenarioReplications(base,candidate,options);
+  if(settings.absolutePrecision!==undefined)replicationOptions.absolutePrecision=settings.absolutePrecision;
+  const plan=planScenarioReplications(base,candidate,replicationOptions);
   let minimumPracticalGain;
   try{minimumPracticalGain=scenarioPracticalGain({throughput:plan.baselineMeanThroughput,unitOfFlow:base.unitOfFlow},methodology||{});}catch(error){return {...plan,rounds:null,status:error.message||'INVALID_CONFIRMATION_OBJECTIVE',policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION'};}
-  return {...plan,policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION',comparisonDurationSeconds:base.durationSeconds,comparisonUnitOfFlow:base.unitOfFlow,
+  return {...plan,...(options.automaticBasic?{automaticBasic:true,basicReplicationCap:6}:{}),policy:'FIXED_SAMPLE_INDEPENDENT_CONFIRMATION',comparisonDurationSeconds:base.durationSeconds,comparisonUnitOfFlow:base.unitOfFlow,
     pilotRole:'FINALIST_RANKING_ONLY',minimumPracticalGain,
     interpretation:'Sample size is fixed using separate pilot seeds. A capped plan may not achieve the requested precision; input and model uncertainty are not estimated by replication.'};
 }
@@ -7171,7 +7212,7 @@ window.SimulatorEngine = {
   analyzeLinePerformance: analyzeLinePerformance,diagnoseLineEfficiency:diagnoseLineEfficiency
 };
 window.STScenarioDOE = {design:createScenarioDOE,analyze:analyzeScenarioDOE,anova:analyzeScenarioANOVA};
-window.STScenarioSearch = {basicPlan:planBasicScenarioSearch,packageDesign:designScenarioPackages,screenFlow:screenFlowFactors,reliabilityTargets:searchReliabilityTargets,settings:scenarioSearchSettings,settingsSignature:scenarioSearchSettingsSignature,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary,practicalGain:scenarioPracticalGain};
+window.STScenarioSearch = {basicPlan:planBasicScenarioSearch,progressiveFinalists:selectProgressiveBasicFinalists,packageDesign:designScenarioPackages,screenFlow:screenFlowFactors,reliabilityTargets:searchReliabilityTargets,settings:scenarioSearchSettings,settingsSignature:scenarioSearchSettingsSignature,profiles:SCENARIO_SEARCH_PROFILES,profile:scenarioSearchProfile,run:scenarioSearchRun,rankingPlan:planScenarioFinalistRanking,selectFinalists:selectScenarioFinalists,needsMore:scenarioConfirmationNeedsMore,pairedEvidence:scenarioPairedEvidence,planConfirmation:planScenarioConfirmation,confirm:assessScenarioConfirmation,pairedSummary:scenarioPairedSummary,practicalGain:scenarioPracticalGain};
 window.STScenarios = {expandPackages:expandScenarioPackages,equipmentReliability:equipmentReliabilityAssessment,equipmentAnalysis:analyzeEquipmentReliability,plan:planScenarios,readiness:scenarioSourceReadiness,methodologyInputs:scenarioTechnicalMethodology,efficiency:diagnoseLineEfficiency,diagnose:diagnoseScenarioLosses,apply:applyScenarioChanges,signature:scenarioSignature,audit:scenarioAudit,fields:SCENARIO_FIELDS,catalog:scenarioVariableCatalog,definitions:SCENARIO_DEFINITIONS,interventions:SCENARIO_INTERVENTIONS,categoryAllows:scenarioCategoryAllows,reliabilitySensitivity:reliabilitySensitivityCandidates,study:buildScenarioStudy,economics:evaluateScenarioEconomics};
 })(window);
 </script>

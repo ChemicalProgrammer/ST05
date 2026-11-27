@@ -73,7 +73,7 @@ window.STDialog = (function() {
       }
       proceed.onclick=async function(){
         if(sending)return;
-        if(!attach.checked){compose(false);proceed.hidden=true;cancel.textContent=errorReportText('dialog.ok');return;}
+        if(!attach.checked){compose(false);proceed.hidden=true;attach.disabled=true;cancel.textContent=errorReportText('dialog.ok');return;}
         sending=true;cancel.disabled=proceed.disabled=attach.disabled=true;status.hidden=false;status.textContent=errorReportText('errors.report_preparing');link.hidden=true;
         try{
           var snapshot=errorReporting?.captureCase?.();if(!snapshot?.record)throw Error('No case snapshot');

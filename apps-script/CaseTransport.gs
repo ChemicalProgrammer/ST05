@@ -30,7 +30,7 @@ function stageCaseTransfer_(request,user){
 }
 function decodeCasePayload_(payload,user){
   if(!payload||payload.__stCaseTransfer!==1){
-    if(payload&&JSON.stringify(payload).length>ST_CASE_TRANSFER_.maxBytes)caseTransferError_('The case exceeds the 32 MB transfer limit.');
+    if(payload){var raw=JSON.stringify(payload),limit=ST_CASE_TRANSFER_.maxBytes;if(raw.length>limit||(raw.length>Math.floor(limit/3)&&Utilities.newBlob(raw).getBytes().length>limit))caseTransferError_('The case exceeds the 32 MB transfer limit.');}
     return payload;
   }
   caseTransferFormat_(payload.format,payload.bytes);

@@ -69,6 +69,11 @@ function buildSavedScenarioStudy_(source,proposal,sourceSignature,warnings,searc
     if(evidence.uiMode==='minimal'&&(!evidence.confirmationPlan?.automaticBasic||check.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.baseline?.scenarioFidelity!=='PHYSICAL_PRECISE_V1'||check.candidate?.scenarioFidelity!=='PHYSICAL_PRECISE_V1')){check.passed=false;check.reason='BASIC_PRECISE_CONFIRMATION_REQUIRED';}
     if(check.durationSeconds!==check.baseline?.durationSeconds||check.rounds!==evidence.confirmationPlan?.rounds||check.unitOfFlow!==(source.unitOfFlow||source.results?.unitOfFlow||source.results?.replay?.unitOfFlow||'units')||check.unitOfFlow!==check.baseline?.unitOfFlow){check.passed=false;check.reason='CONFIRMATION_METADATA_MISMATCH';}
   }
+  if(evidence.uiMode==='minimal'){
+    evidence.originalVerificationRequired=true;
+    if(evidence.independentCheck?.passed===true){evidence.originalVerification=STScenarioEngine_.verifyOriginal(source,evidence.originalVerification?.candidate||null,proposal.changes);}
+    if(evidence.originalVerification?.passed!==true&&['IMPROVEMENT_REPRODUCED','ENGINEERING_REVIEW_REQUIRED'].includes(evidence.status))evidence.status='NOT_REPRODUCED';
+  }
   return STScenarioEngine_.study(source,evidence);
 }
 function resolveLocalScenarioProposal_(proposal,source) {

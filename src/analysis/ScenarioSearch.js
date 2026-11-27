@@ -1,5 +1,8 @@
 import {scenarioPairedSummary,planScenarioReplications} from './ScenarioStatistics.js';
 import {resolvePlannedStops} from '../simulation/PlantCalendarSchedule.js';
+import {scenarioSourceReadiness} from './ScenarioReadiness.js';
+import {canonicalSimulationInputSignature} from '../simulation/SimulationProvenance.js';
+import {applyScenarioChanges} from './ScenarioPlanner.js';
 
 export const SCENARIO_SEARCH_PROFILES = Object.freeze({
   LIGHT: {explorationSeconds:300,confirmationSeconds:1800,maxCandidates:48,maxSearchMs:120000,maxWithoutImprovement:16,maxFactors:0,passes:1,finalists:4,fullHorizonFinalists:2},
@@ -14,7 +17,7 @@ export function scenarioSearchSettings(raw) {
 }
 export function scenarioSearchSettingsSignature(raw) {
   const settings=scenarioSearchSettings(raw);
-  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_MULTIFIDELITY_V3':'SCENARIO_SEARCH_SPEED_V1',settings]);
+  return JSON.stringify([settings.automaticBasic?'SCENARIO_SEARCH_BASIC_MULTIFIDELITY_V4':'SCENARIO_SEARCH_SPEED_V1',settings]);
 }
 export function scenarioSearchProfile(level,settings,context) {
   const profile=SCENARIO_SEARCH_PROFILES[level]||SCENARIO_SEARCH_PROFILES.MEDIUM;
@@ -107,8 +110,8 @@ export function designScenarioPackages(packages) {
 
 // Diagnosis provides priorities; this step only allocates the bounded search.
 // There is no second simulation-based screening before the small factorial.
-export function planBasicScenarioSearch(targets,{tier='ZERO',maxFactors=3}={}) {
-  if(!['ZERO','MEDIUM','HIGH'].includes(tier)||!Number.isInteger(maxFactors)||maxFactors<1||maxFactors>3)throw Error('SCENARIO_INVALID_BASIC_FACTOR_LIMIT');
+export function planBasicScenarioSearch(targets,{tier='ZERO',maxFactors=3,screeningLimit=0}={}) {
+  if(!['ZERO','MEDIUM','HIGH'].includes(tier)||!Number.isInteger(maxFactors)||maxFactors<1||maxFactors>(tier==='ZERO'?4:3))throw Error('SCENARIO_INVALID_BASIC_FACTOR_LIMIT');
   const key=change=>change.equipmentId+':'+change.path;
   const source=(Array.isArray(targets)?targets:[]).filter(item=>item?.change?.equipmentId&&typeof item.change.path==='string'&&(item.change.before===null||Number.isFinite(item.change.before))&&Number.isFinite(item.change.after)&&item.change.before!==item.change.after&&(!item.change.originTier||item.change.originTier===tier));
   const ordered=source.slice().sort((a,b)=>(Number(b.priority)||0)-(Number(a.priority)||0)||key(a.change).localeCompare(key(b.change))||String(a.change.packageId||'').localeCompare(String(b.change.packageId||'')));
@@ -134,8 +137,8 @@ export function planBasicScenarioSearch(targets,{tier='ZERO',maxFactors=3}={}) {
   const design=packages.length?designScenarioPackages(packages):null;
   const changes=packages.flatMap(p=>p.changes),candidatePackages=design?design.designPoints.filter(point=>point.changes.length).map(point=>({packageIds:packages.filter((_,i)=>point.levels[i]===1).map(p=>p.packageId),changes:point.changes,siteCount:new Set(point.changes.map(c=>c.equipmentId)).size})):[];
   return {policy:'BASIC_AUTOMATIC_PACKAGES_V1',tier,maxFactors,packages,changes,factors:design?.factors||[],design,candidatePackages,maximumDesignPoints:design?.designPoints.length||0,
-    eligible:source.length,eligiblePackages:ranked.length,omitted:Math.max(0,source.length-changes.length),omittedPackages:ranked.length-packages.length,
-    interpretation:'A deterministic diagnosis-prioritized shortlist evaluates up to three complete interventions and every selected combination. It can omit lower-priority interventions; independent full-horizon confirmation remains required.'};
+    screeningPackages:ranked.slice(0,Math.max(0,Math.min(16,screeningLimit))),eligible:source.length,eligiblePackages:ranked.length,omitted:Math.max(0,source.length-changes.length),omittedPackages:ranked.length-packages.length,
+    interpretation:'A bounded shortlist evaluates complete intervention packages and selected factorial combinations. Preliminary isolated screens can inform the shortlist; physical confirmation and original-horizon verification remain separate.'};
 }
 export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings,equipment) {
   const profile=scenarioSearchProfile(level,settings,{run,equipment});
@@ -156,6 +159,7 @@ export function scenarioSearchRun(run,level,confirmation=false,rounds=3,settings
       copy.durationSeconds=Math.min(horizon.seconds,eligible.supported?(confirmation==='sensitivity'?Math.max(300,profile.explorationSeconds):1800):profile.explorationSeconds);
       copy.scenarioFidelity=eligible.supported?'FLUID_SCREEN_V1':'PHYSICAL_FAST_V1';
       if(!eligible.supported)copy.numericalResolution='FAST';
+      else copy.scenarioWarmupSeconds=Math.min(300,copy.durationSeconds/3);
     }
   }
   return copy;
@@ -228,17 +232,31 @@ export function selectProgressiveBasicFinalists(items,baseline,run,equipment=[],
   if(scored.some(item=>item.uncertain))reasons.push('INCOMPLETE_PAIRED_SCREEN');
   const approximate=baseline?.scenarioFidelity==='FLUID_SCREEN_V1';
   if(approximate)reasons.push('APPROXIMATE_SCREEN_REQUIRES_PHYSICAL_PROBE');
-  const promising=scored.filter(item=>item.potential),chosen=promising.slice(0,Math.max(1,Math.min(2,limit)));
+  const promising=scored.filter(item=>item.potential),budget=Math.max(1,Math.min(3,limit)),chosen=[];
+  const keys=row=>new Set(row.item.changes.map(c=>c.packageId||c.equipmentId+':'+c.path));
+  const distance=(a,b)=>{const x=keys(a),y=keys(b);return 1-[...x].filter(k=>y.has(k)).length/new Set([...x,...y]).size;};
+  if(promising.length)chosen.push(promising[0]);
+  // Do not spend all physical checks on near-duplicate fluid winners. Retain
+  // a distinct sensor/control hypothesis even when fluid pulses are invisible.
+  if(approximate&&budget>1&&chosen.length){
+    const sensor=row=>row.item.changes.some(c=>/sensor|timedelay|lpPrimeMm/i.test(c.path));
+    const control=scored.find(row=>!chosen.includes(row)&&sensor(row)&&distance(row,chosen[0])>=.5);
+    if(control)chosen.push(control);
+  }
+  while(chosen.length<budget&&promising.some(row=>!chosen.includes(row))){
+    const pool=promising.filter(row=>!chosen.includes(row));
+    chosen.push((approximate?pool.find(row=>chosen.every(prior=>distance(row,prior)>=.5)):null)||pool[0]);
+  }
   const lateMechanism=item=>item.item.changes.some(change=>change.path.startsWith('noiseProfile.reliability.')||change.interventionType==='ACCUMULATION'||change.interventionType==='REPLACEMENT');
   if(!chosen.length&&reasons.length&&scored.length)chosen.push((rare&&short?scored.find(lateMechanism):null)||scored[0]);
-  if(chosen.length===1&&limit>1&&reasons.length){
+  if(chosen.length===1&&budget>1&&reasons.length){
     const sensor=item=>item.item.changes.some(c=>/sensor|timedelay|lpPrimeMm/i.test(c.path));
     const late=(approximate?scored.find(item=>!chosen.includes(item)&&sensor(item)):null)||scored.find(item=>!chosen.includes(item)&&lateMechanism(item))||(approximate?scored.find(item=>!chosen.includes(item)):null);
     if(late)chosen.push(late);
   }
   return {selected:chosen.map(row=>row.item),evaluated:valid.length,promising:promising.length,omitted:valid.length-chosen.length,precautionary:chosen.some(row=>!row.potential),reasons,threshold,
     outcome:chosen.length?'PROMOTE':valid.length?'NO_PROMISING_CANDIDATE':'NO_FEASIBLE_CANDIDATE',
-    interpretation:'Bounded preliminary selection only. Omitted candidates may improve over a longer horizon or outside the tested levels; a promoted candidate still requires full-horizon independent confirmation.'};
+    interpretation:'Bounded preliminary selection only. Omitted candidates may improve over a longer horizon or outside the tested levels; a promoted candidate still requires independent physical confirmation and verification on the original run.'};
 }
 
 export function scenarioConfirmationNeedsMore(base,candidate) {
@@ -356,4 +374,40 @@ function scenarioComparisonEvidenceIssue(base,candidate,plan) {
     }
   }
   return null;
+}
+
+// Absolute source comparison is a second, descriptive gate, not a statistical
+// replication or a replacement for the independent short-window experiment.
+// The saved baseline is reused only after the normal source readiness check.
+export function scenarioOriginalVerificationPlan(simulation){
+  const readiness=scenarioSourceReadiness(simulation);
+  if(!readiness.ready)return {ready:false,reason:readiness.reason||'SOURCE_NOT_READY'};
+  const result=simulation.results,provenance=JSON.parse(result.inputSignature),run={...provenance.run};
+  if(run.effectiveRuntimeTargetSeconds!==undefined)return {ready:false,reason:'VARIABLE_CALENDAR_RUNTIME_TARGET'};
+  const duration=result.durationSeconds,rows=result.batch?.rows||(run.rounds===1?[result]:[]);
+  if(run.durationSeconds!==duration||!Array.isArray(rows)||rows.length!==run.rounds)return {ready:false,reason:'SOURCE_HORIZON_MISMATCH'};
+  const roundMetrics=rows.map(row=>({seed:row.seed,durationSeconds:row.durationSeconds??duration,outputCount:row.summary?.outputCount,oee:row.summary?.lineOeePercent,throughput:row.summary?.outputCount/(row.durationSeconds??duration)*60}));
+  const mean=key=>roundMetrics.reduce((sum,r)=>sum+r[key]/roundMetrics.length,0);
+  const baseline={durationSeconds:duration,unitOfFlow:result.unitOfFlow||readiness.unitOfFlow,roundMetrics,oee:mean('oee'),throughput:mean('throughput'),overflowUnits:result.batch?.statistics?.totalOverflowUnits?.mean??result.summary?.totalOverflowUnits??null,cacheSource:'SAVED_ORIGINAL_SIMULATION',scenarioFidelity:'ORIGINAL_PHYSICAL_RUN'};
+  const issue=scenarioComparisonEvidenceIssue(baseline,baseline);
+  if(issue)return {ready:false,reason:issue};
+  const reportedOee=result.batch?.statistics?.lineOeePercent?.mean??result.summary?.lineOeePercent;
+  const reportedThroughput=result.batch?.statistics?.throughputPerMinute?.mean??(result.batch?.statistics?.outputCount?.mean??result.summary?.outputCount)/duration*60;
+  if(!Number.isFinite(reportedOee)||!Number.isFinite(reportedThroughput)||Math.abs(reportedOee-baseline.oee)>1e-6||Math.abs(reportedThroughput-baseline.throughput)>1e-6*Math.max(1,baseline.throughput))return {ready:false,reason:'SOURCE_AGGREGATE_MISMATCH'};
+  return {ready:true,run,inputUnit:provenance.unitOfFlow,baseline,sourceInputSignature:result.inputSignature};
+}
+export function assessScenarioOriginalVerification(simulation,candidate,changes){
+  const plan=scenarioOriginalVerificationPlan(simulation),policy='MATCHED_ORIGINAL_HORIZON_V1';
+  if(!plan.ready)return {policy,passed:false,status:'NOT_EVALUATED',reason:plan.reason};
+  const baseline=plan.baseline,run={durationSeconds:plan.run.durationSeconds,rounds:plan.run.rounds,seed:plan.run.seed,numericalResolution:plan.run.numericalResolution||'PRECISE',engineId:plan.run.engineId,comparisonBasis:'ORIGINAL_FIXED_CALENDAR'};
+  const common={policy,baseline,run,candidate:candidate||null,unitOfFlow:baseline.unitOfFlow,durationSeconds:run.durationSeconds,rounds:run.rounds,interpretation:'Descriptive comparison with the exact original horizon, resolution and seeds. Independent short-window statistical evidence is separate; one original round is not an independent confidence interval.'};
+  if(!candidate)return {...common,passed:false,status:'NOT_EVALUATED',reason:'CANDIDATE_REQUIRED'};
+  let expected;try{const model=applyScenarioChanges(simulation,changes,{previewOnly:true});expected=canonicalSimulationInputSignature({case:{equipment:model.equipment,unitOfFlow:plan.inputUnit},run:plan.run});}catch(_){return {...common,passed:false,status:'INVALID',reason:'CANDIDATE_CONFIGURATION_INVALID'};}
+  const issue=scenarioComparisonEvidenceIssue(baseline,candidate);
+  const matched=baseline.roundMetrics.length===candidate.roundMetrics?.length&&baseline.roundMetrics.every(row=>candidate.roundMetrics.some(r=>r.seed===row.seed));
+  if(issue||!matched||candidate.inputSignature!==expected)return {...common,passed:false,status:'INVALID',reason:issue||(!matched?'ORIGINAL_SEEDS_MISMATCH':'ORIGINAL_INPUT_SIGNATURE_MISMATCH')};
+  const delta={oeePercentagePoints:candidate.oee-baseline.oee,throughputPerMinute:candidate.throughput-baseline.throughput};
+  const threshold=scenarioPracticalGain(baseline,simulation.whatIf?.methodology||{});
+  const passed=delta.throughputPerMinute>threshold&&delta.oeePercentagePoints>=-1e-9;
+  return {...common,passed,status:passed?'VERIFIED':'NO_ORIGINAL_HORIZON_IMPROVEMENT',reason:passed?null:'ORIGINAL_HORIZON_GAIN_NOT_ESTABLISHED',threshold,delta};
 }

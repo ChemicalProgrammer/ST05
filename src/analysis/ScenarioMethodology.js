@@ -213,6 +213,7 @@ export function evaluateScenarioEconomics(simulation, evaluation, config) {
   }
   if (!check) missingInputs.push('evaluation.independentCheck');
   if (check?.passed !== true) blockers.push('INDEPENDENT_CONFIRMATION_NOT_PASSED');
+  if(evaluation?.originalVerificationRequired===true&&evaluation?.originalVerification?.passed!==true)blockers.push('ORIGINAL_RUN_VERIFICATION_NOT_PASSED');
   for (const key of ['baseline', 'candidate']) {
     const metric = scenarioStudyNumber(check?.[key]?.throughput);
     if (metric === null) missingInputs.push('evaluation.independentCheck.' + key + '.throughput');
@@ -352,6 +353,7 @@ export function buildScenarioStudy(simulation, evaluation) {
     'CAPEX classification uses intervention type and scope; budget amounts and financial evaluation are outside the current technical study.',
     'Reported source references are not independently verified.'
   ];
+  const originalVerification=evaluation?.originalVerification;
   const confirmationStatus = !check ? 'NOT_EVALUATED' : !traceable ? 'UNTRACEABLE_EVIDENCE' : check.passed !== true ? 'NOT_REPRODUCED' :
     validConfirmation ? 'MODEL_REPRODUCED' : 'INVALID_OR_INCOMPLETE_CONFIRMATION';
   return {
@@ -399,7 +401,7 @@ export function buildScenarioStudy(simulation, evaluation) {
           interpretation: 'Effects apply to the tested factor region conditional on these fixed changes and the saved baseline; they are not isolated causal shares or guarantees outside that region.' },
         combinations: scenarioStudyNumber(doe?.combinations) ?? (Array.isArray(doe?.observations) ? doe.observations.length : null),
         roundsPerCombination: scenarioStudyNumber(doe?.roundsPerCombination),
-        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds','scenarioFidelity','numericalResolution']) : {},
+        run: doe ? scenarioStudyPick(doe.run || evaluation?.explorationRun, ['durationSeconds', 'durationMode', 'rounds', 'seed', 'engineId', 'sampleIntervalSeconds','scenarioFidelity','numericalResolution','scenarioWarmupSeconds']) : {},
         observations: scenarioStudyDOEObservations(doe?.observations),
         observationsOmitted: Math.max(0, (Array.isArray(doe?.observations) ? doe.observations.length : 0) - 16),
         analysis: scenarioStudyPick(doe?.analysis, ['complete', 'reason', 'effects', 'interpretation']),
@@ -407,6 +409,7 @@ export function buildScenarioStudy(simulation, evaluation) {
         replicationPlan: { status: metadata.replications ? 'REPORTED' : 'NOT_PROVIDED', reported: scenarioStudyPick(metadata.replications, ['minimum', 'maximum', 'confidenceLevel', 'relativePrecision', 'absolutePrecision']),
           actual: confirmationPlan ? { role: 'CONFIRMATION_NOT_DOE', source: 'evaluation.confirmationPlan', plan: confirmationPlan } : null }
       },
+      originalVerification: {required:evaluation?.originalVerificationRequired===true,status:scenarioStudyText(originalVerification?.status)||'NOT_EVALUATED',passed:originalVerification?.passed===true,reason:scenarioStudyText(originalVerification?.reason),run:scenarioStudyPick(originalVerification?.run,['durationSeconds','rounds','seed','engineId','numericalResolution','comparisonBasis']),baseline:scenarioStudyMetrics(originalVerification?.baseline),candidate:scenarioStudyMetrics(originalVerification?.candidate),delta:scenarioStudyPick(originalVerification?.delta,['oeePercentagePoints','throughputPerMinute']),interpretation:'Matched original-run comparison is descriptive; the separate independent-window experiment supplies the statistical evidence.'},
       confirmation: { status: confirmationStatus, reportedPassed: check?.passed === true,
         kind: scenarioStudyText(check?.confirmationKind || evaluation?.confirmationKind),
         baseline: actualBase, candidate: actualCandidate, run: scenarioStudyPick(check, ['durationSeconds', 'rounds', 'seed','scenarioFidelity']),

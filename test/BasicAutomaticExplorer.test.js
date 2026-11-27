@@ -11,6 +11,10 @@ function harness({reliability=true,durationSeconds=86400,compact=true,uiMode='ba
   sim.dynamicConfig={...sim.dynamicConfig,durationMode:'FIXED',durationSeconds,rounds:3,seed:23,commands:[],machineDesignEnabled:false,machineMaximumSpeedEnabled:false,reliabilityEnabled:reliability};
   sim.whatIf={searchDepth:'LIGHT',exploreReliabilityTargets:false,reliabilitySettings:{scope:'MANUAL',maximumTargets:20,equipmentIds:['stale-id'],equipmentLimits:{'stale-id':{mtbfMaximum:0}}},capexInclusions:{MEDIUM:{ZERO:true},HIGH:{ZERO:true,MEDIUM:true}},cardConfigurations:{}};
   completeSyntheticScenarioSource(sim);
+  // Keep the saved original and the deterministic evaluator on the same
+  // synthetic reference: 100 bpm, 50% OEE. The source must not be mutated later.
+  sim.results.unitOfFlow='bottles';sim.results.summary.outputCount=100*durationSeconds/60;
+  sim.results.batch.rows.forEach(row=>{row.summary.outputCount=100*durationSeconds/60;});
   sim.results.batch.equipmentStatistics=Object.fromEntries(sim.equipment.filter(e=>e.type!=='CONVEYOR').map(e=>[e.id,Object.fromEntries(Object.entries({failureSeconds:reliability?durationSeconds*.1:0,microStopSeconds:0,starvedSeconds:durationSeconds*.1,blockedSeconds:durationSeconds*.1,failureCount:10,microStopCount:0}).map(([key,mean])=>[key,{mean}]))]));
   if(!compact){sim.whatIf.searchDepth='MEDIUM';sim.whatIf.reliabilitySettings={scope:'AUTO',maximumTargets:3,equipmentIds:[],equipmentLimits:{}};}
   const record={id:'case',simulations:[sim],metadata:{includeDOE:!compact,scenarioSearch:{speedProfile:compact?'THOROUGH':'FAST'}}},before={equipment:structuredClone(sim.equipment),dynamicConfig:structuredClone(sim.dynamicConfig),results:structuredClone(sim.results)};
@@ -54,15 +58,17 @@ async function search(h,tier){
 
 function verifyAutomatic(entry,h){
   assert.equal(entry.searchSettings.automaticBasic,true);assert.equal(entry.searchSettings.speedProfile,'FAST');assert.equal(entry.depth,'MEDIUM');assert.equal(entry.method,'AUTOMATIC_PACKAGE_DOE');
-  assert.equal(entry.searchLimits.maxCandidates,24);assert.equal(entry.searchLimits.passes,1);
-  assert(entry.phaseAudit.automaticSelection.selectedPackages<=3);assert(entry.doe.observations.length<=8);assert(entry.doe.analysis.complete);assert(entry.doe.anova.complete);
+  const expanded=entry.tier==='ZERO'&&entry.explorationRun.scenarioFidelity==='FLUID_SCREEN_V1';
+  assert.equal(entry.searchLimits.maxCandidates,expanded?32:24);assert.equal(entry.searchLimits.passes,1);
+  assert(entry.phaseAudit.automaticSelection.selectedPackages<=(expanded?4:3));assert(entry.doe.observations.length<=(expanded?16:8));assert(entry.doe.analysis.complete);assert(entry.doe.anova.complete);
   assert.equal(entry.conditionalFlowDOE,undefined);assert.equal(entry.phaseAudit.flowScreen,undefined);
   assert.deepEqual(JSON.parse(JSON.stringify(entry.reproducibility.categoryInclusions)),{});
-  assert(entry.phaseAudit.exploration.testedCandidates<=7,'At most seven selected nonempty subsets are explored');
+  assert(entry.phaseAudit.exploration.testedCandidates<=(expanded?32:7),'The bounded isolated screen and factorial remain within budget');
   assert.equal(entry.infeasibleTrials,0,'Every expanded package combination must reach a valid experiment');
   assert(entry.phaseAudit.ranking.finalists<=1);assert(entry.independentCheck.rounds<=6);
   assert.equal(entry.independentCheck.durationSeconds,entry.rankingPlan.confirmationHorizon.seconds);assert.equal(entry.independentCheck.scenarioFidelity,'PHYSICAL_PRECISE_V1');
   assert.equal(entry.independentCheck.rounds,entry.confirmationPlan.rounds);
+  assert.equal(entry.originalVerificationRequired,true);assert(entry.originalVerification?.passed);assert.equal(entry.originalVerification.durationSeconds,h.before.dynamicConfig.durationSeconds);assert.equal(entry.originalVerification.rounds,h.before.dynamicConfig.rounds);assert.equal(entry.originalVerification.baseline.throughput,100);assert(entry.originalVerification.candidate.throughput>100);
   assert(entry.confirmationPlan.pilotSeeds.every(seed=>!entry.independentCheck.baseline.roundMetrics.some(row=>row.seed===seed)));
   assert.equal(entry.phaseAudit.doe.plannedCombinations,entry.phaseAudit.doe.evaluatedCombinations);
   assert.deepEqual(h.sim.equipment,h.before.equipment);assert.deepEqual(h.sim.dynamicConfig,h.before.dynamicConfig);assert.deepEqual(h.sim.results,h.before.results);
@@ -75,11 +81,11 @@ test('Basic selects its DOE and budgets despite retained manual preferences and 
       for(const input of card.querySelectorAll('.scenario-change input[type="checkbox"]'))input.checked=false;
     }
     const entry=await search(h,'ZERO');verifyAutomatic(entry,h);
-    assert.equal(entry.reliabilityTargetSearch.searchPolicy,'BASIC_JOINT_RELIABILITY_V1');assert.equal(entry.reliabilityTargetSearch.coverage.screened,3);assert(entry.reliabilityTargetSearch.calculations<=9);
+    assert.equal(entry.reliabilityTargetSearch.searchPolicy,'BASIC_JOINT_RELIABILITY_V1');assert.equal(entry.reliabilityTargetSearch.coverage.screened,3);assert(entry.reliabilityTargetSearch.calculations<=16);
     assert(entry.reliabilityTargetSearch.targetTests.every(t=>t.mechanism==='JOINT'));
     assert(!entry.reliabilityCounterfactual,'Basic skips the optional second full-horizon failure-free diagnosis');
     assert(entry.automaticPlan.packages.some(p=>p.mechanism==='RELIABILITY'),'Automatic downtime reduction remains represented with the flow controls');
-    assert(h.calls.length<=24,'Initial reliability screen, eight subsets, ranking and confirmation remain bounded');
+    assert(h.calls.length<=57,'Broader fluid screen, factorial, ranking and original verification remain bounded');
     assert.equal(h.record.metadata.includeDOE,false);assert.equal(h.record.metadata.scenarioSearch.speedProfile,'THOROUGH');assert.equal(h.sim.whatIf.searchDepth,'LIGHT');
   }finally{h.close();}
 });
@@ -94,7 +100,7 @@ test('Basic Medium evaluates one, two and three complete accumulation packages f
       for(const c of point.changes){assert(c.originTier==='MEDIUM');for(const path of c.packagePaths||[])assert(point.changes.some(other=>other.equipmentId===c.equipmentId&&other.path===path));}
     }
     const base=entry.doe.observations.find(point=>point.levels.every(level=>level===-1));assert.equal(base.throughput,100,'All-low factorial point really is the source baseline');
-    assert(h.calls.length<=17,'Geometry subsets are not re-simulated during DOE');
+    assert(h.calls.length<=18,'Geometry subsets are not re-simulated during DOE');
   }finally{h.close();}
 });
 
@@ -223,6 +229,18 @@ test('Basic displays a provisional estimate while the full-horizon candidate is 
   };
   const entry=await search(h,'ZERO');
   assert(sawPreview);assert(entry.independentCheck.passed);
-  assert(h.cards.ZERO.querySelector('.scenario-result-notice').hidden);
+  assert(entry.originalVerification.passed);assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/Verified on the original run/);
+ }finally{h.close();}
+});
+
+
+test('Basic separates independent improvement from a worse original-horizon candidate',async()=>{
+ const h=harness({reliability:false,durationSeconds:86400});try{
+  const original=h.w.SimulatorEngine.simulateBatch;let originalCalls=0;
+  h.w.SimulatorEngine.simulateBatch=async input=>{
+    if(input.run.durationSeconds===86400&&!input.run.scenarioFidelity){originalCalls++;assert(h.cards.ZERO.querySelector('.scenario-create').disabled);return original({...input,case:{...input.case,equipment:h.before.equipment}});}
+    return original(input);
+  };
+  const entry=await search(h,'ZERO');assert.equal(originalCalls,1);assert(entry.independentCheck.passed);assert.equal(entry.originalVerification.passed,false);assert.equal(entry.status,'NOT_REPRODUCED');assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/did not improve the original run/);
  }finally{h.close();}
 });

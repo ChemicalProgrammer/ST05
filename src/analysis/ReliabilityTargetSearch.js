@@ -16,7 +16,7 @@ export async function searchReliabilityTargets(simulation,{measure,run,cancelled
   if(!machines.length)return {status:'NO_ELIGIBLE_RELIABILITY',analysisOnly:true,candidateSets:[],selectedChanges:[],coverage:{screened:0,total:0},calculations:0};
   // Basic chooses its own scope; retained manual/ALL settings from a larger
   // workspace must not expand this preliminary diagnosis without a bound.
-  if(automaticBasic){scope='AUTO';maximumMachines=Math.min(maximumMachines,3);maximumTargets=1;}
+  if(automaticBasic){scope='AUTO';maximumMachines=Math.min(maximumMachines,3);maximumTargets=run?.scenarioFidelity==='FLUID_SCREEN_V1'?Math.min(2,maximumTargets):1;}
   if(!['AUTO','MANUAL','ALL'].includes(scope))throw Error('SCENARIO_RELIABILITY_SCOPE');
   if(!Number.isInteger(maximumMachines)||maximumMachines<1||!Number.isInteger(maximumTargets)||maximumTargets<1)throw Error('SCENARIO_RELIABILITY_BUDGET');
   if(scope==='MANUAL'&&(!equipmentIds.length||equipmentIds.some(id=>!machines.some(e=>e.id===id))))throw Error('SCENARIO_RELIABILITY_SELECTION');
@@ -99,7 +99,7 @@ export async function searchReliabilityTargets(simulation,{measure,run,cancelled
   const admissible=candidateSets.filter(c=>c.candidate.throughput>baseline.throughput+threshold&&c.candidate.oee>=baseline.oee-1e-9).sort((a,b)=>Number(!!a.candidate.warnings?.length)-Number(!!b.candidate.warnings?.length)||b.candidate.throughput-a.candidate.throughput);
   return {status:admissible.length?(admissible[0].candidate.warnings?.length?'TARGETS_REQUIRE_ENGINEERING_REVIEW':'EXPLORATORY_TARGETS_FOUND'):'NO_TARGET_GAIN',analysisOnly:true,classification:'ZERO',scope,equipmentIds:selected.map(e=>e.id),equipmentLimits,maximumTargets:scope==='AUTO'?maximumTargets:selected.length,run,baseline,failureFree,
     conditionalReliabilityGain:{throughput:failureFree.throughput-baseline.throughput,oeePp:failureFree.oee-baseline.oee,pairedEvidence:scenarioPairedSummary(baseline,failureFree),additive:false},
-    coverage,ranking,targetTests,candidateSets,selectedChanges:admissible[0]?.changes||[],recoveryFraction,calculations,
+    coverage,ranking,targetTests,candidateSets,selectedChanges:admissible[0]?.changes||[],isolatedTargetChanges:choices.map(c=>c.changes),recoveryFraction,calculations,
     searchPolicy:automaticBasic?'BASIC_JOINT_RELIABILITY_V1':'BOUNDED_RELIABILITY_MECHANISMS_V1',testedMechanisms:mechanisms,
     uncertainty:{method:'PAIRED_SEED_DIFFERENCES',multipleComparisonAdjusted:false,selectionIsExploratory:true,confirmationRequired:true},
     interpretation:'Conditional failure-removal gains overlap and are not additive causal OEE shares. Aggregate MTBF/MTTR targets change all configured stop classes proportionally and leave the separate MICRO_STOP process unchanged; general inputs do not support minor/major attribution. Paired intervals describe replication uncertainty within the model, not plant uncertainty. Bounded model targets use the least parameter change recovering the configured fraction of the best isolated tested gain, then test joint packages. Screening is preliminary; full-horizon independent confirmation is required. The intervention scope is operational or maintenance downtime reduction in Zero CAPEX. Achievable actions and feasibility require review; budget amounts are outside this analysis.'};

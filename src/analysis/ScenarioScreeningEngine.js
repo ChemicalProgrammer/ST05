@@ -109,16 +109,17 @@ function fluidRates(model,t){
 // Solve each constant-rate segment analytically. Stop at the next failure,
 // repair, start, arrival-rate change, sensor threshold or buffer boundary.
 export function simulateScenarioFluidRound(input,{cancelled,progress}={}){
-  const model=fluidBuild(input),{machines,links,run}=model,horizon=run.durationSeconds;
-  if(!(horizon>0&&Number.isFinite(horizon)))throw Error('SCENARIO_FLUID_INVALID_HORIZON');
-  let t=0,source=0,output=0,events=0;
+  const model=fluidBuild(input),{machines,links,run}=model,measurement=run.durationSeconds,warmup=run.scenarioWarmupSeconds??0,horizon=measurement+warmup;
+  if(!(measurement>0&&Number.isFinite(measurement)&&Number.isFinite(warmup)&&warmup>=0&&warmup<=measurement&&Number.isFinite(horizon)))throw Error('SCENARIO_FLUID_INVALID_HORIZON');
+  let t=0,source=0,output=0,events=0,initialInventory=0,measuring=warmup===0;
   progress?.(0);
   while(t<horizon-FLUID_EPS){
     if(cancelled?.())throw Error('BATCH_CANCELLED');
     if(++events>FLUID_EVENT_LIMIT)throw Error('SCENARIO_FLUID_EVENT_LIMIT');
+    if(!measuring&&t>=warmup-FLUID_EPS){measuring=true;initialInventory=links.reduce((n,l)=>n+(l?.total||0),0);for(const m of machines){m.output=0;m.failures=0;m.microStops=0;}}
     fluidUpdate(model,t);
     const rates=fluidRates(model,t);
-    let next=horizon;
+    let next=measuring?horizon:warmup;
     const at=x=>{if(Number.isFinite(x)&&x>t+FLUID_EPS&&x<next)next=x;};
     const crossing=(v,rate,target)=>{if(Number.isFinite(target)&&Math.abs(rate)>FLUID_EPS){const dt=(target-v)/rate;if(dt>FLUID_EPS)at(t+dt);}};
     for(let i=0;i<machines.length;i++){
@@ -146,12 +147,12 @@ export function simulateScenarioFluidRound(input,{cancelled,progress}={}){
       if(total<-1e-4||total>l.cap+1e-4||ready<-1e-4||ready>total+1e-4)throw Error('SCENARIO_FLUID_BALANCE');
       l.total=fluidClamp(total,0,l.cap);l.ready=fluidClamp(ready,0,l.total);
     }
-    source+=rates[0]*dt;output+=rates.at(-1)*dt;t=next;
+    if(measuring){source+=rates[0]*dt;output+=rates.at(-1)*dt;}t=next;
     if(events%128===0)progress?.(Math.min(1,t/horizon));
   }
-  const inventory=links.reduce((n,l)=>n+(l?.total||0),0),residual=source-output-inventory;
+  const inventory=links.reduce((n,l)=>n+(l?.total||0),0),residual=initialInventory+source-output-inventory;
   if(Math.abs(residual)>Math.max(1e-4,source*1e-8))throw Error('SCENARIO_FLUID_MASS_BALANCE');
-  const summary={outputCount:output,lineOeePercent:Math.min(100,100*output/(model.reference*horizon)),totalOverflowUnits:0,materialBalance:{inputUnits:source,outputUnits:output,inventoryUnits:inventory,overflowUnits:0,residualUnits:residual},fluidEvents:events,totalFailureCount:machines.reduce((n,m)=>n+m.failures,0)};
+  const summary={outputCount:output,lineOeePercent:Math.min(100,100*output/(model.reference*measurement)),totalOverflowUnits:0,materialBalance:{initialInventoryUnits:initialInventory,inputUnits:source,outputUnits:output,inventoryUnits:inventory,overflowUnits:0,residualUnits:residual},fluidEvents:events,totalFailureCount:machines.reduce((n,m)=>n+m.failures,0)};
   progress?.(1);
-  return {ok:true,result:{caseId:input.case.id,unitOfFlow:model.unitOfFlow,engineVersion:'CAPEX_FLUID_SCREEN_V1',scenarioFidelity:'FLUID_SCREEN_V1',durationSeconds:horizon,seed:run.seed,summary,equipmentMetrics:Object.fromEntries(machines.map(m=>[m.e.id,{outputCount:m.output,failureCount:m.failures,microStopCount:m.microStops}])),screeningLimitations:['CONTINUOUS_FLOW','FIXED_TRANSPORT_DELAY','APPROXIMATE_SENSOR_HYSTERESIS','AVERAGE_RAMP_DELAY','NO_INDIVIDUAL_PACKAGES_OR_INTERNAL_RESIDENCE','NO_PHYSICAL_OVERFLOW_CERTIFICATION']}};
+  return {ok:true,result:{caseId:input.case.id,unitOfFlow:model.unitOfFlow,engineVersion:'CAPEX_FLUID_SCREEN_V1',scenarioFidelity:'FLUID_SCREEN_V1',durationSeconds:measurement,screeningWarmupSeconds:warmup,seed:run.seed,summary,equipmentMetrics:Object.fromEntries(machines.map(m=>[m.e.id,{outputCount:m.output,failureCount:m.failures,microStopCount:m.microStops}])),screeningLimitations:['CONTINUOUS_FLOW','FIXED_TRANSPORT_DELAY','APPROXIMATE_SENSOR_HYSTERESIS','AVERAGE_RAMP_DELAY','NO_INDIVIDUAL_PACKAGES_OR_INTERNAL_RESIDENCE','NO_PHYSICAL_OVERFLOW_CERTIFICATION']}};
 }

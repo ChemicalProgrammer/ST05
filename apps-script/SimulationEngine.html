@@ -5495,7 +5495,7 @@ function expandScenarioPackages(simulation,changes,availableChanges=[]){
   }
   return expanded;
 }
-function applyScenarioChanges(simulation,changes,{tier}={}){
+function applyScenarioChanges(simulation,changes,{tier,previewOnly=false}={}){
   if(!Array.isArray(changes)||!changes.length||changes.length>SCENARIO_POLICY.maxChanges)throw new Error('SCENARIO_INVALID_CHANGES');
   const declaredTiers=new Set(changes.map(c=>c?.originTier).filter(Boolean));
   if(tier)declaredTiers.add(tier);
@@ -5516,7 +5516,10 @@ function applyScenarioChanges(simulation,changes,{tier}={}){
     if(change?.packagePaths===undefined)continue;
     if(!change.packageId||!Array.isArray(change.packagePaths)||!change.packagePaths.length||change.packagePaths.length>12||!change.packagePaths.includes(change.path)||change.packagePaths.some(path=>!Object.hasOwn(SCENARIO_FIELDS,path)||!changes.some(c=>c.equipmentId===change.equipmentId&&c.packageId===change.packageId&&c.path===path)))throw new Error('SCENARIO_PACKAGE_INCOMPLETE');
   }
-  const copy=scenarioCopy(simulation),seen=new Set();
+  // Validation and measured trials need only the physical inputs. Preserve
+  // the original result for reference checks, but never clone replay or DOE
+  // history into a temporary candidate. Actual scenario creation is unchanged.
+  const copy=scenarioCopy(previewOnly?{id:simulation.id,unitOfFlow:simulation.unitOfFlow,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,run:simulation.run}:simulation),seen=new Set();
   changes.forEach(change=>{
     const rule=Object.hasOwn(SCENARIO_FIELDS,change.path)?SCENARIO_FIELDS[change.path]:null;
     const unit=copy.equipment.find(e=>e.id===change.equipmentId),key=change.equipmentId+':'+change.path;
@@ -5667,7 +5670,7 @@ function scenarioLossEvidence(simulation,diagnosis,equipment,kind){
 }
 // Opportunity screening does not create undocumented implementation targets.
 function scenarioProposalNeeds(simulation){
-  const equipment=scenarioEngineeringEquipment(simulation),product=scenarioActiveProduct(simulation),line=analyzeLinePerformance(equipment,null),reference=line.points.find(p=>p.isPacemaker),options=(simulation.whatIf?.externalOptions||[]).filter(o=>{try{if(!o.changes?.length||!o.changes.every(c=>scenarioCategoryAllows(c,o.tier)))return false;applyScenarioChanges(simulation,o.changes);return true;}catch(_){return false;}}).flatMap(o=>o.changes),needs=[];
+  const equipment=scenarioEngineeringEquipment(simulation),product=scenarioActiveProduct(simulation),line=analyzeLinePerformance(equipment,null),reference=line.points.find(p=>p.isPacemaker),options=(simulation.whatIf?.externalOptions||[]).filter(o=>{try{if(!o.changes?.length||!o.changes.every(c=>scenarioCategoryAllows(c,o.tier)))return false;applyScenarioChanges(simulation,o.changes,{tier:o.tier,previewOnly:true});return true;}catch(_){return false;}}).flatMap(o=>o.changes),needs=[];
   if(!reference)return needs;
   const factors=new Map(equipment.map(item=>[item.id,product?productUnitFactor(item,product):1]));
   const referenceBpm=reference.configuredBpm*factors.get(reference.id);
@@ -5736,7 +5739,7 @@ function planScenarios(simulation){
   equipmentReliability.forEach(r=>checks.push({equipmentId:r.equipmentId,rule:'EQUIPMENT_RELIABILITY',status:r.status==='NOT EVALUATED'?'NOT_EVALUATED':r.status,assessment:r,interpretation:'Engineering screening thresholds; not a replacement mandate.'}));
   function add(kind,tier,equipment,changes,evidence,priority,basis){
     changes=changes.filter(c=>c.before!==c.after).map(c=>({...c,originTier:tier}));if(!changes.length)return;
-    let disabledReason=null;try{applyScenarioChanges(simulation,changes,{tier});}catch(error){disabledReason=error.message;}
+    let disabledReason=null;try{applyScenarioChanges(simulation,changes,{tier,previewOnly:true});}catch(error){disabledReason=error.message;}
     const losses=scenarioLossEvidence(simulation,diagnosis,equipment,kind);evidence={...evidence,...losses,
       reliabilityParametersChanged:changes.some(change=>change.path.startsWith('noiseProfile.reliability.')),
       classificationBasis:'INTERVENTION_SCOPE',budgetUsed:false};priority+=losses.priorityBonus;if(diagnosis.status==='OBSERVED')basis='HYBRID';
@@ -5865,7 +5868,7 @@ function planScenarios(simulation){
       if(option.tier==='HIGH'){
         const targetId=changes[0].targetId||'REPLACEMENT:'+equipmentId+':DOCUMENTED:'+(option.id||optionIndex);
         changes=scenarioPackage(changes,{packageId:changes[0].packageId||targetId,targetId});
-        try{applyScenarioChanges(simulation,changes,{tier:'HIGH'});documentedReplacementIds.add(equipmentId);}catch(_){}
+        try{applyScenarioChanges(simulation,changes,{tier:'HIGH',previewOnly:true});documentedReplacementIds.add(equipmentId);}catch(_){}
       }
       add(changes.some(c=>c.replacementMaximumBpm!==undefined)?'CAPACITY_REPLACEMENT':'RELIABILITY_INTERVENTION',option.tier,equipment,changes,{targetSource:'USER_DOCUMENTED',interventionType:changes[0]?.interventionType,costClass:SCENARIO_INTERVENTIONS[changes[0]?.interventionType]?.costClass,interpretation:'Supported intervention hypothesis; dynamic benefit and shifted constraints require evaluation.'},changes.some(c=>c.replacementMaximumBpm!==undefined)&&capacityDiagnosis.limitingEquipment.some(e=>e.id===equipment.id)?120:90,'STATIC');
     }

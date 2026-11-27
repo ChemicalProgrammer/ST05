@@ -209,3 +209,20 @@ test('Basic deadline interrupts calculation without marking the candidate confir
     assert.match(h.cards.ZERO.querySelector('.scenario-result-notice').textContent,/Time limit reached/);
   }finally{h.close();}
 });
+
+test('Basic displays a provisional estimate while the full-horizon candidate is being ranked',async()=>{
+ const h=harness({reliability:false,durationSeconds:86400});try{
+  const original=h.w.SimulatorEngine.simulateBatch;let sawPreview=false;
+  h.w.SimulatorEngine.simulateBatch=async input=>{
+   if(input.run.durationSeconds===86400){
+    const notice=h.cards.ZERO.querySelector('.scenario-result-notice');
+    sawPreview ||= !notice.hidden&&/Provisional estimate/.test(notice.textContent);
+    assert(h.cards.ZERO.querySelector('.scenario-create').disabled);
+   }
+   return original(input);
+  };
+  const entry=await search(h,'ZERO');
+  assert(sawPreview);assert(entry.independentCheck.passed);
+  assert(h.cards.ZERO.querySelector('.scenario-result-notice').hidden);
+ }finally{h.close();}
+});

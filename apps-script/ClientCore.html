@@ -127,6 +127,8 @@
           document.getElementById('duration-mode').value='FIXED';state.run.durationMode='FIXED';
           var input=document.getElementById('run-duration');input.value=String(value);document.getElementById('run-duration-unit').value=unit;
           syncDurationControls();renderControlEvents();markCaseDirty({target:input});
+        },setRounds:function(value){
+          var input=document.getElementById('run-rounds');input.value=String(value);markCaseDirty({target:input});
         },save:function(){return flushCase(true);},importCase:importMinimalCase,error:showError});
         shell.init();
         if (STPreferences.read('remember') === 'yes') {

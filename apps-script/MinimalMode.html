@@ -64,20 +64,101 @@ window.STMinimalMode=(function(){
     // configuration. Existing saved non-fixed methods remain until edited.
     actions.setDuration(Number(input.value),unit.value);durationKey='';sync(state);return true;
   }
-  function resultValues(r){
+  // Mirror the canonical run input; the compact toolbar owns no independent run.
+  var roundsKey='',selectedResult=null,roundView='average',roundViewKey='';
+  function readRounds(){return Number(el('run-rounds').value);}
+  function syncRounds(lock){
+    var input=el('minimal-rounds'),rounds=readRounds(),key=ownerKey()+'|'+rounds;
+    input.disabled=lock;
+    if(key!==roundsKey&&Number.isInteger(rounds)&&rounds>=1&&rounds<=100){
+      input.value=String(rounds);roundsKey=key;
+    }
+  }
+  function applyRounds(){
+    if(busy())return false;
+    var input=el('minimal-rounds'),rounds=Number(input.value);
+    if(!input.reportValidity())return false;
+    if(!Number.isInteger(rounds)||rounds<1||rounds>100){
+      actions.error({message:tr('Enter a whole number of rounds from 1 to 100.')});return false;
+    }
+    if(rounds===readRounds())return true;
+    actions.setRounds(rounds);roundsKey='';sync(state);return true;
+  }
+  function expectedRounds(r){return r?.batch?.rounds??r?.replicationStatus?.rounds??r?.rounds??1;}
+  function resultRoundRows(r){
+    if(!r?.summary)return [];
+    var count=expectedRounds(r),rows=r.batch?.rows;
+    if(!Number.isInteger(count)||count<1||count>100)return [];
+    if(!Array.isArray(rows)||!rows.length){
+      return count===1?[{round:1,seed:r.seed,summary:r.summary,durationSeconds:r.durationSeconds}]:[];
+    }
+    // Use saved per-round measurements, even where compact results omit replay.
+    // Never fabricate missing rounds from the first result or its statistics.
+    if(rows.length!==count||rows.some(row=>!Number.isInteger(row?.round)||row.round<1||row.round>count||!row.summary)
+      ||new Set(rows.map(row=>row.round)).size!==count)return [];
+    return rows.slice().sort((a,b)=>a.round-b.round);
+  }
+  function representativeRound(r,rows){
+    var number=r?.batch?.representativeRound;
+    if(rows.some(row=>row.round===number))return number;
+    if(rows.length===1)return rows[0].round;
+    // Same ordering as SimulationBatch.closestRound: output, OEE, round number.
+    if(!rows.length||rows.some(row=>!Number.isFinite(row.summary.outputCount)||!Number.isFinite(row.summary.lineOeePercent)))return null;
+    var meanOutput=rows.reduce((sum,row)=>sum+row.summary.outputCount,0)/rows.length,
+      meanOee=rows.reduce((sum,row)=>sum+row.summary.lineOeePercent,0)/rows.length;
+    return rows.slice().sort((a,b)=>Math.abs(a.summary.outputCount-meanOutput)-Math.abs(b.summary.outputCount-meanOutput)
+      ||Math.abs(a.summary.lineOeePercent-meanOee)-Math.abs(b.summary.lineOeePercent-meanOee)||a.round-b.round)[0].round;
+  }
+  function resetRoundView(){selectedResult=null;roundView='average';roundViewKey='';}
+  function syncRoundView(r,lock){
+    var select=el('minimal-round-view');
+    if(selectedResult!==r){resetRoundView();selectedResult=r;}
+    var rows=resultRoundRows(r),representative=representativeRound(r,rows);
+    select.hidden=!rows.length;select.disabled=lock||!rows.length;
+    if(!rows.length)return;
+    var options=[['average',tr('Average of all rounds')+' ('+rows.length+')']];
+    if(representative!==null)options.push(['representative',tr('Representative round')+' ('+representative+')']);
+    rows.forEach(row=>options.push([String(row.round),tr('Round')+' '+row.round]));
+    if(!options.some(pair=>pair[0]===roundView))roundView='average';
+    var key=JSON.stringify(options);
+    if(key!==roundViewKey){
+      select.replaceChildren();
+      options.forEach(pair=>{var option=node('option',pair[1]);option.value=pair[0];select.append(option);});
+      roundViewKey=key;
+    }
+    select.value=roundView;
+  }
+  function resultValues(r,selection='average'){
     var unit=window.STFlowUnits?.labels(r.unitOfFlow||state.activeCase?.unitOfFlow)||{count:'units',rate:'units/min'};
-    var stats=r.batch?.statistics||{},s=r.summary||{};
-    return {unit:unit,oee:stats.lineOeePercent?.mean??s.lineOeePercent,
-      throughput:stats.throughputPerMinute?.mean??(r.durationSeconds>0?s.outputCount/r.durationSeconds*60:null),output:stats.outputCount?.mean??s.outputCount};
+    var rows=resultRoundRows(r),stats=r.batch?.statistics||{};
+    function values(row){
+      var s=row?.summary||{},duration=row?.durationSeconds??r.durationSeconds;
+      return {oee:Number.isFinite(s.lineOeePercent)?s.lineOeePercent:null,
+        throughput:duration>0&&Number.isFinite(s.outputCount)?s.outputCount/duration*60:null,
+        output:Number.isFinite(s.outputCount)?s.outputCount:null};
+    }
+    if(selection!=='average'){
+      var round=selection==='representative'?representativeRound(r,rows):Number(selection);
+      var row=rows.find(item=>item.round===round);
+      if(row)return {...values(row),unit};
+    }
+    if(expectedRounds(r)===1&&!r.batch)return {...values(r),unit};
+    var measured=rows.map(values);
+    function mean(key,stat){
+      if(Number.isFinite(stats[stat]?.mean))return stats[stat].mean;
+      return measured.length&&measured.every(row=>Number.isFinite(row[key]))
+        ?measured.reduce((sum,row)=>sum+row[key],0)/measured.length:null;
+    }
+    return {unit,oee:mean('oee','lineOeePercent'),throughput:mean('throughput','throughputPerMinute'),output:mean('output','outputCount')};
   }
   function productionLabel(unit){return unit.count==='bottles'?'Bottles produced':'Production';}
   function renderResults(r){
     show('minimal-result-cards',!!r&&!starting&&!actions.locked());
     if(!r)return;
-    var v=resultValues(r),theory=window.STBasicMode?.theoreticalEfficiency(owner()?.equipment),key=JSON.stringify([v,theory,document.documentElement.lang]);
+    var v=resultValues(r,roundView),theory=window.STBasicMode?.theoreticalEfficiency(owner()?.equipment),key=JSON.stringify([v,theory,roundView,document.documentElement.lang]);
     if(key===resultKey)return;resultKey=key;
     var grid=el('minimal-result-cards');grid.replaceChildren();
-    [['Theoretical equipment efficiency',theory,'%',2],['Simulated efficiency',v.oee,'%',2],['Throughput',v.throughput,v.unit.rate,2],[productionLabel(v.unit),v.output,v.unit.count,0]].forEach(function(spec,i){
+    [['Theoretical equipment efficiency',theory,'%',2],['Simulated efficiency',v.oee,'%',2],['Throughput',v.throughput,v.unit.rate,2],[productionLabel(v.unit),v.output,v.unit.count,roundView==='average'?2:0]].forEach(function(spec,i){
       var card=node('article',null,'metric-card metric-card--featured');
       if(i===0){card.title=tr('Theoretical efficiency = 100 × product of MTBF / (MTBF + MTTR).');card.tabIndex=0;}
       card.append(node('span',spec[0]),metricValue(spec[1],spec[2],spec[3]));grid.append(card);
@@ -135,11 +216,11 @@ window.STMinimalMode=(function(){
     var workspace=el('minimal-workspace'),becameVisible=active&&workspace.classList.contains('hidden');
     workspace.classList.toggle('hidden',!active);
     if(becameVisible)window.STEquipmentTable?.refresh();
-    if(k!==lastOwner){lastOwner=k;durationKey=tableKey=resultKey='';clearScenarios();readinessCache=null;searchMessage='';runProgress=0;searchProgress=0;}
+    if(k!==lastOwner){lastOwner=k;durationKey=roundsKey=tableKey=resultKey='';resetRoundView();clearScenarios();readinessCache=null;searchMessage='';runProgress=0;searchProgress=0;}
     var lock=busy();
     document.querySelectorAll('#basic-case-actions button').forEach(function(b){if(lock&&!b.disabled){b.disabled=true;b.dataset.minimalLock='true';}else if(!lock&&b.dataset.minimalLock==='true'){b.disabled=false;delete b.dataset.minimalLock;}});
     if(!active){if(!busy()){stopMonitor();if(scenarioOwner)clearScenarios();}return;}
-    syncTable(lock||state.saving);syncDuration(lock||state.saving);
+    syncTable(lock||state.saving);syncDuration(lock||state.saving);syncRounds(lock||state.saving);
     var sheetExport=el('minimal-export-equipment-sheet');if(sheetExport)sheetExport.disabled=lock||state.saving||sheetExport.dataset.busy==='true';
     var running=starting||actions.locked(),r=result(),review=reviewRequired(sim);
     show('minimal-input-review',review||!!sim?.sourceImport?.simpleImportIssues?.length&&!r);
@@ -147,7 +228,7 @@ window.STMinimalMode=(function(){
     if(running){runProgress=Math.max(runProgress,Math.min(100,100*actions.progress()));progress('minimal-run-progress',runProgress,runProgress===100?'Preparing results…':null);}
     el('minimal-run').hidden=false;el('minimal-run').disabled=lock||state.saving||!sim;
     el('minimal-run').textContent=tr(r?'Restart simulation':'Run simulation');
-    renderResults(r);
+    syncRoundView(running?null:r,lock||state.saving);renderResults(r);
     var statExport=el('minimal-export-minitab');
     if(statExport){statExport.hidden=!r||!window.STStatExport;statExport.disabled=!r||running||!window.STStatExport?.canExport(sim);}
     var benchmark=el('minimal-ideal-benchmark');if(benchmark){benchmark.hidden=true;benchmark.disabled=true;}
@@ -170,10 +251,10 @@ window.STMinimalMode=(function(){
   async function startRun(){
     if(busy()||!state.activeCase)return;
     var sim=owner();if(!sim)return;
-    if(!applyDuration())return;
+    if(!applyDuration()||!applyRounds())return;
     // Let the canonical editor and physical engine validate corrected values.
     if((sim.equipment||[]).length<2){actions.error({message:tr('At least two equipment units are required for simulation.')});return;}
-    starting=true;runProgress=0;clearScenarios();searchMessage='';resultKey='';
+    starting=true;runProgress=0;clearScenarios();searchMessage='';resultKey='';resetRoundView();
     el('run-calculation-mode').value='FAST';expandForAction('minimal-simulation');sync(state);
     try{await actions.run();}catch(error){actions.error(error);}finally{starting=false;sync(state);}
   }
@@ -253,6 +334,11 @@ window.STMinimalMode=(function(){
     el('minimal-run').onclick=startRun;el('minimal-search').onclick=function(){return searching?stopSearch():startSearch();};
     var statExport=el('minimal-export-minitab');if(statExport)statExport.onclick=function(){if(!result()||!window.STStatExport?.canExport(owner()))return;try{window.STStatExport.download(owner(),state.activeCase);}catch(error){actions.error(error);}};
     el('minimal-duration').onchange=applyDuration;el('minimal-duration-unit').onchange=applyDuration;
+    el('minimal-rounds').onchange=applyRounds;
+    el('minimal-round-view').onchange=function(){
+      if(busy()||!result())return;
+      roundView=this.value;syncRoundView(result(),false);renderResults(result());
+    };
     var dialog=el('minimal-import-dialog'),link=el('minimal-import-link'),submit=el('minimal-import-submit'),close=el('minimal-import-close');
     close.onclick=function(){if(!importing)dialog.close();};
     dialog.addEventListener('cancel',e=>{if(importing)e.preventDefault();});

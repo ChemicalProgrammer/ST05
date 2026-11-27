@@ -14,7 +14,9 @@
       <div class="subsection-heading-copy"><h3 id="minimal-simulation-title" class="subsection-heading-title"><button class="fold-toggle" type="button" data-subsection-toggle aria-expanded="true" aria-controls="minimal-simulation-content">Simulation</button></h3></div>
       <div class="fold-tools button-row minimal-simulation-tools">
         <label class="time-value-label"><span>Duration</span><span class="time-value-control"><input id="minimal-duration" type="number" min="0.001" step="any" required value="8" aria-label="Duration"><select id="minimal-duration-unit" aria-label="Duration time unit"><option value="SECONDS">s</option><option value="MINUTES">min</option><option value="HOURS" selected>h</option><option value="DAYS">d</option></select></span></label>
+        <label class="minimal-inline-label"><span>Rounds</span><input id="minimal-rounds" type="number" min="1" max="100" step="1" required value="3" aria-label="Number of rounds"></label>
         <button id="minimal-run" type="button">Run simulation</button>
+        <select id="minimal-round-view" aria-label="Results view" title="Results view" hidden disabled></select>
         <button id="minimal-export-minitab" class="secondary" type="button" data-icon="upload" title="Export statistical report" aria-label="Export statistical report" hidden disabled>Statistical Report</button>
       </div>
     </div>

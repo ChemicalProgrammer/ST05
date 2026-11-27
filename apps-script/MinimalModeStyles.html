@@ -23,7 +23,9 @@ html[data-workspace-mode=MINIMAL] .case-open .workspace-content {padding:var(--w
 .minimal-section .minimal-message {margin:0;}
 html[data-workspace-mode=MINIMAL] #minimal-equipment-table-host {min-width:0;max-width:100%;}
 .minimal-simulation-tools {align-items:center;justify-content:flex-end;}
-.minimal-simulation-tools .time-value-label {display:flex;align-items:center;gap:var(--space-2);margin:0;}
+.minimal-simulation-tools :is(.time-value-label,.minimal-inline-label) {display:flex;align-items:center;gap:var(--space-2);margin:0;}
+.minimal-simulation-tools #minimal-rounds {width:var(--size-64,64px);min-width:0;}
+.minimal-simulation-tools #minimal-round-view {width:auto;max-width:100%;min-width:0;}
 .minimal-simulation-tools .time-value-control {width:auto;}
 .minimal-simulation-tools #minimal-duration {width:var(--size-80,80px);min-width:0;}
 #minimal-result-cards {grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--size-160)),1fr));}

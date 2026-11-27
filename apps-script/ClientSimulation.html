@@ -467,7 +467,8 @@
       document.getElementById('duration-mode').value=run.durationMode||(window.STBasicMode?.isBasic()?'SHIFTS':'FIXED');
       document.getElementById('run-shift-hours').value=run.shiftHours||8;
       document.getElementById('run-shift-count').value=run.shiftCount||1;
-      document.getElementById('run-rounds').value=run.rounds||1;
+      var savedRounds=run.rounds??activePersistentSimulation()?.results?.batch?.rounds??activePersistentSimulation()?.results?.replicationStatus?.rounds;
+      document.getElementById('run-rounds').value=savedRounds??(window.STMinimalMode?.isMinimal?.()&&!activePersistentSimulation()?.results?3:1);
       syncDurationControls();
       document.getElementById('run-duration').value = run.durationSeconds ?? document.getElementById('run-duration').defaultValue;
       var sampleUnit=run.sampleDisplayUnit||'SECONDS';

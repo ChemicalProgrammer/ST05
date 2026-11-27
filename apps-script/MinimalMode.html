@@ -190,6 +190,11 @@ window.STMinimalMode=(function(){
     var entries=sim?.whatIf?.evaluations;
     if(Array.isArray(entries))sim.whatIf.evaluations=entries.filter(entry=>!ownedScenarioResult(entry,sim,scope));
   }
+  function exitScenarioResults(sim){
+    if(!sim.whatIf?.evaluations?.some(entry=>ownedScenarioResult(entry,sim)))return;
+    var grid=el('minimal-scenario-cards');
+    if(grid?.getClientRects?.().length)return window.STMotion?.exit(grid);
+  }
   function clearScenarios(){
     var grid=el('minimal-scenario-cards');grid.replaceChildren();show('minimal-scenario-cards',false);scenarioOwner=scenarioResult=null;
   }
@@ -317,9 +322,18 @@ window.STMinimalMode=(function(){
     if(!applyDuration()||!applyRounds())return;
     // Let the canonical editor and physical engine validate corrected values.
     if((sim.equipment||[]).length<2){actions.error({message:tr('At least two equipment units are required for simulation.')});return;}
-    starting=true;runStopRequested=false;runStopTask=null;runStartedAt=performance.now();runProgress=0;clearScenarios();searchMessage='';resultKey='';resetRoundView();
-    el('run-calculation-mode').value='FAST';expandForAction('minimal-simulation');sync(state);
-    try{await actions.run();}catch(error){if(!runStopRequested)actions.error(error);}finally{
+    starting=true;runStopRequested=false;runStopTask=null;runStartedAt=performance.now();runProgress=0;searchMessage='';resultKey='';resetRoundView();
+    try{
+      var exit=exitScenarioResults(sim);
+      if(exit)await exit;
+      if(runStopRequested||owner()!==sim)return;
+      if(sim.whatIf?.evaluations?.some(entry=>ownedScenarioResult(entry,sim))){
+        discardScenarioResults(sim);actions.markReset();
+      }
+      clearScenarios();
+      el('run-calculation-mode').value='FAST';expandForAction('minimal-simulation');sync(state);
+      await actions.run();
+    }catch(error){if(!runStopRequested)actions.error(error);}finally{
       if(runStopTask)await runStopTask;
       starting=false;runStopRequested=false;runStopTask=null;runStartedAt=null;sync(state);
     }
@@ -360,6 +374,14 @@ window.STMinimalMode=(function(){
       // Reset the complete requested queue before starting its first category.
       // The single-card refresh only resets that card.
       if(work.some(card=>typeof card._prepareMinimalRestart!=='function'))throw Error('CAPEX reset is unavailable.');
+      if(!onlyCard){
+        var exit=exitScenarioResults(sim);
+        if(exit)await exit;
+        if(stopRequested)throw Error('Search stopped.');
+        if(owner()!==sim||ownerKey()!==key||sourceSignature(sim)!==signature)throw Error('Source inputs changed.');
+        discardScenarioResults(sim);
+        evaluated=true;
+      }
       for(var index=0;index<work.length;index++){
         if(!work[index]._prepareMinimalRestart({notify:index===work.length-1}))throw Error('CAPEX card could not be reset.');
         evaluated=true;

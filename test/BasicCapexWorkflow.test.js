@@ -14,8 +14,8 @@ function fixture(outcome,options={}){
   _runMinimalSearch:async()=>{calls.push(tier);if(outcome instanceof Error)throw outcome;return outcome;},
   _cancelMinimalSearch:({discard})=>{assert.equal(discard,true);calls.push('cancel');}
  }));
- const context={executionPolicy,sim,state,paints,owner:()=>sim,result:()=>r,busy:()=>false,ownerKey:()=>sim.id,sourceSignature:()=> 'current',
-  window:{requestAnimationFrame:options.frame,STScenarioExplorer:{executionPolicy},STScenarios:{readiness:()=>({ready:options.ready!==false,reason:options.ready===false?'NO_RESULTS':null})}},
+ const context={el:()=>options.grid,executionPolicy,sim,state,paints,owner:()=>sim,result:()=>r,busy:()=>false,ownerKey:()=>sim.id,sourceSignature:()=> 'current',
+  window:{STMotion:options.motion,requestAnimationFrame:options.frame,STScenarioExplorer:{executionPolicy},STScenarios:{readiness:()=>({ready:options.ready!==false,reason:options.ready===false?'NO_RESULTS':null})}},
   document:{visibilityState:options.frame?'visible':'hidden',documentElement:{lang:'en'}},setTimeout:fn=>fn(),scenarioCards:()=>cards,expandForAction:()=>{},isMinimal:()=>true,
   actions:{error:e=>calls.push('error:'+e.message),markReset:()=>calls.push('dirty'),save:async()=>calls.push('save')},
   progress:(_id,value)=>percentages.push(value),clearScenarios:()=>calls.push('clear'),show:()=>{}};
@@ -94,4 +94,18 @@ test('the first visible search frame precedes resetting and running the selected
   await pending;
   assert.deepEqual(h.calls,single?['prepare MEDIUM','MEDIUM','save']:['prepare ZERO','prepare MEDIUM','ZERO','MEDIUM','save']);
  }
+});
+
+test('global restart waits for the previous cards to exit and clears both tiers before dispatch',async()=>{
+ let finish;
+ const h=fixture(complete('NO_ELIGIBLE_TARGETS'),{
+  grid:{getClientRects:()=>[{}]},motion:{exit:()=>new Promise(resolve=>{finish=resolve;})}
+ });
+ h.sim.whatIf.evaluations.push({tier:'MEDIUM',sourceSimulationId:h.sim.id});
+ const pending=h.run.startSearch();
+ assert.deepEqual(h.calls,[]);
+ finish();
+ await pending;
+ assert.deepEqual(h.sim.whatIf.evaluations,[{tier:'HIGH'},{tier:'ZERO',sourceSimulationId:'other'}]);
+ assert(h.calls.includes('MEDIUM'));
 });

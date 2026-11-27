@@ -11,7 +11,7 @@ test('Basic run switches to Stop, keeps it enabled, then discards and saves befo
    block(mode,'  function ownedScenarioResult(','  function clearScenarios(')+block(mode,'  function clearRunDisplay(','  // A terminal evaluated outcome')+
    '\nreturn {startRun,stopRun,starting:()=>starting,stopping:()=>runStopRequested};')(
    {now:()=>1000},()=>sim,()=>sim.id,{activeCase:{}},{run:()=>new Promise(resolve=>{resolveRun=resolve;}),stopRun:()=>{sim.results=null;resolveRun(false);return new Promise(resolve=>{resolveStop=resolve;});},markReset:()=>calls.push('dirty'),save:async()=>calls.push('save'),error:e=>{throw e;}},el,()=>false,()=>true,()=>true,()=>{},()=>{},()=>{},()=>{},()=>{},()=>{});
- const run=api.startRun();assert(api.starting());const stopped=api.stopRun();await Promise.resolve();
+ const run=api.startRun();assert(api.starting());assert.deepEqual(sim.whatIf.evaluations,[{tier:'HIGH'}]);const stopped=api.stopRun();await Promise.resolve();
  assert(api.stopping());assert(api.starting());assert.equal(sim.results,null);assert.equal(api.stopRun(),stopped);
  resolveStop();await stopped;await run;assert(!api.starting());assert(!api.stopping());assert.deepEqual(sim.whatIf.evaluations,[{tier:'HIGH'}]);assert(calls.includes('clear:minimal-result-cards'));assert.deepEqual(calls.slice(-2),['dirty','save']);
  assert.match(mode,/runButton\.disabled=starting\?runStopRequested:/);assert.match(mode,/runButton\.textContent=tr\(starting\?\(runStopRequested\?'Stopping…':'Stop'/);

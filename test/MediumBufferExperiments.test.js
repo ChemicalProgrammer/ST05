@@ -42,3 +42,19 @@ test('successive search attempts change actual extension targets within the engi
     }
   }
 });
+
+test('restarts retain an early doubled-length trial when feasible',()=>{
+  const sites=['A','B','C'].map(pack);
+  for(const scale of [1,.58]){
+    const trials=plan(sites,9,scale);
+    for(const site of sites)assert(trials.some(t=>t.changes.length===1&&t.changes[0].equipmentId===site.changes[0].equipmentId&&t.changes[0].after===20000));
+  }
+});
+test('length refinement brackets the best safe measured level and respects its budget',()=>{
+  const refine=new Function(helper+'return refineBufferExperiments;')();
+  const site=pack('A'),history=plan([site],48).filter(t=>!t.control&&t.changes.length===1).map(t=>({...t,result:{throughput:t.changes[0].after===15000?12:10,overflowUnits:0}}));
+  history.find(t=>t.changes[0].after===20000).result={throughput:20,overflowUnits:1};
+  const trials=refine([site],history,{overflowUnits:0},2);
+  assert.deepEqual(trials.map(t=>t.changes[0].after),[13750,27438]);
+  assert.equal(refine([site],history,{overflowUnits:0},1).length,1);
+});

@@ -125,6 +125,8 @@ window.STScenarioExplorer=(function(){
       if(sensor&&sensor.after<=length.before&&sensor.after!==sensor.before){
         add([{equipmentId:sensor.equipmentId,path:sensorPath,before:sensor.before,after:sensor.after,unit:sensor.unit,originTier:'ZERO'}],true);
       }
+      const paths=[lengthPath];
+      if(2*length.before<=length.after)add([{...length,after:2*length.before,packagePaths:paths}]);
       const span=length.after-length.before;
       const lengths=[.25,.5,1].map((fraction,index)=>Math.min(length.after,Math.round(length.before+levelScale*Math.min(length.before*fraction,span*(index+1)/4))));
       lengths.push(length.after);
@@ -147,6 +149,34 @@ window.STScenarioExplorer=(function(){
       for(const site of sites)if(site[i]&&result.length<limit)result.push(site[i]);
     }
     return result;
+  }
+  function bufferTrialKey(changes){
+    return JSON.stringify(changes.map(c=>[c.equipmentId,c.path,c.after]).sort((a,b)=>a[1].localeCompare(b[1])));
+  }
+  function refineBufferExperiments(packages,history,baseline,limit){
+    const lengthPath='processData.geometry.lactMm';
+    const seen=new Set(history.map(t=>bufferTrialKey(t.changes)));
+    const sites=[];
+    for(const pack of packages){
+      const length=pack.changes.find(c=>c.path===lengthPath);
+      if(!length)continue;
+      const samples=history.filter(t=>t.changes.length===1&&t.changes[0].path===lengthPath&&t.changes[0].equipmentId===length.equipmentId&&Number.isFinite(t.result?.throughput)&&t.result.overflowUnits<=baseline.overflowUnits+1e-6);
+      if(!samples.length)continue;
+      const peak=samples.reduce((a,b)=>a.result.throughput>=b.result.throughput?a:b);
+      const target=peak.changes[0].after;
+      const levels=[...new Set([length.before,...samples.map(t=>t.changes[0].after),length.after])].sort((a,b)=>a-b);
+      const index=levels.indexOf(target),trials=[];
+      for(const bound of [levels[index-1],levels[index+1]]){
+        if(bound==null)continue;
+        const after=Math.round((bound+target)/2);
+        if(after===bound||after===target)continue;
+        const changes=[{...peak.changes[0],after}],key=bufferTrialKey(changes);
+        if(!seen.has(key)){seen.add(key);trials.push({changes,control:false,refined:true});}
+      }
+      sites.push({score:peak.result.throughput,trials});
+    }
+    sites.sort((a,b)=>b.score-a.score);
+    return [0,1].flatMap(i=>sites.flatMap(s=>s.trials.slice(i,i+1))).slice(0,limit);
   }
   function unitLabel(unit){return window.STBasicMode?.unitLabel(unit)||unit||'units';}
   function quantity(value,unit){var strong=el('strong',value,'metric-value');if(unit)strong.append(el('span',unit,'metric-unit'));return strong;}
@@ -1195,11 +1225,22 @@ window.STScenarioExplorer=(function(){
           setStage(document.documentElement.lang==='es'?'Exploración rápida de longitudes y sensores':'Fast buffer length and sensor screening');
           maximum=completed+experiments.length;
           evidence.trialHistory=trialHistory;
-          for(const trial of experiments){
+          const refineAt=Math.max(packages.length*2,Math.ceil(experiments.length*.75));
+          let refinedCount=0;
+          for(let index=0;index<experiments.length;index++){
             if(cancelled())return;
             if(finishRequested)break;
             checkBudget();
-            const stage=trial.control?'INSTALLED_LENGTH_SENSOR_CONTROL':'BUFFER_PACKAGE';
+            if(index===refineAt){
+              const slots=experiments.length-index;
+              const refined=refineBufferExperiments(packages,trialHistory,baseline,slots);
+              const keys=new Set(refined.map(t=>bufferTrialKey(t.changes)));
+              const remaining=experiments.slice(index).filter(t=>!keys.has(bufferTrialKey(t.changes)));
+              experiments.splice(index,slots,...refined.concat(remaining).slice(0,slots));
+            }
+            const trial=experiments[index];
+            if(trial.refined)refinedCount++;
+            const stage=trial.refined?'BUFFER_LENGTH_REFINEMENT':trial.control?'INSTALLED_LENGTH_SENSOR_CONTROL':'BUFFER_PACKAGE';
             try{
               const value=await measured(trial.changes,0,source,previewRun,undefined,trial.control);
               if(cancelled())return;
@@ -1215,7 +1256,7 @@ window.STScenarioExplorer=(function(){
           }
           const winner=bestOf([...finalistPool.values()],baseline);
           best=winner?.result||baseline;bestChanges=winner?.changes||[];
-          evidence.phaseAudit.exploration={testedCandidates:done,infeasibleCandidates:invalid,eligiblePackages:packages.length,plannedExperiments:experiments.length};
+          evidence.phaseAudit.exploration={testedCandidates:done,infeasibleCandidates:invalid,eligiblePackages:packages.length,plannedExperiments:experiments.length,refinedCandidates:refinedCount};
 
         }else{
           var ofatPlan=STScenarioSearch.zeroOFAT(source,{levelScale,limit:Math.min(30,Math.max(0,limits.maxCandidates-14))});

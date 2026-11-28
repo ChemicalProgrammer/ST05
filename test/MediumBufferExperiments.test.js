@@ -29,3 +29,16 @@ test('candidate budget is shared across sites and duplicate levels are skipped',
   const keys=plan(sites.slice(0,1),48).map(t=>JSON.stringify(t.changes.map(c=>[c.path,c.after])));
   assert.equal(keys.length,new Set(keys).size);
 });
+
+test('successive search attempts change actual extension targets within the engineering envelope',()=>{
+  const site=pack('A'),limit=48;
+  const attempts=[1,.79,.58].map(scale=>plan([site],limit,scale));
+  function keys(trials){return new Set(trials.map(t=>JSON.stringify(t.changes.map(c=>[c.path,c.after]))));}
+  for(let i=1;i<attempts.length;i++){
+    const previous=keys(attempts[i-1]);
+    assert([...keys(attempts[i])].some(k=>!previous.has(k)));
+    for(const trial of attempts[i])for(const change of trial.changes){
+      if(change.path===length)assert(change.after>10000&&change.after<=39876);
+    }
+  }
+});

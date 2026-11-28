@@ -6883,7 +6883,7 @@ function zeroFlowChangeAllowed(change,equipment){
 const zeroFlowKey=c=>c.equipmentId+':'+c.path;
 const zeroFlowRead=(e,path)=>path.split('.').reduce((o,k)=>o?.[k],e)??null;
 const zeroFlowRound=x=>Number(x.toPrecision(10));
-function planZeroFlowOFAT(simulation,{limit=30}={}){
+function planZeroFlowOFAT(simulation,{limit=30,levelScale=1}={}){
   const equipment=simulation.equipment||[],run=simulation.dynamicConfig||{},product=run.productCatalog?.find(p=>p.id===(run.initialFormatId??run.initialProductId)),projected=projectMachineDesign(equipment,run),resolved=product?applyProductProfile(projected,product):projected;
   const diagnostic=scenarioControlDiagnostics(simulation.results,equipment),groups=[],omitted=[];
   const byId=id=>diagnostic?.machines.find(m=>m.equipmentId===id);
@@ -6897,6 +6897,10 @@ function planZeroFlowOFAT(simulation,{limit=30}={}){
     const risk=(down?.repeatedStarts?30:0)+(z?.pulseConflict?25:0)+Math.min(30,100*((down?.waitingForPrimeSeconds||0)+(up?.blockedSeconds||0))/(diagnostic?.durationSeconds||1));
     const basePath='processData.accumulation.',L=d.usableLengthMm,pack=d.productLengthMm,pulse=pack/d.conveyorSpeedMmPerSecond,prime=d.primeSensorPositionMm,backup=d.backupSensorPositionMm;
     function add(path,kind,levels,priority,baselineEffective){
+      // Interpolate inside the existing physical envelope, then validate the effective setting.
+      if(levelScale>0&&levelScale<1&&Number.isFinite(baselineEffective)){
+        levels=levels.map(value=>baselineEffective+(value-baselineEffective)*levelScale);
+      }
       const before=zeroFlowRead(e,path),rule=SCENARIO_FIELDS[path],values=[...new Set(levels.filter(Number.isFinite).map(zeroFlowRound))].filter(v=>v!==before&&v!==baselineEffective&&v>=rule[0]&&v<=rule[1]);
       const candidates=[];
       for(const after of values){

@@ -236,7 +236,7 @@ window.STMinimalMode=(function(){
     var current=Number(searchCard?._minimalSearchProgress?.())||0;
     searchProgress=Math.max(searchProgress,Math.min(99.9,(searchCompleted+Math.min(current,99.9)/100)/searchTotal*100));
     progress('minimal-search-progress',searchProgress);
-    var tier=cardTier(searchCard,owner()?.id)||searchTiers[0];
+    var tier=cardTier(searchCard,owner()?.id)||searchTiers[Math.min(searchCompleted,searchTiers.length-1)];
     var label=tier==='MEDIUM'?tr('Medium CAPEX'):tr('Zero CAPEX');
     var position=searchTiers.indexOf(tier)+1;
     el('minimal-search-tier').textContent=searchTotal>1?label+' ('+position+'/'+searchTotal+')':label;
@@ -287,7 +287,7 @@ window.STMinimalMode=(function(){
     var priorSearchLabel=searchButton.textContent;searchButton.textContent=tr(searching?(stopRequested?'Stopping…':'Stop'):saved?'Restart search':'Find optimizations');
     if(priorSearchLabel!==searchButton.textContent)window.STMotion?.reveal(searchButton);
     searchButton.title=tr(searching?'Stop search':saved?'Restart search':'Find optimizations');
-    show('minimal-search-progress',searching&&!stopRequested);
+    show('minimal-search-progress',!stopRequested&&(searching||(searchProgress===100&&!!searchMessage&&!!r&&!running)));
     if(searching&&!stopRequested)updateSearchProgress();
     var message=searchMessage||(!canSearch&&r?'Optimization is unavailable for this configuration.'+(readiness?.reason?' ('+readiness.reason+(readiness.differencePath?' · '+readiness.differencePath:'')+')':''):'');
     el('minimal-search-message').textContent=tr(message);show('minimal-search-message',!!message&&!searching&&!runStopRequested);
@@ -363,7 +363,7 @@ window.STMinimalMode=(function(){
     }
     searchTiers=work.map(card=>cardTier(card,sim.id));
     searching=true;searchStartedAt=performance.now();stopRequested=false;searchProgress=0;searchCompleted=0;searchTotal=work.length;searchMessage='';expandForAction('minimal-optimization');sync(state);
-    var failures=[],evaluated=false;
+    var failures=[],summaries=[],evaluated=false;
     try{
       // Give the browser a paint before resetting cards or preparing simulation batches.
       if(document.visibilityState==='visible'&&typeof window.requestAnimationFrame==='function'){
@@ -398,6 +398,12 @@ window.STMinimalMode=(function(){
         catch(error){outcome={started:false,reason:error.message||'Evaluation failed'};}
         evaluated=evaluated||outcome?.started===true;
         if(stopRequested)break; // Ignore even a late successful response after Stop.
+        if(outcome?.started&&outcome.searchAttempt){
+          var counts=outcome.reuseCounts||{},calculated=counts.CALCULATED||0;
+          var reused=Object.entries(counts).reduce((sum,[key,count])=>sum+(key==='CALCULATED'?0:count),0);
+          var es=document.documentElement.lang==='es';
+          summaries.push(label+' · '+(es?'Intento ':'Attempt ')+outcome.searchAttempt+' · '+calculated+(es?' lotes calculados, ':' calculated batches, ')+reused+(es?' reutilizados':' reused'));
+        }
         if(completedOutcome(outcome)){searchCompleted++;}
         else failures.push(label+': '+(outcome?.reason||outcome?.status||'Evaluation did not complete.'));
         searchCard=null;
@@ -406,7 +412,7 @@ window.STMinimalMode=(function(){
         sync(state);
         if(stopRequested)break;
       }
-      if(!stopRequested&&failures.length)searchMessage=failures.join(' · ');
+      if(!stopRequested)searchMessage=failures.concat(summaries).join(' · ');
     }catch(error){if(!stopRequested){searchMessage=error.message||'Evaluation failed';actions.error(error);}}
     finally{
       var discarded=stopRequested,sameOwner=owner()===sim&&ownerKey()===key&&sourceSignature(sim)===signature;

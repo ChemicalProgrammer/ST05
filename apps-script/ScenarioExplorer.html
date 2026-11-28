@@ -111,7 +111,7 @@ window.STScenarioExplorer=(function(){
     return tier==='MEDIUM'&&change.interventionType==='ACCUMULATION'&&STScenarios.categoryAllows(change,tier);
   }
   // Interleave sites so a large conveyor cannot consume the whole screening budget.
-  function bufferExperiments(packages,limit){
+  function bufferExperiments(packages,limit,levelScale=1){
     const lengthPath='processData.geometry.lactMm',sensorPath='processData.accumulation.backupSensorPositionMm';
     const sites=packages.map(pack=>{
       const length=pack.changes.find(c=>c.path===lengthPath),sensor=pack.changes.find(c=>c.path===sensorPath);
@@ -120,25 +120,26 @@ window.STScenarioExplorer=(function(){
         const key=JSON.stringify(changes.map(c=>[c.path,c.after]));
         if(!seen.has(key)){seen.add(key);trials.push({changes,control});}
       }
-      add(pack.changes);
-      if(!length||!(length.before>0&&length.after>length.before)||pack.changes.some(c=>c.equipmentId!==length.equipmentId||![lengthPath,sensorPath].includes(c.path)))return trials;
+      if(levelScale===1)add(pack.changes);
+      if(!length||!(length.before>0&&length.after>length.before)||pack.changes.some(c=>c.equipmentId!==length.equipmentId||![lengthPath,sensorPath].includes(c.path))){add(pack.changes);return trials;}
       if(sensor&&sensor.after<=length.before&&sensor.after!==sensor.before){
         add([{equipmentId:sensor.equipmentId,path:sensorPath,before:sensor.before,after:sensor.after,unit:sensor.unit,originTier:'ZERO'}],true);
       }
       const span=length.after-length.before;
-      const lengths=[.25,.5,1].map((fraction,index)=>Math.min(length.after,Math.round(length.before+Math.min(length.before*fraction,span*(index+1)/4))));
+      const lengths=[.25,.5,1].map((fraction,index)=>Math.min(length.after,Math.round(length.before+levelScale*Math.min(length.before*fraction,span*(index+1)/4))));
       lengths.push(length.after);
       for(const target of new Set(lengths)){
         if(target<=length.before)continue;
         const geometry={...length,after:target};
         add([{...geometry,packagePaths:[lengthPath]}]);
         if(!sensor)continue;
-        for(const position of [sensor.after,Math.round(sensor.after*.85),Math.round(sensor.after*1.15)]){
+        for(const position of [sensor.after,Math.round(sensor.after*(1-.15*levelScale)),Math.round(sensor.after*(1+.15*levelScale))]){
           if(position<0||position>target||position===sensor.before)continue;
           const paths=[lengthPath,sensorPath];
           add([{...geometry,packagePaths:paths},{...sensor,after:position,packagePaths:paths}]);
         }
       }
+      add(pack.changes);
       return trials;
     });
     const result=[];
@@ -317,6 +318,7 @@ window.STScenarioExplorer=(function(){
   function attach(host,project,create,simulation,sharedPlan){
     if(!enabledProject(project)){host.hidden=true;return;}
     var source=JSON.parse(JSON.stringify({id:simulation.id,equipment:simulation.equipment,dynamicConfig:simulation.dynamicConfig,unitOfFlow:simulation.results?.unitOfFlow||simulation.results?.replay?.unitOfFlow||simulation.unitOfFlow})),rows=[],generation=0,timer,baseline,baselineRun,last=null,searchCanFinish=false,finishRequested=false;
+    var searchAttempt=0,levelScale=1;
     var automaticBasic=true,compactCheckpoint=null,discardMinimalSearch=false; // Single automatic physical policy in every mode.
     function searchDOEEnabled(){return automaticBasic||doeEnabled();}
     var searchSettings=currentSearchSettings(automaticBasic),searchSettingsSignature=STScenarioSearch.settingsSignature(searchSettings),pendingSearchSettingsChange=false;
@@ -366,6 +368,7 @@ window.STScenarioExplorer=(function(){
     function record(state,details,{notify=true}={}){
       if(discardMinimalSearch)return;
       var entry=Object.assign({searchSettings:Object.assign({},searchSettings),searchSettingsSignature:searchSettingsSignature,cardId:cardId,recordKey:recordKey,baseRecordKey:baseRecordKey,uiMode:viewMode,sourceSimulationId:source.id,sourceSignature:sourceSignature,title:project.title||STScenarioText[project.titleKey]||project.kind,searchScope:project.searchScope||project.tier,tier:project.tier,kind:project.kind,status:state,updatedAt:new Date().toISOString(),unitOfFlow:source.unitOfFlow||'units',run:previewRun,depth:depth,categoryInclusions:Object.assign({},inclusions),proposedChanges:project.changes.filter(scopeAllowed),searchVariables:searchVariables,selections:rows.map(r=>({equipmentId:r.change.equipmentId,path:r.change.path,selected:r.check.checked,limit:r.limit.value===''?null:Number(r.limit.value)/r.scale,limitDirection:r.change.after>=r.change.before?'MAXIMUM':'MINIMUM',unit:STScenarios.fields[r.change.path]?.[2]})),acceptance:{minimumThroughputRelativeGain:.001,minimumThroughputAbsoluteGain:.001,allowOeeRegression:false,independentSeedCheckRequired:true},plantValidated:false},details||{});
+      entry.searchAttempt=searchAttempt;entry.explorationLevelScale=levelScale;
       entry.recordKey=recordKey;entry.baseRecordKey=baseRecordKey;entry.uiMode=viewMode;entry.status=state;entry.updatedAt=new Date().toISOString();
       entry.methodologyInputs=STScenarios.methodologyInputs(source.whatIf?.methodology||{});entry.methodologySignature=JSON.stringify(entry.methodologyInputs);
       if(STScenarios.study&&Array.isArray(entry.evaluatedChanges))entry.study=STScenarios.study(source,entry);
@@ -877,6 +880,13 @@ window.STScenarioExplorer=(function(){
     // results. Do not clear the physical baseline, exact cache, or settings.
     host._prepareMinimalRestart=function({notify=true}={}){
       if(activeHost||!enabledProject(project)||!zeroEngineReady())return false;
+      simulation.whatIf=simulation.whatIf||{};
+      const attempts=simulation.whatIf.searchAttempts||(simulation.whatIf.searchAttempts={});
+      const previous=attempts[primaryTier]??latest?.searchAttempt??(latest?1:0);
+      searchAttempt=Number.isSafeInteger(previous)&&previous>=0?previous+1:1;
+      attempts[primaryTier]=searchAttempt;
+      // A low-discrepancy sequence samples a different fraction of the design range on each restart.
+      levelScale=searchAttempt===1?1:.45+.55*(((searchAttempt-1)*.6180339887498949)%1);
       generation++;clearTimeout(timer);discardMinimalSearch=false;
       latest=null;last=null;lastMetricEntry=null;compactCheckpoint=null;baseline=null;baselineRun=null;searchVariables=[];pendingMetricsReveal=false;
       progressTrace=[];tracePercent=0;traceOutcome='';traceSummary={};traceHistorical=false;lastTracePaint=0;
@@ -900,7 +910,7 @@ window.STScenarioExplorer=(function(){
         status.textContent='Evaluation interrupted.';status.dataset.state='rejected';
         return {started:true,status:'INTERRUPTED',reason:status.textContent};
       }
-      return {started:true,status:latest.status,reason:latest.error||latest.message||status.textContent};
+      return {started:true,status:latest.status,reason:latest.error||latest.message||status.textContent,searchAttempt:latest.searchAttempt,reuseCounts:latest.reuseCounts||{}};
     };
     run.classList.add('scenario-search');save.classList.add('scenario-create');actions.setAttribute('role','group');actions.setAttribute('aria-label','Scenario actions');actions.append(configure,run,save);host.append(actions);
     var results=iconButton('Scenario results','list',showResults);results.classList.add('scenario-results');actions.insertBefore(results,save);
@@ -1181,7 +1191,7 @@ window.STScenarioExplorer=(function(){
           evidence.explorationRun={...previewRun};
           setStage('Baseline');
           baseline=await measured([],0);
-          const experiments=bufferExperiments(packages,limits.maxCandidates);
+          const experiments=bufferExperiments(packages,limits.maxCandidates,levelScale);
           setStage(document.documentElement.lang==='es'?'Exploración rápida de longitudes y sensores':'Fast buffer length and sensor screening');
           maximum=completed+experiments.length;
           evidence.trialHistory=trialHistory;
@@ -1208,7 +1218,7 @@ window.STScenarioExplorer=(function(){
           evidence.phaseAudit.exploration={testedCandidates:done,infeasibleCandidates:invalid,eligiblePackages:packages.length,plannedExperiments:experiments.length};
 
         }else{
-          var ofatPlan=STScenarioSearch.zeroOFAT(source,{limit:Math.min(30,Math.max(0,limits.maxCandidates-14))});
+          var ofatPlan=STScenarioSearch.zeroOFAT(source,{levelScale,limit:Math.min(30,Math.max(0,limits.maxCandidates-14))});
           var ofatRun=searchRun('control-screen',3),diagnosisRun=searchRun('diagnosis',1),doeRun=searchRun('doe',3);
           var hasReliability=config(source).reliabilityEnabled!==false;
           maximum=ofatPlan.probes.length+2+1+1+8+6+limits.finalists+7;

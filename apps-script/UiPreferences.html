@@ -167,7 +167,7 @@ window.STPreferences = (function() {
     // El guardado de casos es exclusivamente manual. Ignorar políticas heredadas.
     return {equipmentLayout:saved.equipmentLayout==='combined'?'combined':'split',
       rateLossCategories:saved.rateLossCategories||{},showRealData:saved.showRealData!==false,
-      seedPolicy:(saved.seedPolicy??read('seedPolicy'))==='FIXED'?'FIXED':'RANDOM'};
+      seedPolicy:'RANDOM'};
   }
   function setCaseOptions(value) {
     var record=caseProvider?.();if(!record)return false;

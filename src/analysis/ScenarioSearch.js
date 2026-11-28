@@ -177,7 +177,7 @@ export function planScenarioFinalistRanking(run,level,candidateCount,options={})
   if(settings.automaticBasic){
     const horizon=basicScenarioConfirmationHorizon(run,options.equipment||[]),rankRun=scenarioSearchRun(run,level,'ranking',3,settings,options.equipment);
     const staged=candidateCount>1;
-    return {policy:'ZERO_PHYSICAL_RANKING_V1',staged,reason:staged?'INDEPENDENT_SHORT_PHYSICAL_RANKING':'ONE_FINALIST',screenRun,fullRun:rankRun,confirmationRun:fullRun,confirmationHorizon:horizon,fullHorizonFinalists:Math.min(2,candidateCount),screeningSeedOffset:50003,rankingSeedOffset:100003,confirmationSeedOffset:1000003,interpretation:'Matched physical FAST experiments and independent PRECISE confirmation; no fluid model. Original-horizon verification is separate.'};
+    return {policy:'ZERO_PHYSICAL_RANKING_V1',staged,reason:staged?'SOURCE_SEED_PHYSICAL_RANKING':'ONE_FINALIST',screenRun,fullRun:rankRun,confirmationRun:fullRun,confirmationHorizon:horizon,fullHorizonFinalists:Math.min(2,candidateCount),screeningSeedOffset:0,rankingSeedOffset:0,confirmationSeedOffset:1000003,interpretation:'Matched physical FAST experiments and independent PRECISE confirmation; no fluid model. Original-horizon verification is separate.'};
   }
   // A short prefix does not represent an entire shift/calendar/product program.
   // Keep every finalist when the run has explicit changes over time.

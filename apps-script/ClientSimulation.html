@@ -950,7 +950,14 @@
       resetPlaybackPerformance();
       var execution;
       try{execution=prepareCalendarRun(run);}catch(error){showError(error);return;}
-      if(STPreferences.caseOptions().seedPolicy==='RANDOM'){var seedArray=new Uint32Array(1);if(window.crypto?.getRandomValues)window.crypto.getRandomValues(seedArray);else seedArray[0]=Math.floor(Math.random()*4294967296);run.seed=seedArray[0];document.getElementById('run-seed').value=run.seed;}
+      // Reserve space for consecutive replication seeds and avoid the previous run's range.
+      var seedRange=2147483400,seedSample=new Uint32Array(1);
+      if(window.crypto?.getRandomValues)window.crypto.getRandomValues(seedSample);
+      else seedSample[0]=Math.floor(Math.random()*4294967296);
+      var nextSeed=1+seedSample[0]%seedRange;
+      if(Math.abs(nextSeed-run.seed)<100)nextSeed=1+(nextSeed+200)%seedRange;
+      run.seed=nextSeed;
+      document.getElementById('run-seed').value=nextSeed;
       invalidateActiveResult();
       var committed=activePersistentSimulation();
       if(committed){committed.equipment=cloneJson(state.activeCase.equipment);committed.dynamicConfig=cloneJson(run);}

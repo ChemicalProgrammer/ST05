@@ -110,6 +110,43 @@ window.STScenarioExplorer=(function(){
     if(tier==='ZERO')return STScenarioSearch.zeroAllowed(change,equipment);
     return tier==='MEDIUM'&&change.interventionType==='ACCUMULATION'&&STScenarios.categoryAllows(change,tier);
   }
+  // Interleave sites so a large conveyor cannot consume the whole screening budget.
+  function bufferExperiments(packages,limit){
+    const lengthPath='processData.geometry.lactMm',sensorPath='processData.accumulation.backupSensorPositionMm';
+    const sites=packages.map(pack=>{
+      const length=pack.changes.find(c=>c.path===lengthPath),sensor=pack.changes.find(c=>c.path===sensorPath);
+      const trials=[],seen=new Set();
+      function add(changes,control=false){
+        const key=JSON.stringify(changes.map(c=>[c.path,c.after]));
+        if(!seen.has(key)){seen.add(key);trials.push({changes,control});}
+      }
+      add(pack.changes);
+      if(!length||!(length.before>0&&length.after>length.before)||pack.changes.some(c=>c.equipmentId!==length.equipmentId||![lengthPath,sensorPath].includes(c.path)))return trials;
+      if(sensor&&sensor.after<=length.before&&sensor.after!==sensor.before){
+        add([{equipmentId:sensor.equipmentId,path:sensorPath,before:sensor.before,after:sensor.after,unit:sensor.unit,originTier:'ZERO'}],true);
+      }
+      const span=length.after-length.before;
+      const lengths=[.25,.5,1].map((fraction,index)=>Math.min(length.after,Math.round(length.before+Math.min(length.before*fraction,span*(index+1)/4))));
+      lengths.push(length.after);
+      for(const target of new Set(lengths)){
+        if(target<=length.before)continue;
+        const geometry={...length,after:target};
+        add([{...geometry,packagePaths:[lengthPath]}]);
+        if(!sensor)continue;
+        for(const position of [sensor.after,Math.round(sensor.after*.85),Math.round(sensor.after*1.15)]){
+          if(position<0||position>target||position===sensor.before)continue;
+          const paths=[lengthPath,sensorPath];
+          add([{...geometry,packagePaths:paths},{...sensor,after:position,packagePaths:paths}]);
+        }
+      }
+      return trials;
+    });
+    const result=[];
+    for(let i=0;sites.some(site=>i<site.length)&&result.length<limit;i++){
+      for(const site of sites)if(site[i]&&result.length<limit)result.push(site[i]);
+    }
+    return result;
+  }
   function unitLabel(unit){return window.STBasicMode?.unitLabel(unit)||unit||'units';}
   function quantity(value,unit){var strong=el('strong',value,'metric-value');if(unit)strong.append(el('span',unit,'metric-unit'));return strong;}
   // Evidence belongs to the simulation and is saved through the case autosave.
@@ -567,7 +604,7 @@ window.STScenarioExplorer=(function(){
     context.remove();
     var validationNotice=el('p','','scenario-config-validation chart-note');validationNotice.setAttribute('role','alert');validationNotice.hidden=true;body.replaceChildren(validationNotice,searchSection,inputSection,conveyorSection,reliabilityPage);
     if(readOnlyAutomaticConfiguration()){
-      var automaticNote=el('p',primaryTier==='MEDIUM'?(document.documentElement.lang==='es'?'Se evalúa cada ampliación de acumulación con sus ajustes de sensores.':'Each buffer extension is evaluated with its associated sensor changes.'):'Automatic Zero CAPEX: factors and levels are selected by the search. These controls are for reference only. See Scenario results for the evaluated changes.','chart-note');automaticNote.setAttribute('role','status');body.prepend(automaticNote);
+      var automaticNote=el('p',primaryTier==='MEDIUM'?(document.documentElement.lang==='es'?'Se prueban varias longitudes y posiciones de Back-up. Los finalistas pasan a comparaciones más largas y confirmación precisa.':'Multiple lengths and Back-up positions are screened. Finalists advance to longer comparisons and precise confirmation.'):'Automatic Zero CAPEX: factors and levels are selected by the search. These controls are for reference only. See Scenario results for the evaluated changes.','chart-note');automaticNote.setAttribute('role','status');body.prepend(automaticNote);
     }
     var configTabs=el('nav','','settings-tabs scenario-config-tabs');configTabs.setAttribute('role','tablist');configTabs.setAttribute('aria-label','Scenario configuration sections');
     var configId='scenario-config-'+(++configurationSerial),pages=[searchSection,inputSection,conveyorSection,reliabilityPage],tabButtons=[],selectedConfig=0;
@@ -1096,11 +1133,11 @@ window.STScenarioExplorer=(function(){
         if((stage==='Comparing finalists'||stage==='Screening finalists')&&rankingProgress&&!cancelled?.()){var currentFraction=activeFractions.size?Math.min(1,batchFraction/activeFractions.size):1;status.textContent=(rankingProgress.index?progressText('Candidate')+' '+rankingProgress.index+' / '+rankingProgress.total:progressText('Baseline'))+' · '+Number((previewRun.durationSeconds/60).toFixed(2))+' min × '+previewRun.rounds+' '+progressText('Rounds')+' · '+progressText('Current batch')+': '+(100*currentFraction).toFixed(2)+'%';}
       }
       var clock=setInterval(updateProgress,1000);
-      async function measured(changes,offset,model=source,measurementRun=previewRun,inputUnitOverride){
-        checkBudget();changes=completePackages(changes);validateReliabilityChanges(changes);var id=++nextBatch,owner=traceStep,startedAt=Date.now(),rounds=measurementRun.rounds||1,roundsDone=0;activeFractions.set(id,0);owner.batchStarted++;owner.roundsStarted+=rounds;owner.activeBatches++;
+      async function measured(changes,offset,model=source,measurementRun=previewRun,inputUnitOverride,control=false){
+        checkBudget();if(!control)changes=completePackages(changes);validateReliabilityChanges(changes);var id=++nextBatch,owner=traceStep,startedAt=Date.now(),rounds=measurementRun.rounds||1,roundsDone=0;activeFractions.set(id,0);owner.batchStarted++;owner.roundsStarted+=rounds;owner.activeBatches++;
         function countRounds(value){if(!Number.isFinite(value))return;var next=Math.min(rounds,Math.max(roundsDone,Math.floor(value)));owner.roundsCompleted+=next-roundsDone;roundsDone=next;}
         function refresh(){batchFraction=Array.from(activeFractions.values()).reduce(function(sum,f){return sum+f;},0);updateProgress();}refresh();
-        try{var result=await evaluate(model,changes,function(){return cancelled()||abortPending||budgetReached();},offset,measurementRun,function(fraction,completedRounds){countRounds(completedRounds);activeFractions.set(id,Math.max(activeFractions.get(id)||0,Math.min(1,Number(fraction)||0)));refresh();},automaticBasic,inputUnitOverride,primaryTier);
+        try{var result=await evaluate(model,changes,function(){return cancelled()||abortPending||budgetReached();},offset,measurementRun,function(fraction,completedRounds){countRounds(completedRounds);activeFractions.set(id,Math.max(activeFractions.get(id)||0,Math.min(1,Number(fraction)||0)));refresh();},automaticBasic,inputUnitOverride,control?'ZERO':primaryTier);
           checkBudget();
           completed++;owner.batchCompleted++;countRounds(rounds);activeFractions.set(id,0);
           var reuse=result.cacheSource||'CALCULATED';if(reuse!=='CALCULATED')owner.reusedBatches++;
@@ -1141,23 +1178,35 @@ window.STScenarioExplorer=(function(){
           var packages=(diagnosticPlan.candidates||[]).filter(p=>p.canApply&&p.tier==='MEDIUM'&&p.changes.length&&p.changes.every(scopeAllowed));
           if(!packages.length){status.textContent=document.documentElement.lang==='es'?'No hay ampliaciones de acumulación aplicables a esta línea.':'No eligible buffer extensions for this line.';record('NO_ELIGIBLE_TARGETS',Object.assign({},evidence,{candidate:null,evaluatedChanges:[],trials:0}));return;}
           previewRun=searchRun('control-screen',3);
+          evidence.explorationRun={...previewRun};
+          setStage('Baseline');
           baseline=await measured([],0);
-          setStage('Comparing buffer extensions');
-          maximum=1+Math.min(packages.length,limits.maxCandidates);
+          const experiments=bufferExperiments(packages,limits.maxCandidates);
+          setStage(document.documentElement.lang==='es'?'Exploración rápida de longitudes y sensores':'Fast buffer length and sensor screening');
+          maximum=completed+experiments.length;
           evidence.trialHistory=trialHistory;
-          for(const pack of packages.slice(0,limits.maxCandidates)){
+          for(const trial of experiments){
             if(cancelled())return;
             if(finishRequested)break;
             checkBudget();
-            const value=await measured(pack.changes,0);
-            if(cancelled())return;
-            done++;trialHistory.push({stage:'BUFFER_PACKAGE',changes:pack.changes,result:value});
-            if(resultEligible(value,baseline))finalistPool.set(keyOf(pack.changes),{changes:pack.changes,result:value});
-            setCounter('primary','Candidates checked',done,maximum-1);
+            const stage=trial.control?'INSTALLED_LENGTH_SENSOR_CONTROL':'BUFFER_PACKAGE';
+            try{
+              const value=await measured(trial.changes,0,source,previewRun,undefined,trial.control);
+              if(cancelled())return;
+              trialHistory.push({stage,changes:trial.changes,result:value});
+              if(!trial.control&&Number.isFinite(value.overflowUnits)&&value.overflowUnits<=baseline.overflowUnits+1e-6){
+                finalistPool.set(keyOf(trial.changes),{changes:trial.changes,result:value});
+              }
+            }catch(error){
+              if(cancelled()||budgetReached()||!String(error.message).startsWith('SCENARIO_'))throw error;
+              invalid++;trialHistory.push({stage,changes:trial.changes,error:error.message});
+            }
+            done++;setCounter('primary','Candidates checked',done,experiments.length);
           }
           const winner=bestOf([...finalistPool.values()],baseline);
           best=winner?.result||baseline;bestChanges=winner?.changes||[];
-          evidence.phaseAudit.exploration={testedCandidates:done,eligiblePackages:packages.length};
+          evidence.phaseAudit.exploration={testedCandidates:done,infeasibleCandidates:invalid,eligiblePackages:packages.length,plannedExperiments:experiments.length};
+
         }else{
           var ofatPlan=STScenarioSearch.zeroOFAT(source,{limit:Math.min(30,Math.max(0,limits.maxCandidates-14))});
           var ofatRun=searchRun('control-screen',3),diagnosisRun=searchRun('diagnosis',1),doeRun=searchRun('doe',3);
@@ -1260,7 +1309,7 @@ window.STScenarioExplorer=(function(){
         }
         evidence.baseline=baseline;evidence.candidate=bestChanges.length?best:null;evidence.evaluatedChanges=bestChanges;
         if(bestChanges.length)compactCheckpoint=evidence.progressiveCheckpoint={baseline,candidate:best,changes:bestChanges,trials:done};
-        if(!bestChanges.length){record('NO_DEMONSTRATED_IMPROVEMENT',Object.assign({},evidence,{candidate:null,evaluatedChanges:[],delta:null,trials:done,infeasibleTrials:invalid}));status.textContent=primaryTier==='MEDIUM'?(document.documentElement.lang==='es'?'Ninguna ampliación evaluada aumentó el throughput sin incrementar el desbordamiento.':'No tested buffer extension improved throughput without increasing overflow.'):'No tested sensor or conveyor configuration improved throughput without increasing overflow.';return;}
+        if(!bestChanges.length&&!(primaryTier==='MEDIUM'&&finalistPool.size)){record('NO_DEMONSTRATED_IMPROVEMENT',Object.assign({},evidence,{candidate:null,evaluatedChanges:[],delta:null,trials:done,infeasibleTrials:invalid}));status.textContent=primaryTier==='MEDIUM'?(document.documentElement.lang==='es'?'Ninguna ampliación evaluada aumentó el throughput sin incrementar el desbordamiento.':'No tested buffer extension improved throughput without increasing overflow.'):'No tested sensor or conveyor configuration improved throughput without increasing overflow.';return;}
         // Protect time for confirmation independently of the exploratory limit.
         originalVerificationRunning=true;
         if(cancelled())return;
